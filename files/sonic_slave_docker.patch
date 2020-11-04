@@ -1,0 +1,64 @@
+diff --git a/sonic-slave-buster/Dockerfile.j2 b/sonic-slave-buster/Dockerfile.j2
+index 3e31912..8a8ab9b 100644
+--- a/sonic-slave-buster/Dockerfile.j2
++++ b/sonic-slave-buster/Dockerfile.j2
+@@ -412,17 +412,13 @@ RUN apt-get install -y \
+            curl \
+            gnupg2 \
+            software-properties-common
+-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
++RUN curl -k -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+ RUN add-apt-repository \
+            "deb [arch={{ CONFIGURED_ARCH }}] https://download.docker.com/linux/debian \
+            $(lsb_release -cs) \
+            stable"
+ RUN apt-get update
+-{%- if CONFIGURED_ARCH == "amd64" %}
+ RUN apt-get install -y docker-ce=5:18.09.5~3-0~debian-buster docker-ce-cli=5:18.09.5~3-0~debian-buster
+-{%- else %}
+-RUN apt-get install -y docker-ce=18.06.3~ce~3-0~debian
+-{%- endif %}
+ RUN echo "DOCKER_OPTS=\"--experimental --storage-driver=vfs\"" >> /etc/default/docker
+ RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+ 
+diff --git a/sonic-slave-jessie/Dockerfile.j2 b/sonic-slave-jessie/Dockerfile.j2
+index b2626f3..e757b0e 100644
+--- a/sonic-slave-jessie/Dockerfile.j2
++++ b/sonic-slave-jessie/Dockerfile.j2
+@@ -295,15 +295,15 @@ RUN export VERSION=1.14.2 \
+ 
+ # Upgrade pip2
+ # Note: use pip2 specific version so jinja2 2.10 will install
+-RUN python2 -m pip install -U pip==9.0.3
++#RUN python2 -m pip install -U pip==9.0.3
+ 
+ # For p4 build
+-RUN pip install \
+-        ctypesgen==0.r125 \
+-        crc16
++#RUN pip install \
++#        ctypesgen==0.r125 \
++#        crc16
+ 
+ # For sonic config engine testing
+-RUN pip install pyangbind==0.6.0
++#RUN pip install pyangbind==0.6.0
+ # Note: force upgrade debian packaged jinja2, if installed
+ RUN pip install --force-reinstall --upgrade "jinja2>=2.10"
+ 
+diff --git a/sonic-slave-stretch/Dockerfile.j2 b/sonic-slave-stretch/Dockerfile.j2
+index a726680..ee8a91c 100644
+--- a/sonic-slave-stretch/Dockerfile.j2
++++ b/sonic-slave-stretch/Dockerfile.j2
+@@ -433,11 +433,7 @@ RUN add-apt-repository \
+            $(lsb_release -cs) \
+            stable"
+ RUN apt-get update
+-{%- if CONFIGURED_ARCH == "amd64" %}
+ RUN apt-get install -y docker-ce=5:18.09.5~3-0~debian-stretch docker-ce-cli=5:18.09.5~3-0~debian-stretch
+-{%- else %}
+-RUN apt-get install -y docker-ce=18.06.3~ce~3-0~debian
+-{%- endif %}
+ RUN echo "DOCKER_OPTS=\"--experimental --storage-driver=vfs\"" >> /etc/default/docker
+ 
+ # Install swi tools

@@ -1,0 +1,18 @@
+diff --git a/src/libteam/Makefile b/src/libteam/Makefile
+index b1ef123..03b8b9e 100644
+--- a/src/libteam/Makefile
++++ b/src/libteam/Makefile
+@@ -31,7 +31,12 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	mv tmp/debian libteam/
+ 	rm -rf tmp
+ 	pushd ./libteam
+-	dpkg-buildpackage -rfakeroot -b -us -uc -j$(SONIC_CONFIG_MAKE_JOBS)
++	sed -i 's/#.\/autogen.sh/.\/autogen.sh/g' debian/rules
++	sed -i '/override_dh_auto_install/i \
++override_dh_autoreconf:
++	
++	' debian/rules
++	dpkg-buildpackage -d -rfakeroot -b -us -uc -j$(SONIC_CONFIG_MAKE_JOBS)
+ 	popd
+ 
+ 	mv $(DERIVED_TARGETS) $* $(DEST)/

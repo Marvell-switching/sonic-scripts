@@ -1,0 +1,26 @@
+diff --git a/orchagent/switchorch.cpp b/orchagent/switchorch.cpp
+index bac2c9a3a..9c1302e19 100644
+--- a/orchagent/switchorch.cpp
++++ b/orchagent/switchorch.cpp
+@@ -23,7 +23,8 @@ const map<string, sai_switch_attr_t> switch_attribute_map =
+     {"lag_hash_seed",                       SAI_SWITCH_ATTR_LAG_DEFAULT_HASH_SEED},
+     {"fdb_aging_time",                      SAI_SWITCH_ATTR_FDB_AGING_TIME},
+     {"vxlan_port",                          SAI_SWITCH_ATTR_VXLAN_DEFAULT_PORT},
+-    {"vxlan_router_mac",                    SAI_SWITCH_ATTR_VXLAN_DEFAULT_ROUTER_MAC}
++    {"vxlan_router_mac",                    SAI_SWITCH_ATTR_VXLAN_DEFAULT_ROUTER_MAC},
++    {"sdk_diag_shell",                      SAI_SWITCH_ATTR_SWITCH_SHELL_ENABLE}
+ };
+ 
+ const map<string, sai_packet_action_t> packet_action_map =
+@@ -107,6 +108,10 @@ void SwitchOrch::doTask(Consumer &consumer)
+                         memcpy(attr.value.mac, mac_addr.getMac(), sizeof(sai_mac_t));
+                         break;
+ 
++                   case SAI_SWITCH_ATTR_SWITCH_SHELL_ENABLE:
++                        attr.value.booldata = to_uint<uint32_t>(value);
++                        break;
++
+                     default:
+                         invalid_attr = true;
+                         break;
+

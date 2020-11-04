@@ -1,0 +1,27 @@
+diff --git a/dockers/docker-base-buster/Dockerfile.j2 b/dockers/docker-base-buster/Dockerfile.j2
+index 1959bb5..6e22c50 100644
+--- a/dockers/docker-base-buster/Dockerfile.j2
++++ b/dockers/docker-base-buster/Dockerfile.j2
+@@ -35,7 +35,8 @@ COPY ["sources.list", "/etc/apt/sources.list"]
+ {% endif %}
+ COPY ["no_install_recommend_suggest", "/etc/apt/apt.conf.d"]
+ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d"]
+-
++RUN apt-get clean
++RUN echo "deb http://ftp.debian.org/debian buster-backports main" | tee /etc/apt/sources.list.d/backports.list
+ # Update apt cache and
+ # pre-install fundamental packages
+ RUN apt-get update &&        \
+diff --git a/dockers/docker-base-stretch/Dockerfile.j2 b/dockers/docker-base-stretch/Dockerfile.j2
+index f573e94..e6426c4 100644
+--- a/dockers/docker-base-stretch/Dockerfile.j2
++++ b/dockers/docker-base-stretch/Dockerfile.j2
+@@ -38,6 +38,8 @@ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d"]
+ 
+ # Update apt cache and
+ # pre-install fundamental packages
++RUN apt-get clean
++RUN echo "deb http://ftp.debian.org/debian stretch-backports main" | tee /etc/apt/sources.list.d/backports.list
+ RUN apt-get update &&        \
+     apt-get -y install       \
+         less                 \

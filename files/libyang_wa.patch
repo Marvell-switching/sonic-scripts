@@ -1,0 +1,24 @@
+diff --git a/src/libyang/patch/libyang-armhf-wa.patch b/src/libyang/patch/libyang-armhf-wa.patch
+new file mode 100644
+index 0000000..de8766c
+--- /dev/null
++++ b/src/libyang/patch/libyang-armhf-wa.patch
+@@ -0,0 +1,10 @@
++diff --git a/packages/debian.rules.in b/packages/debian.rules.in
++index d565819e..e92fe4a1 100644
++--- a/packages/debian.rules.in
+++++ b/packages/debian.rules.in
++@@ -19,4 +19,4 @@
++ 	dh_makeshlibs -Xextensions -Xuser_types
++ 
++ override_dh_auto_test:
++-	ctest --output-on-failure
+++	#ctest --output-on-failure
+diff --git a/src/libyang/patch/series b/src/libyang/patch/series
+index 773245e..a54c3ac 100644
+--- a/src/libyang/patch/series
++++ b/src/libyang/patch/series
+@@ -1,2 +1,3 @@
+ libyang.patch
+ swig.patch
++libyang-armhf-wa.patch

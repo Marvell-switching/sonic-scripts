@@ -1,0 +1,15 @@
+diff --git a/dockers/docker-orchagent/switch.json.j2 b/dockers/docker-orchagent/switch.json.j2
+index f8beffbc9a..7be2a49047 100644
+--- a/dockers/docker-orchagent/switch.json.j2
++++ b/dockers/docker-orchagent/switch.json.j2
+@@ -15,7 +15,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "{{ hash_seed }}",
+             "lag_hash_seed": "{{ hash_seed }}",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+

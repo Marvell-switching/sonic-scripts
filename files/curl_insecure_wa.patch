@@ -1,0 +1,58 @@
+diff --git a/src/snmpd/Makefile b/src/snmpd/Makefile
+index 5e5c2a8..540ac0b 100644
+--- a/src/snmpd/Makefile
++++ b/src/snmpd/Makefile
+@@ -19,7 +19,7 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -rf net-snmp-$(SNMPD_VERSION)
+ 
+ 	# download debian net-snmp
+-	dget -u https://sonicstorage.blob.core.windows.net/debian/pool/main/n/net-snmp/net-snmp_$(SNMPD_VERSION_FULL).dsc
++	dget --insecure -u https://sonicstorage.blob.core.windows.net/debian/pool/main/n/net-snmp/net-snmp_$(SNMPD_VERSION_FULL).dsc
+ 
+ 	pushd net-snmp-$(SNMPD_VERSION)
+ 	git init
+diff --git a/build_debian.sh b/build_debian.sh
+index a805d34..03d045c 100755
+--- a/build_debian.sh
++++ b/build_debian.sh
+@@ -33,7 +33,8 @@ CONFIGURED_ARCH=$([ -f .arch ] && cat .arch || echo amd64)
+ ## docker engine version (with platform)
+ if [[ $CONFIGURED_ARCH == armhf || $CONFIGURED_ARCH == arm64 ]]; then
+     # Version name differs between ARCH, copying same version as in sonic-slave docker
+-    DOCKER_VERSION=18.06.3~ce~3-0~debian
++    #DOCKER_VERSION=18.06.3~ce~3-0~debian
++    DOCKER_VERSION=5:18.09.8~3-0~debian-$IMAGE_DISTRO
+ else
+     DOCKER_VERSION=5:18.09.8~3-0~debian-$IMAGE_DISTRO
+ fi
+@@ -198,7 +199,7 @@ sudo LANG=C chroot $FILESYSTEM_ROOT apt-get -y install apt-transport-https \
+                                                        curl \
+                                                        gnupg2 \
+                                                        software-properties-common
+-sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT curl -o /tmp/docker.gpg -fsSL https://download.docker.com/linux/debian/gpg
++sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT curl -k -o /tmp/docker.gpg -fsSL https://download.docker.com/linux/debian/gpg
+ sudo LANG=C chroot $FILESYSTEM_ROOT apt-key add /tmp/docker.gpg
+ sudo LANG=C chroot $FILESYSTEM_ROOT rm /tmp/docker.gpg
+ sudo LANG=C chroot $FILESYSTEM_ROOT add-apt-repository \
+diff --git a/slave.mk b/slave.mk
+index a03c28f..40612bf 100644
+--- a/slave.mk
++++ b/slave.mk
+@@ -299,7 +299,7 @@ $(addprefix $(DEBS_PATH)/, $(SONIC_ONLINE_DEBS)) : $(DEBS_PATH)/% : .platform \
+ 	if [ -z '$($*_CACHE_LOADED)' ] ; then
+ 
+ 		$(foreach deb,$* $($*_DERIVED_DEBS), \
+-			{ curl -L -f -o $(DEBS_PATH)/$(deb) $($(deb)_URL) $(LOG) || { exit 1 ; } } ; )
++			{ curl -k -L -f -o $(DEBS_PATH)/$(deb) $($(deb)_URL) $(LOG) || { exit 1 ; } } ; )
+ 
+ 		# Save the target deb into DPKG cache
+ 		$(call SAVE_CACHE,$*,$@)
+@@ -316,7 +316,7 @@ SONIC_TARGET_LIST += $(addprefix $(DEBS_PATH)/, $(SONIC_ONLINE_DEBS))
+ #     SONIC_ONLINE_FILES += $(SOME_NEW_FILE)
+ $(addprefix $(FILES_PATH)/, $(SONIC_ONLINE_FILES)) : $(FILES_PATH)/% : .platform
+ 	$(HEADER)
+-	curl -L -f -o $@ $($*_URL) $(LOG)
++	curl -k -L -f -o $@ $($*_URL) $(LOG)
+ 	$(FOOTER)
+ 
+ SONIC_TARGET_LIST += $(addprefix $(FILES_PATH)/, $(SONIC_ONLINE_FILES))

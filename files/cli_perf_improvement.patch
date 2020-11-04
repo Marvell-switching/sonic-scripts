@@ -1,0 +1,99 @@
+diff --git a/show/main.py b/show/main.py
+index 95993ac..4f7309a 100755
+--- a/show/main.py
++++ b/show/main.py
+@@ -1,26 +1,26 @@
+ #! /usr/bin/python -u
+ 
+ import json
+-import netaddr
++#import netaddr
+ import netifaces
+ import os
+ import re
+ import subprocess
+ import sys
+ import ipaddress
+-from pkg_resources import parse_version
+-from collections import OrderedDict
++#from pkg_resources import parse_version
++#from collections import OrderedDict
+ 
+ import click
+ from natsort import natsorted
+ from tabulate import tabulate
+ 
+-import sonic_device_util
++#import sonic_device_util
+ from swsssdk import ConfigDBConnector
+ from swsssdk import SonicV2Connector
+-from portconfig import get_child_ports
++#from portconfig import get_child_ports
+ 
+-import mlnx
++#import mlnx
+ 
+ # Global Variable
+ PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
+@@ -186,7 +186,7 @@ def get_routing_stack():
+ 
+ 
+ # Global Routing-Stack variable
+-routing_stack = get_routing_stack()
++routing_stack = "frr"
+ 
+ # Read given JSON file
+ def readJsonFile(fileName):
+@@ -813,6 +813,8 @@ def alias(interfacename):
+ @click.pass_context
+ def breakout(ctx):
+     """Show Breakout Mode information by interfaces"""
++    from collections import OrderedDict
++    from portconfig import get_child_ports
+     # Reading data from Redis configDb
+     config_db = ConfigDBConnector()
+     config_db.connect()
+@@ -1506,6 +1508,7 @@ def get_if_master(iface):
+ @ip.command()
+ def interfaces():
+     """Show interfaces IPv4 address"""
++    import netaddr
+     header = ['Interface', 'Master', 'IPv4 address/mask', 'Admin/Oper', 'BGP Neighbor', 'Neighbor IP']
+     data = []
+     bgp_peer = get_bgp_peer()
+@@ -1773,6 +1776,7 @@ def get_hw_info_dict():
+     """
+     This function is used to get the HW info helper function
+     """
++    import sonic_device_util
+     hw_info_dict = {}
+     machine_info = sonic_device_util.get_machine_info()
+     platform = sonic_device_util.get_platform_info(machine_info)
+@@ -1795,9 +1799,11 @@ def platform():
+     """Show platform-specific hardware info"""
+     pass
+ 
++'''
+ version_info = sonic_device_util.get_sonic_version_info()
+ if (version_info and version_info.get('asic_type') == 'mellanox'):
+     platform.add_command(mlnx.mlnx)
++'''
+ 
+ # 'summary' subcommand ("show platform summary")
+ @platform.command()
+@@ -1921,6 +1927,7 @@ def logging(process, lines, follow, verbose):
+ @cli.command()
+ @click.option("--verbose", is_flag=True, help="Enable verbose output")
+ def version(verbose):
++    import sonic_device_util
+     """Show version information"""
+     version_info = sonic_device_util.get_sonic_version_info()
+     hw_info_dict = get_hw_info_dict()
+@@ -2170,6 +2177,7 @@ def bgp(verbose):
+ @click.option('--verbose', is_flag=True, help="Enable verbose output")
+ def ntp(ctx, verbose):
+     """Show NTP information"""
++    from pkg_resources import parse_version
+     ntpstat_cmd = "ntpstat"
+     ntpcmd = "ntpq -p -n"
+     if is_mgmt_vrf_enabled(ctx) is True:
