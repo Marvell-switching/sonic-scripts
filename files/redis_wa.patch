@@ -1,0 +1,12 @@
+diff --git a/dockers/docker-database/Dockerfile.j2 b/dockers/docker-database/Dockerfile.j2
+index e14be96e..251d52a5 100644
+--- a/dockers/docker-database/Dockerfile.j2
++++ b/dockers/docker-database/Dockerfile.j2
+@@ -32,6 +48,7 @@ RUN apt-get clean -y                                  && \
+              s/^# syslog-enabled no$/syslog-enabled no/; \
+              s/^# unixsocket/unixsocket/;                \
+              s/redis-server.sock/redis.sock/g;           \
++             s/lua-time-limit 5000/lua-time-limit 20000/g;  \
+              s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/ \
+             ' /etc/redis/redis.conf
+ 
