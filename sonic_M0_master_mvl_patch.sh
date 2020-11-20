@@ -84,7 +84,10 @@ buildimage_post_script()
 
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm_redis_storage.patch
     patch -p1 < arm_redis_storage.patch
-    #rm -f arm_redis_storage.patch
+
+    #redis workaround to increase lua-time-limit to 20000ms
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
+    patch -p1 < redis_wa.patch
 }
 
 utilities_post_script()
