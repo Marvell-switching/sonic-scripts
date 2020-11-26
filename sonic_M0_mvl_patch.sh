@@ -20,7 +20,7 @@ declare -a PATCHES=(P1 P2 P3 P4 P5 P6 P7 P8 P9)
 url="https://github.com/Azure"
 urlsai="https://patch-diff.githubusercontent.com/raw/opencomputeproject"
 
-declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="3687 5500" [URL]="$url" [PREREQ]="" [POSTREQ]="buildimage_post_script")
+declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="3687 5500 6040" [URL]="$url" [PREREQ]="" [POSTREQ]="buildimage_post_script")
 declare -A P2=( [NAME]=sonic-swss [DIR]=src/sonic-swss [PR]="1325 1273 1369 1407 " [URL]="$url" [PREREQ]="" [POSTREQ]="swss_post_script" )
 declare -A P3=( [NAME]=sonic-swss-common [DIR]=src/sonic-swss-common [PR]="" [URL]="$url" [PREREQ]="" )
 declare -A P4=( [NAME]=sonic-mgmt-framework [DIR]=src/sonic-mgmt-framework [PR]="" [URL]="$url" [PREREQ]="" )
@@ -53,7 +53,7 @@ pre_patch_help()
     log "STEPS TO BUILD:"
     log "git clone https://github.com/Azure/sonic-buildimage.git"
     log "cd sonic-buildimage"
-    log "git checkout $SONIC_MASTER_JUN09_COMMIT"
+    log "git checkout $SONIC_MASTER_JUN30_COMMIT"
     log "git checkout -b mrvl"
     log "make init"
 
