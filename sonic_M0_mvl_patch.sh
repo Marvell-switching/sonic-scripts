@@ -228,6 +228,12 @@ apply_buster_kernel()
     echo "Patching 4.19.67 armhf"
     patch -p1 < ./armhf_kernel_4.19.67.patch
 
+    # Adding  DTS for platform ET6448M and IPD6448M
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_DTS-files-for-platform-ET6448M-and-IPD6448M.patch
+    patch -p1 --dry-run < ./armhf_DTS-files-for-platform-ET6448M-and-IPD6448M.patch
+    echo "Patching DTS for platform ET6448M and IPD6448M"
+    patch -p1 < ./armhf_DTS-files-for-platform-ET6448M-and-IPD6448M.patch
+
 }
 
 build_kernel_buster()
