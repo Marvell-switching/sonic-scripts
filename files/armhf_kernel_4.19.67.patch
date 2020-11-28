@@ -2690,7 +2690,7 @@ diff --git a/patch/series b/patch/series
 index dad09fe..b5a0d74 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -65,3 +65,11 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
+@@ -65,3 +65,12 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
  0012-Add-support-for-new-transceivers-types-QSFP-DD-and-Q.patch
  0013-watchdog-mlx-wdt-support-new-watchdog-type-with-long.patch
  
@@ -2702,3 +2702,4 @@ index dad09fe..b5a0d74 100755
 +0113-mtd-rawnand-marvell-support-8b-512B-strength-for-2ki.patch
 +0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
 +0117-mtd-nand-marvell-Add-support-for-8KB-page-4-and-8-bi.patch
++0120-DTS-files-for-platform-ET6448M-and-IPD6448M.patch
