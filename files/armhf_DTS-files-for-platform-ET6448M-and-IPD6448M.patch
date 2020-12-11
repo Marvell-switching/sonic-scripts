@@ -2,7 +2,7 @@ diff --git a/patch/0120-DTS-files-for-platform-ET6448M-and-IPD6448M.patch b/patc
 index e69de29..2935666 100644
 --- a/patch/0120-DTS-files-for-platform-ET6448M-and-IPD6448M.patch
 +++ b/patch/0120-DTS-files-for-platform-ET6448M-and-IPD6448M.patch
-@@ -0,0 +1,1644 @@
+@@ -0,0 +1,1651 @@
 +From b2fbd02d3e8fbaa354f8a0401863b1d64e48cd5f Mon Sep 17 00:00:00 2001
 +From: arheneus <arheneus@marvell.com>
 +Date: Thu, 3 Sep 2020 07:56:25 +0530
@@ -820,7 +820,7 @@ index e69de29..2935666 100644
 +index 0000000..b749f58
 +--- /dev/null
 ++++ b/arch/arm/boot/dts/armada-385-ipd6448m.dts
-+@@ -0,0 +1,823 @@
++@@ -0,0 +1,830 @@
 ++/dts-v1/;
 ++
 ++/ {
@@ -1363,6 +1363,13 @@ index e69de29..2935666 100644
 ++				marvell,crypto-srams = <0xc 0xd>;
 ++				marvell,crypto-sram-size = <0x800>;
 ++			};*/
+++
+++			rtc@a3800 {
+++                               compatible = "marvell,armada-380-rtc";
+++                               reg = <0xa3800 0x20>, <0x184a0 0x0c>;
+++                               reg-names = "rtc", "rtc-soc";
+++                               interrupts = <0x0 0x15 0x04>;
+++                       };
 ++
 ++			sata@a8000 {
 ++				compatible = "marvell,armada-380-ahci";
