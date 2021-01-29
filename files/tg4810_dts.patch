@@ -1,0 +1,1405 @@
+diff --git a/files/arm64_TG48MP_DTS_and_Kernel_config.patch b/files/arm64_TG48MP_DTS_and_Kernel_config.patch
+deleted file mode 100644
+index 3a9bccd..0000000
+--- a/files/arm64_TG48MP_DTS_and_Kernel_config.patch
++++ /dev/null
+@@ -1,413 +0,0 @@
+-diff --git a/patch/0131-lmsensor-support.patch b/patch/0131-lmsensor-support.patch
+-new file mode 100644
+-index 0000000..7ff9e39
+---- /dev/null
+-+++ b/patch/0131-lmsensor-support.patch
+-@@ -0,0 +1,13 @@
+-+diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+-+index a7f274f..44a487f 100644
+-+--- a/debian/build/build_arm64_none_arm64/.config
+-++++ b/debian/build/build_arm64_none_arm64/.config
+-+@@ -3699,7 +3699,7 @@ CONFIG_SENSORS_ADCXX=m
+-+ # CONFIG_SENSORS_LM63 is not set
+-+ CONFIG_SENSORS_LM70=m
+-+ CONFIG_SENSORS_LM73=m
+-+-CONFIG_SENSORS_LM75=m
+-++CONFIG_SENSORS_LM75=y
+-+ # CONFIG_SENSORS_LM77 is not set
+-+ # CONFIG_SENSORS_LM78 is not set
+-+ # CONFIG_SENSORS_LM80 is not set
+-diff --git a/patch/0132-DTS-for-platform-TG48MP.patch b/patch/0132-DTS-for-platform-TG48MP.patch
+-new file mode 100644
+-index 0000000..db09425
+---- /dev/null
+-+++ b/patch/0132-DTS-for-platform-TG48MP.patch
+-@@ -0,0 +1,297 @@
+-+diff --git a/arch/arm64/boot/dts/marvell/tg48m-p.dts b/arch/arm64/boot/dts/marvell/tg48m-p.dts
+-+new file mode 100644
+-+index 0000000..eca7eb0
+-+--- /dev/null
+-++++ b/arch/arm64/boot/dts/marvell/tg48m-p.dts
+-+@@ -0,0 +1,291 @@
+-++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+-++/*
+-++ * Copyright (C) 2016 Marvell Technology Group Ltd.
+-++ *
+-++ * Device Tree file for Marvell Armada 7040 Development board platform
+-++ */
+-++
+-++#include <dt-bindings/gpio/gpio.h>
+-++#include "armada-7040.dtsi"
+-++
+-++/ {
+-++	model = "Marvell Armada 7040 TG48M-P";
+-++	compatible = "marvell,armada7040-db-default", "marvell,armada7040-db",
+-++		     "marvell,armada7040", "marvell,armada-ap806-quad",
+-++		     "marvell,armada-ap806";
+-++
+-++	chosen {
+-++		stdout-path = "serial0:115200n8";
+-++	};
+-++
+-++	aliases {
+-++		ethernet0 = &cp0_eth0;
+-++		ethernet1 = &cp0_eth1;
+-++		ethernet2 = &cp0_eth2;
+-++                i2c0 = &cp0_i2c0;
+-++                i2c1 = &cp0_i2c1;
+-++                i2c2 = &AP_I2C;
+-++	};
+-++        ap_pinctrl {
+-++   /*             ap_spi0_pins: spi-pins-0 {
+-++                        marvell,pins = "mpp0", "mpp1", "mpp2", "mpp3";
+-++                        marvell,function = "spi0";
+-++                };
+-++                ap_i2c_pins: i2c-pins {
+-++                        marvell,pins = "mpp4", "mpp5";
+-++                        marvell,function = "i2c0";
+-++                };
+-++                ap_uart0_pins: uart0-pins {
+-++                        marvell,pins = "mpp11", "mpp19";
+-++                        marvell,function = "uart0";
+-++                };
+-++*/
+-++        };
+-++
+-++	leds {
+-++            compatible = "gpio-leds";
+-++            fan-green {
+-++                gpios = <&cp0_gpio1 11 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "fanLedGreen";
+-++            };
+-++            fan-amber {
+-++                gpios = <&cp0_gpio1 14 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "fanLedAmber";
+-++            };
+-++            psu-green {
+-++                gpios = <&cp0_gpio1 2 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "psuLedGreen";
+-++            };
+-++            psu-amber {
+-++                gpios = <&cp0_gpio1 3 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "psuLedAmber";
+-++            };
+-++            sys-green{
+-++                gpios = <&cp0_gpio2 2 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "sysLedGreen";
+-++            };
+-++            sys-amber{
+-++                gpios = <&cp0_gpio1 31 GPIO_ACTIVE_LOW>;
+-++                default-status = "off";
+-++                label = "sysLedAmber";
+-++            };
+-++        };
+-++
+-++        i2cmux {
+-++            compatible = "i2c-mux-gpio";
+-++            #address-cells = <1>;
+-++            #size-cells = <0>;
+-++            mux-gpios = <&cp0_gpio2 22 0 &cp0_gpio2 23 0>;
+-++            i2c-parent = <&cp0_i2c1>;
+-++
+-++            i2c@0 {
+-++                reg = <0>;
+-++                #address-cells = <1>;
+-++                #size-cells = <0>;
+-++            };
+-++
+-++            i2c@1 {
+-++                reg = <1>;
+-++                #address-cells = <1>;
+-++                #size-cells = <0>;
+-++            };
+-++
+-++            i2c@2 {
+-++                reg = <2>;
+-++                #address-cells = <1>;
+-++                #size-cells = <0>;
+-++            };
+-++
+-++            i2c@3 {
+-++                reg = <3>;
+-++                #address-cells = <1>;
+-++                #size-cells = <0>;
+-++            };
+-++        };
+-++};
+-++
+-++AP_UART: &uart0 {
+-++	status = "okay";
+-++
+-++/*	pinctrl-names = "default";
+-++	pinctrl-0 = <&ap_uart0_pins>;*/
+-++};
+-++
+-++AP_I2C: &i2c0 {
+-++	status = "okay";
+-++
+-++	clock-frequency = <100000>;
+-++
+-++/*	pinctrl-names = "default";
+-++	pinctrl-0 = <&ap_i2c_pins>;*/
+-++};
+-++
+-++/******************************************************************/
+-++
+-++&cp0_pinctrl {
+-++        cp0_ge_mdio_pins: ge-mdio-pins {
+-++                marvell,pins = "mpp0", "mpp1";
+-++                marvell,function = "ge";
+-++        };
+-++        cp0_sata0_prsnt_pin: sata0-prsnt-pins {
+-++                marvell,pins = "mpp29";
+-++                marvell,function = "sata0";
+-++        };
+-++        cp0_i2c0_pins: i2c0-pins {
+-++                marvell,pins = "mpp37", "mpp38";
+-++                marvell,function = "i2c0";
+-++        };
+-++        cp0_i2c1_pins: i2c1-pins {
+-++                marvell,pins = "mpp35", "mpp36";
+-++                marvell,function = "i2c1";
+-++        };
+-++        cp0_spi0_pins: spi0-pins {
+-++                marvell,pins = "mpp56", "mpp57", "mpp58", "mpp59";
+-++                marvell,function = "spi0";
+-++        };
+-++};
+-++
+-++&cp0_spi0 {
+-++	status = "okay";
+-++
+-++	pinctrl-names = "default";
+-++	pinctrl-0 = <&cp0_spi0_pins>;
+-++
+-++	 spi-flash@0 {
+-++         	#address-cells = <0x1>;
+-++               	#size-cells = <0x1>;
+-++                compatible = "jedec,spi-nor";
+-++                reg = <0x0>;
+-++                spi-max-frequency = <0x1312d00>;
+-++
+-++              	partitions {
+-++               		compatible = "fixed-partitions";
+-++                       	#address-cells = <0x1>;
+-++                       	#size-cells = <0x1>;
+-++
+-++                    	partition@0 {
+-++                        	label = "uboot";
+-++                         	reg = <0x0 0x3f0000>;
+-++                  	};
+-++
+-++                      	partition@3f0000 {
+-++                    		reg = <0x3f0000 0x10000>;
+-++                        	label = "uboot-env";
+-++                             	env_size = <0x10000>;
+-++                   	};
+-++
+-++              		partition@400000 {
+-++                   		reg = <0x400000 0xc00000>;
+-++                        	label = "onie";
+-++                    	};
+-++            	};
+-++         };
+-++};
+-++
+-++&cp0_i2c0 {
+-++	status = "okay";
+-++
+-++	clock-frequency = <100000>;
+-++	pinctrl-names = "default";
+-++	pinctrl-0 = <&cp0_i2c0_pins>;
+-++	adt7473@2e {
+-++        	compatible = "adi,adt7473";
+-++        	reg = <0x2e>;
+-++    	};
+-++
+-++    	lm75a@4a {
+-++        	compatible = "ti,tmp75";
+-++        	reg = <0x4a>;
+-++    	};
+-++
+-++    	lm75a@4b {
+-++        	compatible = "ti,tmp75";
+-++        	reg = <0x4b>;
+-++    	};
+-++    	eeprom@57 {
+-++        	compatible = "atmel,24c64";
+-++        	reg = <0x57>;
+-++    	};
+-++};
+-++
+-++&cp0_i2c1 {
+-++	status = "okay";
+-++
+-++	clock-frequency = <100000>;
+-++	pinctrl-names = "default";
+-++	pinctrl-0 = <&cp0_i2c1_pins>;
+-++};
+-++
+-++&cp0_sata0 {
+-++	status = "okay";
+-++
+-++};
+-++
+-++/*&cp0_utmi0 {
+-++        status = "okay";
+-++};
+-++*/
+-++&cp0_usb3_0 {  /* usb3_0 is USB2 only (UTMI) */
+-++	status = "okay";
+-++
+-++/*        phys = <&cp0_utmi0>;
+-++        phy-names = "usb";
+-++*/
+-++};
+-++
+-++&cp0_mdio {
+-++	status = "okay";
+-++
+-++	pinctrl-names = "default";
+-++	pinctrl-0 = <&cp0_ge_mdio_pins>;
+-++	OOB_E1512_PHY: ethernet-phy@1 {
+-++		reg = <0x0>;
+-++	};
+-++};
+-++
+-++&cp0_ethernet {
+-++	status = "okay";
+-++};
+-++
+-++&cp0_eth0 {
+-++
+-++	phy-mode = "2500base-x";
+-++	phys = <&cp0_comphy2 0>;
+-++};
+-++
+-++&cp0_eth1 {
+-++
+-++	phy-mode = "1000base-x";
+-++	phys = <&cp0_comphy3 1>;
+-++};
+-++
+-++&cp0_eth2 {
+-++	status = "okay";
+-++
+-++	phy-mode = "sgmii";
+-++	phy = <&OOB_E1512_PHY>;
+-++	phys = <&cp0_comphy5 2>;
+-++};
+-++
+-++&cp0_crypto {
+-++	status = "disabled";
+-++};
+-++
+-++&cp0_pcie0 {
+-++	status = "okay";
+-++	phys = <&cp0_comphy0 0>;
+-++	ranges = <0x81000000 0 0xf6000000 0  0xf6000000 0 0x00010000 0x82000000 0 0xc0000000 0  0xc0000000 0 0x18000000>;
+-++};
+-++
+-++&cp0_pcie1 {
+-++	status = "okay";
+-++	phys = <&cp0_comphy4 1>;
+-++	ranges = <0x81000000 0 0xf7000000 0  0xf7000000 0 0x00010000 0x82000000 0 0xd8000000 0  0xd8000000 0 0x18000000>;
+-++};
+-++
+-++
+-diff --git a/patch/0133-TG48MP-Makefile.patch b/patch/0133-TG48MP-Makefile.patch
+-new file mode 100644
+-index 0000000..5a3ce2f
+---- /dev/null
+-+++ b/patch/0133-TG48MP-Makefile.patch
+-@@ -0,0 +1,9 @@
+-+diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
+-+index ea9d49f..841c281 100644
+-+--- a/arch/arm64/boot/dts/marvell/Makefile
+-++++ b/arch/arm64/boot/dts/marvell/Makefile
+-+@@ -6,3 +6,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-7040-db.dtb
+-+ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
+-+ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
+-+ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
+-++dtb-$(CONFIG_ARCH_MVEBU) += tg48m-p.dtb
+-diff --git a/patch/0134-i2c-mux-support.patch b/patch/0134-i2c-mux-support.patch
+-new file mode 100644
+-index 0000000..e79bf87
+---- /dev/null
+-+++ b/patch/0134-i2c-mux-support.patch
+-@@ -0,0 +1,37 @@
+-+diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+-+index 34564e2..a7f274f 100644
+-+--- a/debian/build/build_arm64_none_arm64/.config
+-++++ b/debian/build/build_arm64_none_arm64/.config
+-+@@ -3240,18 +3240,18 @@ CONFIG_ACPI_I2C_OPREGION=y
+-+ CONFIG_I2C_BOARDINFO=y
+-+ CONFIG_I2C_COMPAT=y
+-+ CONFIG_I2C_CHARDEV=m
+-+-CONFIG_I2C_MUX=m
+-++CONFIG_I2C_MUX=y
+-+ 
+-+ #
+-+ # Multiplexer I2C Chip support
+-+ #
+-+-# CONFIG_I2C_ARB_GPIO_CHALLENGE is not set
+-+-# CONFIG_I2C_MUX_GPIO is not set
+-++CONFIG_I2C_ARB_GPIO_CHALLENGE=m
+-++CONFIG_I2C_MUX_GPIO=m
+-+ # CONFIG_I2C_MUX_GPMUX is not set
+-+ # CONFIG_I2C_MUX_LTC4306 is not set
+-+ # CONFIG_I2C_MUX_PCA9541 is not set
+-+-# CONFIG_I2C_MUX_PCA954x is not set
+-+-# CONFIG_I2C_MUX_PINCTRL is not set
+-++CONFIG_I2C_MUX_PCA954x=m
+-++CONFIG_I2C_MUX_PINCTRL=m
+-+ # CONFIG_I2C_MUX_REG is not set
+-+ # CONFIG_I2C_DEMUX_PINCTRL is not set
+-+ CONFIG_I2C_MUX_MLXCPLD=m
+-+@@ -3299,7 +3299,7 @@ CONFIG_I2C_DESIGNWARE_PLATFORM=m
+-+ # CONFIG_I2C_DESIGNWARE_SLAVE is not set
+-+ # CONFIG_I2C_DESIGNWARE_PCI is not set
+-+ # CONFIG_I2C_EMEV2 is not set
+-+-CONFIG_I2C_GPIO=m
+-++CONFIG_I2C_GPIO=y
+-+ # CONFIG_I2C_GPIO_FAULT_INJECTOR is not set
+-+ CONFIG_I2C_MESON=m
+-+ CONFIG_I2C_MV64XXX=m
+-diff --git a/patch/0135-arm64-spi-orion-support.patch b/patch/0135-arm64-spi-orion-support.patch
+-new file mode 100644
+-index 0000000..ce1ce76
+---- /dev/null
+-+++ b/patch/0135-arm64-spi-orion-support.patch
+-@@ -0,0 +1,13 @@
+-+diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+-+index ba078d1d6..eaca2ef3d 100644
+-+--- a/debian/build/build_arm64_none_arm64/.config
+-++++ b/debian/build/build_arm64_none_arm64/.config
+-+@@ -3362,7 +3362,7 @@ CONFIG_SPI_LM70_LLP=m
+-+ # CONFIG_SPI_MESON_SPICC is not set
+-+ CONFIG_SPI_MESON_SPIFC=m
+-+ # CONFIG_SPI_OC_TINY is not set
+-+-# CONFIG_SPI_ORION is not set
+-++CONFIG_SPI_ORION=m
+-+ # CONFIG_SPI_PL022 is not set
+-+ # CONFIG_SPI_PXA2XX is not set
+-+ CONFIG_SPI_ROCKCHIP=m
+-diff --git a/patch/series b/patch/series
+-index 976cdbe..b40412b 100755
+---- a/patch/series
+-+++ b/patch/series
+-@@ -75,3 +75,8 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
+- 0117-mtd-nand-marvell-Add-support-for-8KB-page-4-and-8-bi.patch
+- 0120-arm64-reduced-configs.patch
+- 0120-arm64-pcie-irq.patch
+-+0131-lmsensor-support.patch
+-+0132-DTS-for-platform-TG48MP.patch
+-+0133-TG48MP-Makefile.patch
+-+0134-i2c-mux-support.patch
+-+0135-arm64-spi-orion-support.patch
+-
+diff --git a/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch b/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+new file mode 100644
+index 0000000..4335c71
+--- /dev/null
++++ b/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+@@ -0,0 +1,960 @@
++diff --git a/patch/0131-lmsensor-support.patch b/patch/0131-lmsensor-support.patch
++new file mode 100644
++index 0000000..05eee81
++--- /dev/null
+++++ b/patch/0131-lmsensor-support.patch
++@@ -0,0 +1,13 @@
+++diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+++index d3f5165..eaca2ef 100644
+++--- a/debian/build/build_arm64_none_arm64/.config
++++++ b/debian/build/build_arm64_none_arm64/.config
+++@@ -3699,7 +3699,7 @@ CONFIG_SENSORS_ADCXX=m
+++ # CONFIG_SENSORS_LM63 is not set
+++ CONFIG_SENSORS_LM70=m
+++ CONFIG_SENSORS_LM73=m
+++-# CONFIG_SENSORS_LM75 is not set
++++CONFIG_SENSORS_LM75=m
+++ # CONFIG_SENSORS_LM77 is not set
+++ # CONFIG_SENSORS_LM78 is not set
+++ # CONFIG_SENSORS_LM80 is not set
++diff --git a/patch/0132-DTS-for-platform-TG48MP.patch b/patch/0132-DTS-for-platform-TG48MP.patch
++new file mode 100644
++index 0000000..db09425
++--- /dev/null
+++++ b/patch/0132-DTS-for-platform-TG48MP.patch
++@@ -0,0 +1,297 @@
+++diff --git a/arch/arm64/boot/dts/marvell/tg48m-p.dts b/arch/arm64/boot/dts/marvell/tg48m-p.dts
+++new file mode 100644
+++index 0000000..eca7eb0
+++--- /dev/null
++++++ b/arch/arm64/boot/dts/marvell/tg48m-p.dts
+++@@ -0,0 +1,291 @@
++++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++++/*
++++ * Copyright (C) 2016 Marvell Technology Group Ltd.
++++ *
++++ * Device Tree file for Marvell Armada 7040 Development board platform
++++ */
++++
++++#include <dt-bindings/gpio/gpio.h>
++++#include "armada-7040.dtsi"
++++
++++/ {
++++	model = "Marvell Armada 7040 TG48M-P";
++++	compatible = "marvell,armada7040-db-default", "marvell,armada7040-db",
++++		     "marvell,armada7040", "marvell,armada-ap806-quad",
++++		     "marvell,armada-ap806";
++++
++++	chosen {
++++		stdout-path = "serial0:115200n8";
++++	};
++++
++++	aliases {
++++		ethernet0 = &cp0_eth0;
++++		ethernet1 = &cp0_eth1;
++++		ethernet2 = &cp0_eth2;
++++                i2c0 = &cp0_i2c0;
++++                i2c1 = &cp0_i2c1;
++++                i2c2 = &AP_I2C;
++++	};
++++        ap_pinctrl {
++++   /*             ap_spi0_pins: spi-pins-0 {
++++                        marvell,pins = "mpp0", "mpp1", "mpp2", "mpp3";
++++                        marvell,function = "spi0";
++++                };
++++                ap_i2c_pins: i2c-pins {
++++                        marvell,pins = "mpp4", "mpp5";
++++                        marvell,function = "i2c0";
++++                };
++++                ap_uart0_pins: uart0-pins {
++++                        marvell,pins = "mpp11", "mpp19";
++++                        marvell,function = "uart0";
++++                };
++++*/
++++        };
++++
++++	leds {
++++            compatible = "gpio-leds";
++++            fan-green {
++++                gpios = <&cp0_gpio1 11 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "fanLedGreen";
++++            };
++++            fan-amber {
++++                gpios = <&cp0_gpio1 14 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "fanLedAmber";
++++            };
++++            psu-green {
++++                gpios = <&cp0_gpio1 2 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "psuLedGreen";
++++            };
++++            psu-amber {
++++                gpios = <&cp0_gpio1 3 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "psuLedAmber";
++++            };
++++            sys-green{
++++                gpios = <&cp0_gpio2 2 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "sysLedGreen";
++++            };
++++            sys-amber{
++++                gpios = <&cp0_gpio1 31 GPIO_ACTIVE_LOW>;
++++                default-status = "off";
++++                label = "sysLedAmber";
++++            };
++++        };
++++
++++        i2cmux {
++++            compatible = "i2c-mux-gpio";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            mux-gpios = <&cp0_gpio2 22 0 &cp0_gpio2 23 0>;
++++            i2c-parent = <&cp0_i2c1>;
++++
++++            i2c@0 {
++++                reg = <0>;
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++            };
++++
++++            i2c@1 {
++++                reg = <1>;
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++            };
++++
++++            i2c@2 {
++++                reg = <2>;
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++            };
++++
++++            i2c@3 {
++++                reg = <3>;
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++            };
++++        };
++++};
++++
++++AP_UART: &uart0 {
++++	status = "okay";
++++
++++/*	pinctrl-names = "default";
++++	pinctrl-0 = <&ap_uart0_pins>;*/
++++};
++++
++++AP_I2C: &i2c0 {
++++	status = "okay";
++++
++++	clock-frequency = <100000>;
++++
++++/*	pinctrl-names = "default";
++++	pinctrl-0 = <&ap_i2c_pins>;*/
++++};
++++
++++/******************************************************************/
++++
++++&cp0_pinctrl {
++++        cp0_ge_mdio_pins: ge-mdio-pins {
++++                marvell,pins = "mpp0", "mpp1";
++++                marvell,function = "ge";
++++        };
++++        cp0_sata0_prsnt_pin: sata0-prsnt-pins {
++++                marvell,pins = "mpp29";
++++                marvell,function = "sata0";
++++        };
++++        cp0_i2c0_pins: i2c0-pins {
++++                marvell,pins = "mpp37", "mpp38";
++++                marvell,function = "i2c0";
++++        };
++++        cp0_i2c1_pins: i2c1-pins {
++++                marvell,pins = "mpp35", "mpp36";
++++                marvell,function = "i2c1";
++++        };
++++        cp0_spi0_pins: spi0-pins {
++++                marvell,pins = "mpp56", "mpp57", "mpp58", "mpp59";
++++                marvell,function = "spi0";
++++        };
++++};
++++
++++&cp0_spi0 {
++++	status = "okay";
++++
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_spi0_pins>;
++++
++++	 spi-flash@0 {
++++         	#address-cells = <0x1>;
++++               	#size-cells = <0x1>;
++++                compatible = "jedec,spi-nor";
++++                reg = <0x0>;
++++                spi-max-frequency = <0x1312d00>;
++++
++++              	partitions {
++++               		compatible = "fixed-partitions";
++++                       	#address-cells = <0x1>;
++++                       	#size-cells = <0x1>;
++++
++++                    	partition@0 {
++++                        	label = "uboot";
++++                         	reg = <0x0 0x3f0000>;
++++                  	};
++++
++++                      	partition@3f0000 {
++++                    		reg = <0x3f0000 0x10000>;
++++                        	label = "uboot-env";
++++                             	env_size = <0x10000>;
++++                   	};
++++
++++              		partition@400000 {
++++                   		reg = <0x400000 0xc00000>;
++++                        	label = "onie";
++++                    	};
++++            	};
++++         };
++++};
++++
++++&cp0_i2c0 {
++++	status = "okay";
++++
++++	clock-frequency = <100000>;
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_i2c0_pins>;
++++	adt7473@2e {
++++        	compatible = "adi,adt7473";
++++        	reg = <0x2e>;
++++    	};
++++
++++    	lm75a@4a {
++++        	compatible = "ti,tmp75";
++++        	reg = <0x4a>;
++++    	};
++++
++++    	lm75a@4b {
++++        	compatible = "ti,tmp75";
++++        	reg = <0x4b>;
++++    	};
++++    	eeprom@57 {
++++        	compatible = "atmel,24c64";
++++        	reg = <0x57>;
++++    	};
++++};
++++
++++&cp0_i2c1 {
++++	status = "okay";
++++
++++	clock-frequency = <100000>;
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_i2c1_pins>;
++++};
++++
++++&cp0_sata0 {
++++	status = "okay";
++++
++++};
++++
++++/*&cp0_utmi0 {
++++        status = "okay";
++++};
++++*/
++++&cp0_usb3_0 {  /* usb3_0 is USB2 only (UTMI) */
++++	status = "okay";
++++
++++/*        phys = <&cp0_utmi0>;
++++        phy-names = "usb";
++++*/
++++};
++++
++++&cp0_mdio {
++++	status = "okay";
++++
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_ge_mdio_pins>;
++++	OOB_E1512_PHY: ethernet-phy@1 {
++++		reg = <0x0>;
++++	};
++++};
++++
++++&cp0_ethernet {
++++	status = "okay";
++++};
++++
++++&cp0_eth0 {
++++
++++	phy-mode = "2500base-x";
++++	phys = <&cp0_comphy2 0>;
++++};
++++
++++&cp0_eth1 {
++++
++++	phy-mode = "1000base-x";
++++	phys = <&cp0_comphy3 1>;
++++};
++++
++++&cp0_eth2 {
++++	status = "okay";
++++
++++	phy-mode = "sgmii";
++++	phy = <&OOB_E1512_PHY>;
++++	phys = <&cp0_comphy5 2>;
++++};
++++
++++&cp0_crypto {
++++	status = "disabled";
++++};
++++
++++&cp0_pcie0 {
++++	status = "okay";
++++	phys = <&cp0_comphy0 0>;
++++	ranges = <0x81000000 0 0xf6000000 0  0xf6000000 0 0x00010000 0x82000000 0 0xc0000000 0  0xc0000000 0 0x18000000>;
++++};
++++
++++&cp0_pcie1 {
++++	status = "okay";
++++	phys = <&cp0_comphy4 1>;
++++	ranges = <0x81000000 0 0xf7000000 0  0xf7000000 0 0x00010000 0x82000000 0 0xd8000000 0  0xd8000000 0 0x18000000>;
++++};
++++
++++
++diff --git a/patch/0133-TG48MP-Makefile.patch b/patch/0133-TG48MP-Makefile.patch
++new file mode 100644
++index 0000000..5a3ce2f
++--- /dev/null
+++++ b/patch/0133-TG48MP-Makefile.patch
++@@ -0,0 +1,9 @@
+++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
+++index ea9d49f..841c281 100644
+++--- a/arch/arm64/boot/dts/marvell/Makefile
++++++ b/arch/arm64/boot/dts/marvell/Makefile
+++@@ -6,3 +6,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-7040-db.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
++++dtb-$(CONFIG_ARCH_MVEBU) += tg48m-p.dtb
++diff --git a/patch/0134-i2c-mux-support.patch b/patch/0134-i2c-mux-support.patch
++new file mode 100644
++index 0000000..e79bf87
++--- /dev/null
+++++ b/patch/0134-i2c-mux-support.patch
++@@ -0,0 +1,37 @@
+++diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+++index 34564e2..a7f274f 100644
+++--- a/debian/build/build_arm64_none_arm64/.config
++++++ b/debian/build/build_arm64_none_arm64/.config
+++@@ -3240,18 +3240,18 @@ CONFIG_ACPI_I2C_OPREGION=y
+++ CONFIG_I2C_BOARDINFO=y
+++ CONFIG_I2C_COMPAT=y
+++ CONFIG_I2C_CHARDEV=m
+++-CONFIG_I2C_MUX=m
++++CONFIG_I2C_MUX=y
+++ 
+++ #
+++ # Multiplexer I2C Chip support
+++ #
+++-# CONFIG_I2C_ARB_GPIO_CHALLENGE is not set
+++-# CONFIG_I2C_MUX_GPIO is not set
++++CONFIG_I2C_ARB_GPIO_CHALLENGE=m
++++CONFIG_I2C_MUX_GPIO=m
+++ # CONFIG_I2C_MUX_GPMUX is not set
+++ # CONFIG_I2C_MUX_LTC4306 is not set
+++ # CONFIG_I2C_MUX_PCA9541 is not set
+++-# CONFIG_I2C_MUX_PCA954x is not set
+++-# CONFIG_I2C_MUX_PINCTRL is not set
++++CONFIG_I2C_MUX_PCA954x=m
++++CONFIG_I2C_MUX_PINCTRL=m
+++ # CONFIG_I2C_MUX_REG is not set
+++ # CONFIG_I2C_DEMUX_PINCTRL is not set
+++ CONFIG_I2C_MUX_MLXCPLD=m
+++@@ -3299,7 +3299,7 @@ CONFIG_I2C_DESIGNWARE_PLATFORM=m
+++ # CONFIG_I2C_DESIGNWARE_SLAVE is not set
+++ # CONFIG_I2C_DESIGNWARE_PCI is not set
+++ # CONFIG_I2C_EMEV2 is not set
+++-CONFIG_I2C_GPIO=m
++++CONFIG_I2C_GPIO=y
+++ # CONFIG_I2C_GPIO_FAULT_INJECTOR is not set
+++ CONFIG_I2C_MESON=m
+++ CONFIG_I2C_MV64XXX=m
++diff --git a/patch/0135-arm64-spi-orion-support.patch b/patch/0135-arm64-spi-orion-support.patch
++new file mode 100644
++index 0000000..ce1ce76
++--- /dev/null
+++++ b/patch/0135-arm64-spi-orion-support.patch
++@@ -0,0 +1,13 @@
+++diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
+++index ba078d1d6..eaca2ef3d 100644
+++--- a/debian/build/build_arm64_none_arm64/.config
++++++ b/debian/build/build_arm64_none_arm64/.config
+++@@ -3362,7 +3362,7 @@ CONFIG_SPI_LM70_LLP=m
+++ # CONFIG_SPI_MESON_SPICC is not set
+++ CONFIG_SPI_MESON_SPIFC=m
+++ # CONFIG_SPI_OC_TINY is not set
+++-# CONFIG_SPI_ORION is not set
++++CONFIG_SPI_ORION=m
+++ # CONFIG_SPI_PL022 is not set
+++ # CONFIG_SPI_PXA2XX is not set
+++ CONFIG_SPI_ROCKCHIP=m
++diff --git a/patch/0136-DTS-for-platform-TG4810M.patch b/patch/0136-DTS-for-platform-TG4810M.patch
++new file mode 100644
++index 0000000..d3fb3ec
++--- /dev/null
+++++ b/patch/0136-DTS-for-platform-TG4810M.patch
++@@ -0,0 +1,525 @@
+++diff --git a/arch/arm64/boot/dts/marvell/tg4810m.dts b/arch/arm64/boot/dts/marvell/tg4810m.dts
+++new file mode 100644
+++index 0000000..47b4d44
+++--- /dev/null
++++++ b/arch/arm64/boot/dts/marvell/tg4810m.dts
+++@@ -0,0 +1,519 @@
++++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++++/*
++++ * Copyright (C) 2016 Marvell Technology Group Ltd.
++++ *
++++ * Device Tree file for Marvell Armada 7040 Development board platform
++++ */
++++
++++#include <dt-bindings/gpio/gpio.h>
++++#include "armada-7040.dtsi"
++++
++++/ {
++++	model = "Marvell Armada 7040 TG4810M";
++++	compatible = "marvell,armada7040-db-default", "marvell,armada7040-db",
++++		     "marvell,armada7040", "marvell,armada-ap806-quad",
++++		     "marvell,armada-ap806";
++++
++++	chosen {
++++		stdout-path = "serial0:115200n8";
++++	};
++++
++++	aliases {
++++		ethernet0 = &cp0_eth0;
++++		ethernet1 = &cp0_eth1;
++++		ethernet2 = &cp0_eth2;
++++                i2c0 = &cp0_i2c0;
++++                i2c1 = &cp0_i2c1;
++++                i2c2 = &AP_I2C;
++++	};
++++
++++        leds {
++++            compatible = "gpio-leds";
++++            fan-green {
++++                    gpios = <&cp0_gpio1 11 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "fanLedGreen";
++++            };
++++            fan-amber {
++++                    gpios = <&cp0_gpio1 14 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "fanLedAmber";
++++            };
++++            psu-green {
++++                    gpios = <&cp0_gpio1 2 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "psuLedGreen";
++++            };
++++            psu-amber {
++++                    gpios = <&cp0_gpio1 3 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "psuLedAmber";
++++            };
++++            sys-green{
++++                    gpios = <&cp0_gpio2 2 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "sysLedGreen";
++++            };
++++            sys-amber{
++++                    gpios = <&cp0_gpio1 31 GPIO_ACTIVE_LOW>;
++++                    default-status = "off";
++++                    label = "sysLedAmber";
++++            };
++++        };
++++};
++++
++++AP_UART: &uart0 {
++++	status = "okay";
++++};
++++
++++AP_I2C: &i2c0 {
++++	status = "okay";
++++	clock-frequency = <100000>;
++++};
++++
++++&cp0_pinctrl {
++++        cp0_ge_mdio_pins: ge-mdio-pins {
++++                marvell,pins = "mpp0", "mpp1";
++++                marvell,function = "ge";
++++        };
++++        cp0_sata0_prsnt_pin: sata0-prsnt-pins {
++++                marvell,pins = "mpp29";
++++                marvell,function = "sata0";
++++        };
++++        cp0_i2c0_pins: i2c0-pins {
++++                marvell,pins = "mpp37", "mpp38";
++++                marvell,function = "i2c0";
++++        };
++++        cp0_i2c1_pins: i2c1-pins {
++++                marvell,pins = "mpp35", "mpp36";
++++                marvell,function = "i2c1";
++++        };
++++        cp0_spi0_pins: spi0-pins {
++++                marvell,pins = "mpp56", "mpp57", "mpp58", "mpp59";
++++                marvell,function = "spi0";
++++        };
++++};
++++
++++&cp0_spi0 {
++++	status = "okay";
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_spi0_pins>;
++++	spi-flash@0 {
++++        	#address-cells = <0x1>;
++++                #size-cells = <0x1>;
++++                compatible = "jedec,spi-nor";
++++                reg = <0x0>;
++++                spi-max-frequency = <0x1312d00>;
++++
++++              	partitions {
++++            		compatible = "fixed-partitions";
++++                  	#address-cells = <0x1>;
++++                  	#size-cells = <0x1>;
++++
++++                 	partition@0 {
++++                    		label = "uboot";
++++                    		reg = <0x0 0x3f0000>;
++++        		};
++++               		partition@3f0000 {
++++                    		reg = <0x3f0000 0x10000>;
++++                  		label = "uboot-env";
++++             			env_size = <0x10000>;
++++        		};
++++      			partition@400000 {
++++           			reg = <0x400000 0xc00000>;
++++                 		label = "onie";
++++              		};
++++   		};
++++	};
++++};
++++
++++&cp0_i2c0 {
++++	status = "okay";
++++	clock-frequency = <100000>;
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_i2c0_pins>;
++++
++++        adt7473@2e {
++++            compatible = "adi,adt7473";
++++            reg = <0x2e>;
++++        };
++++        lm75a@4a {
++++            compatible = "ti,tmp75";
++++            reg = <0x4a>;
++++        };
++++        lm75a@4b {
++++            compatible = "ti,tmp75";
++++            reg = <0x4b>;
++++        };
++++        i2c-mux@70 {
++++            compatible = "nxp,pca9546";
++++            reg = <0x70>;
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;  
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++        };
++++};
++++
++++&cp0_i2c1 {
++++	status = "okay";
++++	clock-frequency = <100000>;
++++	pinctrl-names = "default";
++++        pinctrl-0 = <&cp0_i2c1_pins>;
++++
++++        i2c-mux@70 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x70>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++        i2c-mux@71 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x71>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++        i2c-mux@72 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x72>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++
++++
++++        i2c-mux@73 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x73>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++
++++        i2c-mux@74 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x74>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++
++++        i2c-mux@75 {
++++            compatible = "nxp,pca9548";
++++            #address-cells = <1>;
++++            #size-cells = <0>;
++++            reg = <0x75>;
++++
++++            i2c@0 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <0>;
++++            };
++++
++++            i2c@1 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <1>;
++++            };
++++            i2c@2 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <2>;
++++            };
++++            i2c@3 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <3>;
++++            };
++++            i2c@4 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <4>;
++++            };
++++            i2c@5 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <5>;
++++            };
++++            i2c@6 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <6>;
++++            };
++++            i2c@7 {
++++                #address-cells = <1>;
++++                #size-cells = <0>;
++++                reg = <7>;
++++            };
++++        };
++++};
++++
++++&cp0_sata0 {
++++	status = "okay";
++++};
++++
++++&cp0_usb3_0 {  /* usb3_0 is USB2 only (UTMI) */
++++	status = "okay";
++++};
++++
++++&cp0_mdio {
++++	status = "okay";
++++	pinctrl-names = "default";
++++	pinctrl-0 = <&cp0_ge_mdio_pins>;
++++	OOB_E1512_PHY: ethernet-phy@1 {
++++		reg = <0x0>;
++++	};
++++};
++++
++++&cp0_ethernet {
++++	status = "okay";
++++};
++++
++++&cp0_eth0 {
++++	phy-mode = "2500base-x";
++++	phys = <&cp0_comphy2 0>;
++++};
++++
++++&cp0_eth1 {
++++	phy-mode = "1000base-x";
++++	phys = <&cp0_comphy3 1>;
++++};
++++
++++&cp0_eth2 {
++++	status = "okay";
++++	phy-mode = "sgmii";
++++	phy = <&OOB_E1512_PHY>;
++++	phys = <&cp0_comphy5 2>;
++++};
++++
++++&cp0_crypto {
++++	status = "disabled";
++++};
++++
++++&cp0_pcie0 {
++++        status = "okay";
++++        phys = <&cp0_comphy0 0>;
++++        ranges = <0x81000000 0 0xf6000000 0  0xf6000000 0 0x00010000 0x82000000 0 0xc0000000 0  0xc0000000 0 0x18000000>;
++++};
++++
++++
++diff --git a/patch/0137-TG4810M-Makefile.patch b/patch/0137-TG4810M-Makefile.patch
++new file mode 100644
++index 0000000..8bd61fd
++--- /dev/null
+++++ b/patch/0137-TG4810M-Makefile.patch
++@@ -0,0 +1,9 @@
+++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
+++index 841c281..cec8bd1 100644
+++--- a/arch/arm64/boot/dts/marvell/Makefile
++++++ b/arch/arm64/boot/dts/marvell/Makefile
+++@@ -7,3 +7,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
+++ dtb-$(CONFIG_ARCH_MVEBU) += tg48m-p.dtb
++++dtb-$(CONFIG_ARCH_MVEBU) += tg4810m.dtb
++diff --git a/patch/series b/patch/series
++index 976cdbe..be0450b 100755
++--- a/patch/series
+++++ b/patch/series
++@@ -75,3 +75,10 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
++ 0117-mtd-nand-marvell-Add-support-for-8KB-page-4-and-8-bi.patch
++ 0120-arm64-reduced-configs.patch
++ 0120-arm64-pcie-irq.patch
+++0131-lmsensor-support.patch
+++0132-DTS-for-platform-TG48MP.patch
+++0133-TG48MP-Makefile.patch
+++0134-i2c-mux-support.patch
+++0135-arm64-spi-orion-support.patch
+++0136-DTS-for-platform-TG4810M.patch
+++0137-TG4810M-Makefile.patch
+diff --git a/sonic_target_mvl_patch.sh b/sonic_target_mvl_patch.sh
+index 8976d83..15fbe9b 100644
+--- a/sonic_target_mvl_patch.sh
++++ b/sonic_target_mvl_patch.sh
+@@ -105,11 +105,11 @@ apply_buster_kernel()
+     echo "Patching 4.19.67 arm changes"
+     patch -p1 < ./linux-ARM64-and-ARMHF-build-changes.patch
+     
+-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm64_TG48MP_DTS_and_Kernel_config.patch
++    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+ 
+-    patch -p1 --dry-run < ./arm64_TG48MP_DTS_and_Kernel_config.patch
+-    echo "Patching tg48mp kernel changes"
+-    patch -p1 < ./arm64_TG48MP_DTS_and_Kernel_config.patch
++    patch -p1 --dry-run < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
++    echo "Patching tg48mp and tg4810m kernel changes"
++    patch -p1 < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+ }
+ 
+ build_kernel_buster()
