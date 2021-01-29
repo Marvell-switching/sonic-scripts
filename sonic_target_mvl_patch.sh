@@ -14,7 +14,7 @@
 
 SONIC_MASTER_JUN30_COMMIT="96fedf1ae9ebcc6604daced6b7dd577eaeb26883"
 
-declare -a PATCHES=(P1 P2 P3 P4 P5 P6 P7)
+declare -a PATCHES=(P1 P2 P3 P4 P5 P6 P7 P8)
 
 url="https://github.com/Azure"
 urlsai="https://patch-diff.githubusercontent.com/raw/opencomputeproject"
@@ -27,6 +27,7 @@ declare -A P4=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [
 declare -A P5=( [NAME]=sonic-snmpagent [DIR]=src/sonic-snmpagent [PR]="134" [URL]="$url" [PREREQ]="" )
 declare -A P6=( [NAME]=sonic-sairedis [DIR]=src/sonic-sairedis [PR]="643" [URL]="$url" [PREREQ]="" )
 declare -A P7=( [NAME]=sonic-swss-common [DIR]=src/sonic-swss-common [PR]="391" [URL]="$url" [PREREQ]="" )
+declare -A P8=( [NAME]=sonic-buildimage [DIR]=. [PR]="14 15" [URL]="https://github.com/Marvell-OpenNOS" [PREREQ]="" [POSTREQ]="")
 #
 # END of CONFIGURATIONS
 #
@@ -103,6 +104,12 @@ apply_buster_kernel()
     patch -p1 --dry-run < ./linux-ARM64-and-ARMHF-build-changes.patch
     echo "Patching 4.19.67 arm changes"
     patch -p1 < ./linux-ARM64-and-ARMHF-build-changes.patch
+    
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+
+    patch -p1 --dry-run < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+    echo "Patching tg48mp and tg4810m kernel changes"
+    patch -p1 < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
 }
 
 build_kernel_buster()
