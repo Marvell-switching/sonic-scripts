@@ -105,11 +105,11 @@ apply_buster_kernel()
     echo "Patching 4.19.67 arm changes"
     patch -p1 < ./linux-ARM64-and-ARMHF-build-changes.patch
     
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm64_TG48MP_DTS_and_Kernel_config.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
 
-    patch -p1 --dry-run < ./arm64_TG48MP_DTS_and_Kernel_config.patch
-    echo "Patching tg48mp kernel changes"
-    patch -p1 < ./arm64_TG48MP_DTS_and_Kernel_config.patch
+    patch -p1 --dry-run < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
+    echo "Patching tg48mp and tg4810m kernel changes"
+    patch -p1 < ./arm64_TG48MP_TG4810M_DTS_and_Kernel_config.patch
 }
 
 build_kernel_buster()
