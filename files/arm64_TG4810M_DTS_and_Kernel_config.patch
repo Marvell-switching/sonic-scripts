@@ -1,15 +1,24 @@
-diff --git a/patch/0136-DTS-for-platform-TG4810M.patch b/patch/0136-DTS-for-platform-TG4810M.patch
+diff --git a/patch/0136-DTS-for-TG4810M.patch b/patch/0136-DTS-for-TG4810M.patch
 new file mode 100644
-index 0000000..d3fb3ec
+index 0000000..bf456d7
 --- /dev/null
-+++ b/patch/0136-DTS-for-platform-TG4810M.patch
-@@ -0,0 +1,525 @@
++++ b/patch/0136-DTS-for-TG4810M.patch
+@@ -0,0 +1,524 @@
++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
++index 841c281..cec8bd1 100644
++--- a/arch/arm64/boot/dts/marvell/Makefile
+++++ b/arch/arm64/boot/dts/marvell/Makefile
++@@ -7,3 +7,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += tg48m-p.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += tg4810m.dtb
 +diff --git a/arch/arm64/boot/dts/marvell/tg4810m.dts b/arch/arm64/boot/dts/marvell/tg4810m.dts
 +new file mode 100644
-+index 0000000..47b4d44
++index 0000000..1ca31c3
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/tg4810m.dts
-+@@ -0,0 +1,519 @@
++@@ -0,0 +1,509 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Copyright (C) 2016 Marvell Technology Group Ltd.
@@ -165,17 +174,7 @@ index 0000000..d3fb3ec
 ++            i2c@0 {
 ++                #address-cells = <1>;
 ++                #size-cells = <0>;
-++                reg = <0>;
-++            };
-++            i2c@1 {
-++                #address-cells = <1>;
-++                #size-cells = <0>;  
-++                reg = <1>;
-++            };
-++            i2c@2 {
-++                #address-cells = <1>;
-++                #size-cells = <0>;
-++                reg = <2>;
+++                reg = <0xff>;
 ++            };
 ++        };
 ++};
@@ -529,28 +528,13 @@ index 0000000..d3fb3ec
 ++};
 ++
 ++
-diff --git a/patch/0137-TG4810M-Makefile.patch b/patch/0137-TG4810M-Makefile.patch
-new file mode 100644
-index 0000000..8bd61fd
---- /dev/null
-+++ b/patch/0137-TG4810M-Makefile.patch
-@@ -0,0 +1,9 @@
-+diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
-+index 841c281..cec8bd1 100644
-+--- a/arch/arm64/boot/dts/marvell/Makefile
-++++ b/arch/arm64/boot/dts/marvell/Makefile
-+@@ -7,3 +7,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += tg48m-p.dtb
-++dtb-$(CONFIG_ARCH_MVEBU) += tg4810m.dtb
 diff --git a/patch/series b/patch/series
-index b40412b..be0450b 100755
+index b40412b..bc03c28 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -80,3 +80,5 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
+@@ -80,3 +80,4 @@ net-fix-skb-csum-update-in-inet_proto_csum_replace16.patch
  0133-TG48MP-Makefile.patch
  0134-i2c-mux-support.patch
  0135-arm64-spi-orion-support.patch
-+0136-DTS-for-platform-TG4810M.patch
-+0137-TG4810M-Makefile.patch
++0136-DTS-for-TG4810M.patch
+
