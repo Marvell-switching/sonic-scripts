@@ -18,7 +18,7 @@ index 0000000..bf456d7
 +index 0000000..1ca31c3
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/tg4810m.dts
-+@@ -0,0 +1,509 @@
++@@ -0,0 +1,498 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Copyright (C) 2016 Marvell Technology Group Ltd.
@@ -165,17 +165,6 @@ index 0000000..bf456d7
 ++        lm75a@4b {
 ++            compatible = "ti,tmp75";
 ++            reg = <0x4b>;
-++        };
-++        i2c-mux@70 {
-++            compatible = "nxp,pca9546";
-++            reg = <0x70>;
-++            #address-cells = <1>;
-++            #size-cells = <0>;
-++            i2c@0 {
-++                #address-cells = <1>;
-++                #size-cells = <0>;
-++                reg = <0xff>;
-++            };
 ++        };
 ++};
 ++
