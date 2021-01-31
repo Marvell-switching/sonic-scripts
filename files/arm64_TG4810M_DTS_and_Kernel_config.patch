@@ -18,7 +18,7 @@ index 0000000..b1079a8
 +index 0000000..0eed6c9
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/tg4810m.dts
-+@@ -0,0 +1,498 @@
++@@ -0,0 +1,504 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Copyright (C) 2016 Marvell Technology Group Ltd.
@@ -179,6 +179,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x70>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
@@ -227,6 +228,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x71>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
@@ -275,6 +277,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x72>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
@@ -325,6 +328,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x73>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
@@ -374,6 +378,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x74>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
@@ -423,6 +428,7 @@ index 0000000..b1079a8
 ++            #address-cells = <1>;
 ++            #size-cells = <0>;
 ++            reg = <0x75>;
+++            i2c-mux-idle-disconnect;
 ++
 ++            i2c@0 {
 ++                #address-cells = <1>;
