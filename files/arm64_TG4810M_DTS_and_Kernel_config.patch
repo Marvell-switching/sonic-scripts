@@ -1,9 +1,9 @@
 diff --git a/patch/0136-DTS-for-TG4810M.patch b/patch/0136-DTS-for-TG4810M.patch
 new file mode 100644
-index 0000000..bf456d7
+index 0000000..b1079a8
 --- /dev/null
 +++ b/patch/0136-DTS-for-TG4810M.patch
-@@ -0,0 +1,524 @@
+@@ -0,0 +1,513 @@
 +diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
 +index 841c281..cec8bd1 100644
 +--- a/arch/arm64/boot/dts/marvell/Makefile
@@ -15,7 +15,7 @@ index 0000000..bf456d7
 ++dtb-$(CONFIG_ARCH_MVEBU) += tg4810m.dtb
 +diff --git a/arch/arm64/boot/dts/marvell/tg4810m.dts b/arch/arm64/boot/dts/marvell/tg4810m.dts
 +new file mode 100644
-+index 0000000..1ca31c3
++index 0000000..0eed6c9
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/tg4810m.dts
 +@@ -0,0 +1,498 @@
