@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..b1079a8
 --- /dev/null
 +++ b/patch/0136-DTS-for-TG4810M.patch
-@@ -0,0 +1,513 @@
+@@ -0,0 +1,519 @@
 +diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
 +index 841c281..cec8bd1 100644
 +--- a/arch/arm64/boot/dts/marvell/Makefile
