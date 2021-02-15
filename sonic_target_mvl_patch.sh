@@ -27,7 +27,8 @@ declare -A P4=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [
 declare -A P5=( [NAME]=sonic-snmpagent [DIR]=src/sonic-snmpagent [PR]="134" [URL]="$url" [PREREQ]="" )
 declare -A P6=( [NAME]=sonic-sairedis [DIR]=src/sonic-sairedis [PR]="643" [URL]="$url" [PREREQ]="" )
 declare -A P7=( [NAME]=sonic-swss-common [DIR]=src/sonic-swss-common [PR]="391" [URL]="$url" [PREREQ]="" )
-declare -A P8=( [NAME]=sonic-buildimage [DIR]=. [PR]="14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30" [URL]="https://github.com/Marvell-OpenNOS" [PREREQ]="" [POSTREQ]="")
+declare -A P8=( [NAME]=sonic-buildimage [DIR]=. [PR]="14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 37 38 39 40 41 " \
+[URL]="https://github.com/Marvell-OpenNOS" [PREREQ]="" [POSTREQ]="")
 #
 # END of CONFIGURATIONS
 #
