@@ -1,0 +1,70 @@
+diff --git a/dockers/docker-orchagent/switch.json.j2 b/dockers/docker-orchagent/switch.json.j2
+index 4d2a0be..84327e4 100644
+--- a/dockers/docker-orchagent/switch.json.j2
++++ b/dockers/docker-orchagent/switch.json.j2
+@@ -20,7 +20,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "{{ hash_seed_value }}",
+             "lag_hash_seed": "{{ hash_seed_value }}",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json b/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
+index 34fd946..aeb087e 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
+@@ -3,7 +3,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "11",
+             "lag_hash_seed": "11",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json b/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
+index d9f9296..adabaa6 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
+@@ -3,7 +3,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "13",
+             "lag_hash_seed": "13",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch.json b/src/sonic-config-engine/tests/sample_output/t0-switch.json
+index 414e53b..0b7628d 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch.json
+@@ -3,7 +3,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "0",
+             "lag_hash_seed": "0",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+diff --git a/src/sonic-config-engine/tests/sample_output/t1-switch.json b/src/sonic-config-engine/tests/sample_output/t1-switch.json
+index fdae474..b728544 100644
+--- a/src/sonic-config-engine/tests/sample_output/t1-switch.json
++++ b/src/sonic-config-engine/tests/sample_output/t1-switch.json
+@@ -3,7 +3,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "10",
+             "lag_hash_seed": "10",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
