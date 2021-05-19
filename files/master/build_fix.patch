@@ -1,0 +1,103 @@
+diff --git a/files/initramfs-tools/modules b/files/initramfs-tools/modules
+index 349bf37..0fa5529 100644
+--- a/files/initramfs-tools/modules
++++ b/files/initramfs-tools/modules
+@@ -5,3 +5,4 @@ nls_ascii
+ nls_cp437
+ nls_utf8
+ nvme
++i2c-dev
+diff --git a/files/initramfs-tools/modules.arm b/files/initramfs-tools/modules.arm
+index 0741051..fd2e65b 100644
+--- a/files/initramfs-tools/modules.arm
++++ b/files/initramfs-tools/modules.arm
+@@ -12,3 +12,14 @@ ofpart
+ mtdswap
+ mtd_blkdevs
+ adt7475
++mtdblock
++mtdblock_ro
++mtdoops
++ahci
++sd_mod
++sr_mod
++ohci_pci
++ehci_pci
++loop
++ext4
++i2c-dev
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index 15f25a2..60a0d7a 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -13,8 +13,8 @@ initrd_addr=0x2000000
+ VAR_LOG=512
+ DISK_SIZE=9
+
+-kernel_fname="/boot/vmlinuz-4.9.0-9-2-arm64"
+-initrd_fname="/boot/initrd.img-4.9.0-9-2-arm64"
++kernel_fname="/boot/vmlinuz-4.19.0-12-2-arm64"
++initrd_fname="/boot/initrd.img-4.19.0-12-2-arm64"
+ fdt_fname="/boot/armada-7020-comexpress.dtb"
+ fit_fname="/boot/sonic_arm64.fit"
+
+diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
+index f8e4c12..2f2fe8f 100644
+--- a/platform/marvell-arm64/rules.mk
++++ b/platform/marvell-arm64/rules.mk
+@@ -6,8 +6,6 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/one-image.mk
+ include $(PLATFORM_PATH)/linux-kernel-arm64.mk
+-INCLUDE_SYSTEM_TELEMETRY = ""
+-
+
+ SONIC_ALL += $(SONIC_ONE_IMAGE) \
+              $(DOCKER_FPM)     \
+diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
+index 6cf7947..b211293 100644
+--- a/platform/marvell-arm64/sai.mk
++++ b/platform/marvell-arm64/sai.mk
+@@ -1,6 +1,6 @@
+ # Marvell SAI
+
+-export MRVL_SAI_VERSION = 1.5.1
++export MRVL_SAI_VERSION = 1.8.1
+ export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
+
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
+index 9b09d4c..7c99966 100644
+--- a/platform/marvell-arm64/sonic_fit.its
++++ b/platform/marvell-arm64/sonic_fit.its
+@@ -7,7 +7,7 @@
+     images {
+         kernel@0 {
+             description = "Linux Kernel";
+-            data = /incbin/("/boot/vmlinuz-4.9.0-9-2-arm64");
++            data = /incbin/("/boot/vmlinuz-4.19.0-12-2-arm64");
+             type = "kernel";
+             arch = "arm64";
+             os = "linux";
+@@ -30,7 +30,7 @@
+         };
+         ramdisk@0 {
+             description = "ramdisk";
+-            data = /incbin/("/boot/initrd.img-4.9.0-9-2-arm64");
++            data = /incbin/("/boot/initrd.img-4.19.0-12-2-arm64");
+             type = "ramdisk";
+             arch = "arm64";
+             os = "linux";
+diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
+index ac05bc8..8a59781 100644
+--- a/platform/marvell/sai.mk
++++ b/platform/marvell/sai.mk
+@@ -1,6 +1,6 @@
+ # Marvell SAI
+
+-export MRVL_SAI_VERSION = 1.5.1
++export MRVL_SAI_VERSION = 1.8.1
+ export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
+
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+
