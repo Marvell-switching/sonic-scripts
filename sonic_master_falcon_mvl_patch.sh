@@ -152,6 +152,10 @@ bug_fixes()
     patch -p1 --dry-run < ./build_fix.patch
     patch -p1 < ./build_fix.patch
 
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/syncd_buster.patch
+    patch -p1 --dry-run < ./syncd_buster.patch
+    patch -p1 < ./syncd_buster.patch
+
     #redis workaround to increase lua-time-limit to 20000ms
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
     patch -p1 < redis_wa.patch
