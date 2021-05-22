@@ -156,6 +156,10 @@ bug_fixes()
     patch -p1 --dry-run < ./syncd_buster.patch
     patch -p1 < ./syncd_buster.patch
 
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/radius_arm64_build.patch
+    patch -p1 --dry-run < ./radius_arm64_build.patch
+    patch -p1 < ./radius_arm64_build.patch
+
     #redis workaround to increase lua-time-limit to 20000ms
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
     patch -p1 < redis_wa.patch
