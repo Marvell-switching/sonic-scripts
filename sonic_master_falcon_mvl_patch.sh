@@ -201,14 +201,6 @@ bug_fixes()
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
 
-    #6 Overwrite default profile with 32x25G 12.8T
-    cp -rv device/marvell/x86_64-marvell_db98cx8580_32cd-r0/FALCON32X25G/* device/marvell/x86_64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd/
-    cp -rv device/marvell/arm64-marvell_db98cx8580_32cd-r0/FALCON32X25G/* device/marvell/arm64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd/
-
-    #7 Overwrite default profile with 16x25G 6.4T
-    cp -rv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/FALCON16X25G/* device/marvell/x86_64-marvell_db98cx8540_16cd-r0/db98cx8540_16cd/ || true
-    cp -rv device/marvell/arm64-marvell_db98cx8540_16cd-r0/FALCON16X25G/* device/marvell/arm64-marvell_db98cx8540_16cd-r0/db98cx8540_16cd/ || true
-
     #8 Add Falcon module  
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/falcon_modules.patch
     patch -p1 < falcon_modules.patch
