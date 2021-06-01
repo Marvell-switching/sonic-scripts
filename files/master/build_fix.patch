@@ -55,14 +55,14 @@ index f8e4c12..2f2fe8f 100644
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM)     \
 diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
-index 6cf7947..b211293 100644
+index 6cf7947..6695ff8 100644
 --- a/platform/marvell-arm64/sai.mk
 +++ b/platform/marvell-arm64/sai.mk
 @@ -1,6 +1,6 @@
  # Marvell SAI
 
 -export MRVL_SAI_VERSION = 1.5.1
-+export MRVL_SAI_VERSION = 1.8.1
++export MRVL_SAI_VERSION = 1.8.1-1
  export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
 
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
@@ -89,15 +89,17 @@ index 9b09d4c..7c99966 100644
              arch = "arm64";
              os = "linux";
 diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
-index ac05bc8..8a59781 100644
+index ac05bc8..6695ff8 100644
 --- a/platform/marvell/sai.mk
 +++ b/platform/marvell/sai.mk
-@@ -1,6 +1,6 @@
+@@ -1,7 +1,7 @@
  # Marvell SAI
 
 -export MRVL_SAI_VERSION = 1.5.1
-+export MRVL_SAI_VERSION = 1.8.1
- export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
+-export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
++export MRVL_SAI_VERSION = 1.8.1-1
++export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
 
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
 
