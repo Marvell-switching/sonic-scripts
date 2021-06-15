@@ -15,20 +15,13 @@ set -e
 
 SONIC_MASTER_COMMIT="5ab300b62669e65c3095ac50a020f970c0337e66"
 
-declare -a PATCHES=(P1 P2 P3 P4 P5 P6 P7 P8 P9)
+declare -a PATCHES=(P1 P2)
 
 url="https://github.com/Azure"
 urlsai="https://patch-diff.githubusercontent.com/raw/opencomputeproject"
 
 declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="")
-declare -A P2=( [NAME]=sonic-swss [DIR]=src/sonic-swss [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="" )
-declare -A P3=( [NAME]=sonic-swss-common [DIR]=src/sonic-swss-common [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P4=( [NAME]=sonic-mgmt-framework [DIR]=src/sonic-mgmt-framework [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P5=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [URL]="$url" [PREREQ]="apply_buster_kernel" )
-declare -A P6=( [NAME]=sonic-platform-common [DIR]=src/sonic-platform-common [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P7=( [NAME]=sonic-snmpagent [DIR]=src/sonic-snmpagent [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P8=( [NAME]=sonic-sairedis [DIR]=src/sonic-sairedis [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P9=( [NAME]=sonic-utilities [DIR]=src/sonic-utilities [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="")
+declare -A P2=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [URL]="$url" [PREREQ]="apply_buster_kernel" )
 
 #
 # END of CONFIGURATIONS
@@ -178,19 +171,11 @@ apply_buster_kernel()
 
 bug_fixes()
 {
-    #redis workaround to increase lua-time-limit to 20000ms
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
-    patch -p1 < redis_wa.patch
-
     # Mac address fix
     sed -i  "s/'cat'/'cat '/g" src/sonic-py-common/sonic_py_common/device_info.py
 
     # snmp subagent
     echo 'sudo sed -i "s/python3.6/python3/g" $FILESYSTEM_ROOT/etc/monit/conf.d/monit_snmp' >> files/build_templates/sonic_debian_extension.j2
-
-    # Update redis version
-    #sed -i 's/redis-tools=5:6.0.5-1~bpo10+1/redis-tools=5:6.0.8-1~bpo10+1/g' dockers/docker-base-buster/Dockerfile.j2
-    #sed -i 's/redis-server=5:6.0.5-1~bpo10+1/redis-server=5:6.0.8-1~bpo10+1/g' dockers/docker-database/Dockerfile.j2
 
     # Disable Telemetry
     sed -i 's/INCLUDE_MGMT_FRAMEWORK = y/INCLUDE_MGMT_FRAMEWORK = n/g' rules/config
