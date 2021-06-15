@@ -13,22 +13,22 @@ set -e
 # CONFIGURATIONS:-
 #
 
-SONIC_MASTER_JUN30_COMMIT="96fedf1ae9ebcc6604daced6b7dd577eaeb26883"
+SONIC_MASTER_COMMIT="5ab300b62669e65c3095ac50a020f970c0337e66"
 
 declare -a PATCHES=(P1 P2 P3 P4 P5 P6 P7 P8 P9)
 
 url="https://github.com/Azure"
 urlsai="https://patch-diff.githubusercontent.com/raw/opencomputeproject"
 
-declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="3687 5500 6040" [URL]="$url" [PREREQ]="" [POSTREQ]="buildimage_post_script")
-declare -A P2=( [NAME]=sonic-swss [DIR]=src/sonic-swss [PR]="1325 1273 1369 1407 " [URL]="$url" [PREREQ]="" [POSTREQ]="swss_post_script" )
+declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="")
+declare -A P2=( [NAME]=sonic-swss [DIR]=src/sonic-swss [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="" )
 declare -A P3=( [NAME]=sonic-swss-common [DIR]=src/sonic-swss-common [PR]="" [URL]="$url" [PREREQ]="" )
 declare -A P4=( [NAME]=sonic-mgmt-framework [DIR]=src/sonic-mgmt-framework [PR]="" [URL]="$url" [PREREQ]="" )
 declare -A P5=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [URL]="$url" [PREREQ]="apply_buster_kernel" )
 declare -A P6=( [NAME]=sonic-platform-common [DIR]=src/sonic-platform-common [PR]="" [URL]="$url" [PREREQ]="" )
-declare -A P7=( [NAME]=sonic-snmpagent [DIR]=src/sonic-snmpagent [PR]="134" [URL]="$url" [PREREQ]="" )
-declare -A P8=( [NAME]=sonic-sairedis [DIR]=src/sonic-sairedis [PR]="643" [URL]="$url" [PREREQ]="" )
-declare -A P9=( [NAME]=sonic-utilities [DIR]=src/sonic-utilities [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="utilities_post_script")
+declare -A P7=( [NAME]=sonic-snmpagent [DIR]=src/sonic-snmpagent [PR]="" [URL]="$url" [PREREQ]="" )
+declare -A P8=( [NAME]=sonic-sairedis [DIR]=src/sonic-sairedis [PR]="" [URL]="$url" [PREREQ]="" )
+declare -A P9=( [NAME]=sonic-utilities [DIR]=src/sonic-utilities [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="")
 
 #
 # END of CONFIGURATIONS
@@ -53,7 +53,7 @@ pre_patch_help()
     log "STEPS TO BUILD:"
     log "git clone https://github.com/Azure/sonic-buildimage.git"
     log "cd sonic-buildimage"
-    log "git checkout $SONIC_MASTER_JUN30_COMMIT"
+    log "git checkout $SONIC_MASTER_COMMIT"
     log "git checkout -b mrvl"
     log "make init"
 
@@ -65,41 +65,6 @@ pre_patch_help()
     log ""
     log ""
 }
-swss_post_script()
-{
-    #PR 1454
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/shell_swss.patch
-    patch -p1 < shell_swss.patch
-}
-
-buildimage_post_script()
-{
-    #PR 5519
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/shell_buildimage.patch
-    patch -p1 < shell_buildimage.patch
-    #PR 5252
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/5252_ebtables.patch
-    patch -p1 < 5252_ebtables.patch
-    rm files/image_config/ebtables/ebtables.filter
-
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/arm_redis_storage.patch
-    patch -p1 < arm_redis_storage.patch
-
-    #redis workaround to increase lua-time-limit to 20000ms
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
-    patch -p1 < redis_wa.patch
-}
-
-utilities_post_script()
-{
-    #PR 1146
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/shell_utilities.patch
-    patch -p1 < shell_utilities.patch
-    #PR 1140
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/1140_portstat.patch
-    patch -p1 < 1140_portstat.patch
-}
-
 
 apply_patches()
 {
@@ -153,31 +118,6 @@ apply_patches()
     done
 }
 
-misc_workarounds()
-{
-    # Workarounds for Build machine
-    # Change docker spawn wait time to 4 sec
-    #cd sonic-buildimage
-    #sed -i 's/sleep 1/sleep 4/g' Makefile.work
-
-    # Disable Telemetry
-    sed -i 's/ENABLE_MGMT_FRAMEWORK = y/ENABLE_MGMT_FRAMEWORK = N/g' rules/config
-
-    # Add entropy
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/ent.py
-    mv ent.py files/image_config/platform/ent.py
-    sed -i '/platform rc.local/i \
-sudo cp $IMAGE_CONFIGS/platform/ent.py $FILESYSTEM_ROOT/etc/' files/build_templates/sonic_debian_extension.j2
-    sed -i '/build_version/i \
-python /etc/ent.py &' files/image_config/platform/rc.local
-
-   # enable sflow
-   #sed -i 's/("sflow", "disabled")/("sflow", "enabled")/g' files/build_templates/init_cfg.json.j2
-
-   # Starting teamd after syncd. (PR #4016)
-   #sed -i 's/After=updategraph.service/After=updategraph.service syncd.service/g' files/build_templates/per_namespace/teamd.service.j2
-}
-
 inband_mgmt_fix()
 {
     # WA to restart networking for inband mgmt
@@ -222,11 +162,11 @@ inband_mgmt(){\
 
 apply_buster_kernel()
 {
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_kernel_4.19.67.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_kernel_4.19.152.patch
 
-    patch -p1 --dry-run < ./armhf_kernel_4.19.67.patch
-    echo "Patching 4.19.67 armhf"
-    patch -p1 < ./armhf_kernel_4.19.67.patch
+    patch -p1 --dry-run < ./armhf_kernel_4.19.152.patch
+    echo "Patching 4.19.152 armhf"
+    patch -p1 < ./armhf_kernel_4.19.152.patch
 
     # Adding  DTS for platform ET6448M and IPD6448M
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_DTS-files-for-platform-ET6448M-and-IPD6448M.patch
@@ -236,66 +176,14 @@ apply_buster_kernel()
 
 }
 
-build_kernel_buster()
+bug_fixes()
 {
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_build_kernel_4.19.67_jun09.patch
-    patch -p1 --dry-run < ./armhf_build_kernel_4.19.67_jun09.patch
-    echo "Patching 4.19.67 build rules"
-    patch -p1 < ./armhf_build_kernel_4.19.67_jun09.patch
-}
-
-master_armhf_fix()
-{
-
-    # sonic slave docker
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/sonic_slave_docker.patch
-    patch -p1 --dry-run < ./sonic_slave_docker.patch
-    echo "SONIC slave build"
-    patch -p1 < ./sonic_slave_docker.patch
-    
-    # sonic base  docker
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/sonic_base_docker.patch
-    patch -p1 --dry-run < ./sonic_base_docker.patch
-    echo "SONIC base build"
-    patch -p1 < ./sonic_base_docker.patch
-
-    # Curl patch
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/curl_insecure_wa.patch
-    patch -p1 --dry-run < ./curl_insecure_wa.patch
-    echo "Curl insecure download"
-    patch -p1 < ./curl_insecure_wa.patch
-
-    # libyang patch
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/libyang_wa.patch
-    patch -p1 --dry-run < ./libyang_wa.patch
-    echo "Libyang fix test"
-    patch -p1 < ./libyang_wa.patch
-
-    # sonic_yang patch
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/sonic_yang_wa_jun09.patch
-    patch -p1 --dry-run < ./sonic_yang_wa_jun09.patch
-    echo "sonic-yang fix test"
-    patch -p1 < ./sonic_yang_wa_jun09.patch
-
-    # reboot syslog patch
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/reboot_syslog.patch
-    patch -p1 --dry-run < ./reboot_syslog.patch
-    echo "reboot_syslog fix test"
-    patch -p1 < ./reboot_syslog.patch
-
-    # wheel
-    sed -i '/keep pip installed/i \
-sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip install wheel' build_debian.sh
-
-    # Update SAI 1.6.3
-    sed -i 's/1.5.1/1.6.3/g' platform/marvell-armhf/sai.mk
+    #redis workaround to increase lua-time-limit to 20000ms
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
+    patch -p1 < redis_wa.patch
 
     # Mac address fix
-    sed -i  "s/'cat'/'cat '/g" src/sonic-config-engine/sonic_device_util.py
-
-    # Fancontrol
-    sed -i '/fancontrol.pid/i \
-/bin/cp -f /usr/share/sonic/platform/fancontrol /etc/' dockers/docker-platform-monitor/docker_init.sh
+    sed -i  "s/'cat'/'cat '/g" src/sonic-py-common/sonic_py_common/device_info.py
 
     # snmp subagent
     echo 'sudo sed -i "s/python3.6/python3/g" $FILESYSTEM_ROOT/etc/monit/conf.d/monit_snmp' >> files/build_templates/sonic_debian_extension.j2
@@ -304,23 +192,37 @@ sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip install wheel' 
     #sed -i 's/redis-tools=5:6.0.5-1~bpo10+1/redis-tools=5:6.0.8-1~bpo10+1/g' dockers/docker-base-buster/Dockerfile.j2
     #sed -i 's/redis-server=5:6.0.5-1~bpo10+1/redis-server=5:6.0.8-1~bpo10+1/g' dockers/docker-database/Dockerfile.j2
 
-    # sonic_generate_dump patch
-    pushd src/sonic-utilities
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/sonic_generate_dump.patch
-    patch -p1 --dry-run < ./sonic_generate_dump.patch
-    patch -p1 < ./sonic_generate_dump.patch
+    # Disable Telemetry
+    sed -i 's/INCLUDE_MGMT_FRAMEWORK = y/INCLUDE_MGMT_FRAMEWORK = n/g' rules/config
+    sed -i 's/INCLUDE_SYSTEM_TELEMETRY = y/INCLUDE_SYSTEM_TELEMETRY = n/g' rules/config
 
-    # cli performance improvement patch
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/cli_perf_improvement.patch
-    patch -p1 --dry-run < ./cli_perf_improvement.patch
-    patch -p1 < ./cli_perf_improvement.patch
-    popd
+    # Add entropy
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/ent.py
+    mv ent.py files/image_config/platform/ent.py
+    sed -i '/platform rc.local/i \
+sudo cp $IMAGE_CONFIGS/platform/ent.py $FILESYSTEM_ROOT/etc/' files/build_templates/sonic_debian_extension.j2
+    sed -i '/build_version/i \
+python /etc/ent.py &' files/image_config/platform/rc.local
+
 }
 
-update_sai_deb()
+enable_sdk_shell()
 {
-    # Using sai deb from xps branch
-    sed -i 's/mrvllibsai_/mrvllibsai_xps_202006_/g' platform/marvell-armhf/sai.mk
+    #PR 5519
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_buildimage.patch
+    patch -p1 < shell_buildimage.patch
+
+    #PR 1454
+    pushd src/sonic-swss
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_swss.patch
+    patch -p1 < shell_swss.patch
+    popd
+
+    #PR 1146
+    pushd src/sonic-utilities
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_utilities.patch
+    patch -p1 < shell_utilities.patch
+    popd
 }
 
 main()
@@ -332,9 +234,9 @@ main()
         exit
     fi
 
-    if [ "${sonic_buildimage_commit}" != "$SONIC_MASTER_JUN30_COMMIT" ]; then
+    if [ "${sonic_buildimage_commit}" != "$SONIC_MASTER_COMMIT" ]; then
         log "Checkout sonic-buildimage commit as below to proceed"
-        log "git checkout ${SONIC_MASTER_JUN30_COMMIT}"
+        log "git checkout ${SONIC_MASTER_COMMIT}"
         pre_patch_help
         exit
     fi
@@ -343,15 +245,12 @@ main()
 
     apply_patches 
 
-    misc_workarounds
-
     inband_mgmt_fix
 
-    build_kernel_buster
+    enable_sdk_shell
 
-    master_armhf_fix
+    bug_fixes
 
-    update_sai_deb
 }
 
 main $@
