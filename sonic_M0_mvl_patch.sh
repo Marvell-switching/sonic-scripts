@@ -170,6 +170,9 @@ apply_buster_kernel()
 
 bug_fixes()
 {
+    # Mac address fix
+    sed -i  "s/'cat'/'cat '/g" src/sonic-py-common/sonic_py_common/device_info.py
+
     # snmp subagent
     echo 'sudo sed -i "s/python3.6/python3/g" $FILESYSTEM_ROOT/etc/monit/conf.d/monit_snmp' >> files/build_templates/sonic_debian_extension.j2
 
