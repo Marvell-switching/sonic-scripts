@@ -156,7 +156,6 @@ inband_mgmt(){\
 apply_buster_kernel()
 {
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/armhf_kernel_4.19.152.patch
-
     patch -p1 --dry-run < ./armhf_kernel_4.19.152.patch
     echo "Patching 4.19.152 armhf"
     patch -p1 < ./armhf_kernel_4.19.152.patch
@@ -171,9 +170,6 @@ apply_buster_kernel()
 
 bug_fixes()
 {
-    # Mac address fix
-    sed -i  "s/'cat'/'cat '/g" src/sonic-py-common/sonic_py_common/device_info.py
-
     # snmp subagent
     echo 'sudo sed -i "s/python3.6/python3/g" $FILESYSTEM_ROOT/etc/monit/conf.d/monit_snmp' >> files/build_templates/sonic_debian_extension.j2
 
