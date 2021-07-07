@@ -20,7 +20,7 @@ declare -a PATCHES=(P1 P2)
 url="https://github.com/Azure"
 urlsai="https://patch-diff.githubusercontent.com/raw/opencomputeproject"
 
-declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="" [URL]="$url" [PREREQ]="" [POSTREQ]="")
+declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="53" [URL]="https://github.com/Marvell-OpenNOS/" [PREREQ]="" [POSTREQ]="")
 declare -A P2=( [NAME]=sonic-linux-kernel [DIR]=src/sonic-linux-kernel [PR]="" [URL]="$url" [PREREQ]="apply_buster_kernel" )
 
 #
