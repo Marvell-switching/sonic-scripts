@@ -173,6 +173,9 @@ bug_fixes()
     # Mac address fix
     sed -i  "s/'cat'/'cat '/g" src/sonic-py-common/sonic_py_common/device_info.py
 
+    #Update SAI version 1.8.1-1
+    sed -i 's/1.7.1-1/1.8.1-1/g' platform/marvell-armhf/sai.mk
+
     # snmp subagent
     echo 'sudo sed -i "s/python3.6/python3/g" $FILESYSTEM_ROOT/etc/monit/conf.d/monit_snmp' >> files/build_templates/sonic_debian_extension.j2
 
