@@ -41,19 +41,6 @@ index 15f25a2..60a0d7a 100644
  fdt_fname="/boot/armada-7020-comexpress.dtb"
  fit_fname="/boot/sonic_arm64.fit"
 
-diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
-index f8e4c12..2f2fe8f 100644
---- a/platform/marvell-arm64/rules.mk
-+++ b/platform/marvell-arm64/rules.mk
-@@ -6,8 +6,6 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
- include $(PLATFORM_PATH)/libsaithrift-dev.mk
- include $(PLATFORM_PATH)/one-image.mk
- include $(PLATFORM_PATH)/linux-kernel-arm64.mk
--INCLUDE_SYSTEM_TELEMETRY = ""
--
-
- SONIC_ALL += $(SONIC_ONE_IMAGE) \
-              $(DOCKER_FPM)     \
 diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
 index 6cf7947..6695ff8 100644
 --- a/platform/marvell-arm64/sai.mk

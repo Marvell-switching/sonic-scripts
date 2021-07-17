@@ -2165,14 +2165,6 @@ index 0000000..38e695e
 + CONFIG_HAVE_DEBUG_KMEMLEAK=y
 + # CONFIG_DEBUG_KMEMLEAK is not set
 + # CONFIG_DEBUG_STACK_USAGE is not set
-+@@ -8653,7 +7842,6 @@
-+ CONFIG_OLD_MCOUNT=y
-+ # CONFIG_DEBUG_USER is not set
-+ # CONFIG_DEBUG_LL is not set
-+-CONFIG_DEBUG_IMX_UART_PORT=1
-+ CONFIG_DEBUG_LL_INCLUDE="mach/debug-macro.S"
-+ CONFIG_UNCOMPRESS_INCLUDE="debug/uncompress.h"
-+ # CONFIG_ARM_KPROBES_TEST is not set
 +diff --git a/debian/build/build_armhf_none_armmp/.config b/debian/build/build_armhf_none_armmp/.config
 +index e997934..69288eb 100644
 +--- a/debian/build/build_armhf_none_armmp/.config

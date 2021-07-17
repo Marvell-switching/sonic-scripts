@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="5ab300b62669e65c3095ac50a020f970c0337e66"
+SONIC_COMMIT="f14430b29b80d199c709f7fa8c74035b5c004f90"
 
 declare -a PATCHES=(P1)
 
@@ -150,10 +150,6 @@ bug_fixes()
     patch -p1 --dry-run < ./syncd_buster.patch
     patch -p1 < ./syncd_buster.patch
 
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/radius_arm64_build.patch
-    patch -p1 --dry-run < ./radius_arm64_build.patch
-    patch -p1 < ./radius_arm64_build.patch
-
     #redis workaround to increase lua-time-limit to 20000ms
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
     patch -p1 < redis_wa.patch
@@ -206,7 +202,7 @@ bug_fixes()
     mv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/sfputil.py
 
     #8 Add Falcon module  
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/falcon_modules.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/falcon_modules.patch
     patch -p1 < falcon_modules.patch
 
     #9 TODO: Intel USB access
