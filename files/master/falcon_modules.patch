@@ -1,0 +1,34 @@
+diff --git a/platform/marvell/linux-modules.mk b/platform/marvell/linux-modules.mk
+new file mode 100644
+index 0000000..0f76ae3
+--- /dev/null
++++ b/platform/marvell/linux-modules.mk
+@@ -0,0 +1,6 @@
++# linux kernel package for marvell modules
++
++# Add platform specific MOD
++LINUX_KERNEL_MOD = linux-module-1.0.0-amd64.deb
++$(LINUX_KERNEL_MOD)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/kernel/$(LINUX_KERNEL_MOD)
++SONIC_ONLINE_DEBS += $(LINUX_KERNEL_MOD)
+diff --git a/platform/marvell/rules.mk b/platform/marvell/rules.mk
+index 070892e..23b6cfa 100644
+--- a/platform/marvell/rules.mk
++++ b/platform/marvell/rules.mk
+@@ -3,6 +3,7 @@ include $(PLATFORM_PATH)/docker-syncd-mrvl.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/one-image.mk
++include $(PLATFORM_PATH)/linux-modules.mk
+ include $(PLATFORM_PATH)/platform-db98cx8540-16cd.mk
+ include $(PLATFORM_PATH)/platform-db98cx8580-32cd.mk
+ 
+diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
+index fcac038..0b4176a 100644
+--- a/platform/marvell/one-image.mk
++++ b/platform/marvell/one-image.mk
+@@ -11,3 +11,4 @@ else
+ $(SONIC_ONE_IMAGE)_DOCKERS = $(SONIC_INSTALL_DOCKER_IMAGES)
+ endif
+ SONIC_INSTALLERS += $(SONIC_ONE_IMAGE)
++$(SONIC_ONE_IMAGE)_INSTALLS += $(LINUX_KERNEL_MOD)
+

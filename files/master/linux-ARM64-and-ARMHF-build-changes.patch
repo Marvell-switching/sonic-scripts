@@ -6867,111 +6867,7 @@ index 0000000..b21d5be
 + 	/*
 + 	 * On x86 irq line 0xff means "unknown" or "no connection"
 + 	 * (PCI 3.0, Section 6.2.4, footnote on page 223).
-diff --git a/patch/0121-arm64-marvell-mvpp2.patch b/patch/0121-arm64-marvell-mvpp2.patch
-new file mode 100644
-index 0000000..d182087
---- /dev/null
-+++ b/patch/0121-arm64-marvell-mvpp2.patch
-@@ -0,0 +1,99 @@
-+From 101892188fd5afd46afafc8a45f98194d41bcb96 Mon Sep 17 00:00:00 2001
-+From: sanandan <sanandan@marvell.com>
-+Date: Wed, 26 May 2021 18:12:07 +0530
-+Subject: [PATCH] marvell mvpp2 driver fix
-+
-+---
-+ drivers/net/ethernet/marvell/mvpp2/mvpp2.h      |  3 +--
-+ drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c | 19 ++++++++-----------
-+ 2 files changed, 9 insertions(+), 13 deletions(-)
-+
-+diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-+index 46911b6..67b9e81 100644
-+--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-+@@ -253,8 +253,7 @@
-+ #define     MVPP2_ISR_ENABLE_INTERRUPT(mask)  ((mask) & 0xffff)
-+ #define     MVPP2_ISR_DISABLE_INTERRUPT(mask) (((mask) << 16) & 0xffff0000)
-+ #define MVPP2_ISR_RX_TX_CAUSE_REG(port)               (0x5480 + 4 * (port))
-+-#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(version) \
-+-                                      ((version) == MVPP21 ? 0xffff : 0xff)
-++#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK       0xffff
-+ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK       0xff0000
-+ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_OFFSET     16
-+ #define     MVPP2_CAUSE_RX_FIFO_OVERRUN_MASK  BIT(24)
-+diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-+index 04bee45..6455511 100644
-+--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-+@@ -908,7 +908,7 @@ static void mvpp2_interrupts_unmask(void *arg)
-+       u32 val;
-+
-+       val = MVPP2_CAUSE_MISC_SUM_MASK |
-+-              MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
-++              MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+       if (port->has_tx_irqs)
-+               val |= MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK;
-+
-+@@ -928,7 +928,7 @@ mvpp2_shared_interrupt_mask_unmask(struct mvpp2_port *port, bool mask)
-+       if (mask)
-+               val = 0;
-+       else
-+-              val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(MVPP22);
-++              val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+
-+       for (i = 0; i < port->nqvecs; i++) {
-+               struct mvpp2_queue_vector *v = port->qvecs + i;
-+@@ -2901,7 +2901,7 @@ static int mvpp2_tx_tso(struct sk_buff *skb, struct net_device *dev,
-+ }
-+
-+ /* Main tx processing */
-+-static netdev_tx_t mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
-++static int mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
-+ {
-+       struct mvpp2_port *port = netdev_priv(dev);
-+       struct mvpp2_tx_queue *txq, *aggr_txq;
-+@@ -3059,8 +3059,7 @@ static int mvpp2_poll(struct napi_struct *napi, int budget)
-+       }
-+
-+       /* Process RX packets */
-+-      cause_rx = cause_rx_tx &
-+-                 MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
-++      cause_rx = cause_rx_tx & MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+       cause_rx <<= qv->first_rxq;
-+       cause_rx |= qv->pending_cause_rx;
-+       while (cause_rx && budget > 0) {
-+@@ -3341,7 +3340,7 @@ static int mvpp2_open(struct net_device *dev)
-+               valid = true;
-+       }
-+
-+-      if (priv->hw_version == MVPP22 && port->link_irq) {
-++      if (priv->hw_version == MVPP22 && port->link_irq && !port->phylink) {
-+               err = request_irq(port->link_irq, mvpp2_link_status_isr, 0,
-+                                 dev->name, port);
-+               if (err) {
-+@@ -4413,9 +4412,9 @@ static void mvpp2_xlg_config(struct mvpp2_port *port, unsigned int mode,
-+       if (state->pause & MLO_PAUSE_RX)
-+               ctrl0 |= MVPP22_XLG_CTRL0_RX_FLOW_CTRL_EN;
-+
-+-      ctrl4 &= ~(MVPP22_XLG_CTRL4_MACMODSELECT_GMAC |
-+-                 MVPP22_XLG_CTRL4_EN_IDLE_CHECK);
-+-      ctrl4 |= MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC;
-++      ctrl4 &= ~MVPP22_XLG_CTRL4_MACMODSELECT_GMAC;
-++      ctrl4 |= MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC |
-++               MVPP22_XLG_CTRL4_EN_IDLE_CHECK;
-+
-+       writel(ctrl0, port->base + MVPP22_XLG_CTRL0_REG);
-+       writel(ctrl4, port->base + MVPP22_XLG_CTRL4_REG);
-+@@ -5132,8 +5131,6 @@ static int mvpp2_probe(struct platform_device *pdev)
-+       if (has_acpi_companion(&pdev->dev)) {
-+               acpi_id = acpi_match_device(pdev->dev.driver->acpi_match_table,
-+                                           &pdev->dev);
-+-              if (!acpi_id)
-+-                      return -EINVAL;
-+               priv->hw_version = (unsigned long)acpi_id->driver_data;
-+       } else {
-+               priv->hw_version =
-+--
-+2.7.4
-+
+
 diff --git a/patch/series b/patch/series
 index a85ed87..6499761 100755
 --- a/patch/series
@@ -6996,3 +6892,101 @@ index a85ed87..6499761 100755
 -- 
 2.7.4
 
+commit f0475e2bfb997d5a56d83da2b0121b2bc1e71250
+Author: lkunjumon <lkunjumon@marvell.com>
+Date:   Thu Jul 8 11:04:23 2021 +0530
+
+    [PATCH] marvell mvpp2 driver fix
+
+diff --git a/patch/0121-arm64-marvell-mvpp2.patch b/patch/0121-arm64-marvell-mvpp2.patch
+new file mode 100644
+index 0000000..2dbd02a
+--- /dev/null
++++ b/patch/0121-arm64-marvell-mvpp2.patch
+@@ -0,0 +1,86 @@
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
++index 46911b6..67b9e81 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
++@@ -253,8 +253,7 @@
++ #define     MVPP2_ISR_ENABLE_INTERRUPT(mask)	((mask) & 0xffff)
++ #define     MVPP2_ISR_DISABLE_INTERRUPT(mask)	(((mask) << 16) & 0xffff0000)
++ #define MVPP2_ISR_RX_TX_CAUSE_REG(port)		(0x5480 + 4 * (port))
++-#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(version) \
++-					((version) == MVPP21 ? 0xffff : 0xff)
+++#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK	0xffff
++ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK	0xff0000
++ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_OFFSET	16
++ #define     MVPP2_CAUSE_RX_FIFO_OVERRUN_MASK	BIT(24)
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index 04bee45..6455511 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -908,7 +908,7 @@ static void mvpp2_interrupts_unmask(void *arg)
++ 	u32 val;
++ 
++ 	val = MVPP2_CAUSE_MISC_SUM_MASK |
++-		MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
+++		MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
++ 	if (port->has_tx_irqs)
++ 		val |= MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK;
++ 
++@@ -928,7 +928,7 @@ mvpp2_shared_interrupt_mask_unmask(struct mvpp2_port *port, bool mask)
++ 	if (mask)
++ 		val = 0;
++ 	else
++-		val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(MVPP22);
+++		val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
++ 
++ 	for (i = 0; i < port->nqvecs; i++) {
++ 		struct mvpp2_queue_vector *v = port->qvecs + i;
++@@ -2901,7 +2901,7 @@ static int mvpp2_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ }
++ 
++ /* Main tx processing */
++-static netdev_tx_t mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
+++static int mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
++ {
++ 	struct mvpp2_port *port = netdev_priv(dev);
++ 	struct mvpp2_tx_queue *txq, *aggr_txq;
++@@ -3059,8 +3059,7 @@ static int mvpp2_poll(struct napi_struct *napi, int budget)
++ 	}
++ 
++ 	/* Process RX packets */
++-	cause_rx = cause_rx_tx &
++-		   MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
+++	cause_rx = cause_rx_tx & MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
++ 	cause_rx <<= qv->first_rxq;
++ 	cause_rx |= qv->pending_cause_rx;
++ 	while (cause_rx && budget > 0) {
++@@ -3341,7 +3340,7 @@ static int mvpp2_open(struct net_device *dev)
++ 		valid = true;
++ 	}
++ 
++-	if (priv->hw_version == MVPP22 && port->link_irq) {
+++	if (priv->hw_version == MVPP22 && port->link_irq && !port->phylink) {
++ 		err = request_irq(port->link_irq, mvpp2_link_status_isr, 0,
++ 				  dev->name, port);
++ 		if (err) {
++@@ -4413,9 +4412,9 @@ static void mvpp2_xlg_config(struct mvpp2_port *port, unsigned int mode,
++ 	if (state->pause & MLO_PAUSE_RX)
++ 		ctrl0 |= MVPP22_XLG_CTRL0_RX_FLOW_CTRL_EN;
++ 
++-	ctrl4 &= ~(MVPP22_XLG_CTRL4_MACMODSELECT_GMAC |
++-		   MVPP22_XLG_CTRL4_EN_IDLE_CHECK);
++-	ctrl4 |= MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC;
+++	ctrl4 &= ~MVPP22_XLG_CTRL4_MACMODSELECT_GMAC;
+++	ctrl4 |= MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC |
+++		 MVPP22_XLG_CTRL4_EN_IDLE_CHECK;
++ 
++ 	writel(ctrl0, port->base + MVPP22_XLG_CTRL0_REG);
++ 	writel(ctrl4, port->base + MVPP22_XLG_CTRL4_REG);
++@@ -5132,8 +5131,6 @@ static int mvpp2_probe(struct platform_device *pdev)
++ 	if (has_acpi_companion(&pdev->dev)) {
++ 		acpi_id = acpi_match_device(pdev->dev.driver->acpi_match_table,
++ 					    &pdev->dev);
++-		if (!acpi_id)
++-			return -EINVAL;
++ 		priv->hw_version = (unsigned long)acpi_id->driver_data;
++ 	} else {
++ 		priv->hw_version =
