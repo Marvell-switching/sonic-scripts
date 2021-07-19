@@ -14,11 +14,12 @@
 
 SONIC_COMMIT="f14430b29b80d199c709f7fa8c74035b5c004f90"
 
-declare -a PATCHES=(P1)
+declare -a PATCHES=(P1 P2)
 
 url="https://github.com/Azure"
 
-declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="50" [URL]="https://github.com/Marvell-OpenNOS/" [PREREQ]="" [POSTREQ]="")
+declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="8210" [URL]="$url" [PREREQ]="" [POSTREQ]="")
+declare -A P2=( [NAME]=sonic-buildimage [DIR]=. [PR]="50" [URL]="https://github.com/Marvell-OpenNOS/" [PREREQ]="" [POSTREQ]="")
 
 #
 # END of CONFIGURATIONS
