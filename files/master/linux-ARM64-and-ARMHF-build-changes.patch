@@ -6868,27 +6868,6 @@ index 0000000..b21d5be
 + 	 * On x86 irq line 0xff means "unknown" or "no connection"
 + 	 * (PCI 3.0, Section 6.2.4, footnote on page 223).
 
-diff --git a/patch/series b/patch/series
-index a85ed87..6499761 100755
---- a/patch/series
-+++ b/patch/series
-@@ -83,6 +83,16 @@ driver-ixgbe-external-phy.patch
- 0030-hwmon-Add-convience-macro-to-define-simple-static-se.patch
- 0031-backport-nvme-Add-hardware-monitoring-support.patch
- 0032-platform-mellanox-mlxreg-hotplug-Use-capability-regi.patch
-+
-+0111-mtd-rawnand-marvell-document-a-bit-more-the-driver.patch
-+0112-mtd-rawnand-marvell-rework-BCH-engine-failure-path.patch
-+0113-mtd-rawnand-marvell-support-8b-512B-strength-for-2ki.patch
-+0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
-+0117-mtd-nand-marvell-Add-support-for-8KB-page-4-and-8-bi.patch
-+0120-arm64-reduced-configs.patch
-+0120-arm64-pcie-irq.patch
-+0121-arm64-marvell-mvpp2.patch
-+
- ############################################################
- #
- # Internal patches will be added below (placeholder)
 -- 
 2.7.4
 
@@ -6990,3 +6969,24 @@ index 0000000..2dbd02a
 + 		priv->hw_version = (unsigned long)acpi_id->driver_data;
 + 	} else {
 + 		priv->hw_version =
+diff --git a/patch/series b/patch/series
+index e0ce355..768111e 100755
+--- a/patch/series
++++ b/patch/series
+@@ -88,6 +88,16 @@ net-sch_generic-fix-the-missing-new-qdisc-assignment.patch
+ #
+ # Marvell platform patches for 4.19
+ armhf_secondary_boot_online.patch
++
++0111-mtd-rawnand-marvell-document-a-bit-more-the-driver.patch
++0112-mtd-rawnand-marvell-rework-BCH-engine-failure-path.patch
++0113-mtd-rawnand-marvell-support-8b-512B-strength-for-2ki.patch
++0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
++0117-mtd-nand-marvell-Add-support-for-8KB-page-4-and-8-bi.patch
++0120-arm64-reduced-configs.patch
++0120-arm64-pcie-irq.patch
++0121-arm64-marvell-mvpp2.patch
++
+ ############################################################
+ #
+ # Internal patches will be added below (placeholder)
