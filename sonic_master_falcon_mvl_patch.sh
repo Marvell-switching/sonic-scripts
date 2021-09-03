@@ -12,14 +12,13 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="f14430b29b80d199c709f7fa8c74035b5c004f90"
+SONIC_COMMIT="d0c73b050d860162a2c572a907c3b46595caed4c"
 
-declare -a PATCHES=(P1 P2)
+declare -a PATCHES=(P1)
 
 url="https://github.com/Azure"
 
-declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="8210" [URL]="$url" [PREREQ]="" [POSTREQ]="")
-declare -A P2=( [NAME]=sonic-buildimage [DIR]=. [PR]="50" [URL]="https://github.com/Marvell-OpenNOS/" [PREREQ]="" [POSTREQ]="")
+declare -A P1=( [NAME]=sonic-buildimage [DIR]=. [PR]="50" [URL]="https://github.com/Marvell-OpenNOS/" [PREREQ]="" [POSTREQ]="")
 
 #
 # END of CONFIGURATIONS
@@ -163,7 +162,7 @@ bug_fixes()
 
     #1 Disable Mgmt Framework and Telemetry
     sed -i 's/INCLUDE_MGMT_FRAMEWORK = y/INCLUDE_MGMT_FRAMEWORK = n/g' rules/config
-    sed -i 's/INCLUDE_SYSTEM_TELEMETRY = y/INCLUDE_SYSTEM_TELEMETRY = n/g' rules/config
+    sed '/INCLUDE_SYSTEM_TELEMETRY/d' platform/marvell-arm64/rules.mk
 
     #2 TODO: Add Entropy workaround for ARM64
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/ent.py
