@@ -188,12 +188,13 @@ bug_fixes()
     sed -i 's/"cbs":"600",/"cbs":"6000",/g' files/image_config/copp/copp_cfg.j2
 
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_falcon_hwsku.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_falcon_ac5x_hwsku.tgz
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8580_32cd-r0  || true
     rm -fr device/marvell/x86_64-marvell_db98cx8540_16cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8540_16cd-r0  || true
-    tar -C device/marvell/ -xzf mrvl_sonic_falcon_hwsku.tgz
+    rm -fr device/marvell/arm64-marvell_rd98DX7312_32G16HVG6HLG-r0 || true
+    tar -C device/marvell/ -xzf mrvl_sonic_falcon_ac5x_hwsku.tgz
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
