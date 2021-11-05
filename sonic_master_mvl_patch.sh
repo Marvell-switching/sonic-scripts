@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="d0c73b050d860162a2c572a907c3b46595caed4c"
+SONIC_COMMIT=""
 
 declare -a PATCHES=(P1)
 
@@ -146,10 +146,6 @@ bug_fixes()
     patch -p1 --dry-run < ./build_fix.patch
     patch -p1 < ./build_fix.patch
 
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/syncd_buster.patch
-    patch -p1 --dry-run < ./syncd_buster.patch
-    patch -p1 < ./syncd_buster.patch
-
     #redis workaround to increase lua-time-limit to 20000ms
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/redis_wa.patch
     patch -p1 < redis_wa.patch
@@ -162,7 +158,6 @@ bug_fixes()
 
     #1 Disable Mgmt Framework and Telemetry
     sed -i 's/INCLUDE_MGMT_FRAMEWORK = y/INCLUDE_MGMT_FRAMEWORK = n/g' rules/config
-    sed '/INCLUDE_SYSTEM_TELEMETRY/d' platform/marvell-arm64/rules.mk
 
     #2 TODO: Add Entropy workaround for ARM64
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/ent.py
