@@ -27,7 +27,7 @@ index 0741051..fd2e65b 100644
 +ext4
 +i2c-dev
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index 8ecdfa3..d57a2b0 100644
+index 8ecdfa3..50e0c7b 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
 @@ -2,27 +2,71 @@
@@ -60,7 +60,7 @@ index 8ecdfa3..d57a2b0 100644
 +    initrd_addr=0x206000000
 +else
 +    fdt_addr=0x1000000
-+    fit_addr=0x1000000
++    fit_addr=0x8000000
 +    initrd_addr=0x2000000
 +fi
 +
