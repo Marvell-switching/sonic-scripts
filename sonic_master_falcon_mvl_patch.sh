@@ -187,23 +187,13 @@ bug_fixes()
     sed -i 's/"cir":"600",/"cir":"6000",/g' files/image_config/copp/copp_cfg.j2
     sed -i 's/"cbs":"600",/"cbs":"6000",/g' files/image_config/copp/copp_cfg.j2
 
-    #6 Update U-Boot ENV Location
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/update_marvell_arm64_uboot_env.sh
-    mv update_marvell_arm64_uboot_env.sh files/image_config/platform/update_marvell_arm64_uboot_env.sh
-    chmod a+rwx files/image_config/platform/update_marvell_arm64_uboot_env.sh
-    sed -i '/platform rc.local/i \
-        sudo cp $IMAGE_CONFIGS/platform/update_marvell_arm64_uboot_env.sh $FILESYSTEM_ROOT/etc/' files/build_templates/sonic_debian_extension.j2
-    sed -i '/build_version/i \
-        sh /etc/update_marvell_arm64_uboot_env.sh &' files/image_config/platform/rc.local
-
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_falcon_ac5x_hwsku.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_falcon_hwsku.tgz
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8580_32cd-r0  || true
     rm -fr device/marvell/x86_64-marvell_db98cx8540_16cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8540_16cd-r0  || true
-    rm -fr device/marvell/arm64-marvell_rd98DX7312_32G16HVG6HLG-r0 || true
-    tar -C device/marvell/ -xzf mrvl_sonic_falcon_ac5x_hwsku.tgz
+    tar -C device/marvell/ -xzf mrvl_sonic_falcon_hwsku.tgz
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
