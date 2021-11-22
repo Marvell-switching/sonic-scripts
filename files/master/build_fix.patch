@@ -27,66 +27,347 @@ index 0741051..fd2e65b 100644
 +ext4
 +i2c-dev
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index 15f25a2..60a0d7a 100644
+index 8ecdfa3..50e0c7b 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
-@@ -13,8 +13,8 @@ initrd_addr=0x2000000
+@@ -2,27 +2,71 @@
+ 
+ # over ride default behaviour
+ 
++PLATFORM_AC5X="arm64-marvell_rd98DX7312_32G16HVG6HLG-r0"
++
+ echo "Preparing for installation ... "
+ 
+ IS_MASS=0
+ # global defines
+ kernel_addr=0x1100000
+-fdt_addr=0x1000000
+-fit_addr=0x1000000
+-initrd_addr=0x2000000
++
++if [ "$install_env" = "onie" ]; then
++    MACH_FILE="/etc/machine.conf"
++else
++    MACH_FILE="/host/machine.conf"
++fi
++
++PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
++echo "Intalling SONiC from $install_env on Platform $PLATFORM"
++
++if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++    fdt_addr=0x201000000
++    fit_addr=0x210000000
++    initrd_addr=0x206000000
++else
++    fdt_addr=0x1000000
++    fit_addr=0x8000000
++    initrd_addr=0x2000000
++fi
++
  VAR_LOG=512
  DISK_SIZE=9
-
+ 
 -kernel_fname="/boot/vmlinuz-4.9.0-9-2-arm64"
 -initrd_fname="/boot/initrd.img-4.9.0-9-2-arm64"
+-fdt_fname="/boot/armada-7020-comexpress.dtb"
 +kernel_fname="/boot/vmlinuz-4.19.0-12-2-arm64"
 +initrd_fname="/boot/initrd.img-4.19.0-12-2-arm64"
- fdt_fname="/boot/armada-7020-comexpress.dtb"
++
++if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++    fdt_fname="/boot/ac5x.dtb"
++else
++    fdt_fname="/boot/armada-7020-comexpress.dtb"
++fi
++
  fit_fname="/boot/sonic_arm64.fit"
-
+ 
++# AC5X related Partition information
++if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++    onie_part_size=168M
++    onie_part_num=1
++    onie_part_label=ONIE
++
++    swap_part_size=3G
++    swap_part_num=3
++    swap_part_label=swap
++
++    sonic_part_num=2
++    sonic_part_label=SONiC-OS
++fi
++
+ # global mount defines
+ #demo_dev=/dev/sda1
+ demo_mnt=/tmp
+ #mtd_dev=/dev/$(cat /proc/mtd | grep "ENV" | grep -o "mtd[0-9]")
+-FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
++if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++    FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
++else
++    FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
++fi
++
+ UBOOT_FW_DEFAULT=1
+ 
+ # Skip VID Header in UBIFS
+@@ -79,7 +123,12 @@ prepare_boot_menu() {
+                 echo "Error: Unable to detect $blk_dev $demo_dev"
+                 exit 1
+             fi
+-            if [ ${IS_MASS} -eq 1 ]
++
++            if [ "$PLATFORM" = "$PLATFORM_AC5X" ]
++            then
++                demo_part=${sonic_part_num}
++                demo_dev=${blk_dev}p${sonic_part_num}
++            elif [ ${IS_MASS} -eq 1 ]
+             then
+                 demo_dev=${blk_dev}1
+             else
+@@ -132,8 +181,13 @@ prepare_boot_menu() {
+         fw_setenv ${FW_ARG} sonic_boot_load $MMC_LOAD > /dev/null
+     fi
+     #SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; booti $kernel_addr $initrd_addr $fdt_addr'
+-    SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'
+-    SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr'
++    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++        SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr#conf_ac5x'
++        SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr#conf_ac5x'
++    else
++        SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'
++        SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr'
++    fi
+     BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait rootfstype=ext4 panic=1 console=ttyS0,115200 ${othbootargs} ${mtdparts} ${linuxargs}'
+     fw_setenv ${FW_ARG} sonic_bootargs $BOOTARGS > /dev/null
+     fw_setenv ${FW_ARG} sonic_bootcmd $SONIC_BOOT_CMD > /dev/null
+@@ -148,6 +202,21 @@ prepare_boot_menu() {
+ #Default block device is eMMC, if not look for usb storage
+ get_install_device()
+ {
++    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++        mmc_bus="mmc0:0001"
++        for i in 0 1 2 ; do
++            if $(ls -l /sys/block/mmcblk$i/device 2>/dev/null | grep -q "$mmc_bus") ; then
++                echo "/dev/mmcblk$i"
++                blk_dev=/dev/mmcblk$i
++                echo "Selected mmc $blk_dev"
++                return 0
++            fi
++        done
++
++        echo "ERROR storage not found"
++        return 1
++    fi
++
+     mass_bus="target0:0:0"
+     for i in a b c ; do
+         if $(ls -l /sys/block/sd$i/device 2>/dev/null | grep -q "$mass_bus") ; then
+@@ -174,6 +243,62 @@ get_install_device()
+ 
+ create_demo_partition() {
+ 
++    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]
++    then
++        onie_part=$(sgdisk -p "$blk_dev" | grep -e "$onie_part_label" | awk '{print $1}')
++        sonic_part=$(sgdisk -p "$blk_dev" | grep -e "$sonic_part_label" | awk '{print $1}')
++        swap_part=$(sgdisk -p "$blk_dev" | grep -e "$swap_part_label" | awk '{print $1}')
++
++        if [ -z "$onie_part" ]
++        then
++            echo "Partitioning is Incorrect. Re-partitioning"
++            sgdisk -oZ ${blk_dev}
++
++            sgdisk --new ${onie_part_num}:0:+${onie_part_size} \
++                --change-name=${onie_part_num}:${onie_part_label} \
++                --typecode=${onie_part_num}:8300 -p ${blk_dev}
++
++            if [ $? -ne 0 ]; then
++                echo "Failed creating onie eMMC partition"
++                return 2
++            fi
++
++            mkfs.ext4 -F -L ${onie_part_label} ${blk_dev}p${onie_part_num}
++        else
++            fsck.ext4 -v -p ${blk_dev}p${onie_part_num}
++        fi
++
++        if [ -z "$swap_part" ]; then
++            # Create swap partition
++            sgdisk --new ${swap_part_num}:-${swap_part_size}: \
++                --change-name=${swap_part_num}:${swap_part_label} \
++                --typecode=${swap_part_num}:8200 -p ${blk_dev}
++        fi
++
++        if [ -z "$sonic_part" ]; then
++            # Create sonic partition
++            start_num=$(sgdisk -F $blk_dev)
++            end_num=$(sgdisk -E $blk_dev)
++
++            sgdisk --new ${sonic_part_num}:${start_num}:${end_num} \
++                --change-name=${sonic_part_num}:${sonic_part_label} \
++                --typecode=${sonic_part_num}:8300 -p ${blk_dev}
++
++            mkfs.ext4 -F -L ${sonic_part_label} ${blk_dev}p${sonic_part_num}
++        else
++            fsck.ext4 -v -p ${blk_dev}p${sonic_part_num}
++        fi
++
++        partprobe
++        sync
++
++        mkswap ${blk_dev}p${swap_part_num}
++        echo "${blk_dev}p${swap_part_num}    swap  swap  defaults   0   0" > /etc/fstab
++        swapon -a
++
++        return 0
++    fi
++
+     if [ ${IS_MASS} -eq 1 ]
+     then
+         # USB drive
+@@ -201,6 +326,19 @@ create_partition() {
+ }
+ 
+ mount_partition() {
++
++    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++        demo_part=${sonic_part_num}
++        demo_dev=${blk_dev}p${demo_part}
++
++        mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || {
++            echo "Error: Unable to mount $demo_dev on $demo_mnt"
++            exit 1
++        }
++
++        return 0
++    fi
++
+     if [ ${IS_MASS} -eq 1 ]
+     then
+         demo_dev=${blk_dev}1
 diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
 index 6cf7947..6695ff8 100644
 --- a/platform/marvell-arm64/sai.mk
 +++ b/platform/marvell-arm64/sai.mk
 @@ -1,6 +1,6 @@
  # Marvell SAI
-
+ 
 -export MRVL_SAI_VERSION = 1.5.1
 +export MRVL_SAI_VERSION = 1.8.1-1
  export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
-
+ 
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
 diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
-index 9b09d4c..7c99966 100644
+index 9b09d4c..5846c6d 100644
 --- a/platform/marvell-arm64/sonic_fit.its
 +++ b/platform/marvell-arm64/sonic_fit.its
-@@ -7,7 +7,7 @@
+@@ -5,9 +5,9 @@
+     #address-cells = <1>;
+   
      images {
-         kernel@0 {
+-        kernel@0 {
++        kernel_falcon {
              description = "Linux Kernel";
 -            data = /incbin/("/boot/vmlinuz-4.9.0-9-2-arm64");
 +            data = /incbin/("/boot/vmlinuz-4.19.0-12-2-arm64");
              type = "kernel";
              arch = "arm64";
              os = "linux";
-@@ -30,7 +30,7 @@
+@@ -18,7 +18,7 @@
+                 algo = "sha1";
+             };
          };
-         ramdisk@0 {
+-        fdt@0 {
++        fdt_falcon {
+             description = "Flattened Device Tree blob";
+             data = /incbin/("/boot/armada-7020-comexpress.dtb");
+             type = "flat_dt";
+@@ -28,9 +28,9 @@
+                 algo = "sha1";
+             };
+         };
+-        ramdisk@0 {
++        ramdisk_falcon {
              description = "ramdisk";
 -            data = /incbin/("/boot/initrd.img-4.9.0-9-2-arm64");
 +            data = /incbin/("/boot/initrd.img-4.19.0-12-2-arm64");
              type = "ramdisk";
              arch = "arm64";
              os = "linux";
+@@ -39,14 +39,60 @@
+                 algo = "sha1";
+             };
+         };
++        kernel_ac5x {
++            description = "Linux Kernel for AC5x";
++            data = /incbin/("/boot/vmlinuz-4.19.0-12-2-arm64");
++            type = "kernel";
++            arch = "arm64";
++            os = "linux";
++            compression = "none";
++            load = <0x2 0x2080000>;
++            entry = <0x2 0x2080000>;
++            hash@1 {
++                algo = "sha1";
++            };
++        };
++        fdt_ac5x {
++            description = "Flattened Device Tree blob for AC5x";
++            data = /incbin/("/boot/ac5x.dtb");
++            type = "flat_dt";
++            arch = "arm64";
++            compression = "none";
++            load = <0x2 0x1000000>;
++            hash@1 {
++                algo = "sha1";
++            };
++        };
++        ramdisk_ac5x {
++            description = "ramdisk for AC5x";
++            data = /incbin/("/boot/initrd.img-4.19.0-12-2-arm64");
++            type = "ramdisk";
++            arch = "arm64";
++            os = "linux";
++            compression = "gzip";
++            load = <0x2 0x6000000>;
++            entry = <0x2 0x6000000>;
++            hash@1 {
++                algo = "sha1";
++            };
++        };
+     };
+     configurations {
+         default = "conf@1";
+         conf@1 {
+             description = "Boot Linux kernel with FDT blob + ramdisk";
+-            kernel = "kernel@0";
+-            fdt = "fdt@0";
+-            ramdisk = "ramdisk@0";
++            kernel = "kernel_falcon";
++            fdt = "fdt_falcon";
++            ramdisk = "ramdisk_falcon";
++            hash@1 {
++                algo = "sha1";
++            };
++        };
++        conf_ac5x {
++            description = "Boot Linux kernel with FDT blob + ramdisk for RD_AC5x";
++            kernel = "kernel_ac5x";
++            fdt = "fdt_ac5x";
++            ramdisk = "ramdisk_ac5x";
+             hash@1 {
+                 algo = "sha1";
+             };
 diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
 index ac05bc8..6695ff8 100644
 --- a/platform/marvell/sai.mk
 +++ b/platform/marvell/sai.mk
 @@ -1,7 +1,7 @@
  # Marvell SAI
-
+ 
 -export MRVL_SAI_VERSION = 1.5.1
 -export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
 +export MRVL_SAI_VERSION = 1.8.1-1
 +export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
-
+ 
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
  $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
-
