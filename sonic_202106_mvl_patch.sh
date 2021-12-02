@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT=""
+SONIC_COMMIT="206f7b66b59600e46761ab287ae780b0248a3e84"
 
 declare -a PATCHES=(P1)
 
@@ -159,38 +159,22 @@ bug_fixes()
     #1 Disable Mgmt Framework and Telemetry
     sed -i 's/INCLUDE_MGMT_FRAMEWORK = y/INCLUDE_MGMT_FRAMEWORK = n/g' rules/config
 
-    #2 TODO: Add Entropy workaround for ARM64
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/ent.py
-    mv ent.py files/image_config/platform/ent.py
-    sed -i '/platform rc.local/i \
-        sudo cp $IMAGE_CONFIGS/platform/ent.py $FILESYSTEM_ROOT/etc/' files/build_templates/sonic_debian_extension.j2
-    sed -i '/build_version/i \
-        python /etc/ent.py &' files/image_config/platform/rc.local
-
-    #3 update mac in profile.ini
+    #2 update mac in profile.ini
     create_temp_rclocal_patch
     sed '16r /tmp/rclocal_fix' < files/image_config/platform/rc.local > files/image_config/platform/rc.local_new
     mv files/image_config/platform/rc.local files/image_config/platform/rc.local_orig
     mv files/image_config/platform/rc.local_new files/image_config/platform/rc.local
     chmod a+rwx files/image_config/platform/rc.local
 
-    #4 Watchdog/select Timeout  workaround
+    #3 Watchdog/select Timeout  workaround
     sed -i 's/#define SELECT_TIMEOUT 1000/#define SELECT_TIMEOUT 1999999/g' src/sonic-swss/orchagent/orchdaemon.cpp
     sed -i 's/(60\*1000)/(1999999)/g' src/sonic-sairedis/lib/inc/sairedis.h
 
-    #5 copp configuration for jumbo
+    #4 copp configuration for jumbo
     sed -i 's/"cir":"600",/"cir":"6000",/g' files/image_config/copp/copp_cfg.j2
     sed -i 's/"cbs":"600",/"cbs":"6000",/g' files/image_config/copp/copp_cfg.j2
 
-    #6 Update U-Boot ENV Location
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/update_marvell_arm64_uboot_env.sh
-    mv update_marvell_arm64_uboot_env.sh files/image_config/platform/update_marvell_arm64_uboot_env.sh
-    chmod a+rwx files/image_config/platform/update_marvell_arm64_uboot_env.sh
-    sed -i '/platform rc.local/i \
-        sudo cp $IMAGE_CONFIGS/platform/update_marvell_arm64_uboot_env.sh $FILESYSTEM_ROOT/etc/' files/build_templates/sonic_debian_extension.j2
-    sed -i '/build_version/i \
-        sh /etc/update_marvell_arm64_uboot_env.sh &' files/image_config/platform/rc.local
-    # Download hwsku
+    #5 Download hwsku
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku.tgz
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8580_32cd-r0  || true
@@ -208,14 +192,24 @@ bug_fixes()
     mv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/sfputil.py
     mv device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/sfputil.py
 
-    #8 Add Falcon module  
+    #6 Add Falcon module  
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/falcon_modules.patch
     patch -p1 < falcon_modules.patch
 
-    #9 TODO: Intel USB access
+    #7 TODO: Intel USB access
     wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/sonic_usb_install_slow.patch
     patch -p1 < sonic_usb_install_slow.patch
 
+    #8 use buster for syncd. Present in upstream for 202012.
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/202106/sync_buster.patch
+    patch -p1 --dry-run < ./sync_buster.patch
+    patch -p1 < ./sync_buster.patch
+
+    #9 arm64 platform patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/arm64-platform.patch
+    patch -p1 --dry-run < ./arm64-platform.patch
+    patch -p1 < ./arm64-platform.patch
+    
 }
 
 main()
