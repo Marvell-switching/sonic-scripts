@@ -26,6 +26,18 @@ index 0741051..fd2e65b 100644
 +loop
 +ext4
 +i2c-dev
+diff --git a/platform/marvell-arm64/linux-kernel-arm64.mk b/platform/marvell-arm64/linux-kernel-arm64.mk
+index a953c90..75cab1d 100644
+--- a/platform/marvell-arm64/linux-kernel-arm64.mk
++++ b/platform/marvell-arm64/linux-kernel-arm64.mk
+@@ -1,6 +1,6 @@
+ # linux kernel package for marvell arm64
+ 
+ # Add platform specific DTB
+-LINUX_KERNEL_DTB = linux-image-4.9.168-arm64.deb
++LINUX_KERNEL_DTB = linux-image-4.19.0-12-arm64.deb
+ $(LINUX_KERNEL_DTB)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/kernel/$(LINUX_KERNEL_DTB)
+ SONIC_ONLINE_DEBS += $(LINUX_KERNEL_DTB)
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
 index 8ecdfa3..50e0c7b 100644
 --- a/platform/marvell-arm64/platform.conf

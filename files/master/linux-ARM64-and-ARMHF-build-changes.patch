@@ -1,9 +1,8 @@
-From 77312e26515e6177b7ee530f89684154f4c5f4e7 Mon Sep 17 00:00:00 2001
-From: marvell <marvell@cpss-build4.marvell.com>
-Date: Tue, 26 Oct 2021 00:35:44 +0530
-Subject: [PATCH] Add patches and kernel configs for RD_AC5x
+From d2b59a01cf81dadebb51c0b408fa39a326a05f7f Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Fri, 26 Nov 2021 10:39:26 +0530
+Subject: [PATCH] AC5X kernel patch changes
 
-Signed-off-by: marvell <marvell@cpss-build4.marvell.com>
 ---
  ...-marvell-use-regmap_update_bits-for-sysco.patch |   68 +
  ...nd-marvell-document-a-bit-more-the-driver.patch |   97 +
@@ -25,8 +24,8 @@ Signed-off-by: marvell <marvell@cpss-build4.marvell.com>
  patch/0123-rd-ac5x-i2c-fixes.patch                 |  180 ++
  patch/0123-rd-ac5x-pcie-changes.patch              |  222 ++
  patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch     | 1097 ++++++++
- patch/series                                       |   19 +
- 21 files changed, 10409 insertions(+)
+ patch/series                                       |   18 +
+ 21 files changed, 10408 insertions(+)
  create mode 100644 patch/0110-mtd-rawnand-marvell-use-regmap_update_bits-for-sysco.patch
  create mode 100644 patch/0111-mtd-rawnand-marvell-document-a-bit-more-the-driver.patch
  create mode 100644 patch/0112-mtd-rawnand-marvell-rework-BCH-engine-failure-path.patch
@@ -10559,14 +10558,13 @@ index 0000000..24624c2
 + };
 + MODULE_DEVICE_TABLE(of, mvneta_match);
 diff --git a/patch/series b/patch/series
-index e0ce355..f748d6a 100755
+index 86a22e5..972df3b 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -88,6 +88,25 @@ net-sch_generic-fix-the-missing-new-qdisc-assignment.patch
+@@ -119,3 +119,21 @@ net-sch_generic-fix-the-missing-new-qdisc-assignment.patch
+ # Do not add any public patch below this marker
  #
- # Marvell platform patches for 4.19
- armhf_secondary_boot_online.patch
-+
+ ############################################################
 +0111-mtd-rawnand-marvell-document-a-bit-more-the-driver.patch
 +0112-mtd-rawnand-marvell-rework-BCH-engine-failure-path.patch
 +0113-mtd-rawnand-marvell-support-8b-512B-strength-for-2ki.patch
@@ -10585,9 +10583,6 @@ index e0ce355..f748d6a 100755
 +0123-rd-ac5x-pcie-changes.patch
 +0124-rd-ac5x-mvneta-mvmdio-changes.patch
 +
- ############################################################
- #
- # Internal patches will be added below (placeholder)
 -- 
 2.7.4
 
