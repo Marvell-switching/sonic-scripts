@@ -330,7 +330,7 @@ index e69de29..587bb30 100644
 +
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules
-index e69de29..2f54c47 100755
+index e69de29..5dea87d 100644
 --- a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules
 @@ -0,0 +1,57 @@
@@ -348,32 +348,32 @@ index e69de29..2f54c47 100755
 +SERVICE_DIR := service
 +
 +%:
-+       dh $@ --with systemd
++	dh $@ --with systemd
 +
 +clean:
-+       dh_testdir
-+       dh_testroot
-+       dh_clean
++	dh_testdir
++	dh_testroot
++	dh_clean
 +
 +build:
-+       # Nothing to do
++	# Nothing to do
 +
 +binary: binary-arch binary-indep
 +       # Nothing to do
 +
 +binary-arch:
-+       # Nothing to do
++	# Nothing to do
 +
 +binary-indep:
-+       dh_testdir
-+       dh_installdirs
++	dh_testdir
++	dh_installdirs
 +
-+       # Custom package commands
++# Custom package commands
 +       (for mod in $(MODULE_DIRS); do \
-+               dh_installdirs -p$(PACKAGE_PRE_NAME) /usr/local/bin; \
-+       done)
++        dh_installdirs -p$(PACKAGE_PRE_NAME) /usr/local/bin; \
++        done)
 +
-+       # Resuming debhelper scripts
++# Resuming debhelper scripts
 +       dh_testroot
 +       dh_install
 +       dh_installchangelogs
