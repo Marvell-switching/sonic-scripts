@@ -1,0 +1,237 @@
+diff --git a/dockers/docker-database/Dockerfile.j2 b/dockers/docker-database/Dockerfile.j2
+index aef22e2..bee2015 100644
+--- a/dockers/docker-database/Dockerfile.j2
++++ b/dockers/docker-database/Dockerfile.j2
+@@ -47,6 +47,7 @@ RUN apt-get clean -y                                  && \
+              s/^# syslog-enabled no$/syslog-enabled no/; \
+              s/^# unixsocket/unixsocket/;                \
+              s/redis-server.sock/redis.sock/g;           \
++             s/lua-time-limit 5000/lua-time-limit 20000/g;  \
+              s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/ \
+             ' /etc/redis/redis.conf
+ 
+diff --git a/dockers/docker-orchagent/switch.json.j2 b/dockers/docker-orchagent/switch.json.j2
+index 4d2a0be..84327e4 100644
+--- a/dockers/docker-orchagent/switch.json.j2
++++ b/dockers/docker-orchagent/switch.json.j2
+@@ -20,7 +20,8 @@
+         "SWITCH_TABLE:switch": {
+             "ecmp_hash_seed": "{{ hash_seed_value }}",
+             "lag_hash_seed": "{{ hash_seed_value }}",
+-            "fdb_aging_time": "600"
++            "fdb_aging_time": "600",
++            "sdk_diag_shell": 0
+         },
+         "OP": "SET"
+     }
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index 481051c..8842ed6 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -4,8 +4,8 @@
+ 		    "queue": "0",
+ 		    "meter_type":"packets",
+ 		    "mode":"sr_tcm",
+-		    "cir":"600",
+-		    "cbs":"600",
++		    "cir":"6000",
++		    "cbs":"6000",
+ 		    "red_action":"drop"
+ 	    },
+ 	    "queue4_group1": {
+@@ -19,8 +19,8 @@
+ 		    "queue": "4",
+ 		    "meter_type":"packets",
+ 		    "mode":"sr_tcm",
+-		    "cir":"600",
+-		    "cbs":"600",
++		    "cir":"6000",
++		    "cbs":"6000",
+ 		    "red_action":"drop"
+ 	    },
+ 	    "queue4_group3": {
+@@ -44,8 +44,8 @@
+ 		    "queue": "1",
+ 		    "meter_type":"packets",
+ 		    "mode":"sr_tcm",
+-		    "cir":"600",
+-		    "cbs":"600",
++		    "cir":"6000",
++		    "cbs":"6000",
+ 		    "red_action":"drop"
+ 	    },
+ 	    "queue2_group1": {
+diff --git a/files/image_config/platform/rc.local b/files/image_config/platform/rc.local
+index c88829f..f54fddb 100755
+--- a/files/image_config/platform/rc.local
++++ b/files/image_config/platform/rc.local
+@@ -14,6 +14,11 @@
+ SONIC_VERSION=$(cat /etc/sonic/sonic_version.yml | grep "build_version" | sed -e "s/build_version: //g;s/'//g")
+ FIRST_BOOT_FILE="/host/image-${SONIC_VERSION}/platform/firsttime"
+ 
++echo "Marvell: Executing Workarounds !!!!"
++
++echo "Switch Mac Address Update"
++MAC_ADDR=`ip link show eth0 | grep ether | awk '{print $2}'`
++find /usr/share/sonic/device/*db98cx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
+ # Move sonic-environment to /etc/sonic
+ SONIC_CONFIG_DIR="/host/image-${SONIC_VERSION}/sonic-config"
+ SONIC_ENV_FILE=${SONIC_CONFIG_DIR}/sonic-environment
+diff --git a/files/initramfs-tools/modules b/files/initramfs-tools/modules
+index 349bf37..0fa5529 100644
+--- a/files/initramfs-tools/modules
++++ b/files/initramfs-tools/modules
+@@ -5,3 +5,4 @@ nls_ascii
+ nls_cp437
+ nls_utf8
+ nvme
++i2c-dev
+diff --git a/files/initramfs-tools/modules.arm b/files/initramfs-tools/modules.arm
+index 0741051..fd2e65b 100644
+--- a/files/initramfs-tools/modules.arm
++++ b/files/initramfs-tools/modules.arm
+@@ -12,3 +12,14 @@ ofpart
+ mtdswap
+ mtd_blkdevs
+ adt7475
++mtdblock
++mtdblock_ro
++mtdoops
++ahci
++sd_mod
++sr_mod
++ohci_pci
++ehci_pci
++loop
++ext4
++i2c-dev
+diff --git a/installer/x86_64/install.sh b/installer/x86_64/install.sh
+index d40dedc..d3028c8 100755
+--- a/installer/x86_64/install.sh
++++ b/installer/x86_64/install.sh
+@@ -44,6 +44,11 @@ read_conf_file() {
+ set -e
+ cd $(dirname $0)
+ 
++START_TIME=`date +%s`
++echo 0 > /proc/sys/kernel/hung_task_timeout_secs
++sync
++echo 3 > /proc/sys/vm/drop_caches
++
+ if [ -d "/etc/sonic" ]; then
+     echo "Installing SONiC in SONiC"
+     install_env="sonic"
+@@ -185,6 +190,8 @@ if [ "$install_env" = "onie" ]; then
+         exit 1
+     fi
+ fi
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ 
+ # Creates a new partition for the DEMO OS.
+ #
+@@ -278,6 +285,8 @@ create_demo_gpt_partition()
+     ##   probably because it/they are in use.  As a result, the old partition(s) will remain in use.  You should reboot now
+     ##   before making further changes.
+     partprobe || true
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ }
+ 
+ create_demo_msdos_partition()
+@@ -340,6 +349,8 @@ create_demo_uefi_partition()
+ # Install legacy BIOS GRUB for DEMO OS
+ demo_install_grub()
+ {
++sync
++echo 3 > /proc/sys/vm/drop_caches
+     local demo_mnt="$1"
+     local blk_dev="$2"
+ 
+@@ -465,6 +476,8 @@ if [ "$install_env" = "onie" ]; then
+         exit 1
+     }
+ 
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ elif [ "$install_env" = "sonic" ]; then
+     demo_mnt="/host"
+     # Get current SONiC image (grub/aboot/uboot)
+@@ -486,6 +499,8 @@ elif [ "$install_env" = "sonic" ]; then
+             rm -rf $f
+         fi
+     done
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ else
+     demo_mnt="build_raw_image_mnt"
+     demo_dev=$cur_wd/"%%OUTPUT_RAW_IMAGE%%"
+@@ -497,6 +512,8 @@ else
+     mount -t auto -o loop $demo_dev $demo_mnt
+ fi
+ 
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ echo "Installing SONiC to $demo_mnt/$image_dir"
+ 
+ # Create target directory or clean it up if exists
+@@ -517,6 +534,8 @@ if [ x"$docker_inram" = x"on" ]; then
+ else
+     unzip -o $ONIE_INSTALLER_PAYLOAD -x "$FILESYSTEM_DOCKERFS" -d $demo_mnt/$image_dir
+ 
++sync
++echo 3 > /proc/sys/vm/drop_caches
+     if [ "$install_env" = "onie" ]; then
+         TAR_EXTRA_OPTION="--numeric-owner"
+     else
+@@ -524,6 +543,8 @@ else
+     fi
+     mkdir -p $demo_mnt/$image_dir/$DOCKERFS_DIR
+     unzip -op $ONIE_INSTALLER_PAYLOAD "$FILESYSTEM_DOCKERFS" | tar xz $TAR_EXTRA_OPTION -f - -C $demo_mnt/$image_dir/$DOCKERFS_DIR
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ fi
+ 
+ if [ "$install_env" = "onie" ]; then
+@@ -547,6 +568,8 @@ if [ "$install_env" = "onie" ]; then
+     else
+         demo_install_grub "$demo_mnt" "$blk_dev"
+     fi
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ fi
+ 
+ # Create a minimal grub.cfg that allows for:
+@@ -661,6 +684,8 @@ menuentry '$demo_grub_entry' {
+ }
+ EOF
+ 
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ if [ "$install_env" = "onie" ]; then
+     # Add menu entries for ONIE -- use the grub fragment provided by the
+     # ONIE distribution.
+@@ -683,3 +708,10 @@ fi
+ cd /
+ 
+ echo "Installed SONiC base image $demo_volume_label successfully"
++sync
++echo 3 > /proc/sys/vm/drop_caches
++echo 120 > /proc/sys/kernel/hung_task_timeout_secs
++END_TIME=`date +%s`
++DIFF_TIME=$(($START_TIME - $END_TIME))
++#TIME_TAKEN="$(( ${DIFF_TIME} / 3600 ))h $(( (${DIFF_TIME} / 60) % 60 ))m $(( ${DIFF_TIME} % 60 ))s"
++echo "INFO: Installation took ${DIFF_TIME} s"
+diff --git a/rules/config b/rules/config
+index 32117de..1812989 100644
+--- a/rules/config
++++ b/rules/config
+@@ -127,7 +127,7 @@ INCLUDE_ICCPD = n
+ INCLUDE_SFLOW = y
+ 
+ # INCLUDE_MGMT_FRAMEWORK - build docker-sonic-mgmt-framework for CLI and REST server support
+-INCLUDE_MGMT_FRAMEWORK = y
++INCLUDE_MGMT_FRAMEWORK = n
+ 
+ # ENABLE_HOST_SERVICE_ON_START - enable sonic-host-server for mgmt-framework and/or
+ # telemetry containers to access host functionality by default
