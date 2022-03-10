@@ -78,7 +78,7 @@ index e69de29..0012001 100644
 +$(LINUX_KERNEL_MOD)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/kernel/$(LINUX_KERNEL_MOD)
 +SONIC_ONLINE_DEBS += $(LINUX_KERNEL_MOD)
 diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
-index fcac038..db407b0 100644
+index fcac038..6eaad09 100644
 --- a/platform/marvell/one-image.mk
 +++ b/platform/marvell/one-image.mk
 @@ -4,6 +4,10 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
@@ -92,6 +92,11 @@ index fcac038..db407b0 100644
  ifeq ($(INSTALL_DEBUG_TOOLS),y)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
+@@ -11,3 +15,4 @@ else
+ $(SONIC_ONE_IMAGE)_DOCKERS = $(SONIC_INSTALL_DOCKER_IMAGES)
+ endif
+ SONIC_INSTALLERS += $(SONIC_ONE_IMAGE)
++$(SONIC_ONE_IMAGE)_INSTALLS += $(LINUX_KERNEL_MOD)
 diff --git a/platform/marvell/platform-db98cx8514-10cc.mk b/platform/marvell/platform-db98cx8514-10cc.mk
 index e69de29..4a1435f 100644
 --- a/platform/marvell/platform-db98cx8514-10cc.mk
