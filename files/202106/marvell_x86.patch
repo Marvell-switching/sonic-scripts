@@ -163,20 +163,6 @@ index da23e53..6bf0ade 100644
  
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM) \
-diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
-index ac05bc8..6695ff8 100644
---- a/platform/marvell/sai.mk
-+++ b/platform/marvell/sai.mk
-@@ -1,7 +1,7 @@
- # Marvell SAI
- 
--export MRVL_SAI_VERSION = 1.5.1
--export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
-+export MRVL_SAI_VERSION = 1.8.1-1
-+export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
- 
- $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
- $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh
 index e69de29..4b97289 100644
 --- a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh
@@ -8548,3 +8534,17 @@ index e69de29..ebabe73 100644
 +systemctl start db98cx8580-32cd-init.service
 +exit 0
 +
+diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
+index ac05bc8f0..749eb5f57 100644
+--- a/platform/marvell/sai.mk
++++ b/platform/marvell/sai.mk
+@@ -1,7 +1,7 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.5.1
+-export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
++export MRVL_SAI_VERSION = 1.8.1-2
++export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ 
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))

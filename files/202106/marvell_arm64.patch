@@ -411,18 +411,6 @@ index f8e4c12..05b808d 100644
  
  
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
-diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
-index 6cf7947..6695ff8 100644
---- a/platform/marvell-arm64/sai.mk
-+++ b/platform/marvell-arm64/sai.mk
-@@ -1,6 +1,6 @@
- # Marvell SAI
- 
--export MRVL_SAI_VERSION = 1.5.1
-+export MRVL_SAI_VERSION = 1.8.1-1
- export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
- 
- $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
 index e69de29..d7a0c45 100644
 --- a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
@@ -8576,3 +8564,17 @@ index 9b09d4c..5846c6d 100644
              hash@1 {
                  algo = "sha1";
              };
+diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
+index 6cf794729..749eb5f57 100644
+--- a/platform/marvell-arm64/sai.mk
++++ b/platform/marvell-arm64/sai.mk
+@@ -1,7 +1,7 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.5.1
+-export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
++export MRVL_SAI_VERSION = 1.8.1-2
++export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ 
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
