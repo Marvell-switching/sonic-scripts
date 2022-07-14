@@ -25,7 +25,7 @@ index 4d2a0be..84327e4 100644
          "OP": "SET"
      }
 diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
-index 481051c..8842ed6 100755
+index 9c0a0a6..abc7889 100755
 --- a/files/image_config/copp/copp_cfg.j2
 +++ b/files/image_config/copp/copp_cfg.j2
 @@ -4,8 +4,8 @@
@@ -62,9 +62,15 @@ index 481051c..8842ed6 100755
  	    },
  	    "queue2_group1": {
 diff --git a/files/image_config/platform/rc.local b/files/image_config/platform/rc.local
-index c88829f..f54fddb 100755
+index c88829f..ed15dcd 100755
 --- a/files/image_config/platform/rc.local
 +++ b/files/image_config/platform/rc.local
+@@ -1,4 +1,4 @@
+-#!/bin/sh -x
++#!/bin/sh
+ #
+ # rc.local
+ #
 @@ -14,6 +14,11 @@
  SONIC_VERSION=$(cat /etc/sonic/sonic_version.yml | grep "build_version" | sed -e "s/build_version: //g;s/'//g")
  FIRST_BOOT_FILE="/host/image-${SONIC_VERSION}/platform/firsttime"
@@ -223,7 +229,7 @@ index d40dedc..d3028c8 100755
 +#TIME_TAKEN="$(( ${DIFF_TIME} / 3600 ))h $(( (${DIFF_TIME} / 60) % 60 ))m $(( ${DIFF_TIME} % 60 ))s"
 +echo "INFO: Installation took ${DIFF_TIME} s"
 diff --git a/rules/config b/rules/config
-index 32117de..1812989 100644
+index 92b2809..f20b5c0 100644
 --- a/rules/config
 +++ b/rules/config
 @@ -127,7 +127,7 @@ INCLUDE_ICCPD = n
