@@ -49,7 +49,7 @@ log()
 pre_patch_help()
 {
     log "STEPS TO BUILD:"
-    log "git clone https://github.com/Azure/sonic-buildimage.git"
+    log "git clone https://github.com/sonic-net/sonic-buildimage.git -b 202106"
     log "cd sonic-buildimage"
     log "git checkout $SONIC_COMMIT"
     log "make init"
