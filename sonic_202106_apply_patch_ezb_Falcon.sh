@@ -5,7 +5,7 @@
 
 
 #
-# patch script for ARM64/Intel Falcon and AC5X board
+# patch script for ARM64/Intel Falcon board
 #
 
 #
