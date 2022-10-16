@@ -102,14 +102,13 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb_falcon.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8580_32cd-r0  || true
     rm -fr device/marvell/x86_64-marvell_db98cx8540_16cd-r0 || true
     rm -fr device/marvell/arm64-marvell_db98cx8540_16cd-r0  || true
-    rm -fr device/marvell/arm64-marvell_rd98DX7312_32G16HVG6HLG-r0 || true
-    tar -C device/marvell/ -xzf mrvl_sonic_hwsku_ezb.tgz
+    tar -C device/marvell/ -xzf mrvl_sonic_hwsku_ezb_falcon.tgz
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
