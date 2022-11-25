@@ -2614,10 +2614,10 @@ index 0000000..d7730bc
 +
 diff --git a/patch/0126-rd-ac5x-watchdog-support.patch b/patch/0126-rd-ac5x-watchdog-support.patch
 new file mode 100644
-index 0000000..3b9b766
+index 0000000..ce8eab4
 --- /dev/null
 +++ b/patch/0126-rd-ac5x-watchdog-support.patch
-@@ -0,0 +1,562 @@
+@@ -0,0 +1,541 @@
 +From 890e324a5b20c7b86bf4372f298d67698ff328e9 Mon Sep 17 00:00:00 2001
 +From: Pavan Naregundi <pnaregundi@marvell.com>
 +Date: Mon, 14 Feb 2022 15:14:23 +0530
@@ -2625,7 +2625,6 @@ index 0000000..3b9b766
 +
 +---
 + arch/arm64/boot/dts/marvell/ac5.dtsi        |  14 +-
-+ debian/build/build_arm64_none_arm64/.config |   3 +-
 + drivers/watchdog/Kconfig                    |  16 +
 + drivers/watchdog/Makefile                   |   1 +
 + drivers/watchdog/ac5_gwd.c                  | 438 ++++++++++++++++++++++++++++
@@ -2674,26 +2673,6 @@ index 0000000..3b9b766
 + 	};
 + 
 + 	gic: interrupt-controller@80600000 {
-+diff --git a/debian/build/build_arm64_none_arm64/.config b/debian/build/build_arm64_none_arm64/.config
-+index 5e81b7a..f5d381e 100644
-+--- a/debian/build/build_arm64_none_arm64/.config
-++++ b/debian/build/build_arm64_none_arm64/.config
-+@@ -3845,6 +3845,7 @@ CONFIG_WDAT_WDT=m
-+ CONFIG_ARM_SP805_WATCHDOG=m
-+ CONFIG_ARM_SBSA_WATCHDOG=m
-+ CONFIG_ARMADA_37XX_WATCHDOG=m
-++CONFIG_MARVELL_AC5_WATCHDOG=m
-+ # CONFIG_CADENCE_WATCHDOG is not set
-+ CONFIG_DW_WATCHDOG=m
-+ CONFIG_SUNXI_WATCHDOG=m
-+@@ -4872,6 +4873,6 @@ CONFIG_USB_HIDDEV=y
-+ CONFIG_USB_OHCI_LITTLE_ENDIAN=y
-+ CONFIG_USB_SUPPORT=y
-+-CONFIG_USB_COMMON=m
-++CONFIG_USB_COMMON=y
-+ CONFIG_USB_LED_TRIG=y
-+ CONFIG_USB_ULPI_BUS=m
-+ CONFIG_USB_CONN_GPIO=m
 +diff --git a/drivers/watchdog/Kconfig b/drivers/watchdog/Kconfig
 +index da31a4b..f40fa9b 100644
 +--- a/drivers/watchdog/Kconfig
@@ -4119,10 +4098,10 @@ index 6d4f0e6..5727176 100644
  
  [marvell-armhf]
 diff --git a/patch/kconfig-force-inclusions b/patch/kconfig-force-inclusions
-index 94572ad..c728519 100644
+index 94572ad..dd4c44f 100644
 --- a/patch/kconfig-force-inclusions
 +++ b/patch/kconfig-force-inclusions
-@@ -1,6 +1,121 @@
+@@ -1,6 +1,122 @@
  [arm64]
  CONFIG_COMPAT_VDSO=y
  CONFIG_THUMB2_COMPAT_VDSO=y
@@ -4240,7 +4219,8 @@ index 94572ad..c728519 100644
 +CONFIG_BCH=y
 +CONFIG_DMA_API_DEBUG=y
 +CONFIG_DMA_API_DEBUG_SG=y
-+
++CONFIG_USB_COMMON=y
++CONFIG_MARVELL_AC5_WATCHDOG=m
  
  [marvell-armhf]
  CONFIG_ARCH_NR_GPIO=0
