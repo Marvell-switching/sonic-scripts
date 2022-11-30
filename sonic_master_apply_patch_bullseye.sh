@@ -29,7 +29,6 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 # Patches
 PATCHES="generic_fixes_or_wa.patch
 	marvell_arm64.patch
-	marvell_x86.patch
 	sonic_config_engine.patch"
 
 # Sub module patches
