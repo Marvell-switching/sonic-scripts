@@ -75,7 +75,7 @@ index 000000000..048050775
 +SONIC_DPKG_DEBS += $(AC5X_RD98DX7312_PLATFORM)
 +
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index 4ef62d36b..ed32f5963 100644
+index 4ef62d36b..7185b8438 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
 @@ -2,27 +2,71 @@
@@ -171,7 +171,7 @@ index 4ef62d36b..ed32f5963 100644
              then
                  demo_dev=${blk_dev}1
              else
-@@ -104,12 +153,16 @@ prepare_boot_menu() {
+@@ -104,17 +153,21 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} sonic_version_2 $sonic_version_2 > /dev/null
      BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
      BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
@@ -191,8 +191,23 @@ index 4ef62d36b..ed32f5963 100644
      sonic_bootargs_old='setenv bootargs root='$demo_dev' rw rootwait rootfstype=ext4 panic=1 console=ttyS0,115200 ${othbootargs} ${mtdparts} ${linuxargs_old}'
      fw_setenv ${FW_ARG} sonic_bootargs_old $sonic_bootargs_old > /dev/null || true
      sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
-@@ -132,8 +185,13 @@ prepare_boot_menu() {
-         fw_setenv ${FW_ARG} sonic_boot_load $MMC_LOAD > /dev/null
+     old_str="_old"
+-    fw_setenv ${FW_ARG} sonic_boot_load_old $sonic_boot_load_old$old_str > /dev/null || true
++    fw_setenv ${FW_ARG} sonic_boot_load_old "$sonic_boot_load_old$old_str" > /dev/null || true
+ 
+     fw_setenv ${FW_ARG} kernel_addr $kernel_addr > /dev/null
+     fw_setenv ${FW_ARG} fdt_addr $fdt_addr > /dev/null
+@@ -125,15 +178,20 @@ prepare_boot_menu() {
+     then
+         #USB_LOAD='ext4load usb 0 $kernel_addr $image_name; ext4load usb 0 $fdt_addr $fdt_name; ext4load usb 0 $initrd_addr $initrd_name'
+         USB_LOAD='ext4load usb 0 $fit_addr $fit_name'
+-        fw_setenv ${FW_ARG} sonic_boot_load $USB_LOAD > /dev/null
++        fw_setenv ${FW_ARG} sonic_boot_load "$USB_LOAD" > /dev/null
+     else
+         #MMC_LOAD='ext4load mmc 0:'$demo_part' $kernel_addr $image_name; ext4load mmc 0:'$demo_part' $fdt_addr $fdt_name; ext4load mmc 0:'$demo_part' $initrd_addr $initrd_name'
+         MMC_LOAD='ext4load mmc 0:'$demo_part' $fit_addr $fit_name'
+-        fw_setenv ${FW_ARG} sonic_boot_load $MMC_LOAD > /dev/null
++        fw_setenv ${FW_ARG} sonic_boot_load "$MMC_LOAD" > /dev/null
      fi
      #SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; booti $kernel_addr $initrd_addr $fdt_addr'
 -    SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'

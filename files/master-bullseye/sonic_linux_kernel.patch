@@ -3160,10 +3160,10 @@ index 0000000..ce8eab4
 +2.7.4
 +
 diff --git a/patch/kconfig-exclusions b/patch/kconfig-exclusions
-index 6d4f0e6..20c36d2 100644
+index 6d4f0e6..bc9d88b 100644
 --- a/patch/kconfig-exclusions
 +++ b/patch/kconfig-exclusions
-@@ -14,7 +14,147 @@ CONFIG_MLXSW_PCI
+@@ -14,7 +14,149 @@ CONFIG_MLXSW_PCI
  CONFIG_THERMAL_STATISTICS
  
  [arm64]
@@ -3305,6 +3305,8 @@ index 6d4f0e6..20c36d2 100644
 +CONFIG_JFFS2_COMPRESSION_OPTIONS
 +CONFIG_JFFS2_LZO
 +CONFIG_JFFS2_CMODE_PRIORITY
++CONFIG_UBIFS_FS_ZLIB
++CONFIG_UBIFS_FS_ZSTD
 +CONFIG_TRACING
 +CONFIG_FTRACE
 +CONFIG_BPF_EVENTS
@@ -3312,14 +3314,14 @@ index 6d4f0e6..20c36d2 100644
  [armhf]
  
  [marvell-armhf]
-diff --git a/patch/kconfig-force-inclusions b/patch/kconfig-force-inclusions
-index 94572ad..dd4c44f 100644
---- a/patch/kconfig-force-inclusions
-+++ b/patch/kconfig-force-inclusions
-@@ -1,6 +1,122 @@
+diff --git a/patch/kconfig-inclusions b/patch/kconfig-inclusions
+index 34be073..358856a 100644
+--- a/patch/kconfig-inclusions
++++ b/patch/kconfig-inclusions
+@@ -83,6 +83,121 @@ CONFIG_SENSORS_POWR1220=m
+ 
+ 
  [arm64]
- CONFIG_COMPAT_VDSO=y
- CONFIG_THUMB2_COMPAT_VDSO=y
 +CONFIG_REGMAP_SPMI=m
 +CONFIG_MTD=y
 +CONFIG_MTD_CMDLINE_PARTS=y
@@ -3338,11 +3340,11 @@ index 94572ad..dd4c44f 100644
 +CONFIG_MTD_CFI_GEOMETRY=y
 +CONFIG_MTD_CFI_UTIL=y
 +CONFIG_MTD_ONENAND=y
++CONFIG_MTD_SPI_NAND=y
++CONFIG_MTD_RAW_NAND=y
++CONFIG_MTD_NAND_CORE=y
 +CONFIG_MTD_NAND_ECC=y
-+CONFIG_MTD_NAND_ECC_SMC=y
-+CONFIG_MTD_NAND=y
-+CONFIG_MTD_NAND_BCH=y
-+CONFIG_MTD_NAND_ECC_BCH=y
++CONFIG_MTD_NAND_ECC_SW_BCH=y
 +CONFIG_MTD_SM_COMMON=y
 +CONFIG_MTD_NAND_RICOH=y
 +CONFIG_MTD_NAND_DISKONCHIP=y
@@ -3410,7 +3412,6 @@ index 94572ad..dd4c44f 100644
 +CONFIG_FS_ENCRYPTION=y
 +CONFIG_SQUASHFS=y
 +CONFIG_CRYPTO_AEAD=y
-+CONFIG_CRYPTO_BLKCIPHER=y
 +CONFIG_CRYPTO_RNG=y
 +CONFIG_CRYPTO_RNG_DEFAULT=y
 +CONFIG_CRYPTO_NULL=y
@@ -3437,8 +3438,8 @@ index 94572ad..dd4c44f 100644
 +CONFIG_USB_COMMON=y
 +CONFIG_MARVELL_AC5_WATCHDOG=m
  
- [marvell-armhf]
- CONFIG_ARCH_NR_GPIO=0
+ [armhf]
+ CONFIG_EEPROM_SFF_8436=m
 diff --git a/patch/series b/patch/series
 index 6fe19f5..3d3af08 100755
 --- a/patch/series
