@@ -1,0 +1,48 @@
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json b/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
+index 83ca9f5..958c301 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch-masic1.json
+@@ -4,6 +4,7 @@
+             "ecmp_hash_seed": "11",
+             "lag_hash_seed": "11",
+             "fdb_aging_time": "600",
++            "debug_shell_enable": 0,
+             "ordered_ecmp": "true"
+         },
+         "OP": "SET"
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json b/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
+index db5d1b6..6ec12e2 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch-masic3.json
+@@ -4,6 +4,7 @@
+             "ecmp_hash_seed": "13",
+             "lag_hash_seed": "13",
+             "fdb_aging_time": "600",
++            "debug_shell_enable": 0,
+             "ordered_ecmp": "true"
+         },
+         "OP": "SET"
+diff --git a/src/sonic-config-engine/tests/sample_output/t0-switch.json b/src/sonic-config-engine/tests/sample_output/t0-switch.json
+index d585ca2..b2c47e0 100644
+--- a/src/sonic-config-engine/tests/sample_output/t0-switch.json
++++ b/src/sonic-config-engine/tests/sample_output/t0-switch.json
+@@ -4,6 +4,7 @@
+             "ecmp_hash_seed": "0",
+             "lag_hash_seed": "0",
+             "fdb_aging_time": "600",
++            "debug_shell_enable": 0,
+             "ordered_ecmp": "false"
+         },
+         "OP": "SET"
+diff --git a/src/sonic-config-engine/tests/sample_output/t1-switch.json b/src/sonic-config-engine/tests/sample_output/t1-switch.json
+index 3b3b795..b2cdc0b 100644
+--- a/src/sonic-config-engine/tests/sample_output/t1-switch.json
++++ b/src/sonic-config-engine/tests/sample_output/t1-switch.json
+@@ -4,6 +4,7 @@
+             "ecmp_hash_seed": "10",
+             "lag_hash_seed": "10",
+             "fdb_aging_time": "600",
++            "debug_shell_enable": 0,
+             "ordered_ecmp": "true"
+         },
+         "OP": "SET"
