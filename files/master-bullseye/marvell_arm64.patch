@@ -7,7 +7,7 @@ index a953c9082..e7044dacc 100644
  
  # Add platform specific DTB
 -LINUX_KERNEL_DTB = linux-image-4.9.168-arm64.deb
-+LINUX_KERNEL_DTB = linux-image-5.10.0-12-arm64.deb
++LINUX_KERNEL_DTB = linux-image-5.10.0-18-arm64.deb
  $(LINUX_KERNEL_DTB)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/kernel/$(LINUX_KERNEL_DTB)
  SONIC_ONLINE_DEBS += $(LINUX_KERNEL_DTB)
 diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
@@ -118,8 +118,8 @@ index 4ef62d36b..7185b8438 100644
 -kernel_fname="/boot/vmlinuz-4.9.0-9-2-arm64"
 -initrd_fname="/boot/initrd.img-4.9.0-9-2-arm64"
 -fdt_fname="/boot/armada-7020-comexpress.dtb"
-+kernel_fname="/boot/vmlinuz-5.10.0-12-2-arm64"
-+initrd_fname="/boot/initrd.img-5.10.0-12-2-arm64"
++kernel_fname="/boot/vmlinuz-5.10.0-18-2-arm64"
++initrd_fname="/boot/initrd.img-5.10.0-18-2-arm64"
 +
 +if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
 +    fdt_fname="/boot/ac5x.dtb"
@@ -350,7 +350,7 @@ index 6cf794729..5fc14f988 100644
  
 -export MRVL_SAI_VERSION = 1.5.1
 -export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
-+export MRVL_SAI_VERSION = 1.10.2-1
++export MRVL_SAI_VERSION = 1.11.0-1
 +export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
  
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
@@ -8479,7 +8479,7 @@ index 9b09d4cd3..2e3cc59ca 100644
 +        kernel_falcon {
              description = "Linux Kernel";
 -            data = /incbin/("/boot/vmlinuz-4.9.0-9-2-arm64");
-+            data = /incbin/("/boot/vmlinuz-5.10.0-12-2-arm64");
++            data = /incbin/("/boot/vmlinuz-5.10.0-18-2-arm64");
              type = "kernel";
              arch = "arm64";
              os = "linux";
@@ -8500,7 +8500,7 @@ index 9b09d4cd3..2e3cc59ca 100644
 +        ramdisk_falcon {
              description = "ramdisk";
 -            data = /incbin/("/boot/initrd.img-4.9.0-9-2-arm64");
-+            data = /incbin/("/boot/initrd.img-5.10.0-12-2-arm64");
++            data = /incbin/("/boot/initrd.img-5.10.0-18-2-arm64");
              type = "ramdisk";
              arch = "arm64";
              os = "linux";
@@ -8510,7 +8510,7 @@ index 9b09d4cd3..2e3cc59ca 100644
          };
 +        kernel_ac5x {
 +            description = "Linux Kernel for AC5x";
-+            data = /incbin/("/boot/vmlinuz-5.10.0-12-2-arm64");
++            data = /incbin/("/boot/vmlinuz-5.10.0-18-2-arm64");
 +            type = "kernel";
 +            arch = "arm64";
 +            os = "linux";
@@ -8534,7 +8534,7 @@ index 9b09d4cd3..2e3cc59ca 100644
 +        };
 +        ramdisk_ac5x {
 +            description = "ramdisk for AC5x";
-+            data = /incbin/("/boot/initrd.img-5.10.0-12-2-arm64");
++            data = /incbin/("/boot/initrd.img-5.10.0-18-2-arm64");
 +            type = "ramdisk";
 +            arch = "arm64";
 +            os = "linux";
@@ -8568,3 +8568,76 @@ index 9b09d4cd3..2e3cc59ca 100644
              hash@1 {
                  algo = "sha1";
              };
+diff --git a/platform/marvell-arm64/docker-saiserver-mrvl.mk b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+index 90bb5ae99..498f35ffa 100644
+--- a/platform/marvell-arm64/docker-saiserver-mrvl.mk
++++ b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+@@ -3,7 +3,7 @@
+ DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
+ $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
+-$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BUSTER)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
+ 
+ $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 68670343b..1731e8dca 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -15,7 +15,8 @@ RUN apt-get purge -y syncd
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+-    python-pip          \
++    python3-pip		\
++    python-setuptools	\
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+@@ -24,7 +25,7 @@ RUN apt-get update \
+     cmake               \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.71.0
++    libboost-atomic1.74.0
+ 
+ RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
+ {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
+@@ -41,9 +42,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
++ && pip2 install cffi==1.7.0    \
++ && pip2 install --upgrade cffi==1.7.0 \
++ && pip2 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl.mk b/platform/marvell-arm64/docker-syncd-mrvl.mk
+index 39135311b..236f8a437 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl.mk
++++ b/platform/marvell-arm64/docker-syncd-mrvl.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ 
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+index 7ec04c49f..b5e70888a 100755
+--- a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 

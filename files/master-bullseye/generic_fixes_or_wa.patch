@@ -1,5 +1,5 @@
 diff --git a/dockers/docker-database/Dockerfile.j2 b/dockers/docker-database/Dockerfile.j2
-index e1aa3c4..abfc6d1 100644
+index 899c111da..27f265997 100644
 --- a/dockers/docker-database/Dockerfile.j2
 +++ b/dockers/docker-database/Dockerfile.j2
 @@ -32,6 +32,7 @@ RUN apt-get clean -y                                  && \
@@ -7,11 +7,11 @@ index e1aa3c4..abfc6d1 100644
               s/^# unixsocket/unixsocket/;                \
               s/redis-server.sock/redis.sock/g;           \
 +             s/lua-time-limit 5000/lua-time-limit 20000/g;  \
-              s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/ \
+              s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/; \
+              s/^notify-keyspace-events ""$/notify-keyspace-events AKE/ \
              ' /etc/redis/redis.conf
- 
 diff --git a/dockers/docker-orchagent/switch.json.j2 b/dockers/docker-orchagent/switch.json.j2
-index 30ad703..2363680 100644
+index 30ad703bc..2363680ee 100644
 --- a/dockers/docker-orchagent/switch.json.j2
 +++ b/dockers/docker-orchagent/switch.json.j2
 @@ -21,6 +21,7 @@
@@ -23,7 +23,7 @@ index 30ad703..2363680 100644
              "ordered_ecmp": "true"
  {% else %}
 diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
-index 46d921b..22d1c3a 100755
+index 46d921b82..22d1c3af6 100755
 --- a/files/image_config/copp/copp_cfg.j2
 +++ b/files/image_config/copp/copp_cfg.j2
 @@ -4,8 +4,8 @@
@@ -60,7 +60,7 @@ index 46d921b..22d1c3a 100755
  	    },
  	    "queue2_group1": {
 diff --git a/files/image_config/platform/rc.local b/files/image_config/platform/rc.local
-index 8f3de77..0b3cdf5 100755
+index 8692ff648..c51207a02 100755
 --- a/files/image_config/platform/rc.local
 +++ b/files/image_config/platform/rc.local
 @@ -1,4 +1,4 @@
@@ -82,7 +82,7 @@ index 8f3de77..0b3cdf5 100755
  SONIC_CONFIG_DIR="/host/image-${SONIC_VERSION}/sonic-config"
  SONIC_ENV_FILE=${SONIC_CONFIG_DIR}/sonic-environment
 diff --git a/files/initramfs-tools/modules b/files/initramfs-tools/modules
-index 349bf37..0fa5529 100644
+index 349bf3761..0fa55292a 100644
 --- a/files/initramfs-tools/modules
 +++ b/files/initramfs-tools/modules
 @@ -5,3 +5,4 @@ nls_ascii
@@ -91,7 +91,7 @@ index 349bf37..0fa5529 100644
  nvme
 +i2c-dev
 diff --git a/files/initramfs-tools/modules.arm b/files/initramfs-tools/modules.arm
-index 0741051..fd2e65b 100644
+index 074105195..fd2e65b6c 100644
 --- a/files/initramfs-tools/modules.arm
 +++ b/files/initramfs-tools/modules.arm
 @@ -12,3 +12,14 @@ ofpart
@@ -110,7 +110,7 @@ index 0741051..fd2e65b 100644
 +ext4
 +i2c-dev
 diff --git a/installer/default_platform.conf b/installer/default_platform.conf
-index ea13f00..6b877c1 100755
+index c0758b6fb..ec724e4f8 100755
 --- a/installer/default_platform.conf
 +++ b/installer/default_platform.conf
 @@ -75,7 +75,8 @@ create_partition()
@@ -165,7 +165,7 @@ index ea13f00..6b877c1 100755
 +echo "INFO: Installation took ${DIFF_TIME} s"
  }
 diff --git a/installer/install.sh b/installer/install.sh
-index 8ae0fec..34352ad 100755
+index 8ae0fec0e..34352ad77 100755
 --- a/installer/install.sh
 +++ b/installer/install.sh
 @@ -45,6 +45,11 @@ read_conf_file() {
@@ -241,7 +241,7 @@ index 8ae0fec..34352ad 100755
  
  demo_part_size="%%ONIE_IMAGE_PART_SIZE%%"
 diff --git a/rules/config b/rules/config
-index 380b28b..14406be 100644
+index 9bb3326fa..a07545a42 100644
 --- a/rules/config
 +++ b/rules/config
 @@ -135,7 +135,7 @@ INCLUDE_SFLOW = y
@@ -253,3 +253,37 @@ index 380b28b..14406be 100644
  
  # ENABLE_HOST_SERVICE_ON_START - enable sonic-host-server for mgmt-framework and/or
  # telemetry containers to access host functionality by default
+diff --git a/sonic-slave-bullseye/Dockerfile.cleanup b/sonic-slave-bullseye/Dockerfile.cleanup
+new file mode 100644
+index 000000000..64acae799
+--- /dev/null
++++ b/sonic-slave-bullseye/Dockerfile.cleanup
+@@ -0,0 +1,11 @@
++# Base docker build
++FROM sonic-slave-bullseye:ce4a13dbafc
++
++# Copy the cache data to host
++From scratch as output
++COPY --from=sonic-slave-bullseye:ce4a13dbafc /cache.tgz cache.tgz
++
++# Clean up the cache data
++FROM sonic-slave-bullseye:ce4a13dbafc as final
++RUN rm /cache.tgz
++
+diff --git a/sonic-slave-buster/Dockerfile.cleanup b/sonic-slave-buster/Dockerfile.cleanup
+new file mode 100644
+index 000000000..8ccd35865
+--- /dev/null
++++ b/sonic-slave-buster/Dockerfile.cleanup
+@@ -0,0 +1,11 @@
++# Base docker build
++FROM sonic-slave-buster:85796b21756
++
++# Copy the cache data to host
++From scratch as output
++COPY --from=sonic-slave-buster:85796b21756 /cache.tgz cache.tgz
++
++# Clean up the cache data
++FROM sonic-slave-buster:85796b21756 as final
++RUN rm /cache.tgz
++

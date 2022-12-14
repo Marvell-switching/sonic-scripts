@@ -102,7 +102,7 @@ index 602f922..5fc14f9 100644
  
 -export MRVL_SAI_VERSION = 1.8.1-1
 -export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
-+export MRVL_SAI_VERSION = 1.10.2-1
++export MRVL_SAI_VERSION = 1.11.0-1
 +export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
  
  $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai

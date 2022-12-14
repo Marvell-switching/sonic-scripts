@@ -1,10 +1,10 @@
 diff --git a/config/main.py b/config/main.py
-index b35d507..219d832 100644
+index 004b40b..e1b51cd 100644
 --- a/config/main.py
 +++ b/config/main.py
-@@ -6880,5 +6880,43 @@ def del_subinterface(ctx, subinterface_name):
- 
-     config_db.set_entry('VLAN_SUB_INTERFACE', subinterface_name, None)
+@@ -6921,5 +6921,43 @@ def del_subinterface(ctx, subinterface_name):
+     except JsonPatchConflict as e:
+         ctx.fail("{} is invalid vlan subinterface. Error: {}".format(subinterface_name, e))
  
 +@config.group(cls=clicommon.AbbreviationGroup)
 +@click.pass_context
@@ -47,12 +47,12 @@ index b35d507..219d832 100644
  if __name__ == '__main__':
      config()
 diff --git a/scripts/generate_dump b/scripts/generate_dump
-index c9e165c..3c42395 100755
+index 235c553..3ec8f71 100755
 --- a/scripts/generate_dump
 +++ b/scripts/generate_dump
-@@ -1087,6 +1087,74 @@ collect_barefoot() {
-     done
- } 
+@@ -1056,6 +1056,74 @@ collect_mellanox() {
+ 
+ }
  
 +###############################################################################
 +# Runs a given marvellcmd command in all namesapces in case of multi ASIC platform
@@ -123,10 +123,10 @@ index c9e165c..3c42395 100755
 +}
 +
  ###############################################################################
- # Save log file
+ # Collect Broadcom specific information
  # Globals:
-@@ -1412,6 +1480,11 @@ main() {
-         collect_broadcom
+@@ -1580,6 +1648,11 @@ main() {
+         collect_cisco_8000
      fi
  
 +    if [ "$asic" = "marvell" ]; then

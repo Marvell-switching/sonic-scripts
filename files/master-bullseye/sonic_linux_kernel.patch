@@ -265,10 +265,10 @@ index 0000000..91875ed
 +
 diff --git a/patch/0123-rd-ac5x-dts-support.patch b/patch/0123-rd-ac5x-dts-support.patch
 new file mode 100644
-index 0000000..400ccb1
+index 0000000..9e14eb6
 --- /dev/null
 +++ b/patch/0123-rd-ac5x-dts-support.patch
-@@ -0,0 +1,510 @@
+@@ -0,0 +1,506 @@
 +From 983f1480f9fef6427409c23caaf848dc1051ae8d Mon Sep 17 00:00:00 2001
 +From: rminnikanti <rminnikanti@marvell.com>
 +Date: Sun, 5 Sep 2021 18:06:47 +0000
@@ -717,7 +717,7 @@ index 0000000..400ccb1
 +index 0000000..25b02b4
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/ac5x.dts
-+@@ -0,0 +1,58 @@
++@@ -0,0 +1,54 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Device Tree For AC5_db.
@@ -762,10 +762,6 @@ index 0000000..400ccb1
 ++	dr_mode = "peripheral";
 ++};
 ++
-++&pcie0 {
-++        status = "okay";
-++};
-++
 ++&i2c0 {
 ++    status = "okay";
 ++    clock-frequency = <100000>;
@@ -781,15 +777,15 @@ index 0000000..400ccb1
 +
 diff --git a/patch/0123-rd-ac5x-emmc-support.patch b/patch/0123-rd-ac5x-emmc-support.patch
 new file mode 100644
-index 0000000..bc4f81a
+index 0000000..cfbccf4
 --- /dev/null
 +++ b/patch/0123-rd-ac5x-emmc-support.patch
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,114 @@
 +diff --git a/drivers/mmc/host/sdhci-xenon.c b/drivers/mmc/host/sdhci-xenon.c
-+index fafb026..56d7908 100644
++index 0e5234a5c..fb83c7aa6 100644
 +--- a/drivers/mmc/host/sdhci-xenon.c
 ++++ b/drivers/mmc/host/sdhci-xenon.c
-+@@ -20,6 +20,8 @@
++@@ -17,6 +17,8 @@
 + #include <linux/of.h>
 + #include <linux/pm.h>
 + #include <linux/pm_runtime.h>
@@ -798,7 +794,7 @@ index 0000000..bc4f81a
 + 
 + #include "sdhci-pltfm.h"
 + #include "sdhci-xenon.h"
-+@@ -419,6 +421,9 @@ static int xenon_probe_dt(struct platform_device *pdev)
++@@ -421,6 +423,9 @@ static int xenon_probe_dt(struct platform_device *pdev)
 + 	struct xenon_priv *priv = sdhci_pltfm_priv(pltfm_host);
 + 	u32 sdhc_id, nr_sdhc;
 + 	u32 tuning_count;
@@ -808,7 +804,7 @@ index 0000000..bc4f81a
 + 
 + 	/* Disable HS200 on Armada AP806 */
 + 	if (of_device_is_compatible(np, "marvell,armada-ap806-sdhci"))
-+@@ -446,6 +451,26 @@ static int xenon_probe_dt(struct platform_device *pdev)
++@@ -448,6 +453,26 @@ static int xenon_probe_dt(struct platform_device *pdev)
 + 		}
 + 	}
 + 	priv->tuning_count = tuning_count;
@@ -835,8 +831,16 @@ index 0000000..bc4f81a
 + 
 + 	return xenon_phy_parse_dt(np, host);
 + }
++@@ -675,6 +700,7 @@ static const struct of_device_id sdhci_xenon_dt_ids[] = {
++ 	{ .compatible = "marvell,armada-ap806-sdhci",},
++ 	{ .compatible = "marvell,armada-cp110-sdhci",},
++ 	{ .compatible = "marvell,armada-3700-sdhci",},
+++	{ .compatible = "marvell,ac5-sdhci",},
++ 	{}
++ };
++ MODULE_DEVICE_TABLE(of, sdhci_xenon_dt_ids);
 +diff --git a/drivers/of/address.c b/drivers/of/address.c
-+index 73ddf2540..22ba30000 100644
++index 73ddf2540..8629a4aac 100644
 +--- a/drivers/of/address.c
 ++++ b/drivers/of/address.c
 +@@ -1022,6 +1022,7 @@ int of_dma_get_range(struct device_node *np, const struct bus_dma_region **map)
@@ -847,6 +851,26 @@ index 0000000..bc4f81a
 + #endif /* CONFIG_HAS_DMA */
 + 
 + /**
++diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h
++index d9e6a324d..2e62cd1a5 100644
++--- a/drivers/of/of_private.h
+++++ b/drivers/of/of_private.h
++@@ -158,15 +158,5 @@ extern int of_bus_n_addr_cells(struct device_node *np);
++ extern int of_bus_n_size_cells(struct device_node *np);
++ 
++ struct bus_dma_region;
++-#if defined(CONFIG_OF_ADDRESS) && defined(CONFIG_HAS_DMA)
++-int of_dma_get_range(struct device_node *np,
++-		const struct bus_dma_region **map);
++-#else
++-static inline int of_dma_get_range(struct device_node *np,
++-		const struct bus_dma_region **map)
++-{
++-	return -ENODEV;
++-}
++-#endif
++ 
++ #endif /* _LINUX_OF_PRIVATE_H */
 +diff --git a/include/linux/of_address.h b/include/linux/of_address.h
 +index 88bc94340..ee48bdef6 100644
 +--- a/include/linux/of_address.h
@@ -871,26 +895,6 @@ index 0000000..bc4f81a
 + static inline bool of_dma_is_coherent(struct device_node *np)
 + {
 + 	return false;
-+diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h
-+index d9e6a324d..2e62cd1a5 100644
-+--- a/drivers/of/of_private.h
-++++ b/drivers/of/of_private.h
-+@@ -158,15 +158,5 @@ extern int of_bus_n_addr_cells(struct device_node *np);
-+ extern int of_bus_n_size_cells(struct device_node *np);
-+ 
-+ struct bus_dma_region;
-+-#if defined(CONFIG_OF_ADDRESS) && defined(CONFIG_HAS_DMA)
-+-int of_dma_get_range(struct device_node *np,
-+-		const struct bus_dma_region **map);
-+-#else
-+-static inline int of_dma_get_range(struct device_node *np,
-+-		const struct bus_dma_region **map)
-+-{
-+-	return -ENODEV;
-+-}
-+-#endif
-+ 
-+ #endif /* _LINUX_OF_PRIVATE_H */
 diff --git a/patch/0123-rd-ac5x-gpio-pinctrl-support.patch b/patch/0123-rd-ac5x-gpio-pinctrl-support.patch
 new file mode 100644
 index 0000000..fc1abcb
@@ -1697,55 +1701,10 @@ index 0000000..bd193e3
 +
 diff --git a/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch b/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch
 new file mode 100644
-index 0000000..256887c
+index 0000000..92dd380
 --- /dev/null
 +++ b/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch
-@@ -0,0 +1,834 @@
-+diff --git a/drivers/net/ethernet/marvell/mvmdio.c b/drivers/net/ethernet/marvell/mvmdio.c
-+index d14762d93..5251a0dd6 100644
-+--- a/drivers/net/ethernet/marvell/mvmdio.c
-++++ b/drivers/net/ethernet/marvell/mvmdio.c
-+@@ -322,10 +322,6 @@ static int orion_mdio_probe(struct platform_device *pdev)
-+ 	if (pdev->dev.of_node) {
-+ 		for (i = 0; i < ARRAY_SIZE(dev->clk); i++) {
-+ 			dev->clk[i] = of_clk_get(pdev->dev.of_node, i);
-+-			if (PTR_ERR(dev->clk[i]) == -EPROBE_DEFER) {
-+-				ret = -EPROBE_DEFER;
-+-				goto out_clk;
-+-			}
-+ 			if (IS_ERR(dev->clk[i]))
-+ 				break;
-+ 			clk_prepare_enable(dev->clk[i]);
-+@@ -338,10 +334,6 @@ static int orion_mdio_probe(struct platform_device *pdev)
-+ 				 __stringify(ARRAY_SIZE(dev->clk)) "\n");
-+ 	} else {
-+ 		dev->clk[0] = clk_get(&pdev->dev, NULL);
-+-		if (PTR_ERR(dev->clk[0]) == -EPROBE_DEFER) {
-+-			ret = -EPROBE_DEFER;
-+-			goto out_clk;
-+-		}
-+ 		if (!IS_ERR(dev->clk[0]))
-+ 			clk_prepare_enable(dev->clk[0]);
-+ 	}
-+@@ -370,6 +362,10 @@ static int orion_mdio_probe(struct platform_device *pdev)
-+ 	}
-+ 
-+ 	ret = of_mdiobus_register(bus, pdev->dev.of_node);
-++	if (pdev->dev.of_node)
-++		ret = of_mdiobus_register(bus, pdev->dev.of_node);
-++	else
-++		ret = mdiobus_register(bus);
-+ 	if (ret < 0) {
-+ 		dev_err(&pdev->dev, "Cannot register MDIO bus (%d)\n", ret);
-+ 		goto out_mdio;
-+@@ -383,7 +379,6 @@ static int orion_mdio_probe(struct platform_device *pdev)
-+ 	if (dev->err_interrupt > 0)
-+ 		writel(0, dev->regs + MVMDIO_ERR_INT_MASK);
-+ 
-+-out_clk:
-+ 	for (i = 0; i < ARRAY_SIZE(dev->clk); i++) {
-+ 		if (IS_ERR(dev->clk[i]))
-+ 			break;
+@@ -0,0 +1,789 @@
 +diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
 +index 74e266c0b..d16663772 100644
 +--- a/drivers/net/ethernet/marvell/mvneta.c
@@ -3441,10 +3400,10 @@ index 34be073..358856a 100644
  [armhf]
  CONFIG_EEPROM_SFF_8436=m
 diff --git a/patch/series b/patch/series
-index 6fe19f5..3d3af08 100755
+index c0c5e9a..270d4b5 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -162,6 +162,20 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
+@@ -164,6 +164,20 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
  #
  # Marvell platform patches for 4.19
  armhf_secondary_boot_online.patch
@@ -3458,9 +3417,9 @@ index 6fe19f5..3d3af08 100755
 +0123-rd-ac5x-emmc-support.patch
 +0123-rd-ac5x-gpio-pinctrl-support.patch
 +0123-rd-ac5x-i2c-fixes.patch
-+0123-rd-ac5x-pcie-changes.patch
-+#0124-rd-ac5x-mvneta-mvmdio-changes.patch
-+#0125-rd-ac5x-mvneta-xbar_window.patch
++#0123-rd-ac5x-pcie-changes.patch
++0124-rd-ac5x-mvneta-mvmdio-changes.patch
++0125-rd-ac5x-mvneta-xbar_window.patch
 +0126-rd-ac5x-watchdog-support.patch
  #
  #
