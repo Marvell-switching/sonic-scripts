@@ -67,7 +67,7 @@ apply_patches()
     do
 	echo $patch	
     	pushd patches
-    	#wget -c $WGET_PATH/$patch
+    	wget -c $WGET_PATH/$patch
         popd
 	    patch -p1 < patches/$patch
         if [ $? -ne 0 ]; then
@@ -86,7 +86,7 @@ apply_submodule_patches()
 	dir=${SP}[DIR]
 	echo "${!patch}"
     	pushd patches
-    	#wget -c $WGET_PATH/${!patch}
+    	wget -c $WGET_PATH/${!patch}
         popd
 	    pushd ${!dir}
     	patch -p1 < $CWD/patches/${!patch}
