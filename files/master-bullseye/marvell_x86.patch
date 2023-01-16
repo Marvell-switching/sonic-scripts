@@ -1,6 +1,65 @@
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 68670343b..13e7fb9c1 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -15,7 +15,7 @@ RUN apt-get purge -y syncd
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+-    python-pip          \
++    python3-pip          \
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+@@ -24,7 +24,7 @@ RUN apt-get update \
+     cmake               \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.71.0
++    libboost-atomic1.74.0
+ 
+ RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
+ {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
+@@ -41,9 +41,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
++ && pip2 install cffi==1.7.0    \
++ && pip2 install --upgrade cffi==1.7.0 \
++ && pip2 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
+diff --git a/platform/marvell/docker-syncd-mrvl.mk b/platform/marvell/docker-syncd-mrvl.mk
+index d8a205090..bfd2bbd22 100644
+--- a/platform/marvell/docker-syncd-mrvl.mk
++++ b/platform/marvell/docker-syncd-mrvl.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ 
+diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+index cb2f7eadb..a8b91dbcd 100755
+--- a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
 diff --git a/platform/marvell/linux-modules.mk b/platform/marvell/linux-modules.mk
 new file mode 100644
-index 0000000..0012001
+index 000000000..001200143
 --- /dev/null
 +++ b/platform/marvell/linux-modules.mk
 @@ -0,0 +1,6 @@
@@ -11,7 +70,7 @@ index 0000000..0012001
 +$(LINUX_KERNEL_MOD)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/kernel/$(LINUX_KERNEL_MOD)
 +SONIC_ONLINE_DEBS += $(LINUX_KERNEL_MOD)
 diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
-index fcac038..cc4f824 100644
+index fcac03854..cc4f82484 100644
 --- a/platform/marvell/one-image.mk
 +++ b/platform/marvell/one-image.mk
 @@ -4,6 +4,9 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
@@ -26,7 +85,7 @@ index fcac038..cc4f824 100644
  $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
 diff --git a/platform/marvell/platform-db98cx8514-10cc.mk b/platform/marvell/platform-db98cx8514-10cc.mk
 new file mode 100644
-index 0000000..4a1435f
+index 000000000..4a1435f28
 --- /dev/null
 +++ b/platform/marvell/platform-db98cx8514-10cc.mk
 @@ -0,0 +1,12 @@
@@ -44,7 +103,7 @@ index 0000000..4a1435f
 +
 diff --git a/platform/marvell/platform-db98cx8540-16cd.mk b/platform/marvell/platform-db98cx8540-16cd.mk
 new file mode 100644
-index 0000000..a60d662
+index 000000000..a60d662a1
 --- /dev/null
 +++ b/platform/marvell/platform-db98cx8540-16cd.mk
 @@ -0,0 +1,12 @@
@@ -62,7 +121,7 @@ index 0000000..a60d662
 +
 diff --git a/platform/marvell/platform-db98cx8580-32cd.mk b/platform/marvell/platform-db98cx8580-32cd.mk
 new file mode 100644
-index 0000000..f1f9210
+index 000000000..f1f9210e7
 --- /dev/null
 +++ b/platform/marvell/platform-db98cx8580-32cd.mk
 @@ -0,0 +1,12 @@
@@ -79,7 +138,7 @@ index 0000000..f1f9210
 +SONIC_DPKG_DEBS += $(FALCON_DB98CX8580_32CD_PLATFORM)
 +
 diff --git a/platform/marvell/rules.mk b/platform/marvell/rules.mk
-index da23e53..6bf0ade 100644
+index da23e53f2..6bf0ade47 100644
 --- a/platform/marvell/rules.mk
 +++ b/platform/marvell/rules.mk
 @@ -3,6 +3,10 @@ include $(PLATFORM_PATH)/docker-syncd-mrvl.mk
@@ -94,7 +153,7 @@ index da23e53..6bf0ade 100644
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM) \
 diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
-index 602f922..5fc14f9 100644
+index 602f92296..f6372ca68 100644
 --- a/platform/marvell/sai.mk
 +++ b/platform/marvell/sai.mk
 @@ -1,7 +1,7 @@
@@ -109,7 +168,7 @@ index 602f922..5fc14f9 100644
  $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh
 new file mode 100644
-index 0000000..4b97289
+index 000000000..4b97289e8
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/scripts/db98cx8514-10cc-init.sh
 @@ -0,0 +1,7 @@
@@ -122,7 +181,7 @@ index 0000000..4b97289
 +exit 0
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/service/db98cx8514-10cc-init.service b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/service/db98cx8514-10cc-init.service
 new file mode 100644
-index 0000000..a8642ba
+index 000000000..a8642ba32
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/service/db98cx8514-10cc-init.service
 @@ -0,0 +1,14 @@
@@ -142,7 +201,7 @@ index 0000000..a8642ba
 +WantedBy=multi-user.target
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/setup.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/setup.py
 new file mode 100644
-index 0000000..716624b
+index 000000000..716624b63
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/setup.py
 @@ -0,0 +1,15 @@
@@ -163,7 +222,7 @@ index 0000000..716624b
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/__init__.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/__init__.py
 new file mode 100644
-index 0000000..dd96fc4
+index 000000000..dd96fc4bb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/__init__.py
 @@ -0,0 +1,3 @@
@@ -172,7 +231,7 @@ index 0000000..dd96fc4
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
 new file mode 100644
-index 0000000..ee9770b
+index 000000000..ee9770bbd
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
 @@ -0,0 +1,307 @@
@@ -485,7 +544,7 @@ index 0000000..ee9770b
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/component.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/component.py
 new file mode 100644
-index 0000000..8856d08
+index 000000000..8856d0894
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/component.py
 @@ -0,0 +1,89 @@
@@ -580,7 +639,7 @@ index 0000000..8856d08
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/eeprom.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/eeprom.py
 new file mode 100644
-index 0000000..cbf859f
+index 000000000..cbf859f0d
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/eeprom.py
 @@ -0,0 +1,227 @@
@@ -813,7 +872,7 @@ index 0000000..cbf859f
 +        return self.eeprom_tlv_dict
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/pcie.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/pcie.py
 new file mode 100644
-index 0000000..c1b7289
+index 000000000..c1b7289a3
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/pcie.py
 @@ -0,0 +1,47 @@
@@ -866,7 +925,7 @@ index 0000000..c1b7289
 +        self._create_device_id_to_bus_map()
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/platform.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/platform.py
 new file mode 100644
-index 0000000..73d3cfc
+index 000000000..73d3cfc11
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/platform.py
 @@ -0,0 +1,18 @@
@@ -890,7 +949,7 @@ index 0000000..73d3cfc
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
 new file mode 100644
-index 0000000..c7149ca
+index 000000000..c7149ca39
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
 @@ -0,0 +1,1404 @@
@@ -2300,7 +2359,7 @@ index 0000000..c7149ca
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
 new file mode 100644
-index 0000000..eadd9ff
+index 000000000..eadd9fff4
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
 @@ -0,0 +1,258 @@
@@ -2564,7 +2623,7 @@ index 0000000..eadd9ff
 +        return False, {}
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/watchdog.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/watchdog.py
 new file mode 100644
-index 0000000..8c8541e
+index 000000000..8c8541ea0
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/watchdog.py
 @@ -0,0 +1,133 @@
@@ -2703,7 +2762,7 @@ index 0000000..8c8541e
 +        fcntl.ioctl(self.watchdog, WDIOC_KEEPALIVE)
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/utils/get-base-mac.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/utils/get-base-mac.py
 new file mode 100644
-index 0000000..fe271d0
+index 000000000..fe271d04a
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/utils/get-base-mac.py
 @@ -0,0 +1,20 @@
@@ -2729,7 +2788,7 @@ index 0000000..fe271d0
 +    main()
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/changelog b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/changelog
 new file mode 100644
-index 0000000..569563c
+index 000000000..569563c70
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/changelog
 @@ -0,0 +1,4 @@
@@ -2739,14 +2798,14 @@ index 0000000..569563c
 + -- Marvell  Thu, 16 sep 2021 09:35:58 +0800
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/compat b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/compat
 new file mode 100644
-index 0000000..ec63514
+index 000000000..ec635144f
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/compat
 @@ -0,0 +1 @@
 +9
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/control b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/control
 new file mode 100644
-index 0000000..9e14ca3
+index 000000000..9e14ca387
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/control
 @@ -0,0 +1,13 @@
@@ -2765,7 +2824,7 @@ index 0000000..9e14ca3
 + <insert long description, indented with spaces>
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/rules b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/rules
 new file mode 100644
-index 0000000..ac96824
+index 000000000..ac96824c4
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/rules
 @@ -0,0 +1,66 @@
@@ -2837,18 +2896,18 @@ index 0000000..ac96824
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install
 new file mode 100644
-index 0000000..9935b83
+index 000000000..9935b8316
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install
 @@ -0,0 +1,5 @@
 +db98cx8514/scripts/db98cx8514-10cc-init.sh  usr/local/bin
 +db98cx8514/service/db98cx8514-10cc-init.service etc/systemd/system
 +db98cx8514/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8514_10cc-r0
-+db98cx8514/sonic_platform-1.0-py2-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8514_10cc-r0
++
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.postinst b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.postinst
 new file mode 100644
-index 0000000..71c5d77
+index 000000000..71c5d77b3
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.postinst
 @@ -0,0 +1,10 @@
@@ -2864,7 +2923,7 @@ index 0000000..71c5d77
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
 new file mode 100644
-index 0000000..fc9a724
+index 000000000..fc9a72477
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
 @@ -0,0 +1,10 @@
@@ -2880,7 +2939,7 @@ index 0000000..fc9a724
 +exit 0
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
 new file mode 100644
-index 0000000..f655e66
+index 000000000..f655e6646
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
 @@ -0,0 +1,14 @@
@@ -2900,7 +2959,7 @@ index 0000000..f655e66
 +WantedBy=multi-user.target
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/setup.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/setup.py
 new file mode 100644
-index 0000000..ba72a74
+index 000000000..ba72a742c
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/setup.py
 @@ -0,0 +1,15 @@
@@ -2921,7 +2980,7 @@ index 0000000..ba72a74
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/__init__.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/__init__.py
 new file mode 100644
-index 0000000..4bfefa0
+index 000000000..4bfefa0fb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/__init__.py
 @@ -0,0 +1,3 @@
@@ -2930,7 +2989,7 @@ index 0000000..4bfefa0
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py
 new file mode 100644
-index 0000000..b56f2c8
+index 000000000..b56f2c817
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py
 @@ -0,0 +1,363 @@
@@ -3299,7 +3358,7 @@ index 0000000..b56f2c8
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/component.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/component.py
 new file mode 100644
-index 0000000..ae0a764
+index 000000000..ae0a76411
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/component.py
 @@ -0,0 +1,91 @@
@@ -3396,7 +3455,7 @@ index 0000000..ae0a764
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/eeprom.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/eeprom.py
 new file mode 100644
-index 0000000..a6f6bea
+index 000000000..a6f6bea17
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/eeprom.py
 @@ -0,0 +1,237 @@
@@ -3639,7 +3698,7 @@ index 0000000..a6f6bea
 +        return self.eeprom_tlv_dict
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/platform.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/platform.py
 new file mode 100644
-index 0000000..0b67a68
+index 000000000..0b67a68b8
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/platform.py
 @@ -0,0 +1,22 @@
@@ -3667,7 +3726,7 @@ index 0000000..0b67a68
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py
 new file mode 100644
-index 0000000..39d8cb5
+index 000000000..39d8cb5da
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py
 @@ -0,0 +1,1435 @@
@@ -5108,7 +5167,7 @@ index 0000000..39d8cb5
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py
 new file mode 100644
-index 0000000..604eaf4
+index 000000000..604eaf49e
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py
 @@ -0,0 +1,259 @@
@@ -5373,7 +5432,7 @@ index 0000000..604eaf4
 +                    return True, {}
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/watchdog.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/watchdog.py
 new file mode 100644
-index 0000000..8c8541e
+index 000000000..8c8541ea0
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/watchdog.py
 @@ -0,0 +1,133 @@
@@ -5512,7 +5571,7 @@ index 0000000..8c8541e
 +        fcntl.ioctl(self.watchdog, WDIOC_KEEPALIVE)
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/utils/get-base-mac.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/utils/get-base-mac.py
 new file mode 100644
-index 0000000..fe271d0
+index 000000000..fe271d04a
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/utils/get-base-mac.py
 @@ -0,0 +1,20 @@
@@ -5538,7 +5597,7 @@ index 0000000..fe271d0
 +    main()
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/changelog b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/changelog
 new file mode 100644
-index 0000000..7ce3ed2
+index 000000000..7ce3ed2d1
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/changelog
 @@ -0,0 +1,4 @@
@@ -5548,14 +5607,14 @@ index 0000000..7ce3ed2
 + -- Marvell  Wed, 15 Apr 2020 09:35:58 +0800
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/compat b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/compat
 new file mode 100644
-index 0000000..ec63514
+index 000000000..ec635144f
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/compat
 @@ -0,0 +1 @@
 +9
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/control b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/control
 new file mode 100644
-index 0000000..2deaceb
+index 000000000..2deaceb05
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/control
 @@ -0,0 +1,13 @@
@@ -5574,7 +5633,7 @@ index 0000000..2deaceb
 + <insert long description, indented with spaces>
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/files b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/files
 new file mode 100644
-index 0000000..b086c81
+index 000000000..b086c81d8
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/files
 @@ -0,0 +1,2 @@
@@ -5582,7 +5641,7 @@ index 0000000..b086c81
 +sonic-platform-db98cx8540-16cd-db98cx8540_1.0_amd64.deb unknown optional
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/rules b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/rules
 new file mode 100644
-index 0000000..d86c277
+index 000000000..d86c27795
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/rules
 @@ -0,0 +1,66 @@
@@ -5654,18 +5713,18 @@ index 0000000..d86c277
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
 new file mode 100644
-index 0000000..3e3bc1e
+index 000000000..3e3bc1ed6
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
 @@ -0,0 +1,5 @@
 +db98cx8540/scripts/db98cx8540-16cd-init.sh  usr/local/bin
 +db98cx8540/service/db98cx8540-16cd-init.service etc/systemd/system
 +db98cx8540/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8540_16cd-r0
-+db98cx8540/sonic_platform-1.0-py2-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8540_16cd-r0
++
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst
 new file mode 100644
-index 0000000..1ae6cdc
+index 000000000..1ae6cdcf2
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst
 @@ -0,0 +1,10 @@
@@ -5681,7 +5740,7 @@ index 0000000..1ae6cdc
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh
 new file mode 100644
-index 0000000..2851b2e
+index 000000000..2851b2e57
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh
 @@ -0,0 +1,10 @@
@@ -5697,7 +5756,7 @@ index 0000000..2851b2e
 +exit 0
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
 new file mode 100644
-index 0000000..f4a194e
+index 000000000..f4a194eba
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
 @@ -0,0 +1,14 @@
@@ -5717,7 +5776,7 @@ index 0000000..f4a194e
 +WantedBy=multi-user.target
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/setup.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/setup.py
 new file mode 100644
-index 0000000..e48d2e1
+index 000000000..e48d2e160
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/setup.py
 @@ -0,0 +1,15 @@
@@ -5738,7 +5797,7 @@ index 0000000..e48d2e1
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/__init__.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/__init__.py
 new file mode 100644
-index 0000000..4bfefa0
+index 000000000..4bfefa0fb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/__init__.py
 @@ -0,0 +1,3 @@
@@ -5747,7 +5806,7 @@ index 0000000..4bfefa0
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py
 new file mode 100644
-index 0000000..f90f8cd
+index 000000000..f90f8cdb4
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py
 @@ -0,0 +1,382 @@
@@ -6135,7 +6194,7 @@ index 0000000..f90f8cd
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/component.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/component.py
 new file mode 100644
-index 0000000..ae0a764
+index 000000000..ae0a76411
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/component.py
 @@ -0,0 +1,91 @@
@@ -6232,7 +6291,7 @@ index 0000000..ae0a764
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/eeprom.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/eeprom.py
 new file mode 100644
-index 0000000..a6f6bea
+index 000000000..a6f6bea17
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/eeprom.py
 @@ -0,0 +1,237 @@
@@ -6475,7 +6534,7 @@ index 0000000..a6f6bea
 +        return self.eeprom_tlv_dict
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/platform.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/platform.py
 new file mode 100644
-index 0000000..0b67a68
+index 000000000..0b67a68b8
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/platform.py
 @@ -0,0 +1,22 @@
@@ -6503,7 +6562,7 @@ index 0000000..0b67a68
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py
 new file mode 100644
-index 0000000..588158b
+index 000000000..588158b41
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py
 @@ -0,0 +1,1445 @@
@@ -7954,7 +8013,7 @@ index 0000000..588158b
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py
 new file mode 100644
-index 0000000..598cbe6
+index 000000000..598cbe632
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py
 @@ -0,0 +1,269 @@
@@ -8229,7 +8288,7 @@ index 0000000..598cbe6
 +                    return True, {}
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/watchdog.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/watchdog.py
 new file mode 100644
-index 0000000..8c8541e
+index 000000000..8c8541ea0
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/watchdog.py
 @@ -0,0 +1,133 @@
@@ -8368,7 +8427,7 @@ index 0000000..8c8541e
 +        fcntl.ioctl(self.watchdog, WDIOC_KEEPALIVE)
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/utils/get-base-mac.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/utils/get-base-mac.py
 new file mode 100644
-index 0000000..fe271d0
+index 000000000..fe271d04a
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/utils/get-base-mac.py
 @@ -0,0 +1,20 @@
@@ -8394,7 +8453,7 @@ index 0000000..fe271d0
 +    main()
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/changelog b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/changelog
 new file mode 100644
-index 0000000..fecd769
+index 000000000..fecd769ea
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/changelog
 @@ -0,0 +1,4 @@
@@ -8404,14 +8463,14 @@ index 0000000..fecd769
 + -- Marvell  Wed, 15 Apr 2020 09:35:58 +0800
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/compat b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/compat
 new file mode 100644
-index 0000000..ec63514
+index 000000000..ec635144f
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/compat
 @@ -0,0 +1 @@
 +9
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/control b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/control
 new file mode 100644
-index 0000000..2110b65
+index 000000000..2110b65e6
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/control
 @@ -0,0 +1,13 @@
@@ -8430,7 +8489,7 @@ index 0000000..2110b65
 + <insert long description, indented with spaces>
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/files b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/files
 new file mode 100644
-index 0000000..bb52445
+index 000000000..bb5244514
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/files
 @@ -0,0 +1,2 @@
@@ -8438,7 +8497,7 @@ index 0000000..bb52445
 +sonic-platform-db98cx8580-32cd-db98cx8580_1.0_amd64.deb unknown optional
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/rules b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/rules
 new file mode 100644
-index 0000000..390808f
+index 000000000..390808f3c
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/rules
 @@ -0,0 +1,66 @@
@@ -8510,18 +8569,18 @@ index 0000000..390808f
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
 new file mode 100644
-index 0000000..9536c27
+index 000000000..9536c278c
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
 @@ -0,0 +1,5 @@
 +db98cx8580/scripts/db98cx8580-32cd-init.sh  usr/local/bin
 +db98cx8580/service/db98cx8580-32cd-init.service etc/systemd/system
 +db98cx8580/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8580_32cd-r0
-+db98cx8580/sonic_platform-1.0-py2-none-any.whl usr/share/sonic/device/x86_64-marvell_db98cx8580_32cd-r0
++
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst
 new file mode 100644
-index 0000000..ebabe73
+index 000000000..ebabe733e
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst
 @@ -0,0 +1,10 @@
