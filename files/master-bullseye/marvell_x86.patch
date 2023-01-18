@@ -70,13 +70,14 @@ index 000000000..001200143
 +$(LINUX_KERNEL_MOD)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/kernel/$(LINUX_KERNEL_MOD)
 +SONIC_ONLINE_DEBS += $(LINUX_KERNEL_MOD)
 diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
-index fcac03854..cc4f82484 100644
+index fcac03854..5a4e84d20 100644
 --- a/platform/marvell/one-image.mk
 +++ b/platform/marvell/one-image.mk
-@@ -4,6 +4,9 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
+@@ -4,6 +4,10 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
  $(SONIC_ONE_IMAGE)_MACHINE = marvell
  $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
  $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
++$(SONIC_ONE_IMAGE)_INSTALLS += $(LINUX_KERNEL_MOD)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8540_16CD_PLATFORM)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8514_10CC_PLATFORM)
@@ -2896,7 +2897,7 @@ index 000000000..ac96824c4
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install
 new file mode 100644
-index 000000000..9935b8316
+index 000000000..23e29c1b0
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/debian/sonic-platform-db98cx8514-10cc-db98cx8514.install
 @@ -0,0 +1,5 @@
@@ -5713,7 +5714,7 @@ index 000000000..d86c27795
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
 new file mode 100644
-index 000000000..3e3bc1ed6
+index 000000000..46be26fbb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
 @@ -0,0 +1,5 @@
@@ -8569,7 +8570,7 @@ index 000000000..390808f3c
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
 new file mode 100644
-index 000000000..9536c278c
+index 000000000..d8ba75860
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
 @@ -0,0 +1,5 @@
