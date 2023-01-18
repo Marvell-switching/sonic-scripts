@@ -1,233 +1,454 @@
-diff --git a/patch/0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch b/patch/0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
+diff --git a/patch/001-falcon-dts.patch b/patch/001-falcon-dts.patch
 new file mode 100644
-index 0000000..559ce92
+index 0000000..350d7ef
 --- /dev/null
-+++ b/patch/0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
-@@ -0,0 +1,30 @@
-+From 07c0a9512d61ac9aafceec4aee64308bbdf5a55a Mon Sep 17 00:00:00 2001
-+From: Konstantin Porotchkin <kostap@marvell.com>
-+Date: Wed, 8 Aug 2018 16:54:44 +0300
-+Subject: [PATCH] mtd: nand: marvell: add support for 2KB 8-bit nand
++++ b/patch/001-falcon-dts.patch
+@@ -0,0 +1,338 @@
++Subject: DTS support for 7020 AMC & ComExpress
 +
-+Add support for NAND with 2KB page and ECC strength of 8-bit
-+to the layout table of marvell_nand driver.
-+Tested with Toshiba TC58NVG1S3HTA00
-+
-+Change-Id: I54e03dcd05a80c23a2b47c97752591f4072e5060
-+Signed-off-by: Konstantin Porotchkin <kostap@marvell.com>
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Eyal Oron <oeyal@marvell.com>
 +---
-+ drivers/mtd/nand/raw/marvell_nand.c | 1 +
-+ 1 file changed, 1 insertion(+)
++ arch/arm64/boot/dts/marvell/Makefile               |    2 
++ arch/arm64/boot/dts/marvell/armada-7020-amc.dts    |  144 ++++++++++++++++++++
++ .../boot/dts/marvell/armada-7020-comexpress.dts    |  141 ++++++++++++++++++++
++ arch/arm64/boot/dts/marvell/armada-70x0.dtsi       |    6 +
++ 4 files changed, 293 insertions(+)
++ create mode 100644 arch/arm64/boot/dts/marvell/armada-7020-amc.dts
++ create mode 100644 arch/arm64/boot/dts/marvell/armada-7020-comexpress.dts
 +
-+diff --git a/drivers/mtd/nand/raw/marvell_nand.c b/drivers/mtd/nand/raw/marvell_nand.c
-+index 6c16646..916dcd1 100644
-+--- a/drivers/mtd/nand/raw/marvell_nand.c
-++++ b/drivers/mtd/nand/raw/marvell_nand.c
-+@@ -285,6 +285,7 @@ static const struct marvell_hw_ecc_layout marvell_nfc_layouts[] = {
-+ 	MARVELL_LAYOUT( 2048,   512,  1,  1,  1, 2048, 40, 24,  0,  0,  0),
-+ 	MARVELL_LAYOUT( 2048,   512,  4,  1,  1, 2048, 32, 30,  0,  0,  0),
-+ 	MARVELL_LAYOUT( 2048,   512,  8,  2,  1, 1024,  0, 30,1024,32, 30),
-++	MARVELL_LAYOUT( 2048,   512,  8,  2,  1, 1024,  0, 30,  1024, 64, 30),
-+ 	MARVELL_LAYOUT( 4096,   512,  4,  2,  2, 2048, 32, 30,  0,  0,  0),
-+ 	MARVELL_LAYOUT( 4096,   512,  8,  5,  4, 1024,  0, 30,  0, 64, 30),
-+ 	MARVELL_LAYOUT( 8192,   512,  4,  4,  4, 2048,  0, 30,  0,  0,  0),
-+-- 
-+2.7.4
-+
-diff --git a/patch/0120-arm64-pcie-irq.patch b/patch/0120-arm64-pcie-irq.patch
++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
++index 3e5f2e7a0..0f2228c12 100644
++--- a/arch/arm64/boot/dts/marvell/Makefile
+++++ b/arch/arm64/boot/dts/marvell/Makefile
++@@ -16,3 +16,5 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += cn9130-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += cn9131-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += cn9132-db.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += armada-7020-comexpress.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += armada-7020-amc.dtb
++diff --git a/arch/arm64/boot/dts/marvell/armada-7020-amc.dts b/arch/arm64/boot/dts/marvell/armada-7020-amc.dts
++new file mode 100644
++index 000000000..e1ff21f1e
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/armada-7020-amc.dts
++@@ -0,0 +1,144 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Copyright (C) 2019 Marvell Technology Group Ltd.
+++ *
+++ * Device Tree file for Marvell Armada 7020 AMC board.
+++ */
+++
+++#include "armada-7020.dtsi"
+++
+++/ {
+++	model = "Marvell Armada-7020 AMC board setup";
+++	compatible = "marvell,armada7020-amc", "marvell,armada7020",
+++			"marvell,armada-ap806";
+++
+++	memory@0 {
+++		device_type = "memory";
+++		reg = <0x0 0x0 0x0 0x40000000>;
+++	};
+++
+++	chosen {
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	aliases {
+++		ethernet0 = &cp0_eth0;
+++		ethernet1 = &cp0_eth1;
+++	};
+++};
+++
+++&i2c0 {
+++	status = "okay";
+++	clock-frequency = <100000>;
+++};
+++
+++&spi0 {
+++	status = "okay";
+++};
+++
+++&uart0 {
+++	status = "okay";
+++};
+++
+++&cp0_ethernet {
+++	status = "okay";
+++};
+++
+++&cp0_eth0 {
+++	status = "okay";
+++	phy-mode = "10gbase-kr";
+++	managed = "in-band-status";
+++	/* Generic PHY, providing serdes lanes */
+++	phys = <&cp0_comphy4 0>;
+++};
+++
+++&cp0_eth1 {
+++	status = "okay";
+++	phy = <&phy0>;
+++	phy-mode = "rgmii-id";
+++};
+++
+++&cp0_i2c0 {
+++	status = "okay";
+++	clock-frequency = <100000>;
+++};
+++
+++&cp0_mdio {
+++	status = "okay";
+++
+++	phy0: ethernet-phy@1 {
+++		reg = <1>;
+++	};
+++};
+++
+++&cp0_nand_controller {
+++	status = "okay";
+++
+++	nand@0 {
+++		reg = <0>;
+++		label = "main-storage";
+++		nand-rb = <0>;
+++		nand-ecc-mode = "hw";
+++		nand-on-flash-bbt;
+++		nand-ecc-strength = <8>;
+++		nand-ecc-step-size = <512>;
+++
+++		partitions {
+++			compatible = "fixed-partitions";
+++			#address-cells = <1>;
+++			#size-cells = <1>;
+++
+++			partition@0 {
+++				label = "U-Boot";
+++				reg = <0 0x200000>;
+++			};
+++			partition@200000 {
+++				label = "Linux";
+++				reg = <0x200000 0xe00000>;
+++			};
+++			partition@1000000 {
+++				label = "Filesystem";
+++				reg = <0x1000000 0x3f000000>;
+++			};
+++		};
+++	};
+++};
+++
+++&cp0_pcie0 {
+++	status = "okay";
+++	num-lanes = <4>;
+++	num-viewport = <8>;
+++
+++	ranges = <0x81000000 0x0 0xfa000000 0x0 0xfa000000 0x0 0x00010000
+++		  0x82000000 0x0 0x00000000 0x8 0x00000000 0x2 0x00000000>;
+++
+++	/* Generic PHY, providing serdes lanes */
+++	phys = <&cp0_comphy0 0
+++		&cp0_comphy1 0
+++		&cp0_comphy2 0
+++		&cp0_comphy3 0>;
+++};
+++
+++&cp0_sata0 {
+++	/* CPM Lane 0 - U29 */
+++	status = "okay";
+++
+++	sata-port@1 {
+++		status = "okay";
+++		/* Generic PHY, providing serdes lanes */
+++		phys = <&cp0_comphy5 1>;
+++	};
+++};
+++
+++&cp0_sdhci0 {
+++	status = "okay";
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&sdhci_pins>;
+++	bus-width = <4>;
+++	no-1-8-v;
+++	broken-cd;
+++};
+++
+++&cp0_usb3_0 {
+++	status = "okay";
+++};
++diff --git a/arch/arm64/boot/dts/marvell/armada-7020-comexpress.dts b/arch/arm64/boot/dts/marvell/armada-7020-comexpress.dts
++new file mode 100644
++index 000000000..7b81139df
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/armada-7020-comexpress.dts
++@@ -0,0 +1,141 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Copyright (C) 2019 Marvell Technology Group Ltd.
+++ *
+++ * Device Tree file for Marvell Armada 7020 COMEXPRESS board.
+++ */
+++
+++#include "armada-7020.dtsi"
+++
+++/ {
+++	model = "Marvell Armada-7020 COMEXPRESS board setup";
+++	compatible = "marvell,armada7020-comexpress", "marvell,armada7020",
+++			"marvell,armada-ap806";
+++
+++	memory@0 {
+++		device_type = "memory";
+++		reg = <0x0 0x0 0x0 0x40000000>;
+++	};
+++
+++	chosen {
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	aliases {
+++		ethernet0 = &cp0_eth0;
+++		ethernet1 = &cp0_eth1;
+++	};
+++};
+++
+++&i2c0 {
+++	status = "okay";
+++	clock-frequency = <100000>;
+++};
+++
+++&spi0 {
+++	status = "okay";
+++};
+++
+++&uart0 {
+++	status = "okay";
+++};
+++
+++&cp0_mdio {
+++	status = "okay";
+++
+++	phy0: ethernet-phy@10 {
+++		reg = <0x10>;
+++	};
+++};
+++
+++&cp0_ethernet {
+++	status = "okay";
+++};
+++
+++&cp0_eth0 {
+++	status = "okay";
+++	phy-mode = "10gbase-kr";
+++	managed = "in-band-status";
+++	/* Generic PHY, providing serdes lanes */
+++	phys = <&cp0_comphy4 0>;
+++};
+++
+++&cp0_eth1 {
+++	status = "okay";
+++	phy = <&phy0>;
+++	phy-mode = "rgmii-id";
+++};
+++
+++&cp0_i2c0 {
+++	status = "okay";
+++	clock-frequency = <100000>;
+++};
+++
+++&cp0_nand_controller {
+++	status = "okay";
+++
+++	nand@0 {
+++		reg = <0>;
+++		label = "main-storage";
+++		nand-rb = <0>;
+++		nand-ecc-mode = "hw";
+++		nand-on-flash-bbt;
+++		nand-ecc-strength = <8>;
+++		nand-ecc-step-size = <512>;
+++
+++		partitions {
+++			compatible = "fixed-partitions";
+++			#address-cells = <1>;
+++			#size-cells = <1>;
+++
+++			partition@0 {
+++				label = "U-Boot";
+++				reg = <0 0x200000>;
+++			};
+++			partition@200000 {
+++				label = "Linux";
+++				reg = <0x200000 0xe00000>;
+++			};
+++			partition@1000000 {
+++				label = "Filesystem";
+++				reg = <0x1000000 0x3f000000>;
+++			};
+++		};
+++	};
+++};
+++
+++&cp0_pcie0 {
+++	status = "okay";
+++	num-lanes = <4>;
+++	num-viewport = <8>;
+++
+++	ranges = <0x81000000 0x0 0xfa000000 0x0 0xfa000000 0x0 0x00010000
+++		  0x82000000 0x0 0x00000000 0x8 0x00000000 0x2 0x00000000>;
+++
+++	/* Generic PHY, providing serdes lanes */
+++	phys = <&cp0_comphy0 0
+++		&cp0_comphy1 0
+++		&cp0_comphy2 0
+++		&cp0_comphy3 0>;
+++};
+++
+++&cp0_sata0 {
+++	/* CPM Lane 0 - U29 */
+++	status = "okay";
+++
+++	sata-port@1 {
+++		status = "okay";
+++		/* Generic PHY, providing serdes lanes */
+++		phys = <&cp0_comphy5 1>;
+++	};
+++};
+++
+++&cp0_sdhci0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&sdhci_pins>;
+++	status = "okay";
+++	bus-width = <4>;
+++	no-1-8-v;
+++	broken-cd;
+++};
+++
++diff --git a/arch/arm64/boot/dts/marvell/armada-70x0.dtsi b/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
++index 293403a1a..179218774 100644
++--- a/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
+++++ b/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
++@@ -47,6 +47,12 @@ &cp0_syscon0 {
++ 	cp0_pinctrl: pinctrl {
++ 		compatible = "marvell,armada-7k-pinctrl";
++ 
+++		sdhci_pins: sdhi-pins {
+++			marvell,pins = "mpp56", "mpp57", "mpp58",
+++				       "mpp59", "mpp60", "mpp61", "mpp62";
+++			marvell,function = "sdio";
+++		};
+++
++ 		nand_pins: nand-pins {
++ 			marvell,pins =
++ 			"mpp15", "mpp16", "mpp17", "mpp18",
+diff --git a/patch/002-ac5x-cnm-support.patch b/patch/002-ac5x-cnm-support.patch
 new file mode 100644
-index 0000000..1b9e74f
+index 0000000..0e612c1
 --- /dev/null
-+++ b/patch/0120-arm64-pcie-irq.patch
-@@ -0,0 +1,80 @@
-+From adf767005a35a2afeb8006c1023633af4de9d78e Mon Sep 17 00:00:00 2001
-+From: Antony Rheneus <arheneus@marvell.com>
-+Date: Thu, 17 Oct 2019 18:31:57 +0530
-+Subject: [PATCH] arm64 pcie irq
++++ b/patch/002-ac5x-cnm-support.patch
+@@ -0,0 +1,2003 @@
++Subject: Add AC5/X CnM supoort
 +
++List of commits picked from 4.14 repo:
++4b53d35e11 Fixed build for BE - disabled ARM64_VHE symbol
++2a39183b03 Fixed usb parameters in ac5 dts files
++353e642c16 AC5X add phy support, add AC5_comexpress dts
++563d377816 AC5 enable booting with RAM > 0.5G
++2116f8f6dc dts/ac5: Remap addresses for mvneta
++5e8f687104 modify marvell nand NFC timing set for mode 0
++79de05afc0 add USB Ethernet support in defconfig
++a32fedcefb usb/ehci-orion: Delete unneeded local variables
++996f3afc95 CPSS-11995: Add support for PCIe with AC5
++cf03350c6f usb/ehci-orion: Delete debug option max-speed-full-speed
++d4bbb9e96a usb/ehci-orion: Delete AC5 USB window setting and dma offset adjustment
++1f397a3569 CPSS-11949: Add support for USB serial interface
++73a1b37a46 SPI support in DTS
++fa84d3fd6c Add USB full-speed support
++8167a2535d add nand missing layouts , add option to use ndtr predefined values
++66e023f864 eMMC speed support in DTS
++ac22e0b87d Add i2c support for AC5
++69cbbfd149 eMMC 8 bit support in DTS
++9bc751c73c enable realtek 8152 usb2eth
++48e9fa2d4c fix double <<..>> in ac5.dtsi
++a6d705584f dts: Add AC5 IRQ support
++9ef843878f Add AC5 usb support
++90a9430d48 ac5_pci
++83a326d157 add ac_db.dtb to marvell dtbs list in the Makefile
++47d91f7e45 ac5 mvneta
++
++List of fixes on top of the above commits:
++1. Upstream catch-up for enum mvneta_type (on top of 47d91f7e45)
++2. usb/ehci-orion: Set to bit mask 64
++3. arm64: dts: marvell: enable ac5 rd build
++4. PCI: dwc: Map ATU address
++5. Implement function onfi_async_timing_mode_to_sdr_timings
++
++Signed-off-by: Yuval Shaia <yshaia@marvell.com>
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
 +---
-+ arch/arm64/kernel/pci.c | 9 +++++++++
-+ drivers/acpi/pci_irq.c | 9 +++++++++
-+ 2 file changed, 9 insertions(+)
++ .../devicetree/bindings/mtd/marvell-nand.txt       |   14 +
++ .../devicetree/bindings/usb/ehci-orion.txt         |    1 
++ arch/arm/configs/mvebu_v7_defconfig                |    3 
++ arch/arm64/boot/dts/marvell/Makefile               |    2 
++ arch/arm64/boot/dts/marvell/ac5.dtsi               |  379 +++++++++++++++++++
++ arch/arm64/boot/dts/marvell/ac5_comexpress.dts     |   34 ++
++ arch/arm64/boot/dts/marvell/ac5_db.dts             |   38 ++
++ arch/arm64/boot/dts/marvell/ac5_rd.dts             |   26 +
++ arch/arm64/boot/dts/marvell/ac5x_db.dts            |   32 ++
++ arch/arm64/boot/dts/marvell/armada-70x0.dtsi       |   30 ++
++ drivers/mtd/nand/raw/Kconfig                       |    2 
++ drivers/mtd/nand/raw/internals.h                   |    1 
++ drivers/mtd/nand/raw/marvell_nand.c                |  279 +++++++++++++-
++ drivers/mtd/nand/raw/nand_timings.c                |   15 +
++ drivers/net/ethernet/marvell/mvneta.c              |   73 ++--
++ drivers/pci/controller/dwc/pcie-armada8k.c         |  394 ++++++++++++++------
++ drivers/usb/host/ehci-orion.c                      |    6 
++ 17 files changed, 1145 insertions(+), 184 deletions(-)
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5.dtsi
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5_comexpress.dts
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5_db.dts
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5_rd.dts
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5x_db.dts
 +
-+diff --git a/arch/arm64/kernel/pci.c b/arch/arm64/kernel/pci.c
-+index 0e2ea1c..8679828 100644
-+--- a/arch/arm64/kernel/pci.c
-++++ b/arch/arm64/kernel/pci.c
-+@@ -28,8 +28,11 @@
-+  */
-+ int pcibios_alloc_irq(struct pci_dev *dev)
-+ {
-+-	if (!acpi_disabled)
-++	if (!acpi_disabled)
-++	{
-++		dev->irq = 0;
-+ 		acpi_pci_irq_enable(dev);
-++	}
++diff --git a/Documentation/devicetree/bindings/mtd/marvell-nand.txt b/Documentation/devicetree/bindings/mtd/marvell-nand.txt
++index a2d9a0f2b..e6dfff618 100644
++--- a/Documentation/devicetree/bindings/mtd/marvell-nand.txt
+++++ b/Documentation/devicetree/bindings/mtd/marvell-nand.txt
++@@ -2,6 +2,7 @@ Marvell NAND Flash Controller (NFC)
 + 
-+ 	return 0;
-+ }
-+diff --git a/drivers/acpi/pci_irq.c b/drivers/acpi/pci_irq.c
-+index c576a6f..48c321a 100644
-+--- a/drivers/acpi/pci_irq.c
-++++ b/drivers/acpi/pci_irq.c
-+@@ -390,7 +390,7 @@ static inline int acpi_isa_register_gsi(struct pci_dev *dev)
++ Required properties:
++ - compatible: can be one of the following:
+++    * "marvell,ac5-nand-controller"
++     * "marvell,armada-8k-nand-controller"
++     * "marvell,armada370-nand-controller"
++     * "marvell,pxa3xx-nand-controller"
++@@ -57,11 +58,20 @@ Optional properties:
++   step size will shrink or grow in order to fit the required strength.
++   Step sizes are not completely random for all and follow certain
++   patterns described in AN-379, "Marvell SoC NFC ECC".
+++- nand-timing-mode:
+++  This field is relevant only if "is_marvell_timing_modes" capabilitiy
+++  is supportted, then the supported modes are: 0 to "max_mode_number" 
+++  (the maxmium mode the NFC can support, it is also one of the driver 
+++  capabilities). it is recomannded use it for Nand devices
+++  that not supports ONFI and can't read the mode from parameter page,
+++  else mode will be set to 0 or according to nand_ids table. 
+++  In case mode is read from parameter page but also the 
+++  "nand-timing-mode" is defined in dts, than device tree definition is 
+++  the one that counts.
 + 
-+ static inline bool acpi_pci_irq_valid(struct pci_dev *dev, u8 pin)
-+ {
-+-#ifdef CONFIG_X86
-++#if defined(CONFIG_X86) || defined(CONFIG_ARM64)
-+ 	/*
-+ 	 * On x86 irq line 0xff means "unknown" or "no connection"
-+ 	 * (PCI 3.0, Section 6.2.4, footnote on page 223).
-+diff --git a/drivers/acpi/pci_irq.c b/drivers/acpi/pci_irq.c
-+index c576a6f..48c321a 100644
-+--- a/drivers/pci/pci.c
-++++ b/drivers/pci/pci.c
-+@@ -32,6 +32,7 @@
-+ #include <asm/dma.h>
-+ #include <linux/aer.h>
-+ #include "pci.h"
-++#include <linux/of_pci.h>
-+ 
-+ DEFINE_MUTEX(pci_slot_mutex);
-+ 
-+@@ -2064,6 +2065,9 @@
-+  */
-+ int __weak pcibios_add_device(struct pci_dev *dev)
-+ {
-++#if defined(CONFIG_ARM64)
-++	dev->irq = of_irq_parse_and_map_pci(dev, 0, 0);
-++#endif
-+ 	return 0;
-+ }
-+ 
-+diff --git a/drivers/pci/pcie/portdrv_core.c b/drivers/pci/pcie/portdrv_core.c
-+index c576a6f..48c321a 100644
-+--- a/drivers/pci/pcie/portdrv_core.c
-++++ b/drivers/pci/pcie/portdrv_core.c
-+@@ -103,8 +103,13 @@
-+ 	u32 pme = 0, aer = 0, dpc = 0;
-+ 
-+ 	/* Allocate the maximum possible number of MSI/MSI-X vectors */
-++#if defined(CONFIG_ARM64)
-++	nr_entries = pci_alloc_irq_vectors(dev, 1, PCIE_PORT_MAX_MSI_ENTRIES,
-++			PCI_IRQ_MSI);
-++#else
-+ 	nr_entries = pci_alloc_irq_vectors(dev, 1, PCIE_PORT_MAX_MSI_ENTRIES,
-+ 			PCI_IRQ_MSIX | PCI_IRQ_MSI);
-++#endif
-+ 	if (nr_entries < 0)
-+ 		return nr_entries;
-+ 
-diff --git a/patch/0121-arm64-marvell-mvpp2.patch b/patch/0121-arm64-marvell-mvpp2.patch
-new file mode 100644
-index 0000000..f690439
---- /dev/null
-+++ b/patch/0121-arm64-marvell-mvpp2.patch
-@@ -0,0 +1,84 @@
-+diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-+index 46911b6..67b9e81 100644
-+--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2.h
-+@@ -253,8 +253,7 @@
-+ #define     MVPP2_ISR_ENABLE_INTERRUPT(mask)	((mask) & 0xffff)
-+ #define     MVPP2_ISR_DISABLE_INTERRUPT(mask)	(((mask) << 16) & 0xffff0000)
-+ #define MVPP2_ISR_RX_TX_CAUSE_REG(port)		(0x5480 + 4 * (port))
-+-#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(version) \
-+-					((version) == MVPP21 ? 0xffff : 0xff)
-++#define     MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK	0xffff
-+ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK	0xff0000
-+ #define     MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_OFFSET	16
-+ #define     MVPP2_CAUSE_RX_FIFO_OVERRUN_MASK	BIT(24)
-+diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-+index 04bee45..6455511 100644
-+--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-+@@ -1157,7 +1157,7 @@ static void mvpp2_interrupts_unmask(void *arg)
-+ 		return;
-+ 
-+ 	val = MVPP2_CAUSE_MISC_SUM_MASK |
-+-		MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
-++		MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+ 	if (port->has_tx_irqs)
-+ 		val |= MVPP2_CAUSE_TXQ_OCCUP_DESC_ALL_MASK;
-+ 
-+@@ -1178,7 +1178,7 @@ mvpp2_shared_interrupt_mask_unmask(struct mvpp2_port *port, bool mask)
-+ 	if (mask)
-+ 		val = 0;
-+ 	else
-+-		val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(MVPP22);
-++		val = MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+ 
-+ 	for (i = 0; i < port->nqvecs; i++) {
-+ 		struct mvpp2_queue_vector *v = port->qvecs + i;
-+@@ -3966,7 +3966,7 @@ static int mvpp2_tx_tso(struct sk_buff *skb, struct net_device *dev,
-+ }
-+ 
-+ /* Main tx processing */
-+-static netdev_tx_t mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
-++static int mvpp2_tx(struct sk_buff *skb, struct net_device *dev)
-+ {
-+ 	struct mvpp2_port *port = netdev_priv(dev);
-+ 	struct mvpp2_tx_queue *txq, *aggr_txq;
-+@@ -4141,8 +4141,7 @@ static int mvpp2_poll(struct napi_struct *napi, int budget)
-+ 	}
-+ 
-+ 	/* Process RX packets */
-+-	cause_rx = cause_rx_tx &
-+-		   MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK(port->priv->hw_version);
-++	cause_rx = cause_rx_tx & MVPP2_CAUSE_RXQ_OCCUP_DESC_ALL_MASK;
-+ 	cause_rx <<= qv->first_rxq;
-+ 	cause_rx |= qv->pending_cause_rx;
-+ 	while (cause_rx && budget > 0) {
-+@@ -4440,7 +4440,7 @@ static int mvpp2_open(struct net_device *dev)
-+ 		valid = true;
-+ 	}
-+ 
-+-	if (priv->hw_version == MVPP22 && port->port_irq) {
-++	if (priv->hw_version == MVPP22 && port->port_irq && !port->phylink) {
-+ 		err = request_irq(port->port_irq, mvpp2_port_isr, 0,
-+ 				  dev->name, port);
-+ 		if (err) {
-+@@ -5981,9 +5981,8 @@ static void mvpp2_xlg_config(struct mvpp2_port *port, unsigned int mode,
-+ 		     MVPP22_XLG_CTRL0_MAC_RESET_DIS);
-+ 	mvpp2_modify(port->base + MVPP22_XLG_CTRL4_REG,
-+ 		     MVPP22_XLG_CTRL4_MACMODSELECT_GMAC |
-+-		     MVPP22_XLG_CTRL4_EN_IDLE_CHECK |
-+ 		     MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC,
-+-		     MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC);
-++		     MVPP22_XLG_CTRL4_FWD_FC | MVPP22_XLG_CTRL4_FWD_PFC | MVPP22_XLG_CTRL4_EN_IDLE_CHECK);
-+ 
-+ 	/* Wait for reset to deassert */
-+ 	do {
-+@@ -6849,8 +6849,6 @@ static int mvpp2_probe(struct platform_device *pdev)
-+ 	if (has_acpi_companion(&pdev->dev)) {
-+ 		acpi_id = acpi_match_device(pdev->dev.driver->acpi_match_table,
-+ 					    &pdev->dev);
-+-		if (!acpi_id)
-+-			return -EINVAL;
-+ 		priv->hw_version = (unsigned long)acpi_id->driver_data;
-+ 	} else {
-+ 		priv->hw_version =
-diff --git a/patch/0122-ehci-controller-fixes.patch b/patch/0122-ehci-controller-fixes.patch
-new file mode 100644
-index 0000000..91875ed
---- /dev/null
-+++ b/patch/0122-ehci-controller-fixes.patch
-@@ -0,0 +1,47 @@
-+From a3a7dd879aa88cf177df1d4fbf6bbeefc06c858f Mon Sep 17 00:00:00 2001
-+From: rminnikanti <rminnikanti@marvell.com>
-+Date: Sun, 5 Sep 2021 17:27:38 +0000
-+Subject: [PATCH] ehci controller fixes
-+
-+---
-+ Documentation/devicetree/bindings/usb/ehci-orion.txt | 1 +
-+ drivers/usb/host/ehci-orion.c                        | 4 +++-
-+ 2 files changed, 4 insertions(+), 1 deletion(-)
-+
++ See Documentation/devicetree/bindings/mtd/nand-controller.yaml for more details on
++ generic bindings.
++-
++-
+++  
++ Example:
++ nand_controller: nand-controller@d0000 {
++ 	compatible = "marvell,armada370-nand-controller";
 +diff --git a/Documentation/devicetree/bindings/usb/ehci-orion.txt b/Documentation/devicetree/bindings/usb/ehci-orion.txt
-+index 2855bae..ad970bf 100644
++index 2855bae79..ad970bfeb 100644
 +--- a/Documentation/devicetree/bindings/usb/ehci-orion.txt
 ++++ b/Documentation/devicetree/bindings/usb/ehci-orion.txt
 +@@ -12,6 +12,7 @@ Optional properties:
@@ -238,65 +459,40 @@ index 0000000..91875ed
 + 
 + Example:
 + 
-+diff --git a/drivers/usb/host/ehci-orion.c b/drivers/usb/host/ehci-orion.c
-+index 1ad7264..3d35304 100644
-+--- a/drivers/usb/host/ehci-orion.c
-++++ b/drivers/usb/host/ehci-orion.c
-+@@ -189,6 +189,8 @@ static const struct ehci_driver_overrides orion_overrides __initconst = {
-+ 
-+ static int ehci_orion_drv_probe(struct platform_device *pdev)
-+ {
-++#define USB_PORTSC_REG_OFF	0x184
-++
-+ 	struct orion_ehci_data *pd = dev_get_platdata(&pdev->dev);
-+ 	const struct mbus_dram_target_info *dram;
-+ 	struct resource *res;
-+@@ -343,7 +345,7 @@ static int ehci_orion_drv_remove(struct platform_device *pdev)
-+ static const struct of_device_id ehci_orion_dt_ids[] = {
-+ 	{ .compatible = "marvell,orion-ehci", },
-+ 	{ .compatible = "marvell,armada-3700-ehci", },
-+-	{},
-++	{ },
-+ };
-+ MODULE_DEVICE_TABLE(of, ehci_orion_dt_ids);
-+ 
-+-- 
-+2.11.0
-+
-diff --git a/patch/0123-rd-ac5x-dts-support.patch b/patch/0123-rd-ac5x-dts-support.patch
-new file mode 100644
-index 0000000..9e14eb6
---- /dev/null
-+++ b/patch/0123-rd-ac5x-dts-support.patch
-@@ -0,0 +1,506 @@
-+From 983f1480f9fef6427409c23caaf848dc1051ae8d Mon Sep 17 00:00:00 2001
-+From: rminnikanti <rminnikanti@marvell.com>
-+Date: Sun, 5 Sep 2021 18:06:47 +0000
-+Subject: [PATCH] rd-ac5x-dts-support
-+
-+---
-+ arch/arm64/boot/dts/marvell/Makefile |   1 +
-+ arch/arm64/boot/dts/marvell/ac5.dtsi | 415 +++++++++++++++++++++++++++++++++++
-+ arch/arm64/boot/dts/marvell/ac5x.dts |  58 +++++
-+ 3 files changed, 474 insertions(+)
-+ create mode 100644 arch/arm64/boot/dts/marvell/ac5.dtsi
-+ create mode 100644 arch/arm64/boot/dts/marvell/ac5x.dts
-+
++diff --git a/arch/arm/configs/mvebu_v7_defconfig b/arch/arm/configs/mvebu_v7_defconfig
++index cddce57fe..2513ec00d 100644
++--- a/arch/arm/configs/mvebu_v7_defconfig
+++++ b/arch/arm/configs/mvebu_v7_defconfig
++@@ -67,8 +67,11 @@ CONFIG_MVNETA=y
++ CONFIG_MVPP2=y
++ CONFIG_SFP=y
++ CONFIG_MARVELL_PHY=y
+++CONFIG_USB_RTL8150=y
+++CONFIG_USB_RTL8152=y
++ CONFIG_MWIFIEX=y
++ CONFIG_MWIFIEX_SDIO=y
+++CONFIG_USB_NET_RNDIS_WLAN=y
++ CONFIG_INPUT_EVDEV=y
++ CONFIG_KEYBOARD_GPIO=y
++ CONFIG_SERIAL_8250=y
 +diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
-+index ea9d49f..e43a77a 100644
++index 0f2228c12..a69c931db 100644
 +--- a/arch/arm64/boot/dts/marvell/Makefile
 ++++ b/arch/arm64/boot/dts/marvell/Makefile
-+@@ -16,3 +16,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += armada-8080-db.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += cn9130-db.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += cn9131-db.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += cn9132-db.dtb
-++dtb-$(CONFIG_ARCH_MVEBU) += ac5x.dtb
++@@ -1,5 +1,7 @@
++ # SPDX-License-Identifier: GPL-2.0
++ # Mvebu SoC Family
+++dtb-$(CONFIG_ARCH_MVEBU) += ac5_db.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += ac5_rd.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-espressobin.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-espressobin-emmc.dtb
 +diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
 +new file mode 100644
-+index 0000000..eeb10ac
++index 000000000..c0e777e3b
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
-+@@ -0,0 +1,415 @@
++@@ -0,0 +1,379 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Device Tree For AC5.
@@ -323,13 +519,17 @@ index 0000000..9e14eb6
 ++		#size-cells = <2>;
 ++		ranges;
 ++
-++		prestera_rsvd: buffer@0x200000000 {
-++			/* to be used as a shared pool of DMA buffers for a set of devices */
-++			compatible = "shared-dma-pool";
-++			/* No one other than devices registered for that mem, may use this area */
-++			no-map;
+++		prestera_rsvd: buffer@200M {
+++			compatible = "shared-dma-pool"; /* to be used as a shared pool of
+++											DMA buffers for a set of devices
+++											*/
+++			no-map;	/* 	No one other than devices registered for that mem,
+++						may use this area
+++					*/
 ++
-++			/* Base addr (first 2 cells) requires alignment, we choose start of memory */
+++			/*	addr (first 2 cells) need to be aligned with actual DMA that
+++				will be allocted, therefore we choose such addr, that will
+++				be aligned with many DMA sizes */
 ++			reg = <0x2 0x0 0x0 0x400000>;
 ++		};
 ++	};
@@ -343,7 +543,8 @@ index 0000000..9e14eb6
 ++	aliases {
 ++		serial0 = &uart0;
 ++		spiflash0 = &spiflash0;
-++		gpio0 = &gpio0;
+++		ethernet0 = &eth0;
+++		ethernet1 = &eth1;
 ++	};
 ++
 ++	psci {
@@ -413,13 +614,6 @@ index 0000000..9e14eb6
 ++				interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
 ++				clock-frequency=<100000>;
 ++				status="okay";
-++
-++				pinctrl-names = "i2c-mpp-state", "i2c-gpio-state";
-++				pinctrl-0 = <&i2c_mpps>;
-++				pinctrl-1 = <&i2c_gpio>;
-++
-++				scl_gpio = <&gpio0 26 GPIO_ACTIVE_HIGH>;
-++				sda_gpio = <&gpio0 27 GPIO_ACTIVE_HIGH>;
 ++			};
 ++
 ++			i2c1: i2c@11100{
@@ -432,49 +626,16 @@ index 0000000..9e14eb6
 ++				clock-frequency=<100000>;
 ++				status="okay";
 ++			};
-++
-++			gpio0: gpio@18100 {
-++				compatible = "marvell,ac5-gpio";
-++				#gpio-cells = <2>;
-++				gpio-controller;
-++				reg = <0x18100 0x200>;
-++				// gpio-ranges = <&pinctrl0 0 0 46>;
-++				ngpios = <46>;
-++			};
-++		};
-++
-++		mmc_dma: mmc-dma-peripherals@80500000 {
-++				compatible = "simple-bus";
-++				#address-cells = <0x2>;
-++				#size-cells = <0x2>;
-++				ranges;
-++				dma-coherent;
-++
-++				sdhci0: sdhci@805c0000 {
-++					compatible = "marvell,ac5-sdhci", "marvell,armada-ap806-sdhci";
-++					reg = <0x0 0x805c0000 0x0 0x300>;
-++					reg-names = "ctrl", "decoder";
-++					interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
-++					clocks = <&core_clock>;
-++					clock-names = "core";
-++					status = "okay";
-++					bus-width = <8>;
-++					/*marvell,xenon-phy-slow-mode;*/
-++					non-removable;
-++					mmc-ddr-1_8v;
-++					mmc-hs200-1_8v;
-++					mmc-hs400-1_8v;
-++				};
 ++		};
 ++
 ++		/* Dedicated section for devices behind 32bit controllers so we
 ++		   can configure specific DMA mapping for them */
-++		32bit-dma-peripherals@7f000000 {
+++		behind-32bit-controller@7f000000 {
 ++			compatible = "simple-bus";
 ++			#address-cells = <0x2>;
 ++			#size-cells = <0x2>;
 ++			ranges = <0x0 0x0 0x0 0x7f000000 0x0 0x1000000>;
-++			/* Host phy ram starts at 0x200M */
+++			/* Host addresses starts at 0x2000000 */
 ++			dma-ranges = <0x0 0x0 0x2 0x0 0x1 0x0>;
 ++			dma-coherent;
 ++
@@ -508,7 +669,7 @@ index 0000000..9e14eb6
 ++
 ++			/* USB0 is a host USB */
 ++			usb0: usb@80000 {
-++				compatible = "marvell,orion-ehci";
+++				compatible = "marvell,ac5-ehci", "marvell,orion-ehci";
 ++				reg = <0x0 0x80000 0x0 0x500>;
 ++				interrupts = <GIC_SPI 67 IRQ_TYPE_LEVEL_HIGH>;
 ++				status = "okay";
@@ -522,26 +683,9 @@ index 0000000..9e14eb6
 ++			};
 ++		};
 ++
-++		pinctrl0: pinctrl@80020100 {
-++			compatible = "marvell,ac5-pinctrl",
-++				     "syscon", "simple-mfd";
-++			reg = <0 0x80020100 0 0x20>;
-++
-++			i2c_mpps: i2c-mpps {
-++				marvell,pins = "mpp26", "mpp27";
-++				marvell,function = "i2c0-opt";
-++			};
-++
-++			i2c_gpio: i2c-gpio {
-++				marvell,pins = "mpp26", "mpp27";
-++				marvell,function = "gpio";
-++			};
-++		};
-++
-++
 ++		pcie0: pcie@800a0000 {
 ++			compatible = "marvell,ac5-pcie", "snps,dw-pcie";
-++			reg = <0 0x800a0000 0 0x20000> , <0 0x3fff0000 0 0x10000>;
+++			reg = <0 0x800a0000 0 0x20000>, <0 0x3fff0000 0 0x10000>;
 ++			reg-names = "ctrl", "config";
 ++			#address-cells = <3>;
 ++			#size-cells = <2>;
@@ -587,8 +731,8 @@ index 0000000..9e14eb6
 ++			#address-cells = <0x1>;
 ++			#size-cells = <0x0>;
 ++			clocks = <&spi_clock>;
-++				interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
-++				num-cs = <1>;
+++		        interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
+++		        num-cs = <1>;
 ++			status = "okay";
 ++
 ++			spiflash0: spi-flash@0 {
@@ -624,12 +768,27 @@ index 0000000..9e14eb6
 ++			#address-cells = <0x1>;
 ++			#size-cells = <0x0>;
 ++			clocks = <&spi_clock>;
-++				interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
-++				num-cs = <1>;
+++		        interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
+++		        num-cs = <1>;
 ++			status = "disabled";
 ++		};
 ++
-++		nand: nand@805b00 {
+++		sdhci@805c0000 {
+++			compatible = "marvell, ac5-sdhci", "marvell,armada-ap806-sdhci";
+++			reg = <0x0 0x805c0000 0x0 0x300>;
+++			interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+++			clocks = <&core_clock>;
+++			clock-names = "core";
+++			status = "okay";
+++			bus-width = <8>;
+++			//marvell,xenon-phy-slow-mode;
+++			non-removable;
+++			mmc-ddr-1_8v;
+++			mmc-hs200-1_8v;
+++			mmc-hs400-1_8v;
+++		};
+++
+++		nand0: nand@805b00 {
 ++			compatible = "marvell,ac5-nand-controller";
 ++			reg =  <0x0 0x805b0000 0x0 0x00000054
 ++				0x0 0x840F8204 0x0 0x00000004
@@ -640,6 +799,7 @@ index 0000000..9e14eb6
 ++			clocks = <&core_clock>;
 ++			/*marvell,system-controller = <0x15>*/
 ++			status = "okay";
+++			nand-timing-mode = <1>;
 ++
 ++			nand@0 {
 ++				reg = <0x0>;
@@ -664,7 +824,7 @@ index 0000000..9e14eb6
 ++		#interrupt-cells = <3>;
 ++		interrupt-controller;
 ++		/*#redistributor-regions = <1>;*/
-++		redistributor-stride = <0x0 0x20000>; /* 128kB stride */
+++		redistributor-stride = <0x0 0x20000>;	// 128kB stride
 ++		reg = <0x0 0x80600000 0x0 0x10000>, /* GICD */
 ++			  <0x0 0x80660000 0x0 0x40000>; /* GICR */
 ++		interrupts = <GIC_PPI 6 IRQ_TYPE_LEVEL_HIGH>;
@@ -709,15 +869,55 @@ index 0000000..9e14eb6
 ++	memory@00000000 {
 ++		device_type = "memory";
 ++		reg = <0x2 0x00000000 0x0 0x40000000>;
-++		// linux,usable-memory = <0x2 0x00000000 0x0 0x80000000>;
 ++	};
+++
 ++};
-+diff --git a/arch/arm64/boot/dts/marvell/ac5x.dts b/arch/arm64/boot/dts/marvell/ac5x.dts
++diff --git a/arch/arm64/boot/dts/marvell/ac5_comexpress.dts b/arch/arm64/boot/dts/marvell/ac5_comexpress.dts
 +new file mode 100644
-+index 0000000..25b02b4
++index 000000000..0cf91d257
 +--- /dev/null
-++++ b/arch/arm64/boot/dts/marvell/ac5x.dts
-+@@ -0,0 +1,54 @@
+++++ b/arch/arm64/boot/dts/marvell/ac5_comexpress.dts
++@@ -0,0 +1,34 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5 comExpress.
+++ *
+++ * Copyright (C) 2021 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell AC5 comExpress development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++/ {
+++	model = "Marvell AC5 COMEXPRESS board";
+++};
+++
+++&eth0 {
+++	status = "okay";
+++	phy = <&phy0>;
+++};
+++
+++&usb1 {
+++	compatible = "chipidea,usb2";
+++	phys = <&usb1phy>;
+++	phy-names = "usb-phy";
+++	dr_mode = "peripheral";
+++};
+++
+++&nand {
+++   status = "disabled";
+++};
++diff --git a/arch/arm64/boot/dts/marvell/ac5_db.dts b/arch/arm64/boot/dts/marvell/ac5_db.dts
++new file mode 100644
++index 000000000..2f85508ea
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5_db.dts
++@@ -0,0 +1,38 @@
 ++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 ++/*
 ++ * Device Tree For AC5_db.
@@ -734,25 +934,19 @@ index 0000000..9e14eb6
 ++#include "ac5.dtsi"
 ++
 ++/ {
-++	model = "Marvell AC5X RD board";
-++};
-++
-++&mdio {
-++        status = "okay";
-++        pinctrl-names = "default";
-++        phy0: ethernet-phy@0 {
-++                reg = <0x0>;
-++        };
+++	model = "Marvell AC5 DB board";
 ++};
 ++
 ++&eth0 {
 ++	status = "okay";
-++        phy-mode = "sgmii";
-++        phy = <&phy0>;
+++	fixed-link {
+++		speed = <1000>;
+++		full-duplex;
+++	};
 ++};
 ++
-++&usb0 {
-++    status= "okay";
+++&eth1 {
+++	status = "okay";
 ++};
 ++
 ++&usb1 {
@@ -762,161 +956,1528 @@ index 0000000..9e14eb6
 ++	dr_mode = "peripheral";
 ++};
 ++
-++&i2c0 {
-++    status = "okay";
-++    clock-frequency = <100000>;
-++/*    eeprom@52 {
-++            compatible = "microchip,24c64", "atmel,24c64";
-++            reg = <0x52>;
-++            pagesize = <32>;
-++    };*/
++diff --git a/arch/arm64/boot/dts/marvell/ac5_rd.dts b/arch/arm64/boot/dts/marvell/ac5_rd.dts
++new file mode 100644
++index 000000000..d382178a0
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5_rd.dts
++@@ -0,0 +1,26 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5X.
+++ *
+++ * Copyright (C) 2016 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell Armada 7040 development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++/ {
+++	model = "Marvell AC5 RD board";
 ++};
 ++
-+-- 
-+2.11.0
-+
-diff --git a/patch/0123-rd-ac5x-emmc-support.patch b/patch/0123-rd-ac5x-emmc-support.patch
-new file mode 100644
-index 0000000..cfbccf4
---- /dev/null
-+++ b/patch/0123-rd-ac5x-emmc-support.patch
-@@ -0,0 +1,114 @@
-+diff --git a/drivers/mmc/host/sdhci-xenon.c b/drivers/mmc/host/sdhci-xenon.c
-+index 0e5234a5c..fb83c7aa6 100644
-+--- a/drivers/mmc/host/sdhci-xenon.c
-++++ b/drivers/mmc/host/sdhci-xenon.c
-+@@ -17,6 +17,8 @@
-+ #include <linux/of.h>
-+ #include <linux/pm.h>
-+ #include <linux/pm_runtime.h>
-++#include <linux/of_address.h>
-++#include <linux/dma-direct.h>
-+ 
-+ #include "sdhci-pltfm.h"
-+ #include "sdhci-xenon.h"
-+@@ -421,6 +423,9 @@ static int xenon_probe_dt(struct platform_device *pdev)
-+ 	struct xenon_priv *priv = sdhci_pltfm_priv(pltfm_host);
-+ 	u32 sdhc_id, nr_sdhc;
-+ 	u32 tuning_count;
-++	struct resource *decoder;
-++	const struct bus_dma_region *map = NULL;
-++	struct sysinfo si;
-+ 
-+ 	/* Disable HS200 on Armada AP806 */
-+ 	if (of_device_is_compatible(np, "marvell,armada-ap806-sdhci"))
-+@@ -448,6 +453,26 @@ static int xenon_probe_dt(struct platform_device *pdev)
-+ 		}
-+ 	}
-+ 	priv->tuning_count = tuning_count;
-++	decoder = platform_get_resource_byname(pdev, IORESOURCE_MEM, "decoder");
-++	if (decoder) {
-++		if (!of_dma_get_range(np, &map)) {
-++			void __iomem *regs = ioremap(decoder->start, resource_size(decoder));
-++			if (!regs) {
-++				dev_err(mmc_dev(mmc), "Failed to map decoder address 0x%llx\n",
-++						decoder->start);
-++			} else {
-++				writel((map->cpu_start)>>16, regs);
-++				iounmap(regs);
-++			}
-++		}
-++	}
-++	si_meminfo(&si);
+++&pcie0 {
+++	status = "okay";
+++};
 ++
-++	if (of_device_is_compatible(np, "marvell,ac5-sdhci") &&
-++			((si.totalram * si.mem_unit) > 0x80000000 /*2G*/)) {
-++		host->quirks |= SDHCI_QUIRK_BROKEN_DMA;
-++		host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
-++	}
-+ 
-+ 	return xenon_phy_parse_dt(np, host);
-+ }
-+@@ -675,6 +700,7 @@ static const struct of_device_id sdhci_xenon_dt_ids[] = {
-+ 	{ .compatible = "marvell,armada-ap806-sdhci",},
-+ 	{ .compatible = "marvell,armada-cp110-sdhci",},
-+ 	{ .compatible = "marvell,armada-3700-sdhci",},
-++	{ .compatible = "marvell,ac5-sdhci",},
-+ 	{}
+++&usb1 {
+++	compatible = "marvell,ac5-ehci", "marvell,orion-ehci";
+++};
++diff --git a/arch/arm64/boot/dts/marvell/ac5x_db.dts b/arch/arm64/boot/dts/marvell/ac5x_db.dts
++new file mode 100644
++index 000000000..6a5bc72d4
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5x_db.dts
++@@ -0,0 +1,32 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5X.
+++ *
+++ * Copyright (C) 2021 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell Alleycat 5X development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++
+++&eth0 {
+++	status = "okay";
+++	phy = <&phy0>;
+++};
+++
+++&eth1 {
+++	status = "okay";
+++};
+++
+++&usb1 {
+++	compatible = "chipidea,usb2";
+++	phys = <&usb1phy>;
+++	phy-names = "usb-phy";
+++	dr_mode = "peripheral";
+++};
+++
++diff --git a/arch/arm64/boot/dts/marvell/armada-70x0.dtsi b/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
++index 179218774..c4fab4d03 100644
++--- a/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
+++++ b/arch/arm64/boot/dts/marvell/armada-70x0.dtsi
++@@ -12,6 +12,36 @@ aliases {
++ 		spi1 = &cp0_spi0;
++ 		spi2 = &cp0_spi1;
++ 	};
+++
+++/*  Should be unmarked, when need to enlarge legacy DMA allocation */
+++#ifdef NONE
+++	reserved-memory {
+++		#address-cells = <2>;
+++		#size-cells = <2>;
+++		ranges;
+++
+++		prestera_rsvd: buffer {
+++			compatible = "shared-dma-pool"; /* to be used as a shared pool of
+++											DMA buffers for a set of devices
+++											*/
+++			no-map;	/* 	No one other than devices registered for that mem,
+++						may use this area
+++					*/
+++
+++			/*	addr (first 2 cells) need to be aligned with actual DMA that
+++				will be allocted, therefore we choose such addr, that will
+++				be aligned with many DMA sizes */
+++			reg = <0x0 0x10000000 0x0 0x2000000>;
+++		};
+++	};
+++
+++	mvDma {
+++		compatible = "marvell,mv_dma";
+++		memory-region = <&prestera_rsvd>;
+++		status = "okay";
+++	};
+++#endif
+++
 + };
-+ MODULE_DEVICE_TABLE(of, sdhci_xenon_dt_ids);
-+diff --git a/drivers/of/address.c b/drivers/of/address.c
-+index 73ddf2540..8629a4aac 100644
-+--- a/drivers/of/address.c
-++++ b/drivers/of/address.c
-+@@ -1022,6 +1022,7 @@ int of_dma_get_range(struct device_node *np, const struct bus_dma_region **map)
-+ 	of_node_put(node);
-+ 	return ret;
-+ }
-++EXPORT_SYMBOL_GPL(of_dma_get_range);
-+ #endif /* CONFIG_HAS_DMA */
++ 
++ /*
++diff --git a/drivers/mtd/nand/raw/Kconfig b/drivers/mtd/nand/raw/Kconfig
++index 6c46f25b5..0290244a2 100644
++--- a/drivers/mtd/nand/raw/Kconfig
+++++ b/drivers/mtd/nand/raw/Kconfig
++@@ -187,7 +187,7 @@ config MTD_NAND_MARVELL
++ 	  including:
++ 	  - PXA3xx processors (NFCv1)
++ 	  - 32-bit Armada platforms (XP, 37x, 38x, 39x) (NFCv2)
++-	  - 64-bit Aramda platforms (7k, 8k) (NFCv2)
+++	  - 64-bit Aramda platforms (7k, 8k, ac5) (NFCv2)
++ 
++ config MTD_NAND_SLC_LPC32XX
++ 	tristate "NXP LPC32xx SLC NAND controller"
++diff --git a/drivers/mtd/nand/raw/internals.h b/drivers/mtd/nand/raw/internals.h
++index 012876e14..4e7e5f57a 100644
++--- a/drivers/mtd/nand/raw/internals.h
+++++ b/drivers/mtd/nand/raw/internals.h
++@@ -84,6 +84,7 @@ int nand_bbm_get_next_page(struct nand_chip *chip, int page);
++ int nand_markbad_bbm(struct nand_chip *chip, loff_t ofs);
++ int nand_erase_nand(struct nand_chip *chip, struct erase_info *instr,
++ 		    int allowbbt);
+++const struct nand_sdr_timings *onfi_async_timing_mode_to_sdr_timings(int mode);
++ void onfi_fill_interface_config(struct nand_chip *chip,
++ 				struct nand_interface_config *iface,
++ 				enum nand_interface_type type,
++diff --git a/drivers/mtd/nand/raw/marvell_nand.c b/drivers/mtd/nand/raw/marvell_nand.c
++index d00c916f1..b2fd8991d 100644
++--- a/drivers/mtd/nand/raw/marvell_nand.c
+++++ b/drivers/mtd/nand/raw/marvell_nand.c
++@@ -90,6 +90,8 @@
++ #include <linux/dma/pxa-dma.h>
++ #include <linux/platform_data/mtd-nand-pxa3xx.h>
++ 
+++#include "internals.h"
+++
++ /* Data FIFO granularity, FIFO reads/writes must be a multiple of this length */
++ #define FIFO_DEPTH		8
++ #define FIFO_REP(x)		(x / sizeof(u32))
++@@ -226,6 +228,20 @@
++ #define XTYPE_COMMAND_DISPATCH	6
++ #define XTYPE_MASK		7
++ 
+++/* use tRP_min, tWC_min and tWP_min to distinct across timings modes */
+++#define IS_TIMINGS_EQUAL(t1,t2) \
+++		((t1->tRP_min == t2->tRP_min &&\
+++		t1->tWC_min == t2->tWC_min &&\
+++		t1->tWP_min== t2->tWP_min) ? true : false)
+++
+++/*  ndtr0,1 set , each set has few modes level */
+++typedef enum marvell_nfc_timing_mode_set{
+++	MARVELL_NFC_NDTR_SET_0, 		/*tested with ac5*/
+++
+++	MARVELL_NFC_NDTR_NUM_OF_SET,
+++	MARVELL_NFC_NDTR_SET_NON = MARVELL_NFC_NDTR_NUM_OF_SET
+++}marvell_nfc_timing_mode_set_t;
+++
++ /**
++  * struct marvell_hw_ecc_layout - layout of Marvell ECC
++  *
++@@ -283,14 +299,21 @@ struct marvell_hw_ecc_layout {
++ 
++ /* Layouts explained in AN-379_Marvell_SoC_NFC_ECC */
++ static const struct marvell_hw_ecc_layout marvell_nfc_layouts[] = {
++-	MARVELL_LAYOUT(  512,   512,  1,  1,  1,  512,  8,  8,  0,  0,  0),
++-	MARVELL_LAYOUT( 2048,   512,  1,  1,  1, 2048, 40, 24,  0,  0,  0),
++-	MARVELL_LAYOUT( 2048,   512,  4,  1,  1, 2048, 32, 30,  0,  0,  0),
++-	MARVELL_LAYOUT( 2048,   512,  8,  2,  1, 1024,  0, 30,1024,32, 30),
++-	MARVELL_LAYOUT( 4096,   512,  4,  2,  2, 2048, 32, 30,  0,  0,  0),
++-	MARVELL_LAYOUT( 4096,   512,  8,  5,  4, 1024,  0, 30,  0, 64, 30),
++-	MARVELL_LAYOUT( 8192,   512,  4,  4,  4, 2048,  0, 30,  0,  0,  0),
++-	MARVELL_LAYOUT( 8192,   512,  8,  9,  8, 1024,  0, 30,  0, 160, 30),
+++	MARVELL_LAYOUT(  512,   512,  1,  1,  1,  512,  8,  8,  0,   0,  0),
+++	MARVELL_LAYOUT( 2048,   512,  1,  1,  1, 2048, 40, 24,  0,   0,  0),
+++	MARVELL_LAYOUT( 2048,   512,  4,  1,  1, 2048, 32, 30,  0,   0,  0),
+++	MARVELL_LAYOUT( 2048,   512,  8,  2,  1, 1024,  0, 30,  1024,32, 30),
+++	MARVELL_LAYOUT( 2048,   512,  8,  2,  1, 1024,  0, 30,  1024,64, 30),
+++	MARVELL_LAYOUT( 2048,   512,  12, 3,  2, 704,   0, 30,  640, 0,  30),
+++	MARVELL_LAYOUT( 2048,   512,  16, 5,  4, 512,   0, 30,  0,   32, 30),
+++	MARVELL_LAYOUT( 4096,   512,  4,  2,  2, 2048, 32, 30,  0,   0,  0),
+++	MARVELL_LAYOUT( 4096,   512,  8,  5,  4, 1024,  0, 30,  0,   64, 30),
+++	MARVELL_LAYOUT( 4096,   512,  12, 6,  5, 704,   0, 30,  576, 32, 30),
+++	MARVELL_LAYOUT( 4096,   512,  16, 9,  8, 512,   0, 30,  0,   32, 30),
+++	MARVELL_LAYOUT( 8192,   512,  4,  4,  4, 2048,  0, 30,  0,   0,  0),
+++	MARVELL_LAYOUT( 8192,   512,  8,  9,  8, 1024,  0, 30,  0,  160, 30),
+++	MARVELL_LAYOUT( 8192,   512,  12, 12, 11, 704,  0, 30,  448, 64, 30),
+++	MARVELL_LAYOUT( 8192,   512,  16, 17, 16, 512,  0, 30,  0,   32, 30),
++ };
 + 
 + /**
-+diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h
-+index d9e6a324d..2e62cd1a5 100644
-+--- a/drivers/of/of_private.h
-++++ b/drivers/of/of_private.h
-+@@ -158,15 +158,5 @@ extern int of_bus_n_addr_cells(struct device_node *np);
-+ extern int of_bus_n_size_cells(struct device_node *np);
++@@ -328,6 +351,7 @@ struct marvell_nand_chip_sel {
++  * @selected_die:	Current active CS
++  * @nsels:		Number of CS lines required by the NAND chip
++  * @sels:		Array of CS lines descriptions
+++ * @nand_timing_mode:	nand-timing-mode from dts
++  */
++ struct marvell_nand_chip {
++ 	struct nand_chip chip;
++@@ -339,7 +363,8 @@ struct marvell_nand_chip {
++ 	int addr_cyc;
++ 	int selected_die;
++ 	unsigned int nsels;
++-	struct marvell_nand_chip_sel sels[];
+++	struct marvell_nand_chip_sel sels[0];
+++	int nand_timing_mode;
++ };
 + 
-+ struct bus_dma_region;
-+-#if defined(CONFIG_OF_ADDRESS) && defined(CONFIG_HAS_DMA)
-+-int of_dma_get_range(struct device_node *np,
-+-		const struct bus_dma_region **map);
-+-#else
-+-static inline int of_dma_get_range(struct device_node *np,
-+-		const struct bus_dma_region **map)
-+-{
-+-	return -ENODEV;
-+-}
-+-#endif
++ static inline struct marvell_nand_chip *to_marvell_nand(struct nand_chip *chip)
++@@ -367,6 +392,10 @@ static inline struct marvell_nand_chip_sel *to_nand_sel(struct marvell_nand_chip
++  *			BCH error detection and correction algorithm,
++  *			NDCB3 register has been added
++  * @use_dma:		Use dma for data transfers
+++ * @is_marvell_timing_modes: use marvell predefined register values per mode
+++ * @max_mode_number: supported mode by NFC (max mode that supported)
+++ * @timing_mode_set: which set to use from predefined array of sets
+++ 					 each set has few modes
++  */
++ struct marvell_nfc_caps {
++ 	unsigned int max_cs_nb;
++@@ -375,6 +404,9 @@ struct marvell_nfc_caps {
++ 	bool legacy_of_bindings;
++ 	bool is_nfcv2;
++ 	bool use_dma;
+++	bool is_marvell_timing_modes;
+++	unsigned int max_mode_number;
+++	marvell_nfc_timing_mode_set_t timing_mode_set;
++ };
 + 
-+ #endif /* _LINUX_OF_PRIVATE_H */
-+diff --git a/include/linux/of_address.h b/include/linux/of_address.h
-+index 88bc94340..ee48bdef6 100644
-+--- a/include/linux/of_address.h
-++++ b/include/linux/of_address.h
-+@@ -61,6 +61,7 @@ extern int of_pci_dma_range_parser_init(struct of_pci_range_parser *parser,
-+ extern struct of_pci_range *of_pci_range_parser_one(
-+ 					struct of_pci_range_parser *parser,
-+ 					struct of_pci_range *range);
-++extern int of_dma_get_range(struct device_node *np, const struct bus_dma_region **map);
-+ extern bool of_dma_is_coherent(struct device_node *np);
-+ #else /* CONFIG_OF_ADDRESS */
-+ static inline void __iomem *of_io_request_and_map(struct device_node *device,
-+@@ -99,7 +100,10 @@ static inline struct of_pci_range *of_pci_range_parser_one(
-+ {
-+ 	return NULL;
-+ }
-+-
-++static inline int of_dma_get_range(struct device_node *np, const struct bus_dma_region **map)
++ /**
++@@ -485,6 +517,119 @@ struct marvell_nfc_op {
++ 	const struct nand_op_instr *data_instr;
++ };
++ 
+++/* NFC ndtr0 */
+++typedef union  marvell_nand_ndtr0
 ++{
-++	return -ENODEV;
+++	struct {
+++		unsigned  int tRP                 :3;  /* 0-2   */
+++		unsigned  int tRH                 :3;  /* 3-5   */
+++		unsigned  int tRPE                :1;  /* 6     */
+++		unsigned  int tRE_edge            :1;  /* 7     */
+++		unsigned  int tWP                 :3;  /* 8-10  */
+++		unsigned  int tWH                 :3;  /* 11-13 */
+++		unsigned  int reserved            :2;  /* 14-15 */
+++		unsigned  int tCS                 :3;  /* 16-18 */
+++		unsigned  int tCH                 :3;  /* 19-21 */
+++		unsigned  int Rd_Cnt_Del          :4;  /* 22-25 */
+++		unsigned  int selCnrl             :1;  /* 26    */
+++		unsigned  int tADL                :5;  /* 27-31 */
+++	} fields;
+++	unsigned  int  regValue;
+++}marvell_nfc_ndtr0_t;
+++
+++/* NFC ndtr1 */
+++typedef union  marvell_nand_ndtr1
+++{
+++	struct {
+++		unsigned  int tAR                 :4;  /* 0-3   */
+++		unsigned  int tWHR                :4;  /* 4-7   */
+++		unsigned  int tRHW                :2;  /* 8-9   */
+++		unsigned  int reserved            :4;  /* 10-13 */
+++		unsigned  int Prescale            :1;  /* 14    */
+++		unsigned  int wait_mode           :1;  /* 15    */
+++		unsigned  int tR                  :16; /* 16-31 */
+++	} fields;
+++	unsigned  int  regValue;
+++}marvell_nfc_ndtr1_t;
+++
+++#define NUM_OF_TIMING_MODES	6
+++
+++/* arrays of NFC timings modes */
+++typedef marvell_nfc_ndtr0_t marvell_nfc_ndtr0_arr[NUM_OF_TIMING_MODES];
+++typedef marvell_nfc_ndtr1_t marvell_nfc_ndtr1_arr[NUM_OF_TIMING_MODES];
+++
+++#define MARVELL_NTDR0(trp, trh, trpe, tre_edge, twp, twh, resrv, tcs, tch, rd_cnt_del, selcnrl, tadl)	\
+++		{\
+++			.fields = {\
+++				.tRP = trp,                 /* 0-2   */\
+++				.tRH = trh,                 /* 3-5   */\
+++				.tRPE = trpe,               /* 6     */\
+++				.tRE_edge = tre_edge,       /* 7     */\
+++				.tWP = twp,                 /* 8-10  */\
+++				.tWH = twh,                 /* 11-13 */\
+++				.reserved = resrv,          /* 14-15 */\
+++				.tCS = tcs,                 /* 16-18 */\
+++				.tCH = tch,                 /* 19-21 */\
+++				.Rd_Cnt_Del = rd_cnt_del,   /* 22-25 */\
+++				.selCnrl = selcnrl,         /* 26    */\
+++				.tADL = tadl,               /* 27-31 */\
+++			}\
+++		}
+++
+++#define MARVELL_NTDR1(tar, twhr, trhw, resrv, prescale, waiting_mode, tr)	\
+++		{\
+++			.fields = {\
+++				.tAR = tar,                 /* 0-3   */\
+++				.tWHR = twhr,               /* 4-7   */\
+++				.tRHW = trhw,               /* 8-9   */\
+++				.reserved = resrv,          /* 10-13 */\
+++				.Prescale = prescale,       /* 14    */\
+++				.wait_mode = waiting_mode,  /* 15    */\
+++				.tR = tr,                   /* 16-31 */\
+++			}\
+++		}
+++
+++/* ndtr0_modes and ndtr1_modes are arrays of modes with optimal values
+++ * that were tested with Marvell NFC with correlation to ONFI timings mode
+++ * each entry in the array presents different set of modes , for example ac5
+++ * is entry 0 */
+++/* todo: add more modes ASAP */
+++
+++/* Layouts explained in AN-379_Marvell_SoC_NFC_ECC */
+++marvell_nfc_ndtr0_arr ndtr0_modes[MARVELL_NFC_NDTR_NUM_OF_SET] =
+++{
+++	/* value tested with AC5 */
+++	{
+++		MARVELL_NTDR0(7,7,1,0,7,7,0,7,7,0,1,31),
+++		MARVELL_NTDR0(6,3,0,0,4,4,0,7,7,1,1,15),
+++		MARVELL_NTDR0(4,3,0,0,3,3,0,7,7,2,1,15),
+++		MARVELL_NTDR0(2,2,0,0,2,1,0,1,0,2,1,15)
+++	}
+++};
+++
+++marvell_nfc_ndtr1_arr ndtr1_modes[MARVELL_NFC_NDTR_NUM_OF_SET] =
+++{
+++	/* value tested with AC5 */
+++	{
+++		MARVELL_NTDR1(15,15,3,0,0,1,50),
+++		MARVELL_NTDR1(15,15,3,0,0,1,25),
+++		MARVELL_NTDR1(15,15,3,0,0,1,25),
+++		MARVELL_NTDR1(11,11,2,0,0,1,25)
+++	}
+++};
+++
+++/*
+++ * get nand timing-mode from device tree
+++ */
+++static int get_nand_timing_mode(struct device_node *np)
+++{
+++	int ret;
+++	u32 val;
+++
+++	ret = of_property_read_u32(np, "nand-timing-mode", &val);
+++	return ret ? ret : val;
 ++}
-+ static inline bool of_dma_is_coherent(struct device_node *np)
+++
++ /*
++  * Internal helper to conditionnally apply a delay (from the above structure,
++  * most of the time).
++@@ -2254,6 +2399,14 @@ static int marvell_nand_hw_ecc_controller_init(struct mtd_info *mtd,
++ 	ecc->steps = l->nchunks;
++ 	ecc->size = l->data_bytes;
++ 
+++	/* nand_scan_tail func perform  validity tests for ECC strength, and it
+++	 * assumes that all chunks are with same size. in our case when ecc is 12
+++	 * the chunk size is 704 but the last chunk is with different size so
+++	 * we cheat it nand_scan_tail validity tests by set info->ecc_size value to
+++	 * 512*/
+++	if(ecc->strength == 12)
+++		ecc->size = 512;
+++
++ 	if (ecc->strength == 1) {
++ 		chip->ecc.algo = NAND_ECC_ALGO_HAMMING;
++ 		ecc->read_page_raw = marvell_nfc_hw_ecc_hmg_read_page_raw;
++@@ -2354,9 +2507,11 @@ static int marvell_nfc_setup_interface(struct nand_chip *chip, int chipnr,
++ 	struct marvell_nand_chip *marvell_nand = to_marvell_nand(chip);
++ 	struct marvell_nfc *nfc = to_marvell_nfc(chip->controller);
++ 	unsigned int period_ns = 1000000000 / clk_get_rate(nfc->core_clk) * 2;
++-	const struct nand_sdr_timings *sdr;
+++	const struct nand_sdr_timings *sdr,*timings;
++ 	struct marvell_nfc_timings nfc_tmg;
++ 	int read_delay;
+++	marvell_nfc_timing_mode_set_t modes_set;
+++	int mode = 0;
++ 
++ 	sdr = nand_get_sdr_timings(conf);
++ 	if (IS_ERR(sdr))
++@@ -2415,32 +2570,74 @@ static int marvell_nfc_setup_interface(struct nand_chip *chip, int chipnr,
++ 			nfc_tmg.tR = 0;
++ 	}
++ 
++-	if (chipnr < 0)
++-		return 0;
+++		
+++	/* get the timing modes from predefined values according to its compatibility*/
+++	if (nfc->caps->is_marvell_timing_modes) {
+++		/* get the mode set */
+++		modes_set = nfc->caps->timing_mode_set;
+++		if (modes_set >= MARVELL_NFC_NDTR_SET_NON)
+++		{
+++			dev_warn(nfc->dev,
+++				"Warning: not supported timing registers set,use set number 0 by default\n");
++ 
++-	marvell_nand->ndtr0 =
++-		NDTR0_TRP(nfc_tmg.tRP) |
++-		NDTR0_TRH(nfc_tmg.tRH) |
++-		NDTR0_ETRP(nfc_tmg.tRP) |
++-		NDTR0_TWP(nfc_tmg.tWP) |
++-		NDTR0_TWH(nfc_tmg.tWH) |
++-		NDTR0_TCS(nfc_tmg.tCS) |
++-		NDTR0_TCH(nfc_tmg.tCH);
+++			modes_set = MARVELL_NFC_NDTR_SET_0;
+++		}
++ 
++-	marvell_nand->ndtr1 =
++-		NDTR1_TAR(nfc_tmg.tAR) |
++-		NDTR1_TWHR(nfc_tmg.tWHR) |
++-		NDTR1_TR(nfc_tmg.tR);
+++		/* find the caller mode according to timings values */
+++		/* if exit on error it means no more modes; not suppose to happen*/
+++		do
+++		{
+++			timings = onfi_async_timing_mode_to_sdr_timings(mode);
+++			if( IS_TIMINGS_EQUAL(timings,sdr))
+++				break;
+++			mode++;
+++		}while(!IS_ERR(timings));
+++
+++		/* if mode is not supported by NFC, return false or if nand-timing-mode that
+++		 * exists in device tree greater then caller mode also return false and wait
+++		 * for caller to try with next mode (mode-1). we want the nand feature to be
+++		 * configured with nand-timing-mode value */
+++		if ( mode > nfc->caps->max_mode_number ||
+++			 ((marvell_nand->nand_timing_mode) >= 0 &&
+++			 (mode > marvell_nand->nand_timing_mode) ))
+++			return -ENOTSUPP;
++ 
++-	if (nfc->caps->is_nfcv2) {
++-		marvell_nand->ndtr0 |=
++-			NDTR0_RD_CNT_DEL(read_delay) |
++-			NDTR0_SELCNTR |
++-			NDTR0_TADL(nfc_tmg.tADL);
+++		/* just checking NFC capabilities no need to set the registers */
+++		if (chipnr < 0)
+++			return 0;
+++
+++		marvell_nand->ndtr0 = ndtr0_modes[modes_set][mode].regValue;
+++		marvell_nand->ndtr1 = ndtr1_modes[modes_set][mode].regValue;
+++	}
+++	else
+++	{
+++		if (chipnr < 0)
+++			return 0;
++ 
++-		marvell_nand->ndtr1 |=
++-			NDTR1_TRHW(nfc_tmg.tRHW) |
++-			NDTR1_WAIT_MODE;
+++		marvell_nand->ndtr0 =
+++			NDTR0_TRP(nfc_tmg.tRP) |
+++			NDTR0_TRH(nfc_tmg.tRH) |
+++			NDTR0_ETRP(nfc_tmg.tRP) |
+++			NDTR0_TWP(nfc_tmg.tWP) |
+++			NDTR0_TWH(nfc_tmg.tWH) |
+++			NDTR0_TCS(nfc_tmg.tCS) |
+++			NDTR0_TCH(nfc_tmg.tCH);
+++
+++		marvell_nand->ndtr1 =
+++			NDTR1_TAR(nfc_tmg.tAR) |
+++			NDTR1_TWHR(nfc_tmg.tWHR) |
+++			NDTR1_TR(nfc_tmg.tR);
+++
+++		if (nfc->caps->is_nfcv2) {
+++			marvell_nand->ndtr0 |=
+++				NDTR0_RD_CNT_DEL(read_delay) |
+++				NDTR0_SELCNTR |
+++				NDTR0_TADL(nfc_tmg.tADL);
+++
+++			marvell_nand->ndtr1 |=
+++				NDTR1_TRHW(nfc_tmg.tRHW) |
+++				NDTR1_WAIT_MODE;
+++		}
++ 	}
++ 
++ 	return 0;
++@@ -2562,6 +2759,7 @@ static int marvell_nand_chip_init(struct device *dev, struct marvell_nfc *nfc,
++ 	struct nand_chip *chip;
++ 	int nsels, ret, i;
++ 	u32 cs, rb;
+++	struct device_node *dn;
++ 
++ 	/*
++ 	 * The legacy "num-cs" property indicates the number of CS on the only
++@@ -2675,6 +2873,10 @@ static int marvell_nand_chip_init(struct device *dev, struct marvell_nfc *nfc,
++ 	if (!of_property_read_bool(np, "marvell,nand-keep-config"))
++ 		chip->options |= NAND_KEEP_TIMINGS;
++ 
+++	/* read the mode from device tree */
+++	dn = nand_get_flash_node(chip);
+++	marvell_nand->nand_timing_mode = get_nand_timing_mode(dn);
+++
++ 	mtd = nand_to_mtd(chip);
++ 	mtd->dev.parent = dev;
++ 
++@@ -3064,6 +3266,15 @@ static const struct marvell_nfc_caps marvell_armada_8k_nfc_caps = {
++ 	.is_nfcv2 = true,
++ };
++ 
+++static const struct marvell_nfc_caps marvell_ac5_caps = {
+++	.max_cs_nb = 2,
+++	.max_rb_nb = 1,
+++	.is_nfcv2 = true,
+++	.is_marvell_timing_modes = true,
+++	.max_mode_number = 3,
+++	.timing_mode_set = MARVELL_NFC_NDTR_SET_0,
+++};
+++
++ static const struct marvell_nfc_caps marvell_armada370_nfc_caps = {
++ 	.max_cs_nb = 4,
++ 	.max_rb_nb = 2,
++@@ -3112,6 +3323,10 @@ static const struct of_device_id marvell_nfc_of_ids[] = {
++ 		.compatible = "marvell,armada-8k-nand-controller",
++ 		.data = &marvell_armada_8k_nfc_caps,
++ 	},
+++	{
+++		.compatible = "marvell,ac5-nand-controller",
+++		.data = &marvell_ac5_caps,
+++	},
++ 	{
++ 		.compatible = "marvell,armada370-nand-controller",
++ 		.data = &marvell_armada370_nfc_caps,
++diff --git a/drivers/mtd/nand/raw/nand_timings.c b/drivers/mtd/nand/raw/nand_timings.c
++index 481b56d5f..1f825f117 100644
++--- a/drivers/mtd/nand/raw/nand_timings.c
+++++ b/drivers/mtd/nand/raw/nand_timings.c
++@@ -600,6 +600,21 @@ onfi_find_closest_sdr_mode(const struct nand_sdr_timings *spec_timings)
++ 	return 0;
++ }
++ 
+++/**
+++ * onfi_async_timing_mode_to_sdr_timings - [NAND Interface] Retrieve NAND
+++ * timings according to the given ONFI timing mode
+++ * @mode: ONFI timing mode
+++ */
+++const struct nand_sdr_timings *onfi_async_timing_mode_to_sdr_timings(int mode)
+++{
+++   if (mode < 0 || mode >= ARRAY_SIZE(onfi_sdr_timings))
+++       return ERR_PTR(-EINVAL);
+++
+++   return &onfi_sdr_timings[mode].timings.sdr;
+++}
+++EXPORT_SYMBOL(onfi_async_timing_mode_to_sdr_timings);
+++
+++
++ /**
++  * onfi_fill_interface_config - Initialize an interface config from a given
++  *                              ONFI mode
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 74e266c0b..0f5264cfb 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -39,6 +39,7 @@
++ #include <net/tso.h>
++ #include <net/page_pool.h>
++ #include <linux/bpf_trace.h>
+++#include <linux/of_reserved_mem.h>
++ 
++ /* Registers */
++ #define MVNETA_RXQ_CONFIG_REG(q)                (0x1400 + ((q) << 2))
++@@ -353,6 +354,13 @@ enum {
++ 	ETHTOOL_MAX_STATS,
++ };
++ 
+++enum mvneta_type {
+++	MVNETA_TYPE_XP,
+++	MVNETA_TYPE_370,
+++	MVNETA_TYPE_3700,
+++	MVNETA_TYPE_AC5
+++};
+++
++ struct mvneta_statistic {
++ 	unsigned short offset;
++ 	unsigned short type;
++@@ -512,7 +520,7 @@ struct mvneta_port {
++ 	u32 indir[MVNETA_RSS_LU_TABLE_SIZE];
++ 
++ 	/* Flags for special SoC configurations */
++-	bool neta_armada3700;
+++	enum mvneta_type neta_type;
++ 	u16 rx_offset_correction;
++ 	const struct mbus_dram_target_info *dram_target_info;
++ };
++@@ -1117,7 +1125,7 @@ static int mvneta_bm_port_init(struct platform_device *pdev,
++ 	struct device_node *dn = pdev->dev.of_node;
++ 	u32 long_pool_id, short_pool_id;
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		int ret;
++ 
++ 		ret = mvneta_bm_port_mbus_init(pp);
++@@ -1456,7 +1464,7 @@ static void mvneta_defaults_set(struct mvneta_port *pp)
++ 	for_each_present_cpu(cpu) {
++ 		int rxq_map = 0, txq_map = 0;
++ 		int rxq, txq;
++-		if (!pp->neta_armada3700) {
+++		if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 			for (rxq = 0; rxq < rxq_number; rxq++)
++ 				if ((rxq % max_cpu) == cpu)
++ 					rxq_map |= MVNETA_CPU_RXQ_ACCESS(rxq);
++@@ -3157,8 +3165,10 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
++ 	/* For the case where the last mvneta_poll did not process all
++ 	 * RX packets
++ 	 */
++-	cause_rx_tx |= pp->neta_armada3700 ? pp->cause_rx_tx :
++-		port->cause_rx_tx;
+++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5))
+++		cause_rx_tx |= pp->cause_rx_tx;
+++	else
+++		cause_rx_tx |= port->cause_rx_tx;
++ 
++ 	rx_queue = fls(((cause_rx_tx >> 8) & 0xff));
++ 	if (rx_queue) {
++@@ -3175,7 +3185,7 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
++ 		cause_rx_tx = 0;
++ 		napi_complete_done(napi, rx_done);
++ 
++-		if (pp->neta_armada3700) {
+++		if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5)) {
++ 			unsigned long flags;
++ 
++ 			local_irq_save(flags);
++@@ -3189,7 +3199,7 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
++ 		}
++ 	}
++ 
++-	if (pp->neta_armada3700)
+++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5))
++ 		pp->cause_rx_tx = cause_rx_tx;
++ 	else
++ 		port->cause_rx_tx = cause_rx_tx;
++@@ -3409,7 +3419,7 @@ static int mvneta_txq_sw_init(struct mvneta_port *pp,
++ 		return -ENOMEM;
++ 
++ 	/* Setup XPS mapping */
++-	if (pp->neta_armada3700)
+++	if (pp->neta_type == MVNETA_TYPE_3700)
++ 		cpu = 0;
++ 	else if (txq_number > 1)
++ 		cpu = txq->id % num_present_cpus();
++@@ -3611,7 +3621,7 @@ static void mvneta_start_dev(struct mvneta_port *pp)
++ 	/* start the Rx/Tx activity */
++ 	mvneta_port_enable(pp);
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		/* Enable polling on the port */
++ 		for_each_online_cpu(cpu) {
++ 			struct mvneta_pcpu_port *port =
++@@ -3651,7 +3661,7 @@ static void mvneta_stop_dev(struct mvneta_port *pp)
++ 
++ 	phylink_stop(pp->phylink);
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		for_each_online_cpu(cpu) {
++ 			struct mvneta_pcpu_port *port =
++ 				per_cpu_ptr(pp->ports, cpu);
++@@ -4192,7 +4202,7 @@ static int mvneta_cpu_online(unsigned int cpu, struct hlist_node *node)
++ 	/* Armada 3700's per-cpu interrupt for mvneta is broken, all interrupts
++ 	 * are routed to CPU 0, so we don't need all the cpu-hotplug support
++ 	 */
++-	if (pp->neta_armada3700)
+++	if (pp->neta_type == MVNETA_TYPE_3700)
++ 		return 0;
++ 
++ 	spin_lock(&pp->lock);
++@@ -4301,7 +4311,7 @@ static int mvneta_open(struct net_device *dev)
++ 		goto err_cleanup_rxqs;
++ 
++ 	/* Connect to port interrupt line */
++-	if (pp->neta_armada3700)
+++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5))
++ 		ret = request_irq(pp->dev->irq, mvneta_isr, 0,
++ 				  dev->name, pp);
++ 	else
++@@ -4312,7 +4322,7 @@ static int mvneta_open(struct net_device *dev)
++ 		goto err_cleanup_txqs;
++ 	}
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		/* Enable per-CPU interrupt on all the CPU to handle our RX
++ 		 * queue interrupts
++ 		 */
++@@ -4344,15 +4354,15 @@ static int mvneta_open(struct net_device *dev)
++ 	return 0;
++ 
++ err_free_dead_hp:
++-	if (!pp->neta_armada3700)
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
++ 		cpuhp_state_remove_instance_nocalls(CPUHP_NET_MVNETA_DEAD,
++ 						    &pp->node_dead);
++ err_free_online_hp:
++-	if (!pp->neta_armada3700)
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
++ 		cpuhp_state_remove_instance_nocalls(online_hpstate,
++ 						    &pp->node_online);
++ err_free_irq:
++-	if (pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		free_irq(pp->dev->irq, pp);
++ 	} else {
++ 		on_each_cpu(mvneta_percpu_disable, pp, true);
++@@ -4370,7 +4380,7 @@ static int mvneta_stop(struct net_device *dev)
 + {
-+ 	return false;
-diff --git a/patch/0123-rd-ac5x-gpio-pinctrl-support.patch b/patch/0123-rd-ac5x-gpio-pinctrl-support.patch
++ 	struct mvneta_port *pp = netdev_priv(dev);
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		/* Inform that we are stopping so we don't want to setup the
++ 		 * driver for new CPUs in the notifiers. The code of the
++ 		 * notifier for CPU online is protected by the same spinlock,
++@@ -4753,7 +4763,7 @@ static int  mvneta_config_rss(struct mvneta_port *pp)
++ 
++ 	on_each_cpu(mvneta_percpu_mask_interrupt, pp, true);
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		/* We have to synchronise on the napi of each CPU */
++ 		for_each_online_cpu(cpu) {
++ 			struct mvneta_pcpu_port *pcpu_port =
++@@ -4781,7 +4791,7 @@ static int  mvneta_config_rss(struct mvneta_port *pp)
++ 	mvneta_percpu_elect(pp);
++ 	spin_unlock(&pp->lock);
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		/* We have to synchronise on the napi of each CPU */
++ 		for_each_online_cpu(cpu) {
++ 			struct mvneta_pcpu_port *pcpu_port =
++@@ -4804,7 +4814,7 @@ static int mvneta_ethtool_set_rxfh(struct net_device *dev, const u32 *indir,
++ 	struct mvneta_port *pp = netdev_priv(dev);
++ 
++ 	/* Current code for Armada 3700 doesn't support RSS features yet */
++-	if (pp->neta_armada3700)
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
++ 		return -EOPNOTSUPP;
++ 
++ 	/* We require at least one supported parameter to be changed
++@@ -4828,7 +4838,7 @@ static int mvneta_ethtool_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
++ 	struct mvneta_port *pp = netdev_priv(dev);
++ 
++ 	/* Current code for Armada 3700 doesn't support RSS features yet */
++-	if (pp->neta_armada3700)
+++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5))
++ 		return -EOPNOTSUPP;
++ 
++ 	if (hfunc)
++@@ -5122,7 +5132,11 @@ static int mvneta_probe(struct platform_device *pdev)
++ 
++ 	/* Get special SoC configurations */
++ 	if (of_device_is_compatible(dn, "marvell,armada-3700-neta"))
++-		pp->neta_armada3700 = true;
+++		pp->neta_type = MVNETA_TYPE_3700;
+++	else if (of_device_is_compatible(dn, "marvell,armada-ac5-neta"))
+++		pp->neta_type = MVNETA_TYPE_AC5;
+++	else
+++		pp->neta_type = MVNETA_TYPE_XP;
++ 
++ 	pp->clk = devm_clk_get(&pdev->dev, "core");
++ 	if (IS_ERR(pp->clk))
++@@ -5188,13 +5202,12 @@ static int mvneta_probe(struct platform_device *pdev)
++ 	}
++ 
++ 	pp->tx_csum_limit = tx_csum_limit;
++-
++ 	pp->dram_target_info = mv_mbus_dram_info();
++ 	/* Armada3700 requires setting default configuration of Mbus
++ 	 * windows, however without using filled mbus_dram_target_info
++ 	 * structure.
++ 	 */
++-	if (pp->dram_target_info || pp->neta_armada3700)
+++	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
++ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
++ 
++ 	pp->tx_ring_size = MVNETA_MAX_TXD;
++@@ -5245,8 +5258,9 @@ static int mvneta_probe(struct platform_device *pdev)
++ 	/* Armada3700 network controller does not support per-cpu
++ 	 * operation, so only single NAPI should be initialized.
++ 	 */
++-	if (pp->neta_armada3700) {
++-		netif_napi_add(dev, &pp->napi, mvneta_poll, NAPI_POLL_WEIGHT);
+++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5)) {
+++			netif_napi_add(dev, &pp->napi, mvneta_poll,
+++				       NAPI_POLL_WEIGHT);
++ 	} else {
++ 		for_each_present_cpu(cpu) {
++ 			struct mvneta_pcpu_port *port =
++@@ -5338,7 +5352,7 @@ static int mvneta_suspend(struct device *device)
++ 	if (!netif_running(dev))
++ 		goto clean_exit;
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		spin_lock(&pp->lock);
++ 		pp->is_stopped = true;
++ 		spin_unlock(&pp->lock);
++@@ -5383,7 +5397,7 @@ static int mvneta_resume(struct device *device)
++ 	clk_prepare_enable(pp->clk);
++ 	if (!IS_ERR(pp->clk_bus))
++ 		clk_prepare_enable(pp->clk_bus);
++-	if (pp->dram_target_info || pp->neta_armada3700)
+++	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
++ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
++ 	if (pp->bm_priv) {
++ 		err = mvneta_bm_port_init(pdev, pp);
++@@ -5419,7 +5433,7 @@ static int mvneta_resume(struct device *device)
++ 		mvneta_txq_hw_init(pp, txq);
++ 	}
++ 
++-	if (!pp->neta_armada3700) {
+++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
++ 		spin_lock(&pp->lock);
++ 		pp->is_stopped = false;
++ 		spin_unlock(&pp->lock);
++@@ -5444,6 +5458,7 @@ static const struct of_device_id mvneta_match[] = {
++ 	{ .compatible = "marvell,armada-370-neta" },
++ 	{ .compatible = "marvell,armada-xp-neta" },
++ 	{ .compatible = "marvell,armada-3700-neta" },
+++	{ .compatible = "marvell,armada-ac5-neta" },
++ 	{ }
++ };
++ MODULE_DEVICE_TABLE(of, mvneta_match);
++diff --git a/drivers/pci/controller/dwc/pcie-armada8k.c b/drivers/pci/controller/dwc/pcie-armada8k.c
++index 13901f359..6f9d57153 100644
++--- a/drivers/pci/controller/dwc/pcie-armada8k.c
+++++ b/drivers/pci/controller/dwc/pcie-armada8k.c
++@@ -24,15 +24,21 @@
++ #include <linux/of_irq.h>
++ 
++ #include "pcie-designware.h"
+++#include <linux/of_gpio.h>
++ 
++-#define ARMADA8K_PCIE_MAX_LANES PCIE_LNK_X4
++-
+++enum mvpcie_type {
+++	MVPCIE_TYPE_A8K,
+++	MVPCIE_TYPE_AC5
+++};
++ struct armada8k_pcie {
+++#define MV_A8K_PCIE_MAX_WIDTH 4
++ 	struct dw_pcie *pci;
++ 	struct clk *clk;
++-	struct clk *clk_reg;
++-	struct phy *phy[ARMADA8K_PCIE_MAX_LANES];
++-	unsigned int phy_count;
+++	struct gpio_desc    *reset_gpio;
+++	enum of_gpio_flags  flags;
+++	int phy_count;
+++	enum mvpcie_type pcie_type;
+++	struct phy *comphy[MV_A8K_PCIE_MAX_WIDTH];
++ };
++ 
++ #define PCIE_VENDOR_REGS_OFFSET		0x8000
++@@ -54,12 +60,20 @@ struct armada8k_pcie {
++ #define PCIE_INT_C_ASSERT_MASK		BIT(11)
++ #define PCIE_INT_D_ASSERT_MASK		BIT(12)
++ 
+++#define PCIE_GLOBAL_INT_CAUSE2_REG	(PCIE_VENDOR_REGS_OFFSET + 0x24)
+++#define PCIE_GLOBAL_INT_MASK2_REG	(PCIE_VENDOR_REGS_OFFSET + 0x28)
+++#define PCIE_INT2_PHY_RST_LINK_DOWN	BIT(1)
+++#define PCIE_INT_A_ASSERT_MASK_AC5	BIT(12)
+++#define PCIE_INT_B_ASSERT_MASK_AC5	BIT(13)
+++#define PCIE_INT_C_ASSERT_MASK_AC5	BIT(14)
+++#define PCIE_INT_D_ASSERT_MASK_AC5	BIT(15)
+++
++ #define PCIE_ARCACHE_TRC_REG		(PCIE_VENDOR_REGS_OFFSET + 0x50)
++ #define PCIE_AWCACHE_TRC_REG		(PCIE_VENDOR_REGS_OFFSET + 0x54)
++ #define PCIE_ARUSER_REG			(PCIE_VENDOR_REGS_OFFSET + 0x5C)
++ #define PCIE_AWUSER_REG			(PCIE_VENDOR_REGS_OFFSET + 0x60)
++ /*
++- * AR/AW Cache defaults: Normal memory, Write-Back, Read / Write
+++ * AR/AW Cache defauls: Normal memory, Write-Back, Read / Write
++  * allocate
++  */
++ #define ARCACHE_DEFAULT_VALUE		0x3511
++@@ -69,89 +83,66 @@ struct armada8k_pcie {
++ #define AX_USER_DOMAIN_MASK		0x3
++ #define AX_USER_DOMAIN_SHIFT		4
++ 
++-#define to_armada8k_pcie(x)	dev_get_drvdata((x)->dev)
++-
++-static void armada8k_pcie_disable_phys(struct armada8k_pcie *pcie)
++-{
++-	int i;
+++#define PCIE_STREAM_ID			(PCIE_VENDOR_REGS_OFFSET + 0x64)
+++#define STREAM_ID_BUS_BITS		2
+++#define STREAM_ID_DEV_BITS		2
+++#define STREAM_ID_FUNC_BITS		3
+++#define STREAM_ID_PREFIX		0x80
+++#define PCIE_STREAM_ID_CFG		(STREAM_ID_PREFIX << 12 | \
+++					STREAM_ID_BUS_BITS << 8 | \
+++					STREAM_ID_DEV_BITS << 4 | \
+++					STREAM_ID_FUNC_BITS)
++ 
++-	for (i = 0; i < ARMADA8K_PCIE_MAX_LANES; i++) {
++-		phy_power_off(pcie->phy[i]);
++-		phy_exit(pcie->phy[i]);
++-	}
++-}
+++#define to_armada8k_pcie(x)	dev_get_drvdata((x)->dev)
++ 
++-static int armada8k_pcie_enable_phys(struct armada8k_pcie *pcie)
+++static int armada8k_pcie_link_up(struct dw_pcie *pci)
++ {
++-	int ret;
++-	int i;
++-
++-	for (i = 0; i < ARMADA8K_PCIE_MAX_LANES; i++) {
++-		ret = phy_init(pcie->phy[i]);
++-		if (ret)
++-			return ret;
+++	u32 reg;
+++	u32 mask = PCIE_GLB_STS_RDLH_LINK_UP | PCIE_GLB_STS_PHY_LINK_UP;
++ 
++-		ret = phy_set_mode_ext(pcie->phy[i], PHY_MODE_PCIE,
++-				       pcie->phy_count);
++-		if (ret) {
++-			phy_exit(pcie->phy[i]);
++-			return ret;
++-		}
+++	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_STATUS_REG);
++ 
++-		ret = phy_power_on(pcie->phy[i]);
++-		if (ret) {
++-			phy_exit(pcie->phy[i]);
++-			return ret;
++-		}
++-	}
+++	if ((reg & mask) == mask)
+++		return 1;
++ 
+++	dev_dbg(pci->dev, "No link detected (Global-Status: 0x%08x).\n", reg);
++ 	return 0;
++ }
++ 
++-static int armada8k_pcie_setup_phys(struct armada8k_pcie *pcie)
+++static u32 ac5_pcie_read_dbi(struct dw_pcie *pci, void __iomem *base,
+++				u32 reg, size_t size)
++ {
++-	struct dw_pcie *pci = pcie->pci;
++-	struct device *dev = pci->dev;
++-	struct device_node *node = dev->of_node;
++-	int ret = 0;
++-	int i;
++ 
++-	for (i = 0; i < ARMADA8K_PCIE_MAX_LANES; i++) {
++-		pcie->phy[i] = devm_of_phy_get_by_index(dev, node, i);
++-		if (IS_ERR(pcie->phy[i])) {
++-			if (PTR_ERR(pcie->phy[i]) != -ENODEV)
++-				return PTR_ERR(pcie->phy[i]);
++-
++-			pcie->phy[i] = NULL;
++-			continue;
++-		}
++-
++-		pcie->phy_count++;
++-	}
+++	u32 val;
++ 
++-	/* Old bindings miss the PHY handle, so just warn if there is no PHY */
++-	if (!pcie->phy_count)
++-		dev_warn(dev, "No available PHY\n");
+++	if (base == pci->atu_base)
+++		reg |= DEFAULT_DBI_ATU_OFFSET;
++ 
++-	ret = armada8k_pcie_enable_phys(pcie);
++-	if (ret)
++-		dev_err(dev, "Failed to initialize PHY(s) (%d)\n", ret);
+++	/* Handle AC5 ATU access */
+++	if ((reg & ~0xfffff) == 0x300000) {
+++		reg &= 0xfffff;
+++		reg = 0xc000 | (0x200 * (reg >> 9)) | (reg & 0xff);
+++	} else if ((reg & 0xfffff000) == PCIE_VENDOR_REGS_OFFSET)
+++		reg += 0x8000; /* PCIE_VENDOR_REGS_OFFSET in ac5 is 0x10000 */
+++	dw_pcie_read(pci->dbi_base + reg, size, &val);
++ 
++-	return ret;
+++	return val;
++ }
++ 
++-static int armada8k_pcie_link_up(struct dw_pcie *pci)
+++static void ac5_pcie_write_dbi(struct dw_pcie *pci, void __iomem *base,
+++				  u32 reg, size_t size, u32 val)
++ {
++-	u32 reg;
++-	u32 mask = PCIE_GLB_STS_RDLH_LINK_UP | PCIE_GLB_STS_PHY_LINK_UP;
+++	if (base == pci->atu_base)
+++		reg |= DEFAULT_DBI_ATU_OFFSET;
++ 
++-	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_STATUS_REG);
+++	/* Handle AC5 ATU access */
+++	if ((reg & ~0xfffff) == 0x300000) {
+++		reg &= 0xfffff;
+++		reg = 0xc000 | (0x200 * (reg >> 9)) | (reg & 0xff);
+++	} else if ((reg & 0xfffff000) == PCIE_VENDOR_REGS_OFFSET)
+++		reg += 0x8000; /* PCIE_VENDOR_REGS_OFFSET in ac5 is 0x10000 */
++ 
++-	if ((reg & mask) == mask)
++-		return 1;
++-
++-	dev_dbg(pci->dev, "No link detected (Global-Status: 0x%08x).\n", reg);
++-	return 0;
+++	dw_pcie_write(pci->dbi_base + reg, size, val);
++ }
++ 
++ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
++@@ -159,6 +150,10 @@ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
++ 	struct dw_pcie *pci = pcie->pci;
++ 	u32 reg;
++ 
+++	/* Setup Requester-ID to Stream-ID mapping */
+++	if (pcie->pcie_type == MVPCIE_TYPE_A8K)
+++		dw_pcie_writel_dbi(pci, PCIE_STREAM_ID, PCIE_STREAM_ID_CFG);
+++
++ 	if (!dw_pcie_link_up(pci)) {
++ 		/* Disable LTSSM state machine to enable configuration */
++ 		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
++@@ -166,32 +161,46 @@ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
++ 		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
++ 	}
++ 
++-	/* Set the device to root complex mode */
++-	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
++-	reg &= ~(PCIE_DEVICE_TYPE_MASK << PCIE_DEVICE_TYPE_SHIFT);
++-	reg |= PCIE_DEVICE_TYPE_RC << PCIE_DEVICE_TYPE_SHIFT;
++-	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
+++	if (pcie->pcie_type == MVPCIE_TYPE_A8K){
+++		/* Set the device to root complex mode */
+++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
+++		reg &= ~(PCIE_DEVICE_TYPE_MASK << PCIE_DEVICE_TYPE_SHIFT);
+++		reg |= PCIE_DEVICE_TYPE_RC << PCIE_DEVICE_TYPE_SHIFT;
+++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
++ 
++-	/* Set the PCIe master AxCache attributes */
++-	dw_pcie_writel_dbi(pci, PCIE_ARCACHE_TRC_REG, ARCACHE_DEFAULT_VALUE);
++-	dw_pcie_writel_dbi(pci, PCIE_AWCACHE_TRC_REG, AWCACHE_DEFAULT_VALUE);
+++		/* Set the PCIe master AxCache attributes */
+++		dw_pcie_writel_dbi(pci, PCIE_ARCACHE_TRC_REG, ARCACHE_DEFAULT_VALUE);
+++		dw_pcie_writel_dbi(pci, PCIE_AWCACHE_TRC_REG, AWCACHE_DEFAULT_VALUE);
++ 
++-	/* Set the PCIe master AxDomain attributes */
++-	reg = dw_pcie_readl_dbi(pci, PCIE_ARUSER_REG);
++-	reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
++-	reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
++-	dw_pcie_writel_dbi(pci, PCIE_ARUSER_REG, reg);
+++		/* Set the PCIe master AxDomain attributes */
+++		reg = dw_pcie_readl_dbi(pci, PCIE_ARUSER_REG);
+++		reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
+++		reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
+++		dw_pcie_writel_dbi(pci, PCIE_ARUSER_REG, reg);
++ 
++-	reg = dw_pcie_readl_dbi(pci, PCIE_AWUSER_REG);
++-	reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
++-	reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
++-	dw_pcie_writel_dbi(pci, PCIE_AWUSER_REG, reg);
+++		reg = dw_pcie_readl_dbi(pci, PCIE_AWUSER_REG);
+++		reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
+++		reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
+++		dw_pcie_writel_dbi(pci, PCIE_AWUSER_REG, reg);
+++	}
++ 
++ 	/* Enable INT A-D interrupts */
++-	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG);
++-	reg |= PCIE_INT_A_ASSERT_MASK | PCIE_INT_B_ASSERT_MASK |
++-	       PCIE_INT_C_ASSERT_MASK | PCIE_INT_D_ASSERT_MASK;
++-	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG, reg);
+++	if (pcie->pcie_type == MVPCIE_TYPE_AC5) {
+++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG);
+++		reg |= PCIE_INT_A_ASSERT_MASK_AC5 | PCIE_INT_B_ASSERT_MASK_AC5 |
+++		       PCIE_INT_C_ASSERT_MASK_AC5 | PCIE_INT_D_ASSERT_MASK_AC5;
+++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG, reg);
+++	} else {
+++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG);
+++		reg |= PCIE_INT_A_ASSERT_MASK | PCIE_INT_B_ASSERT_MASK |
+++		       PCIE_INT_C_ASSERT_MASK | PCIE_INT_D_ASSERT_MASK;
+++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG, reg);
+++	}
+++
+++	/* Also enable link down interrupts */
+++	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG);
+++	reg |= PCIE_INT2_PHY_RST_LINK_DOWN;
+++	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG, reg);
++ 
++ 	if (!dw_pcie_link_up(pci)) {
++ 		/* Configuration done. Start LTSSM */
++@@ -230,6 +239,36 @@ static irqreturn_t armada8k_pcie_irq_handler(int irq, void *arg)
++ 	val = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_CAUSE1_REG);
++ 	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_CAUSE1_REG, val);
++ 
+++	val = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_CAUSE2_REG);
+++
+++	if (PCIE_INT2_PHY_RST_LINK_DOWN & val) {
+++		u32 reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
+++		/*
+++		 * The link went down. Disable LTSSM immediately. This
+++		 * unlocks the root complex config registers. Downstream
+++		 * device accesses will return all-Fs without freezing the
+++		 * CPU.
+++		 */
+++		reg &= ~(PCIE_APP_LTSSM_EN);
+++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
+++		/*
+++		 * Mask link down interrupts. They can be re-enabled once
+++		 * the link is retrained.
+++		 */
+++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG);
+++		reg &= ~PCIE_INT2_PHY_RST_LINK_DOWN;
+++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG, reg);
+++		/*
+++		 * At this point a worker thread can be triggered to
+++		 * initiate a link retrain. If link retrains were
+++		 * possible, that is.
+++		 */
+++		dev_dbg(pci->dev, "%s: link went down\n", __func__);
+++	}
+++
+++	/* Now clear the second interrupt cause. */
+++	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_CAUSE2_REG, val);
+++
++ 	return IRQ_HANDLED;
++ }
++ 
++@@ -267,16 +306,111 @@ static int armada8k_add_pcie_port(struct armada8k_pcie *pcie,
++ 	return 0;
++ }
++ 
++-static const struct dw_pcie_ops dw_pcie_ops = {
+++static const struct dw_pcie_ops armada8k_dw_pcie_ops = {
++ 	.link_up = armada8k_pcie_link_up,
++ };
++ 
+++static const struct dw_pcie_ops ac5_dw_pcie_ops = {
+++	.link_up = armada8k_pcie_link_up,
+++	.read_dbi = ac5_pcie_read_dbi,
+++	.write_dbi = ac5_pcie_write_dbi,
+++};
+++
+++static int armada8k_phy_config(struct platform_device *pdev,
+++			       struct armada8k_pcie *pcie)
+++{
+++	struct phy *comphy;
+++	int err;
+++	int i;
+++
+++	pcie->phy_count = of_count_phandle_with_args(pdev->dev.of_node, "phys",
+++					       "#phy-cells");
+++	if (pcie->phy_count <= 0)
+++		return 0;
+++
+++	for (i = 0; i < pcie->phy_count; i++) {
+++		comphy = devm_of_phy_get_by_index(&pdev->dev,
+++						  pdev->dev.of_node, i);
+++		if (IS_ERR(comphy)) {
+++			dev_err(&pdev->dev, "Failed to get phy %d\n", i);
+++			return PTR_ERR(comphy);
+++		}
+++
+++		pcie->comphy[i] = comphy;
+++
+++		switch (pcie->phy_count) {
+++		case PCIE_LNK_X1:
+++		case PCIE_LNK_X2:
+++		case PCIE_LNK_X4:
+++			phy_set_bus_width(comphy, pcie->phy_count);
+++			break;
+++		default:
+++			dev_err(&pdev->dev, "wrong pcie width %d",
+++				pcie->phy_count);
+++			return -EINVAL;
+++		}
+++
+++		err = phy_set_mode(comphy, PHY_MODE_PCIE);
+++		if (err) {
+++			dev_err(&pdev->dev, "failed to set comphy\n");
+++			return err;
+++		}
+++
+++		err = phy_init(comphy);
+++		if (err < 0) {
+++			dev_err(&pdev->dev, "phy init failed %d",
+++				pcie->phy_count);
+++			return err;
+++		}
+++
+++		err = phy_power_on(comphy);
+++		if (err < 0) {
+++			dev_err(&pdev->dev, "phy init failed %d",
+++				pcie->phy_count);
+++			phy_exit(comphy);
+++			return err;
+++		}
+++	}
+++
+++	return err;
+++}
+++
+++/* armada8k_pcie_reset
+++ * The function implements the PCIe reset via GPIO.
+++ * First, pull down the GPIO used for PCIe reset, and wait 200ms;
+++ * Second, set the GPIO output value with setting from DTS, and wait
+++ * 200ms for taking effect.
+++ * Return: void, always success.
+++ */
+++static void armada8k_pcie_reset(struct armada8k_pcie *pcie)
+++{
+++	/* Set the reset gpio to low first */
+++	gpiod_direction_output(pcie->reset_gpio, 0);
+++	/* After 200ms to reset pcie */
+++	mdelay(200);
+++	gpiod_direction_output(pcie->reset_gpio,
+++			       (pcie->flags & OF_GPIO_ACTIVE_LOW) ? 0 : 1);
+++	mdelay(200);
+++}
+++
+++static void armada8k_phy_deconfig(struct armada8k_pcie *pcie)
+++{
+++	int i;
+++
+++	for (i = 0; i < pcie->phy_count; i++) {
+++		phy_power_off(pcie->comphy[i]);
+++		phy_exit(pcie->comphy[i]);
+++	}
+++}
+++
++ static int armada8k_pcie_probe(struct platform_device *pdev)
++ {
++ 	struct dw_pcie *pci;
++ 	struct armada8k_pcie *pcie;
++ 	struct device *dev = &pdev->dev;
+++	struct device_node *dn = pdev->dev.of_node;
++ 	struct resource *base;
+++	int reset_gpio;
++ 	int ret;
++ 
++ 	pcie = devm_kzalloc(dev, sizeof(*pcie), GFP_KERNEL);
++@@ -288,8 +422,16 @@ static int armada8k_pcie_probe(struct platform_device *pdev)
++ 		return -ENOMEM;
++ 
++ 	pci->dev = dev;
++-	pci->ops = &dw_pcie_ops;
++-
+++	if (of_device_is_compatible(dn, "marvell,armada8k-pcie")) {
+++		pci->ops = &armada8k_dw_pcie_ops;
+++		pcie->pcie_type = MVPCIE_TYPE_A8K;
+++	}
+++	else if (of_device_is_compatible(dn, "marvell,ac5-pcie")) {
+++		pci->ops = &ac5_dw_pcie_ops;
+++		pcie->pcie_type = MVPCIE_TYPE_AC5;
+++	}
+++	else
+++		dev_err(dev, "couldn't find compatible ops\n");
++ 	pcie->pci = pci;
++ 
++ 	pcie->clk = devm_clk_get(dev, NULL);
++@@ -300,58 +442,74 @@ static int armada8k_pcie_probe(struct platform_device *pdev)
++ 	if (ret)
++ 		return ret;
++ 
++-	pcie->clk_reg = devm_clk_get(dev, "reg");
++-	if (pcie->clk_reg == ERR_PTR(-EPROBE_DEFER)) {
++-		ret = -EPROBE_DEFER;
++-		goto fail;
++-	}
++-	if (!IS_ERR(pcie->clk_reg)) {
++-		ret = clk_prepare_enable(pcie->clk_reg);
++-		if (ret)
++-			goto fail_clkreg;
++-	}
++-
++ 	/* Get the dw-pcie unit configuration/control registers base. */
++ 	base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ctrl");
++ 	pci->dbi_base = devm_pci_remap_cfg_resource(dev, base);
++ 	if (IS_ERR(pci->dbi_base)) {
++ 		ret = PTR_ERR(pci->dbi_base);
++-		goto fail_clkreg;
+++        goto fail;
++ 	}
++ 
++-	ret = armada8k_pcie_setup_phys(pcie);
++-	if (ret)
++-		goto fail_clkreg;
+++    /* Config reset gpio for pcie if the reset connected to gpio */
+++    reset_gpio = of_get_named_gpio_flags(pdev->dev.of_node,
+++                        "reset-gpio", 0,
+++                        &pcie->flags);
+++    if (gpio_is_valid(reset_gpio)) {
+++        pcie->reset_gpio = gpio_to_desc(reset_gpio);
+++        armada8k_pcie_reset(pcie);
+++    }
+++
+++    ret = armada8k_phy_config(pdev, pcie);
+++    if (ret < 0) {
+++        dev_err(dev, "PHYs config failed: %d\n", ret);
+++        goto fail;
+++    }
++ 
++ 	platform_set_drvdata(pdev, pcie);
++ 
++ 	ret = armada8k_add_pcie_port(pcie, pdev);
++ 	if (ret)
++-		goto disable_phy;
++-
+++        goto fail_phy;
++ 	return 0;
++ 
++-disable_phy:
++-	armada8k_pcie_disable_phys(pcie);
++-fail_clkreg:
++-	clk_disable_unprepare(pcie->clk_reg);
+++fail_phy:
+++    armada8k_phy_deconfig(pcie);
++ fail:
++-	clk_disable_unprepare(pcie->clk);
++-
+++    if (!IS_ERR(pcie->clk))
+++       clk_disable_unprepare(pcie->clk);
++ 	return ret;
++ }
++ 
+++static int armada8k_pcie_remove(struct platform_device *pdev)
+++{
+++    struct armada8k_pcie *pcie = platform_get_drvdata(pdev);
+++    struct dw_pcie *pci = pcie->pci;
+++    struct device *dev = &pdev->dev;
+++
+++    dw_pcie_host_deinit(&pci->pp);
+++
+++    armada8k_phy_deconfig(pcie);
+++
+++    if (!IS_ERR(pcie->clk))
+++        clk_disable_unprepare(pcie->clk);
+++
+++    dev_dbg(dev, "%s\n", __func__);
+++
+++    return 0;
+++}
+++
++ static const struct of_device_id armada8k_pcie_of_match[] = {
++ 	{ .compatible = "marvell,armada8k-pcie", },
+++	{ .compatible = "marvell,ac5-pcie", },
++ 	{},
++ };
++ 
++ static struct platform_driver armada8k_pcie_driver = {
++ 	.probe		= armada8k_pcie_probe,
+++	.remove		= armada8k_pcie_remove,
++ 	.driver = {
++ 		.name	= "armada8k-pcie",
++ 		.of_match_table = of_match_ptr(armada8k_pcie_of_match),
++-		.suppress_bind_attrs = true,
++ 	},
++ };
++ builtin_platform_driver(armada8k_pcie_driver);
++diff --git a/drivers/usb/host/ehci-orion.c b/drivers/usb/host/ehci-orion.c
++index 3626758b3..1d670da73 100644
++--- a/drivers/usb/host/ehci-orion.c
+++++ b/drivers/usb/host/ehci-orion.c
++@@ -20,6 +20,7 @@
++ #include <linux/io.h>
++ #include <linux/dma-mapping.h>
++ 
+++
++ #include "ehci.h"
++ 
++ #define rdl(off)	readl_relaxed(hcd->regs + (off))
++@@ -232,7 +233,7 @@ static int ehci_orion_drv_probe(struct platform_device *pdev)
++ 	 * set. Since shared usb code relies on it, set it here for
++ 	 * now. Once we have dma capability bindings this can go away.
++ 	 */
++-	err = dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+++	err = dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
++ 	if (err)
++ 		goto err;
++ 
++@@ -341,7 +342,8 @@ static int ehci_orion_drv_remove(struct platform_device *pdev)
++ static const struct of_device_id ehci_orion_dt_ids[] = {
++ 	{ .compatible = "marvell,orion-ehci", },
++ 	{ .compatible = "marvell,armada-3700-ehci", },
++-	{},
+++	{ .compatible = "marvell,ac5-ehci", },
+++	{ },
++ };
++ MODULE_DEVICE_TABLE(of, ehci_orion_dt_ids);
++ 
+diff --git a/patch/003-ac5x-mvneta-xbar-window.patch b/patch/003-ac5x-mvneta-xbar-window.patch
 new file mode 100644
-index 0000000..fc1abcb
+index 0000000..e9cf809
 --- /dev/null
-+++ b/patch/0123-rd-ac5x-gpio-pinctrl-support.patch
-@@ -0,0 +1,383 @@
-+From f6e52f5dce6f97bab69d80707720ad29525bd1a8 Mon Sep 17 00:00:00 2001
-+From: rminnikanti <rminnikanti@marvell.com>
-+Date: Sun, 5 Sep 2021 17:24:27 +0000
-+Subject: [PATCH] rd ac5x gpio pinctrl support
++++ b/patch/003-ac5x-mvneta-xbar-window.patch
+@@ -0,0 +1,61 @@
++Subject: net/mvneta: Setup xbar windows for AC5
 +
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Yuval Shaia <yshaia@marvell.com>
 +---
-+ arch/arm64/Kconfig.platforms        |   2 +
-+ drivers/gpio/gpio-mvebu.c           |  68 +++++++++++----
-+ drivers/pinctrl/mvebu/Kconfig       |   4 +
-+ drivers/pinctrl/mvebu/Makefile      |   1 +
-+ drivers/pinctrl/mvebu/pinctrl-ac5.c | 164 ++++++++++++++++++++++++++++++++++++
-+ 5 files changed, 224 insertions(+), 15 deletions(-)
++ drivers/net/ethernet/marvell/mvneta.c |   27 +++++++++++++++++++++++++++
++ 1 file changed, 27 insertions(+)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 0f5264cfb..e166e6076 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -76,6 +76,8 @@
++ #define MVNETA_WIN_SIZE(w)                      (0x2204 + ((w) << 3))
++ #define MVNETA_WIN_REMAP(w)                     (0x2280 + ((w) << 2))
++ #define MVNETA_BASE_ADDR_ENABLE                 0x2290
+++#define      MVNETA_AC5_CNM_DDR_TARGET		0x2
+++#define      MVNETA_AC5_CNM_DDR_ATTR		0xb
++ #define MVNETA_ACCESS_PROTECT_ENABLE            0x2294
++ #define MVNETA_PORT_CONFIG                      0x2400
++ #define      MVNETA_UNI_PROMISC_MODE            BIT(0)
++@@ -5048,6 +5050,29 @@ static void mvneta_conf_mbus_windows(struct mvneta_port *pp,
++ 	mvreg_write(pp, MVNETA_ACCESS_PROTECT_ENABLE, win_protect);
++ }
++ 
+++static void mvneta_conf_ac5_cnm_xbar_windows(struct mvneta_port *pp)
+++{
+++	int i;
+++
+++	/* Clear all windows */
+++	for (i = 0; i < 6; i++) {
+++		mvreg_write(pp, MVNETA_WIN_BASE(i), 0);
+++		mvreg_write(pp, MVNETA_WIN_SIZE(i), 0);
+++
+++		if (i < 4)
+++			mvreg_write(pp, MVNETA_WIN_REMAP(i), 0);
+++	}
+++
+++	/*
+++	 * Setup window #0 base 0x0 to target XBAR port 2 (AMB2), attribute 0xb,
+++	 * size 4GB AMB2 address decoder remaps 0x0 to DDR 64 bit base address
+++	 */
+++	mvreg_write(pp, MVNETA_WIN_BASE(0), (MVNETA_AC5_CNM_DDR_ATTR << 8) |
+++		    MVNETA_AC5_CNM_DDR_TARGET);
+++	mvreg_write(pp, MVNETA_WIN_SIZE(0),0xffff0000);
+++	mvreg_write(pp, MVNETA_BASE_ADDR_ENABLE, 0x3e);
+++}
+++
++ /* Power up the port */
++ static int mvneta_port_power_up(struct mvneta_port *pp, int phy_mode)
++ {
++@@ -5209,6 +5234,8 @@ static int mvneta_probe(struct platform_device *pdev)
++ 	 */
++ 	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
++ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
+++	if (pp->neta_type == MVNETA_TYPE_AC5)
+++		mvneta_conf_ac5_cnm_xbar_windows(pp);
++ 
++ 	pp->tx_ring_size = MVNETA_MAX_TXD;
++ 	pp->rx_ring_size = MVNETA_MAX_RXD;
+diff --git a/patch/004-ac5x-spi-driver-fix.patch b/patch/004-ac5x-spi-driver-fix.patch
+new file mode 100644
+index 0000000..e391737
+--- /dev/null
++++ b/patch/004-ac5x-spi-driver-fix.patch
+@@ -0,0 +1,31 @@
++Subject: support BE for AC5 SPI driver
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam <lnoam@marvell.com>
++---
++ drivers/spi/spi-armada-3700.c |    4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/spi/spi-armada-3700.c b/drivers/spi/spi-armada-3700.c
++index d8cc4b270..386c7959e 100644
++--- a/drivers/spi/spi-armada-3700.c
+++++ b/drivers/spi/spi-armada-3700.c
++@@ -497,7 +497,7 @@ static int a3700_spi_fifo_write(struct a3700_spi *a3700_spi)
++ 
++ 	while (!a3700_is_wfifo_full(a3700_spi) && a3700_spi->buf_len) {
++ 		val = *(u32 *)a3700_spi->tx_buf;
++-		spireg_write(a3700_spi, A3700_SPI_DATA_OUT_REG, val);
+++		spireg_write(a3700_spi, A3700_SPI_DATA_OUT_REG, cpu_to_le32(val));
++ 		a3700_spi->buf_len -= 4;
++ 		a3700_spi->tx_buf += 4;
++ 	}
++@@ -519,7 +519,7 @@ static int a3700_spi_fifo_read(struct a3700_spi *a3700_spi)
++ 	while (!a3700_is_rfifo_empty(a3700_spi) && a3700_spi->buf_len) {
++ 		val = spireg_read(a3700_spi, A3700_SPI_DATA_IN_REG);
++ 		if (a3700_spi->buf_len >= 4) {
++-
+++			val = cpu_to_le32(val);
++ 			memcpy(a3700_spi->rx_buf, &val, 4);
++ 
++ 			a3700_spi->buf_len -= 4;
+diff --git a/patch/005-ac5x-gpio-userspace-support.patch b/patch/005-ac5x-gpio-userspace-support.patch
+new file mode 100644
+index 0000000..3f130d4
+--- /dev/null
++++ b/patch/005-ac5x-gpio-userspace-support.patch
+@@ -0,0 +1,439 @@
++Subject: Add AC5 GPIO userspace support
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam <lnoam@marvell.com>
++---
++ arch/arm64/Kconfig.platforms         |    2 
++ arch/arm64/boot/dts/marvell/ac5.dtsi |   16 +++
++ drivers/gpio/gpio-mvebu.c            |   78 +++++++++++++---
++ drivers/pinctrl/mvebu/Kconfig        |    4 +
++ drivers/pinctrl/mvebu/Makefile       |    1 
++ drivers/pinctrl/mvebu/pinctrl-ac5.c  |  162 ++++++++++++++++++++++++++++++++++
++ 6 files changed, 245 insertions(+), 18 deletions(-)
 + create mode 100644 drivers/pinctrl/mvebu/pinctrl-ac5.c
 +
 +diff --git a/arch/arm64/Kconfig.platforms b/arch/arm64/Kconfig.platforms
-+index 393d2b5..28560e4 100644
++index 889e78f40..87ee9c01e 100644
 +--- a/arch/arm64/Kconfig.platforms
 ++++ b/arch/arm64/Kconfig.platforms
 +@@ -179,11 +179,13 @@ config ARCH_MVEBU
@@ -933,8 +2494,49 @@ index 0000000..fc1abcb
 + 
 + config ARCH_MXC
 + 	bool "ARMv8 based NXP i.MX SoC family"
++diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
++index c0e777e3b..e64ed81a0 100644
++--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
+++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
++@@ -48,6 +48,7 @@ mvDma {
++ 	aliases {
++ 		serial0 = &uart0;
++ 		spiflash0 = &spiflash0;
+++		gpio0 = &gpio0;
++ 		ethernet0 = &eth0;
++ 		ethernet1 = &eth1;
++ 	};
++@@ -131,6 +132,15 @@ i2c1: i2c@11100{
++ 				clock-frequency=<100000>;
++ 				status="okay";
++ 			};
+++
+++			gpio0: gpio@18100 {
+++				compatible = "marvell,ac5-gpio";
+++				#gpio-cells = <2>;
+++				gpio-controller;
+++				reg = <0x18100 0x200>;
+++				// gpio-ranges = <&pinctrl0 0 0 46>;
+++				ngpios = <46>;
+++			};
++ 		};
++ 
++ 		/* Dedicated section for devices behind 32bit controllers so we
++@@ -188,6 +198,12 @@ usb1: usb@A0000 {
++ 			};
++ 		};
++ 
+++		pinctrl0: pinctrl@80020100 {
+++			compatible = "marvell,ac5-pinctrl",
+++				     "syscon", "simple-mfd";
+++			reg = <0 0x80020100 0 0x20>;
+++		};
+++
++ 		pcie0: pcie@800a0000 {
++ 			compatible = "marvell,ac5-pcie", "snps,dw-pcie";
++ 			reg = <0 0x800a0000 0 0x20000>, <0 0x3fff0000 0 0x10000>;
 +diff --git a/drivers/gpio/gpio-mvebu.c b/drivers/gpio/gpio-mvebu.c
-+index adc768f..5840b9b 100644
++index 2ab34a8e6..d44b82918 100644
 +--- a/drivers/gpio/gpio-mvebu.c
 ++++ b/drivers/gpio/gpio-mvebu.c
 +@@ -85,10 +85,16 @@
@@ -1007,12 +2609,12 @@ index 0000000..fc1abcb
 + {
 + 	struct mvebu_gpio_chip *mvchip = gpiochip_get_data(chip);
 ++	u32 reg_offset = 0;
-++
-++	if (mvchip->soc_variant == MVEBU_GPIO_SOC_VARIANT_AC5)
-++		reg_offset = GPIO_AC5_REG_OFF(pin);
 + 
 +-	regmap_update_bits(mvchip->regs, GPIO_BLINK_EN_OFF + mvchip->offset,
 +-			   BIT(pin), value ? BIT(pin) : 0);
+++	if (mvchip->soc_variant == MVEBU_GPIO_SOC_VARIANT_AC5)
+++		reg_offset = GPIO_AC5_REG_OFF(pin);
+++
 ++	regmap_update_bits(mvchip->regs, GPIO_BLINK_EN_OFF + reg_offset +
 ++			mvchip->offset, BIT(pin%32), value ? BIT(pin%32) : 0);
 + }
@@ -1061,18 +2663,37 @@ index 0000000..fc1abcb
 + 
 + 	return 0;
 + }
-+@@ -910,6 +936,10 @@ static const struct of_device_id mvebu_gpio_of_match[] = {
++@@ -380,11 +406,15 @@ static int mvebu_gpio_get_direction(struct gpio_chip *chip, unsigned int pin)
++ {
++ 	struct mvebu_gpio_chip *mvchip = gpiochip_get_data(chip);
++ 	u32 u;
+++    u32 reg_offset = 0;
++ 
++-	regmap_read(mvchip->regs, GPIO_IO_CONF_OFF + mvchip->offset, &u);
+++    if (mvchip->soc_variant == MVEBU_GPIO_SOC_VARIANT_AC5)
+++        reg_offset = GPIO_AC5_REG_OFF(pin);
++ 
++-	if (u & BIT(pin))
++-		return GPIO_LINE_DIRECTION_IN;
+++    regmap_read(mvchip->regs, GPIO_IO_CONF_OFF + reg_offset + mvchip->offset, &u);
+++
+++    if (u & BIT(pin%32))
+++        return GPIO_LINE_DIRECTION_IN;
++ 
++ 	return GPIO_LINE_DIRECTION_OUT;
++ }
++@@ -911,6 +941,10 @@ static const struct of_device_id mvebu_gpio_of_match[] = {
++ 		.compatible = "marvell,armada-8k-gpio",
 + 		.data       = (void *) MVEBU_GPIO_SOC_VARIANT_A8K,
 + 	},
-+ 	{
+++	{
 ++		.compatible = "marvell,ac5-gpio",
 ++		.data       = (void *) MVEBU_GPIO_SOC_VARIANT_AC5,
 ++	},
-++	{
++ 	{
 + 		/* sentinel */
 + 	},
-+ };
-+@@ -1154,6 +1184,14 @@ static int mvebu_gpio_probe(struct platform_device *pdev)
++@@ -1158,6 +1192,14 @@ static int mvebu_gpio_probe(struct platform_device *pdev)
 + 	 * Mask and clear GPIO interrupts.
 + 	 */
 + 	switch (soc_variant) {
@@ -1088,7 +2709,7 @@ index 0000000..fc1abcb
 + 	case MVEBU_GPIO_SOC_VARIANT_A8K:
 + 		regmap_write(mvchip->regs,
 +diff --git a/drivers/pinctrl/mvebu/Kconfig b/drivers/pinctrl/mvebu/Kconfig
-+index d9773b7..1caef44 100644
++index 0d12894d3..aa5883f09 100644
 +--- a/drivers/pinctrl/mvebu/Kconfig
 ++++ b/drivers/pinctrl/mvebu/Kconfig
 +@@ -45,6 +45,10 @@ config PINCTRL_ORION
@@ -1103,7 +2724,7 @@ index 0000000..fc1abcb
 + 	bool
 + 	select GENERIC_PINCONF
 +diff --git a/drivers/pinctrl/mvebu/Makefile b/drivers/pinctrl/mvebu/Makefile
-+index cd082dc..23458ab 100644
++index cd082dca4..23458ab17 100644
 +--- a/drivers/pinctrl/mvebu/Makefile
 ++++ b/drivers/pinctrl/mvebu/Makefile
 +@@ -11,3 +11,4 @@ obj-$(CONFIG_PINCTRL_ARMADA_CP110) += pinctrl-armada-cp110.o
@@ -1113,10 +2734,10 @@ index 0000000..fc1abcb
 ++obj-$(CONFIG_PINCTRL_AC5) += pinctrl-ac5.o
 +diff --git a/drivers/pinctrl/mvebu/pinctrl-ac5.c b/drivers/pinctrl/mvebu/pinctrl-ac5.c
 +new file mode 100644
-+index 0000000..c33c9fc
++index 000000000..c996efd3a
 +--- /dev/null
 ++++ b/drivers/pinctrl/mvebu/pinctrl-ac5.c
-+@@ -0,0 +1,164 @@
++@@ -0,0 +1,162 @@
 ++/*
 ++ * Marvell ac5 pinctrl driver based on mvebu pinctrl core
 ++ *
@@ -1194,11 +2815,9 @@ index 0000000..fc1abcb
 ++	MPP_MODE(25,
 ++		 MPP_FUNCTION(0, "gpio",    NULL)),
 ++	MPP_MODE(26,
-++		 MPP_FUNCTION(0, "gpio",    NULL),
-++		 MPP_FUNCTION(1, "i2c0-opt", "scl")),
+++		 MPP_FUNCTION(0, "gpio",    NULL)),
 ++	MPP_MODE(27,
-++		 MPP_FUNCTION(0, "gpio",    NULL),
-++		 MPP_FUNCTION(1, "i2c0-opt", "sda")),
+++		 MPP_FUNCTION(0, "gpio",    NULL)),
 ++	MPP_MODE(28,
 ++		 MPP_FUNCTION(0, "gpio",    NULL)),
 ++	MPP_MODE(29,
@@ -1281,26 +2900,99 @@ index 0000000..fc1abcb
 ++};
 ++
 ++builtin_platform_driver(ac5_pinctrl_driver);
-+-- 
-+2.11.0
-+
-diff --git a/patch/0123-rd-ac5x-i2c-fixes.patch b/patch/0123-rd-ac5x-i2c-fixes.patch
+diff --git a/patch/006-ac5x-i2c-fix.patch b/patch/006-ac5x-i2c-fix.patch
 new file mode 100644
-index 0000000..eb19db1
+index 0000000..25016d8
 --- /dev/null
-+++ b/patch/0123-rd-ac5x-i2c-fixes.patch
-@@ -0,0 +1,179 @@
-+From eaf864d22373cffa8d9eb40b44dc06e7d22a6267 Mon Sep 17 00:00:00 2001
-+From: rminnikanti <rminnikanti@marvell.com>
-+Date: Sun, 5 Sep 2021 17:25:09 +0000
-+Subject: [PATCH] rd ac5x i2c fixes
++++ b/patch/006-ac5x-i2c-fix.patch
+@@ -0,0 +1,254 @@
++Subject: i2c bus lock (Arb-Loss)
 +
++Some i2c slaves, maainly SFPs, might cause the bus to
++    lost arbitration while slave is in the middle of
++    responding.
++
++    The solution is to change the I2C mpps to gpios,
++    and toggle the i2c_scl gpio to emulate bus toggling,
++    so slave will finish its transimission.
++
++    The fix include support for configuring which pins need
++    to be toggled (done in dts & the pinctrl file)
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam Liron <lnoam@marvell.com>
 +---
-+ drivers/i2c/busses/i2c-mv64xxx.c | 83 ++++++++++++++++++++++++++++++++++++++--
-+ 1 file changed, 80 insertions(+), 3 deletions(-)
++ arch/arm/mach-mvebu/Kconfig             |    2 -
++ arch/arm64/boot/dts/marvell/ac5.dtsi    |   17 +++++++
++ arch/arm64/boot/dts/marvell/ac5x_db.dts |    4 ++
++ drivers/i2c/busses/i2c-mv64xxx.c        |   76 +++++++++++++++++++++++++++++++
++ drivers/pinctrl/mvebu/Kconfig           |    5 ++
++ drivers/pinctrl/mvebu/Makefile          |    1 
++ 6 files changed, 104 insertions(+), 1 deletion(-)
 +
++diff --git a/arch/arm/mach-mvebu/Kconfig b/arch/arm/mach-mvebu/Kconfig
++index 34dbeaab9..2ecd372ae 100644
++--- a/arch/arm/mach-mvebu/Kconfig
+++++ b/arch/arm/mach-mvebu/Kconfig
++@@ -93,7 +93,7 @@ config MACH_ARMADA_XP
++ 	select ARMADA_XP_CLK
++ 	select CPU_PJ4B
++ 	select MACH_MVEBU_V7
++-	select PINCTRL_ARMADA_XP
+++	select PINCTRL_AC3
++ 	help
++ 	  Say 'Y' here if you want your kernel to support boards based
++ 	  on the Marvell Armada XP SoC with device tree.
++diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
++index e64ed81a0..18b19f0da 100644
++--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
+++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
++@@ -120,6 +120,13 @@ i2c0: i2c@11000{
++ 				interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
++ 				clock-frequency=<100000>;
++ 				status="okay";
+++
+++				pinctrl-names = "i2c-mpp-state", "i2c-gpio-state";
+++				pinctrl-0 = <&i2c_mpps>;
+++				pinctrl-1 = <&i2c_gpio>;
+++
+++				scl_gpio = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+++				sda_gpio = <&gpio0 27 GPIO_ACTIVE_HIGH>;
++ 			};
++ 
++ 			i2c1: i2c@11100{
++@@ -202,6 +209,16 @@ pinctrl0: pinctrl@80020100 {
++ 			compatible = "marvell,ac5-pinctrl",
++ 				     "syscon", "simple-mfd";
++ 			reg = <0 0x80020100 0 0x20>;
+++
+++			i2c_mpps: i2c-mpps {
+++				marvell,pins = "mpp26", "mpp27";
+++				marvell,function = "i2c0-opt";
+++			};
+++
+++			i2c_gpio: i2c-gpio {
+++				marvell,pins = "mpp26", "mpp27";
+++				marvell,function = "gpio";
+++			};
++ 		};
++ 
++ 		pcie0: pcie@800a0000 {
++diff --git a/arch/arm64/boot/dts/marvell/ac5x_db.dts b/arch/arm64/boot/dts/marvell/ac5x_db.dts
++index 6a5bc72d4..55bc42c85 100644
++--- a/arch/arm64/boot/dts/marvell/ac5x_db.dts
+++++ b/arch/arm64/boot/dts/marvell/ac5x_db.dts
++@@ -30,3 +30,7 @@ &usb1 {
++ 	dr_mode = "peripheral";
++ };
++ 
+++&cnm_clock {
+++    clock-frequency = <325000000>;
+++};
+++
 +diff --git a/drivers/i2c/busses/i2c-mv64xxx.c b/drivers/i2c/busses/i2c-mv64xxx.c
-+index a5a95ea..3d36d34 100644
++index e0e45fc19..494dd8f16 100644
 +--- a/drivers/i2c/busses/i2c-mv64xxx.c
 ++++ b/drivers/i2c/busses/i2c-mv64xxx.c
 +@@ -9,6 +9,8 @@
@@ -1341,15 +3033,7 @@ index 0000000..eb19db1
 + };
 + 
 + static struct mv64xxx_i2c_regs mv64xxx_i2c_regs_mv64xxx = {
-+@@ -169,6 +179,7 @@ static struct mv64xxx_i2c_regs mv64xxx_i2c_regs_sun4i = {
-+ 	.soft_reset	= 0x18,
-+ };
-+ 
-++
-+ static void
-+ mv64xxx_i2c_prepare_for_io(struct mv64xxx_i2c_data *drv_data,
-+ 	struct i2c_msg *msg)
-+@@ -308,6 +319,11 @@ mv64xxx_i2c_fsm(struct mv64xxx_i2c_data *drv_data, u32 status)
++@@ -308,6 +318,11 @@ mv64xxx_i2c_fsm(struct mv64xxx_i2c_data *drv_data, u32 status)
 + 		drv_data->state = MV64XXX_I2C_STATE_IDLE;
 + 		break;
 + 
@@ -1361,7 +3045,7 @@ index 0000000..eb19db1
 + 	case MV64XXX_I2C_STATUS_MAST_WR_ADDR_NO_ACK: /* 0x20 */
 + 	case MV64XXX_I2C_STATUS_MAST_WR_NO_ACK: /* 30 */
 + 	case MV64XXX_I2C_STATUS_MAST_RD_ADDR_NO_ACK: /* 48 */
-+@@ -345,6 +361,9 @@ static void mv64xxx_i2c_send_start(struct mv64xxx_i2c_data *drv_data)
++@@ -345,6 +360,9 @@ static void mv64xxx_i2c_send_start(struct mv64xxx_i2c_data *drv_data)
 + static void
 + mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
 + {
@@ -1371,7 +3055,7 @@ index 0000000..eb19db1
 + 	switch(drv_data->action) {
 + 	case MV64XXX_I2C_ACTION_SEND_RESTART:
 + 		/* We should only get here if we have further messages */
-+@@ -398,6 +417,44 @@ mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
++@@ -398,6 +416,44 @@ mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
 + 			drv_data->reg_base + drv_data->reg_offsets.control);
 + 		break;
 + 
@@ -1416,23 +3100,7 @@ index 0000000..eb19db1
 + 	case MV64XXX_I2C_ACTION_RCV_DATA_STOP:
 + 		drv_data->msg->buf[drv_data->byte_posn++] =
 + 			readl(drv_data->reg_base + drv_data->reg_offsets.data);
-+@@ -850,7 +907,8 @@ mv64xxx_of_config(struct mv64xxx_i2c_data *drv_data,
-+ 			drv_data->errata_delay = true;
-+ 	}
-+ 
-+-	if (of_device_is_compatible(np, "marvell,mv78230-a0-i2c")) {
-++	if (of_device_is_compatible(np, "marvell,mv78230-i2c") ||
-++	    of_device_is_compatible(np, "marvell,mv64xxx-i2c") ) {
-+ 		drv_data->offload_enabled = false;
-+ 		/* The delay is only needed in standard mode (100kHz) */
-+ 		if (bus_freq <= I2C_MAX_STANDARD_MODE_FREQ)
-+@@ -872,11 +930,11 @@ mv64xxx_of_config(struct mv64xxx_i2c_data *drv_data,
-+ }
-+ #endif /* CONFIG_OF */
-+ 
-+-static int
-+-mv64xxx_i2c_probe(struct platform_device *pd)
-++static int mv64xxx_i2c_probe(struct platform_device *pd)
++@@ -875,6 +931,7 @@ mv64xxx_i2c_probe(struct platform_device *pd)
 + {
 + 	struct mv64xxx_i2c_data		*drv_data;
 + 	struct mv64xxx_i2c_pdata	*pdata = dev_get_platdata(&pd->dev);
@@ -1440,7 +3108,7 @@ index 0000000..eb19db1
 + 	int	rc;
 + 
 + 	if ((!pdata && !pd->dev.of_node))
-+@@ -931,6 +989,25 @@ mv64xxx_i2c_probe(struct platform_device *pd)
++@@ -926,6 +983,25 @@ mv64xxx_i2c_probe(struct platform_device *pd)
 + 		goto exit_reset;
 + 	}
 + 
@@ -1466,1158 +3134,62 @@ index 0000000..eb19db1
 + 	drv_data->adapter.dev.parent = &pd->dev;
 + 	drv_data->adapter.algo = &mv64xxx_i2c_algo;
 + 	drv_data->adapter.owner = THIS_MODULE;
-+-- 
-+2.11.0
-+
-diff --git a/patch/0123-rd-ac5x-pcie-changes.patch b/patch/0123-rd-ac5x-pcie-changes.patch
++diff --git a/drivers/pinctrl/mvebu/Kconfig b/drivers/pinctrl/mvebu/Kconfig
++index aa5883f09..cd82576db 100644
++--- a/drivers/pinctrl/mvebu/Kconfig
+++++ b/drivers/pinctrl/mvebu/Kconfig
++@@ -41,6 +41,11 @@ config PINCTRL_ARMADA_XP
++ 	bool
++ 	select PINCTRL_MVEBU
++ 
+++config PINCTRL_AC3
+++	bool
+++	select PINCTRL_MVEBU
+++
+++
++ config PINCTRL_ORION
++ 	bool
++ 	select PINCTRL_MVEBU
++diff --git a/drivers/pinctrl/mvebu/Makefile b/drivers/pinctrl/mvebu/Makefile
++index 23458ab17..edda21439 100644
++--- a/drivers/pinctrl/mvebu/Makefile
+++++ b/drivers/pinctrl/mvebu/Makefile
++@@ -12,3 +12,4 @@ obj-$(CONFIG_PINCTRL_ARMADA_XP)  += pinctrl-armada-xp.o
++ obj-$(CONFIG_PINCTRL_ARMADA_37XX)  += pinctrl-armada-37xx.o
++ obj-$(CONFIG_PINCTRL_ORION)  += pinctrl-orion.o
++ obj-$(CONFIG_PINCTRL_AC5) += pinctrl-ac5.o
+++obj-$(CONFIG_PINCTRL_AC3)  += pinctrl-ac3.o
++\ No newline at end of file
+diff --git a/patch/007-ac5x-wd-support.patch b/patch/007-ac5x-wd-support.patch
 new file mode 100644
-index 0000000..bd193e3
+index 0000000..50b2906
 --- /dev/null
-+++ b/patch/0123-rd-ac5x-pcie-changes.patch
-@@ -0,0 +1,224 @@
-+From c7fa80b0ed1873f22addf608cb5698c66a9183c2 Mon Sep 17 00:00:00 2001
-+From: rminnikanti <rminnikanti@marvell.com>
-+Date: Sun, 5 Sep 2021 17:28:49 +0000
-+Subject: [PATCH] rd ac5x pcie changes
++++ b/patch/007-ac5x-wd-support.patch
+@@ -0,0 +1,537 @@
++Subject: add watchdog + SMC
 +
-+---
-+ drivers/pci/controller/dwc/pcie-armada8k.c | 128 +++++++++++++++++++++++------
-+ 1 file changed, 104 insertions(+), 24 deletions(-)
++WD registers are located in protected CPU area,
++which gets locked after bootrom runs.
++Therefore need to access them by using SMC, which
++was added in this driver
 +
-+diff --git a/drivers/pci/controller/dwc/pcie-armada8k.c b/drivers/pci/controller/dwc/pcie-armada8k.c
-+index 0c389a30..09861f0 100644
-+--- a/drivers/pci/controller/dwc/pcie-armada8k.c
-++++ b/drivers/pci/controller/dwc/pcie-armada8k.c
-+@@ -27,12 +27,18 @@
-+ 
-+ #define ARMADA8K_PCIE_MAX_LANES PCIE_LNK_X4
-+ 
-++enum mvpcie_type {
-++	MVPCIE_TYPE_A8K,
-++	MVPCIE_TYPE_AC5
-++};
-++
-+ struct armada8k_pcie {
-+ 	struct dw_pcie *pci;
-+ 	struct clk *clk;
-+ 	struct clk *clk_reg;
-+ 	struct phy *phy[ARMADA8K_PCIE_MAX_LANES];
-+ 	unsigned int phy_count;
-++       enum mvpcie_type pcie_type;
-+ };
-+ 
-+ #define PCIE_VENDOR_REGS_OFFSET		0x8000
-+@@ -49,7 +55,12 @@ struct armada8k_pcie {
-+ #define PCIE_INT_B_ASSERT_MASK		BIT(10)
-+ #define PCIE_INT_C_ASSERT_MASK		BIT(11)
-+ #define PCIE_INT_D_ASSERT_MASK		BIT(12)
-+-
-++#define PCIE_GLOBAL_INT_CAUSE2_REG     (PCIE_VENDOR_REGS_OFFSET + 0x24)
-++#define PCIE_GLOBAL_INT_MASK2_REG      (PCIE_VENDOR_REGS_OFFSET + 0x28)
-++#define PCIE_INT_A_ASSERT_MASK_AC5      BIT(12)
-++#define PCIE_INT_B_ASSERT_MASK_AC5      BIT(13)
-++#define PCIE_INT_C_ASSERT_MASK_AC5      BIT(14)
-++#define PCIE_INT_D_ASSERT_MASK_AC5      BIT(15)
-+ #define PCIE_ARCACHE_TRC_REG		(PCIE_VENDOR_REGS_OFFSET + 0x50)
-+ #define PCIE_AWCACHE_TRC_REG		(PCIE_VENDOR_REGS_OFFSET + 0x54)
-+ #define PCIE_ARUSER_REG			(PCIE_VENDOR_REGS_OFFSET + 0x5C)
-+@@ -65,6 +76,16 @@ struct armada8k_pcie {
-+ #define AX_USER_DOMAIN_MASK		0x3
-+ #define AX_USER_DOMAIN_SHIFT		4
-+ 
-++#define PCIE_STREAM_ID			(PCIE_VENDOR_REGS_OFFSET + 0x64)
-++#define STREAM_ID_BUS_BITS		2
-++#define STREAM_ID_DEV_BITS		2
-++#define STREAM_ID_FUNC_BITS		3
-++#define STREAM_ID_PREFIX		0x80
-++#define PCIE_STREAM_ID_CFG		(STREAM_ID_PREFIX << 12 | \
-++					STREAM_ID_BUS_BITS << 8 | \
-++					STREAM_ID_DEV_BITS << 4 | \
-++					STREAM_ID_FUNC_BITS)
-++
-+ #define to_armada8k_pcie(x)	dev_get_drvdata((x)->dev)
-+ 
-+ static void armada8k_pcie_disable_phys(struct armada8k_pcie *pcie)
-+@@ -81,11 +102,44 @@ static int armada8k_pcie_link_up(struct dw_pcie *pci)
-+ 	return 0;
-+ }
-+ 
-++static u32 ac5_pcie_read_dbi(struct dw_pcie *pci, void __iomem *base,
-++				u32 reg, size_t size)
-++{
-++
-++	u32 val;
-++
-++	/* Handle AC5 ATU access */
-++	if ((reg & ~0xfffff) == 0x300000) {
-++		reg &= 0xfffff;
-++		reg = 0xc000 | (0x200 * (reg >> 9)) | (reg & 0xff);
-++	} else if ((reg & 0xfffff000) == PCIE_VENDOR_REGS_OFFSET)
-++		reg += 0x8000; /* PCIE_VENDOR_REGS_OFFSET in ac5 is 0x10000 */
-++	dw_pcie_read(base + reg, size, &val);
-++
-++	return val;
-++}
-++
-++static void ac5_pcie_write_dbi(struct dw_pcie *pci, void __iomem *base,
-++				u32 reg, size_t size, u32 val)
-++{
-++	/* Handle AC5 ATU access */
-++	if ((reg & ~0xfffff) == 0x300000) {
-++		reg &= 0xfffff;
-++		reg = 0xc000 | (0x200 * (reg >> 9)) | (reg & 0xff);
-++	} else if ((reg & 0xfffff000) == PCIE_VENDOR_REGS_OFFSET)
-++		reg += 0x8000; /* PCIE_VENDOR_REGS_OFFSET in ac5 is 0x10000 */
-++
-++	dw_pcie_write(base + reg, size, val);
-++}
-++
-++
-+ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
-+ {
-+ 	struct dw_pcie *pci = pcie->pci;
-+ 	u32 reg;
-+ 
-++	if (pcie->pcie_type == MVPCIE_TYPE_A8K)
-++		dw_pcie_writel_dbi(pci, PCIE_STREAM_ID, PCIE_STREAM_ID_CFG);
-+ 	if (!dw_pcie_link_up(pci)) {
-+ 		/* Disable LTSSM state machine to enable configuration */
-+ 		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
-+@@ -93,32 +147,41 @@ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
-+ 		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
-+ 	}
-+ 
-+-	/* Set the device to root complex mode */
-+-	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
-+-	reg &= ~(PCIE_DEVICE_TYPE_MASK << PCIE_DEVICE_TYPE_SHIFT);
-+-	reg |= PCIE_DEVICE_TYPE_RC << PCIE_DEVICE_TYPE_SHIFT;
-+-	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
-++	if (pcie->pcie_type == MVPCIE_TYPE_A8K){
-++		/* Set the device to root complex mode */
-++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_CONTROL_REG);
-++		reg &= ~(PCIE_DEVICE_TYPE_MASK << PCIE_DEVICE_TYPE_SHIFT);
-++		reg |= PCIE_DEVICE_TYPE_RC << PCIE_DEVICE_TYPE_SHIFT;
-++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_CONTROL_REG, reg);
-+ 
-+-	/* Set the PCIe master AxCache attributes */
-+-	dw_pcie_writel_dbi(pci, PCIE_ARCACHE_TRC_REG, ARCACHE_DEFAULT_VALUE);
-+-	dw_pcie_writel_dbi(pci, PCIE_AWCACHE_TRC_REG, AWCACHE_DEFAULT_VALUE);
-++		/* Set the PCIe master AxCache attributes */
-++		dw_pcie_writel_dbi(pci, PCIE_ARCACHE_TRC_REG, ARCACHE_DEFAULT_VALUE);
-++		dw_pcie_writel_dbi(pci, PCIE_AWCACHE_TRC_REG, AWCACHE_DEFAULT_VALUE);
-+ 
-+-	/* Set the PCIe master AxDomain attributes */
-+-	reg = dw_pcie_readl_dbi(pci, PCIE_ARUSER_REG);
-+-	reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
-+-	reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
-+-	dw_pcie_writel_dbi(pci, PCIE_ARUSER_REG, reg);
-++		/* Set the PCIe master AxDomain attributes */
-++		reg = dw_pcie_readl_dbi(pci, PCIE_ARUSER_REG);
-++		reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
-++		reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
-++		dw_pcie_writel_dbi(pci, PCIE_ARUSER_REG, reg);
-+ 
-+-	reg = dw_pcie_readl_dbi(pci, PCIE_AWUSER_REG);
-+-	reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
-+-	reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
-+-	dw_pcie_writel_dbi(pci, PCIE_AWUSER_REG, reg);
-++		reg = dw_pcie_readl_dbi(pci, PCIE_AWUSER_REG);
-++		reg &= ~(AX_USER_DOMAIN_MASK << AX_USER_DOMAIN_SHIFT);
-++		reg |= DOMAIN_OUTER_SHAREABLE << AX_USER_DOMAIN_SHIFT;
-++		dw_pcie_writel_dbi(pci, PCIE_AWUSER_REG, reg);
-++	}
-+ 
-+ 	/* Enable INT A-D interrupts */
-+-	reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG);
-+-	reg |= PCIE_INT_A_ASSERT_MASK | PCIE_INT_B_ASSERT_MASK |
-+-	       PCIE_INT_C_ASSERT_MASK | PCIE_INT_D_ASSERT_MASK;
-+-	dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG, reg);
-++	if (pcie->pcie_type == MVPCIE_TYPE_AC5) {
-++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG);
-++		reg |= PCIE_INT_A_ASSERT_MASK_AC5 | PCIE_INT_B_ASSERT_MASK_AC5 |
-++			PCIE_INT_C_ASSERT_MASK_AC5 | PCIE_INT_D_ASSERT_MASK_AC5;
-++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK2_REG, reg);
-++	} else {
-++		reg = dw_pcie_readl_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG);
-++		reg |= PCIE_INT_A_ASSERT_MASK | PCIE_INT_B_ASSERT_MASK |
-++			PCIE_INT_C_ASSERT_MASK | PCIE_INT_D_ASSERT_MASK;
-++		dw_pcie_writel_dbi(pci, PCIE_GLOBAL_INT_MASK1_REG, reg);
-++	}
-+ 
-+ 	if (!dw_pcie_link_up(pci)) {
-+ 		/* Configuration done. Start LTSSM */
-+@@ -196,8 +259,14 @@ static int armada8k_add_pcie_port(struct armada8k_pcie *pcie,
-+ 	return 0;
-+ }
-+ 
-+-static const struct dw_pcie_ops dw_pcie_ops = {
-++static const struct dw_pcie_ops armada8k_dw_pcie_ops = {
-++	.link_up = armada8k_pcie_link_up,
-++};
-++
-++static const struct dw_pcie_ops ac5_dw_pcie_ops = {
-+ 	.link_up = armada8k_pcie_link_up,
-++	.read_dbi = ac5_pcie_read_dbi,
-++	.write_dbi = ac5_pcie_write_dbi,
-+ };
-+ 
-+ static int armada8k_pcie_probe(struct platform_device *pdev)
-+@@ -205,6 +274,7 @@ static int armada8k_pcie_probe(struct platform_device *pdev)
-+ 	struct dw_pcie *pci;
-+ 	struct armada8k_pcie *pcie;
-+ 	struct device *dev = &pdev->dev;
-++	struct device_node *dn = pdev->dev.of_node;
-+ 	struct resource *base;
-+ 	int ret;
-+ 
-+@@ -217,7 +287,16 @@ static int armada8k_pcie_probe(struct platform_device *pdev)
-+ 		return -ENOMEM;
-+ 
-+ 	pci->dev = dev;
-+-	pci->ops = &dw_pcie_ops;
-++	if (of_device_is_compatible(dn, "marvell,armada8k-pcie")) {
-++		pci->ops = &armada8k_dw_pcie_ops;
-++		pcie->pcie_type = MVPCIE_TYPE_A8K;
-++	}
-++	else if (of_device_is_compatible(dn, "marvell,ac5-pcie")) {
-++		pci->ops = &ac5_dw_pcie_ops;
-++		pcie->pcie_type = MVPCIE_TYPE_AC5;
-++	}
-++	else
-++		dev_err(dev, "couldn't find compatible ops\n");
-+ 
-+ 	pcie->pci = pci;
-+ 
-+@@ -267,6 +346,7 @@ static int armada8k_pcie_probe(struct platform_device *pdev)
-+ 
-+ static const struct of_device_id armada8k_pcie_of_match[] = {
-+ 	{ .compatible = "marvell,armada8k-pcie", },
-++	{.compatible = "marvell,ac5-pcie", },
-+ 	{},
-+ };
-+ 
-+-- 
-+2.11.0
-+
-diff --git a/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch b/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch
-new file mode 100644
-index 0000000..92dd380
---- /dev/null
-+++ b/patch/0124-rd-ac5x-mvneta-mvmdio-changes.patch
-@@ -0,0 +1,789 @@
-+diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index 74e266c0b..d16663772 100644
-+--- a/drivers/net/ethernet/marvell/mvneta.c
-++++ b/drivers/net/ethernet/marvell/mvneta.c
-+@@ -302,10 +304,16 @@
-+ #define MVNETA_RSS_LU_TABLE_SIZE	1
-+ 
-+ /* Max number of Rx descriptors */
-+-#define MVNETA_MAX_RXD 512
-++#define MVNETA_MAX_RXD 4096
-++/* Default number of Rx descriptors */
-++#define MVNETA_RXD_NUM 512
-++
-+ 
-+ /* Max number of Tx descriptors */
-+-#define MVNETA_MAX_TXD 1024
-++#define MVNETA_MAX_TXD 4096
-++/* Default number of Tx descriptors */
-++#define MVNETA_TXD_NUM 1024
-++
-+ 
-+ /* Max number of allowed TCP segments for software TSO */
-+ #define MVNETA_MAX_TSO_SEGS 100
-+@@ -353,6 +361,13 @@ enum {
-+ 	ETHTOOL_MAX_STATS,
-+ };
-+ 
-++enum mvneta_type {
-++	MVNETA_TYPE_XP,
-++	MVNETA_TYPE_370,
-++	MVNETA_TYPE_3700,
-++	MVNETA_TYPE_AC5
-++};
-++
-+ struct mvneta_statistic {
-+ 	unsigned short offset;
-+ 	unsigned short type;
-+@@ -512,7 +527,8 @@ struct mvneta_port {
-+ 	u32 indir[MVNETA_RSS_LU_TABLE_SIZE];
-+ 
-+ 	/* Flags for special SoC configurations */
-+-	bool neta_armada3700;
-++        bool musdk_port;
-++        enum mvneta_type neta_type;
-+ 	u16 rx_offset_correction;
-+ 	const struct mbus_dram_target_info *dram_target_info;
-+ };
-+@@ -713,9 +729,15 @@ static int rx_copybreak __read_mostly = 256;
-+ /* HW BM need that each port be identify by a unique ID */
-+ static int global_port_id;
-+ 
-++/* Branch prediction switches */
-++DEFINE_STATIC_KEY_FALSE(a3700_variant);
-++
-++
-+ #define MVNETA_DRIVER_NAME "mvneta"
-+ #define MVNETA_DRIVER_VERSION "1.0"
-+ 
-++#define MVNETA_MUSDK_QUEUE_MASK                1
-++
-+ /* Utility/helper methods */
-+ 
-+ /* Write helper method */
-+@@ -832,7 +854,7 @@ static void mvneta_rxq_non_occup_desc_add(struct mvneta_port *pp,
-+ }
-+ 
-+ /* Get number of RX descriptors occupied by received packets */
-+-static int mvneta_rxq_busy_desc_num_get(struct mvneta_port *pp,
-++static inline int mvneta_rxq_busy_desc_num_get(struct mvneta_port *pp,
-+ 					struct mvneta_rx_queue *rxq)
-+ {
-+ 	u32 val;
-+@@ -844,7 +866,7 @@ static int mvneta_rxq_busy_desc_num_get(struct mvneta_port *pp,
-+ /* Update num of rx desc called upon return from rx path or
-+  * from mvneta_rxq_drop_pkts().
-+  */
-+-static void mvneta_rxq_desc_num_update(struct mvneta_port *pp,
-++static inline void mvneta_rxq_desc_num_update(struct mvneta_port *pp,
-+ 				       struct mvneta_rx_queue *rxq,
-+ 				       int rx_done, int rx_filled)
-+ {
-+@@ -1117,7 +1139,7 @@ static int mvneta_bm_port_init(struct platform_device *pdev,
-+ 	struct device_node *dn = pdev->dev.of_node;
-+ 	u32 long_pool_id, short_pool_id;
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		int ret;
-+ 
-+ 		ret = mvneta_bm_port_mbus_init(pp);
-+@@ -1215,21 +1237,31 @@ static void mvneta_port_up(struct mvneta_port *pp)
-+ 	u32 q_map;
-+ 
-+ 	/* Enable all initialized TXs. */
-+-	q_map = 0;
-+-	for (queue = 0; queue < txq_number; queue++) {
-+-		struct mvneta_tx_queue *txq = &pp->txqs[queue];
-+-		if (txq->descs)
-+-			q_map |= (1 << queue);
-++        if (pp->musdk_port) {
-++                q_map = MVNETA_MUSDK_QUEUE_MASK;
-++        } else {
-++                q_map = 0;
-++                for (queue = 0; queue < txq_number; queue++) {
-++                        struct mvneta_tx_queue *txq = &pp->txqs[queue];
-++
-++                        if (txq->descs)
-++                               q_map |= (1 << queue);
-++               }
-++
-+ 	}
-+ 	mvreg_write(pp, MVNETA_TXQ_CMD, q_map);
-+ 
-+-	q_map = 0;
-+-	/* Enable all initialized RXQs. */
-+-	for (queue = 0; queue < rxq_number; queue++) {
-+-		struct mvneta_rx_queue *rxq = &pp->rxqs[queue];
-++        if (pp->musdk_port) {
-++                q_map = MVNETA_MUSDK_QUEUE_MASK;
-++        } else {
-++                q_map = 0;
-++                /* Enable all initialized RXQs. */
-++                for (queue = 0; queue < rxq_number; queue++) {
-++                        struct mvneta_rx_queue *rxq = &pp->rxqs[queue];
-+ 
-+-		if (rxq->descs)
-+-			q_map |= (1 << queue);
-++                        if (rxq->descs)
-++                                q_map |= (1 << queue);
-++               }
-+ 	}
-+ 	mvreg_write(pp, MVNETA_RXQ_CMD, q_map);
-+ }
-+@@ -1456,7 +1488,7 @@ static void mvneta_defaults_set(struct mvneta_port *pp)
-+ 	for_each_present_cpu(cpu) {
-+ 		int rxq_map = 0, txq_map = 0;
-+ 		int rxq, txq;
-+-		if (!pp->neta_armada3700) {
-++		if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 			for (rxq = 0; rxq < rxq_number; rxq++)
-+ 				if ((rxq % max_cpu) == cpu)
-+ 					rxq_map |= MVNETA_CPU_RXQ_ACCESS(rxq);
-+@@ -1679,7 +1711,7 @@ static void mvneta_tx_done_pkts_coal_set(struct mvneta_port *pp,
-+ }
-+ 
-+ /* Handle rx descriptor fill by setting buf_cookie and buf_phys_addr */
-+-static void mvneta_rx_desc_fill(struct mvneta_rx_desc *rx_desc,
-++static inline void mvneta_rx_desc_fill(struct mvneta_rx_desc *rx_desc,
-+ 				u32 phys_addr, void *virt_addr,
-+ 				struct mvneta_rx_queue *rxq)
-+ {
-+@@ -1887,7 +1919,7 @@ static void mvneta_txq_done(struct mvneta_port *pp,
-+ 
-+ /* Refill processing for SW buffer management */
-+ /* Allocate page per descriptor */
-+-static int mvneta_rx_refill(struct mvneta_port *pp,
-++static inline int mvneta_rx_refill(struct mvneta_port *pp,
-+ 			    struct mvneta_rx_desc *rx_desc,
-+ 			    struct mvneta_rx_queue *rxq,
-+ 			    gfp_t gfp_mask)
-+@@ -1997,12 +2029,13 @@ int mvneta_rx_refill_queue(struct mvneta_port *pp, struct mvneta_rx_queue *rxq)
-+ {
-+ 	struct mvneta_rx_desc *rx_desc;
-+ 	int curr_desc = rxq->first_to_refill;
-+-	int i;
-++	int i, err;
-+ 
-+ 	for (i = 0; (i < rxq->refill_num) && (i < 64); i++) {
-+ 		rx_desc = rxq->descs + curr_desc;
-+ 		if (!(rx_desc->buf_phys_addr)) {
-+-			if (mvneta_rx_refill(pp, rx_desc, rxq, GFP_ATOMIC)) {
-++			err = mvneta_rx_refill(pp, rx_desc, rxq, GFP_ATOMIC);
-++	                if (unlikely(err)) {
-+ 				struct mvneta_pcpu_stats *stats;
-+ 
-+ 				pr_err("Can't refill queue %d. Done %d from %d\n",
-+@@ -2369,7 +2402,8 @@ static int mvneta_rx_swbm(struct napi_struct *napi,
-+ 
-+ 		if (rx_status & MVNETA_RXD_FIRST_DESC) {
-+ 			/* Check errors only for FIRST descriptor */
-+-			if (rx_status & MVNETA_RXD_ERR_SUMMARY) {
-++			if (unlikely(rx_status & MVNETA_RXD_ERR_SUMMARY)) {
-++
-+ 				mvneta_rx_error(pp, rx_desc);
-+ 				goto next;
-+ 			}
-+@@ -2502,7 +2536,7 @@ static int mvneta_rx_hwbm(struct napi_struct *napi,
-+ 			if (unlikely(!skb))
-+ 				goto err_drop_frame_ret_pool;
-+ 
-+-			dma_sync_single_range_for_cpu(&pp->bm_priv->pdev->dev,
-++			dma_sync_single_range_for_cpu(dev->dev.parent,
-+ 			                              rx_desc->buf_phys_addr,
-+ 			                              MVNETA_MH_SIZE + NET_SKB_PAD,
-+ 			                              rx_bytes,
-+@@ -2773,6 +2807,9 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
-+ 	int frags = 0;
-+ 	u32 tx_cmd;
-+ 
-++	if (pp->musdk_port)
-++		return NETDEV_TX_OK;
-++
-+ 	if (!netif_running(dev))
-+ 		goto out;
-+ 
-+@@ -3157,13 +3194,21 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
-+ 	/* For the case where the last mvneta_poll did not process all
-+ 	 * RX packets
-+ 	 */
-+-	cause_rx_tx |= pp->neta_armada3700 ? pp->cause_rx_tx :
-++	cause_rx_tx |= static_branch_likely(&a3700_variant) ? pp->cause_rx_tx :
-+ 		port->cause_rx_tx;
-+ 
-+ 	rx_queue = fls(((cause_rx_tx >> 8) & 0xff));
-+ 	if (rx_queue) {
-+ 		rx_queue = rx_queue - 1;
-++#if defined(CONFIG_ARM64)
-++		/* Hardcode branch prediction for 64-bit variant,
-++		 * which is a workaround for generic issues with using
-++		 * static_branch array.
-++		 */
-++		if (unlikely(pp->bm_priv))
-++#else
-+ 		if (pp->bm_priv)
-++#endif
-+ 			rx_done = mvneta_rx_hwbm(napi, pp, budget,
-+ 						 &pp->rxqs[rx_queue]);
-+ 		else
-+@@ -3175,7 +3220,7 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
-+ 		cause_rx_tx = 0;
-+ 		napi_complete_done(napi, rx_done);
-+ 
-+-		if (pp->neta_armada3700) {
-++		if (static_branch_likely(&a3700_variant)) {
-+ 			unsigned long flags;
-+ 
-+ 			local_irq_save(flags);
-+@@ -3189,7 +3234,7 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
-+ 		}
-+ 	}
-+ 
-+-	if (pp->neta_armada3700)
-++	if (static_branch_likely(&a3700_variant))
-+ 		pp->cause_rx_tx = cause_rx_tx;
-+ 	else
-+ 		port->cause_rx_tx = cause_rx_tx;
-+@@ -3239,6 +3284,34 @@ static int mvneta_create_page_pool(struct mvneta_port *pp,
-+ 	return err;
-+ }
-+ 
-++static int mvneta_poll_musdk(struct napi_struct *napi, int budget)
-++{
-++	struct mvneta_port *pp = netdev_priv(napi->dev);
-++
-++	/* Read cause register */
-++	if (mvreg_read(pp, MVNETA_INTR_NEW_CAUSE) & MVNETA_MISCINTR_INTR_MASK) {
-++		unsigned long flags;
-++		u32 cause_misc = mvreg_read(pp, MVNETA_INTR_MISC_CAUSE);
-++
-++		mvreg_write(pp, MVNETA_INTR_MISC_CAUSE, 0);
-++
-++		if (cause_misc & (MVNETA_CAUSE_PHY_STATUS_CHANGE |
-++				  MVNETA_CAUSE_LINK_CHANGE))
-++			mvneta_link_change(pp);
-++		local_irq_save(flags);
-++		mvreg_write(pp, MVNETA_INTR_NEW_MASK,
-++			    MVNETA_MISCINTR_INTR_MASK);
-++		local_irq_restore(flags);
-++	}
-++
-++	/* We always want trigger this function by interrupt.
-++	 * This is why '0' is return to napi_complete and as return value
-++         */
-++	napi_complete_done(napi, 0);
-++	return 0;
-++}
-++
-++
-+ /* Handle rxq fill: allocates rxq skbs; called when initializing a port */
-+ static int mvneta_rxq_fill(struct mvneta_port *pp, struct mvneta_rx_queue *rxq,
-+ 			   int num)
-+@@ -3409,7 +3482,7 @@ static int mvneta_txq_sw_init(struct mvneta_port *pp,
-+ 		return -ENOMEM;
-+ 
-+ 	/* Setup XPS mapping */
-+-	if (pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		cpu = 0;
-+ 	else if (txq_number > 1)
-+ 		cpu = txq->id % num_present_cpus();
-+@@ -3524,7 +3597,6 @@ static int mvneta_setup_rxqs(struct mvneta_port *pp)
-+ 		if (err) {
-+ 			netdev_err(pp->dev, "%s: can't create rxq=%d\n",
-+ 				   __func__, queue);
-+-			mvneta_cleanup_rxqs(pp);
-+ 			return err;
-+ 		}
-+ 	}
-+@@ -3608,10 +3680,12 @@ static void mvneta_start_dev(struct mvneta_port *pp)
-+ 	mvneta_max_rx_size_set(pp, pp->pkt_size);
-+ 	mvneta_txq_max_tx_size_set(pp, pp->pkt_size);
-+ 
-++	mvneta_comphy_init(pp, pp->phy_interface);
-++
-+ 	/* start the Rx/Tx activity */
-+ 	mvneta_port_enable(pp);
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		/* Enable polling on the port */
-+ 		for_each_online_cpu(cpu) {
-+ 			struct mvneta_pcpu_port *port =
-+@@ -3651,7 +3725,7 @@ static void mvneta_stop_dev(struct mvneta_port *pp)
-+ 
-+ 	phylink_stop(pp->phylink);
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		for_each_online_cpu(cpu) {
-+ 			struct mvneta_pcpu_port *port =
-+ 				per_cpu_ptr(pp->ports, cpu);
-+@@ -3679,6 +3753,9 @@ static void mvneta_stop_dev(struct mvneta_port *pp)
-+ 	mvneta_tx_reset(pp);
-+ 	mvneta_rx_reset(pp);
-+ 
-++	if (pp->comphy)
-++		phy_power_off(pp->comphy);
-++
-+ 	WARN_ON(phy_power_off(pp->comphy));
-+ }
-+ 
-+@@ -3702,6 +3779,12 @@ static int mvneta_change_mtu(struct net_device *dev, int mtu)
-+ 	struct mvneta_port *pp = netdev_priv(dev);
-+ 	int ret;
-+ 
-++	if (pp->musdk_port) {
-++		netdev_warn(dev, "ndo_change_mtu not supported on MUSDK port\n");
-++		return 0;
-++	}
-++
-++
-+ 	if (!IS_ALIGNED(MVNETA_RX_PKT_SIZE(mtu), 8)) {
-+ 		netdev_info(dev, "Illegal MTU value %d, rounding to %d\n",
-+ 			    mtu, ALIGN(MVNETA_RX_PKT_SIZE(mtu), 8));
-+@@ -3819,6 +3902,7 @@ static void mvneta_validate(struct phylink_config *config,
-+ 	if (state->interface != PHY_INTERFACE_MODE_NA &&
-+ 	    state->interface != PHY_INTERFACE_MODE_QSGMII &&
-+ 	    state->interface != PHY_INTERFACE_MODE_SGMII &&
-++	    state->interface != PHY_INTERFACE_MODE_2500BASEX &&
-+ 	    !phy_interface_mode_is_8023z(state->interface) &&
-+ 	    !phy_interface_mode_is_rgmii(state->interface)) {
-+ 		bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-+@@ -3870,7 +3954,9 @@ static void mvneta_mac_pcs_get_state(struct phylink_config *config,
-+ 
-+ 	gmac_stat = mvreg_read(pp, MVNETA_GMAC_STATUS);
-+ 
-+-	if (gmac_stat & MVNETA_GMAC_SPEED_1000)
-++	if (pp->phy_interface == PHY_INTERFACE_MODE_2500BASEX)
-++		state->speed = SPEED_2500;
-++	else if (gmac_stat & MVNETA_GMAC_SPEED_1000)
-+ 		state->speed =
-+ 			state->interface == PHY_INTERFACE_MODE_2500BASEX ?
-+ 			SPEED_2500 : SPEED_1000;
-+@@ -3894,7 +3980,11 @@ static void mvneta_mac_an_restart(struct phylink_config *config)
-+ {
-+ 	struct net_device *ndev = to_net_dev(config->dev);
-+ 	struct mvneta_port *pp = netdev_priv(ndev);
-+-	u32 gmac_an = mvreg_read(pp, MVNETA_GMAC_AUTONEG_CONFIG);
-++	u32 gmac_an;
-++
-++	if (pp->phy_interface == PHY_INTERFACE_MODE_2500BASEX)
-++		return;
-++	gmac_an = mvreg_read(pp, MVNETA_GMAC_AUTONEG_CONFIG);
-+ 
-+ 	mvreg_write(pp, MVNETA_GMAC_AUTONEG_CONFIG,
-+ 		    gmac_an | MVNETA_GMAC_INBAND_RESTART_AN);
-+@@ -3907,6 +3997,12 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
-+ {
-+ 	struct net_device *ndev = to_net_dev(config->dev);
-+ 	struct mvneta_port *pp = netdev_priv(ndev);
-++	/* Reconfigure the serdes lanes */
-++	if (pp->comphy)
-++		phy_power_off(pp->comphy);
-++
-++	mvneta_comphy_init(pp, pp->phy_interface);
-++	
-+ 	u32 new_ctrl0, gmac_ctrl0 = mvreg_read(pp, MVNETA_GMAC_CTRL_0);
-+ 	u32 new_ctrl2, gmac_ctrl2 = mvreg_read(pp, MVNETA_GMAC_CTRL_2);
-+ 	u32 new_ctrl4, gmac_ctrl4 = mvreg_read(pp, MVNETA_GMAC_CTRL_4);
-+@@ -3932,6 +4028,7 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
-+ 
-+ 	if (state->interface == PHY_INTERFACE_MODE_QSGMII ||
-+ 	    state->interface == PHY_INTERFACE_MODE_SGMII ||
-++	    state->interface == PHY_INTERFACE_MODE_2500BASEX ||
-+ 	    phy_interface_mode_is_8023z(state->interface))
-+ 		new_ctrl2 |= MVNETA_GMAC2_PCS_ENABLE;
-+ 
-+@@ -3961,11 +4058,13 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
-+ 		new_an = (new_an & ~(MVNETA_GMAC_FORCE_LINK_DOWN |
-+ 				     MVNETA_GMAC_FORCE_LINK_PASS |
-+ 				     MVNETA_GMAC_CONFIG_MII_SPEED)) |
-+-			 MVNETA_GMAC_INBAND_AN_ENABLE |
-+ 			 MVNETA_GMAC_CONFIG_GMII_SPEED |
-+ 			 /* The MAC only supports FD mode */
-+ 			 MVNETA_GMAC_CONFIG_FULL_DUPLEX;
-+ 
-++		if (state->interface != PHY_INTERFACE_MODE_2500BASEX)
-++			new_an |= MVNETA_GMAC_INBAND_AN_ENABLE;
-++
-+ 		if (state->pause & MLO_PAUSE_AN && state->an_enabled)
-+ 			new_an |= MVNETA_GMAC_AN_FLOW_CTRL_EN;
-+ 	}
-+@@ -3973,12 +4072,17 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
-+ 	/* Armada 370 documentation says we can only change the port mode
-+ 	 * and in-band enable when the link is down, so force it down
-+ 	 * while making these changes. We also do this for GMAC_CTRL2 */
-+-	if ((new_ctrl0 ^ gmac_ctrl0) & MVNETA_GMAC0_PORT_1000BASE_X ||
-+-	    (new_ctrl2 ^ gmac_ctrl2) & MVNETA_GMAC2_INBAND_AN_ENABLE ||
-+-	    (new_an  ^ gmac_an) & MVNETA_GMAC_INBAND_AN_ENABLE) {
-+-		mvreg_write(pp, MVNETA_GMAC_AUTONEG_CONFIG,
-+-			    (gmac_an & ~MVNETA_GMAC_FORCE_LINK_PASS) |
-+-			    MVNETA_GMAC_FORCE_LINK_DOWN);
-++	/* Also set the GMAC in a reset to clear port on new link-up */
-++	if ((new_ctrl0 ^ gmac_ctrl0) || (new_ctrl2 ^ gmac_ctrl2) ||
-++	    (new_an  ^ gmac_an)) {
-++		gmac_an &= ~MVNETA_GMAC_FORCE_LINK_PASS;
-++		gmac_an |= MVNETA_GMAC_FORCE_LINK_DOWN;
-++		mvreg_write(pp, MVNETA_GMAC_AUTONEG_CONFIG, gmac_an);
-++
-++		if (state->interface == PHY_INTERFACE_MODE_2500BASEX) {
-++			gmac_ctrl2 |= MVNETA_GMAC2_PORT_RESET;
-++			mvreg_write(pp, MVNETA_GMAC_CTRL_2, gmac_ctrl2);
-++		}
-+ 	}
-+ 
-+ 
-+@@ -3998,18 +4102,14 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
-+ 		mvreg_write(pp, MVNETA_GMAC_CTRL_0, new_ctrl0);
-+ 	if (new_ctrl2 != gmac_ctrl2)
-+ 		mvreg_write(pp, MVNETA_GMAC_CTRL_2, new_ctrl2);
-++	while (mvreg_read(pp, MVNETA_GMAC_CTRL_2) & MVNETA_GMAC2_PORT_RESET)
-++		continue;
-+ 	if (new_ctrl4 != gmac_ctrl4)
-+ 		mvreg_write(pp, MVNETA_GMAC_CTRL_4, new_ctrl4);
-+ 	if (new_clk != gmac_clk)
-+ 		mvreg_write(pp, MVNETA_GMAC_CLOCK_DIVIDER, new_clk);
-+ 	if (new_an != gmac_an)
-+ 		mvreg_write(pp, MVNETA_GMAC_AUTONEG_CONFIG, new_an);
-+-
-+-	if (gmac_ctrl2 & MVNETA_GMAC2_PORT_RESET) {
-+-		while ((mvreg_read(pp, MVNETA_GMAC_CTRL_2) &
-+-			MVNETA_GMAC2_PORT_RESET) != 0)
-+-			continue;
-+-	}
-+ }
-+ 
-+ static void mvneta_set_eee(struct mvneta_port *pp, bool enable)
-+@@ -4192,7 +4292,7 @@ static int mvneta_cpu_online(unsigned int cpu, struct hlist_node *node)
-+ 	/* Armada 3700's per-cpu interrupt for mvneta is broken, all interrupts
-+ 	 * are routed to CPU 0, so we don't need all the cpu-hotplug support
-+ 	 */
-+-	if (pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		return 0;
-+ 
-+ 	spin_lock(&pp->lock);
-+@@ -4290,6 +4390,39 @@ static int mvneta_open(struct net_device *dev)
-+ 	struct mvneta_port *pp = netdev_priv(dev);
-+ 	int ret;
-+ 
-++	if (pp->musdk_port) {
-++		/* Connect to port interrupt line */
-++		ret = request_irq(pp->dev->irq, mvneta_isr, 0,
-++				  dev->name, pp);
-++		if (ret) {
-++			netdev_err(pp->dev, "cannot request irq %d\n",
-++				   pp->dev->irq);
-++			return ret;
-++		}
-++
-++		ret = mvneta_mdio_probe(pp);
-++		if (ret < 0) {
-++			netdev_err(dev, "cannot probe MDIO bus\n");
-++			free_irq(pp->dev->irq, pp);
-++			return ret;
-++		}
-++
-++		/* Only mask phy-status and link-state interrupts */
-++		mvreg_write(pp, MVNETA_INTR_NEW_MASK,
-++			    MVNETA_MISCINTR_INTR_MASK);
-++
-++		mvreg_write(pp, MVNETA_INTR_MISC_MASK,
-++			    MVNETA_CAUSE_PHY_STATUS_CHANGE |
-++			    MVNETA_CAUSE_LINK_CHANGE);
-++
-++		napi_enable(&pp->napi);
-++
-++		phylink_start(pp->phylink);
-++		netdev_info(dev, "skipping ndo_open as this port is User Space port\n");
-++		return 0;
-++	}
-++
-++
-+ 	pp->pkt_size = MVNETA_RX_PKT_SIZE(pp->dev->mtu);
-+ 
-+ 	ret = mvneta_setup_rxqs(pp);
-+@@ -4301,7 +4434,7 @@ static int mvneta_open(struct net_device *dev)
-+ 		goto err_cleanup_rxqs;
-+ 
-+ 	/* Connect to port interrupt line */
-+-	if (pp->neta_armada3700)
-++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5))
-+ 		ret = request_irq(pp->dev->irq, mvneta_isr, 0,
-+ 				  dev->name, pp);
-+ 	else
-+@@ -4312,7 +4445,7 @@ static int mvneta_open(struct net_device *dev)
-+ 		goto err_cleanup_txqs;
-+ 	}
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		/* Enable per-CPU interrupt on all the CPU to handle our RX
-+ 		 * queue interrupts
-+ 		 */
-+@@ -4344,15 +4477,15 @@ static int mvneta_open(struct net_device *dev)
-+ 	return 0;
-+ 
-+ err_free_dead_hp:
-+-	if (!pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		cpuhp_state_remove_instance_nocalls(CPUHP_NET_MVNETA_DEAD,
-+ 						    &pp->node_dead);
-+ err_free_online_hp:
-+-	if (!pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		cpuhp_state_remove_instance_nocalls(online_hpstate,
-+ 						    &pp->node_online);
-+ err_free_irq:
-+-	if (pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		free_irq(pp->dev->irq, pp);
-+ 	} else {
-+ 		on_each_cpu(mvneta_percpu_disable, pp, true);
-+@@ -4370,7 +4503,11 @@ static int mvneta_stop(struct net_device *dev)
-+ {
-+ 	struct mvneta_port *pp = netdev_priv(dev);
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if (pp->musdk_port) {
-++		netdev_warn(dev, "ndo_stop not supported on MUSDK port\n");
-++		return 0;
-++	}
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		/* Inform that we are stopping so we don't want to setup the
-+ 		 * driver for new CPUs in the notifiers. The code of the
-+ 		 * notifier for CPU online is protected by the same spinlock,
-+@@ -4458,6 +4595,18 @@ mvneta_ethtool_set_link_ksettings(struct net_device *ndev,
-+ 				  const struct ethtool_link_ksettings *cmd)
-+ {
-+ 	struct mvneta_port *pp = netdev_priv(ndev);
-++	if (!pp->phylink)
-++		return -1;
-++
-++	phylink_stop(pp->phylink);
-++
-++	if (cmd->base.speed == 1000)
-++		pp->phy_interface = PHY_INTERFACE_MODE_SGMII;
-++
-++	if (cmd->base.speed == 2500)
-++		pp->phy_interface = PHY_INTERFACE_MODE_2500BASEX;
-++
-++	phylink_start(pp->phylink);
-+ 
-+ 	return phylink_ethtool_ksettings_set(pp->phylink, cmd);
-+ }
-+@@ -4753,7 +4902,7 @@ static int  mvneta_config_rss(struct mvneta_port *pp)
-+ 
-+ 	on_each_cpu(mvneta_percpu_mask_interrupt, pp, true);
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		/* We have to synchronise on the napi of each CPU */
-+ 		for_each_online_cpu(cpu) {
-+ 			struct mvneta_pcpu_port *pcpu_port =
-+@@ -4781,7 +4930,7 @@ static int  mvneta_config_rss(struct mvneta_port *pp)
-+ 	mvneta_percpu_elect(pp);
-+ 	spin_unlock(&pp->lock);
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		/* We have to synchronise on the napi of each CPU */
-+ 		for_each_online_cpu(cpu) {
-+ 			struct mvneta_pcpu_port *pcpu_port =
-+@@ -4804,7 +4953,7 @@ static int mvneta_ethtool_set_rxfh(struct net_device *dev, const u32 *indir,
-+ 	struct mvneta_port *pp = netdev_priv(dev);
-+ 
-+ 	/* Current code for Armada 3700 doesn't support RSS features yet */
-+-	if (pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		return -EOPNOTSUPP;
-+ 
-+ 	/* We require at least one supported parameter to be changed
-+@@ -4828,7 +4977,7 @@ static int mvneta_ethtool_get_rxfh(struct net_device *dev, u32 *indir, u8 *key,
-+ 	struct mvneta_port *pp = netdev_priv(dev);
-+ 
-+ 	/* Current code for Armada 3700 doesn't support RSS features yet */
-+-	if (pp->neta_armada3700)
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5))
-+ 		return -EOPNOTSUPP;
-+ 
-+ 	if (hfunc)
-+@@ -4980,7 +5129,7 @@ static int mvneta_init(struct device *dev, struct mvneta_port *pp)
-+ 		rxq->time_coal = MVNETA_RX_COAL_USEC;
-+ 		rxq->buf_virt_addr
-+ 			= devm_kmalloc_array(pp->dev->dev.parent,
-+-					     rxq->size,
-++					     MVNETA_MAX_RXD,
-+ 					     sizeof(*rxq->buf_virt_addr),
-+ 					     GFP_KERNEL);
-+ 		if (!rxq->buf_virt_addr)
-+@@ -5069,6 +5218,8 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	int tx_csum_limit;
-+ 	int err;
-+ 	int cpu;
-++	const char *musdk_status;
-++	int statlen;
-+ 
-+ 	dev = devm_alloc_etherdev_mqs(&pdev->dev, sizeof(struct mvneta_port),
-+ 				      txq_number, rxq_number);
-+@@ -5106,7 +5257,7 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 		goto err_free_irq;
-+ 	}
-+ 
-+-	dev->tx_queue_len = MVNETA_MAX_TXD;
-++	dev->tx_queue_len = MVNETA_TXD_NUM;
-+ 	dev->watchdog_timeo = 5 * HZ;
-+ 	dev->netdev_ops = &mvneta_netdev_ops;
-+ 
-+@@ -5121,8 +5272,15 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	pp->indir[0] = rxq_def;
-+ 
-+ 	/* Get special SoC configurations */
-+-	if (of_device_is_compatible(dn, "marvell,armada-3700-neta"))
-+-		pp->neta_armada3700 = true;
-++	if (of_device_is_compatible(dn, "marvell,armada-3700-neta")) {
-++		pp->neta_type = MVNETA_TYPE_3700;
-++		static_branch_enable(&a3700_variant);
-++	} else if (of_device_is_compatible(dn, "marvell,armada-ac5-neta")) {
-++		pp->neta_type = MVNETA_TYPE_AC5;
-++		static_branch_enable(&a3700_variant);
-++	} else {
-++		pp->neta_type = MVNETA_TYPE_XP;
-++	}
-+ 
-+ 	pp->clk = devm_clk_get(&pdev->dev, "core");
-+ 	if (IS_ERR(pp->clk))
-+@@ -5144,6 +5302,13 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 		goto err_clk;
-+ 	}
-+ 
-++	/* check MUSDK port status */
-++	musdk_status = of_get_property(dn, "musdk-status", &statlen);
-++
-++	/* Set musdk_flag, only if status is "private" */
-++	if (musdk_status && !strcmp(musdk_status, "private"))
-++		pp->musdk_port = true;
-++
-+ 	/* Alloc per-cpu port structure */
-+ 	pp->ports = alloc_percpu(struct mvneta_pcpu_port);
-+ 	if (!pp->ports) {
-+@@ -5194,11 +5359,11 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	 * windows, however without using filled mbus_dram_target_info
-+ 	 * structure.
-+ 	 */
-+-	if (pp->dram_target_info || pp->neta_armada3700)
-++	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
-+ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
-+ 
-+-	pp->tx_ring_size = MVNETA_MAX_TXD;
-+-	pp->rx_ring_size = MVNETA_MAX_RXD;
-++	pp->tx_ring_size = MVNETA_TXD_NUM;
-++	pp->rx_ring_size = MVNETA_RXD_NUM;
-+ 
-+ 	pp->dev = dev;
-+ 	SET_NETDEV_DEV(dev, &pdev->dev);
-+@@ -5245,8 +5410,13 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	/* Armada3700 network controller does not support per-cpu
-+ 	 * operation, so only single NAPI should be initialized.
-+ 	 */
-+-	if (pp->neta_armada3700) {
-+-		netif_napi_add(dev, &pp->napi, mvneta_poll, NAPI_POLL_WEIGHT);
-++	if ((pp->neta_type == MVNETA_TYPE_3700) || (pp->neta_type == MVNETA_TYPE_AC5)) {
-++		if (pp->musdk_port)
-++			netif_napi_add(dev, &pp->napi, mvneta_poll_musdk,
-++				       NAPI_POLL_WEIGHT);
-++	else
-++			netif_napi_add(dev, &pp->napi, mvneta_poll,
-++				       NAPI_POLL_WEIGHT);
-+ 	} else {
-+ 		for_each_present_cpu(cpu) {
-+ 			struct mvneta_pcpu_port *port =
-+@@ -5273,7 +5443,7 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	err = register_netdev(dev);
-+ 	if (err < 0) {
-+ 		dev_err(&pdev->dev, "failed to register\n");
-+-		goto err_netdev;
-++		goto err_free_stats;
-+ 	}
-+ 
-+ 	netdev_info(dev, "Using %s mac address %pM\n", mac_from,
-+@@ -5281,15 +5451,35 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 
-+ 	platform_set_drvdata(pdev, pp->dev);
-+ 
-++	/* Port may be configured by Uboot to transmit IDLE, so a remote side
-++	 * feels the link as UP. Stop TX in same way as in mvneta_start/stop.
-++	 */
-++	if (pp->phylink) {
-++		if (rtnl_is_locked()) {
-++			if (!mvneta_mdio_probe(pp))
-++				mvneta_mdio_remove(pp);
-++	} else {
-++			rtnl_lock();
-++			if (!mvneta_mdio_probe(pp))
-++				mvneta_mdio_remove(pp);
-++			rtnl_unlock();
-++		}
-++	}
-++
-++	if (pp->musdk_port)
-++		netdev_info(dev, "Port belong to User Space (MUSDK)\n");
-++
-+ 	return 0;
-+ 
-+ err_netdev:
-++	unregister_netdev(dev);
-+ 	if (pp->bm_priv) {
-+ 		mvneta_bm_pool_destroy(pp->bm_priv, pp->pool_long, 1 << pp->id);
-+ 		mvneta_bm_pool_destroy(pp->bm_priv, pp->pool_short,
-+ 				       1 << pp->id);
-+ 		mvneta_bm_put(pp->bm_priv);
-+ 	}
-++err_free_stats:
-+ 	free_percpu(pp->stats);
-+ err_free_ports:
-+ 	free_percpu(pp->ports);
-+@@ -5338,7 +5528,7 @@ static int mvneta_suspend(struct device *device)
-+ 	if (!netif_running(dev))
-+ 		goto clean_exit;
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		spin_lock(&pp->lock);
-+ 		pp->is_stopped = true;
-+ 		spin_unlock(&pp->lock);
-+@@ -5383,7 +5573,7 @@ static int mvneta_resume(struct device *device)
-+ 	clk_prepare_enable(pp->clk);
-+ 	if (!IS_ERR(pp->clk_bus))
-+ 		clk_prepare_enable(pp->clk_bus);
-+-	if (pp->dram_target_info || pp->neta_armada3700)
-++	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
-+ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
-+ 	if (pp->bm_priv) {
-+ 		err = mvneta_bm_port_init(pdev, pp);
-+@@ -5419,7 +5609,7 @@ static int mvneta_resume(struct device *device)
-+ 		mvneta_txq_hw_init(pp, txq);
-+ 	}
-+ 
-+-	if (!pp->neta_armada3700) {
-++	if ((pp->neta_type != MVNETA_TYPE_3700) && (pp->neta_type != MVNETA_TYPE_AC5)) {
-+ 		spin_lock(&pp->lock);
-+ 		pp->is_stopped = false;
-+ 		spin_unlock(&pp->lock);
-+@@ -5444,6 +5634,7 @@ static const struct of_device_id mvneta_match[] = {
-+ 	{ .compatible = "marvell,armada-370-neta" },
-+ 	{ .compatible = "marvell,armada-xp-neta" },
-+ 	{ .compatible = "marvell,armada-3700-neta" },
-++	{ .compatible = "marvell,armada-ac5-neta" },
-+ 	{ }
-+ };
-+ MODULE_DEVICE_TABLE(of, mvneta_match);
-+@@ -5461,7 +5652,6 @@ static struct platform_driver mvneta_driver = {
-+ static int __init mvneta_driver_init(void)
-+ {
-+ 	int ret;
-+-
-+ 	ret = cpuhp_setup_state_multi(CPUHP_AP_ONLINE_DYN, "net/mvneta:online",
-+ 				      mvneta_cpu_online,
-+ 				      mvneta_cpu_down_prepare);
-diff --git a/patch/0125-rd-ac5x-mvneta-xbar_window.patch b/patch/0125-rd-ac5x-mvneta-xbar_window.patch
-new file mode 100644
-index 0000000..d7730bc
---- /dev/null
-+++ b/patch/0125-rd-ac5x-mvneta-xbar_window.patch
-@@ -0,0 +1,71 @@
-+From 8055e14ce9e73ee5af9930bb257886f4bd34c7d4 Mon Sep 17 00:00:00 2001
-+From: Yuval Shaia <yshaia@marvell.com>
-+Date: Sun, 19 Sep 2021 21:20:25 +0300
-+Subject: [PATCH] net/mvneta: Setup xbar windows for AC5
-+
-+Jira CPSS-11541
-+
-+Change-Id: I6d5de6c684986f5980bd029f9ecd0578c204fbf3
-+Signed-off-by: Yuval Shaia <yshaia@marvell.com>
-+Reviewed-on: http://vgitil10.il.marvell.com:8080/c/NPS/linux/+/95914
++Reviewed-on: http://vgitil10.il.marvell.com:8080/c/NPS/linux/+/98892
 +Tested-by: Raz Adashi <raza@marvell.com>
 +Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam Liron <lnoam@marvell.com>
 +---
-+ drivers/net/ethernet/marvell/mvneta.c | 27 +++++++++++++++++++++++++++
-+ 1 file changed, 27 insertions(+)
-+
-+diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index bf020d7..9d7c9db 100644
-+--- a/drivers/net/ethernet/marvell/mvneta.c
-++++ b/drivers/net/ethernet/marvell/mvneta.c
-+@@ -73,6 +73,8 @@
-+ #define MVNETA_WIN_SIZE(w)                      (0x2204 + ((w) << 3))
-+ #define MVNETA_WIN_REMAP(w)                     (0x2280 + ((w) << 2))
-+ #define MVNETA_BASE_ADDR_ENABLE                 0x2290
-++#define      MVNETA_AC5_CNM_DDR_TARGET		0x2
-++#define      MVNETA_AC5_CNM_DDR_ATTR		0xb
-+ #define MVNETA_ACCESS_PROTECT_ENABLE            0x2294
-+ #define MVNETA_PORT_CONFIG                      0x2400
-+ #define      MVNETA_UNI_PROMISC_MODE            BIT(0)
-+@@ -4571,6 +4573,29 @@ static void mvneta_conf_mbus_windows(struct mvneta_port *pp,
-+ 	mvreg_write(pp, MVNETA_ACCESS_PROTECT_ENABLE, win_protect);
-+ }
-+ 
-++static void mvneta_conf_ac5_cnm_xbar_windows(struct mvneta_port *pp)
-++{
-++	int i;
-++
-++	/* Clear all windows */
-++	for (i = 0; i < 6; i++) {
-++		mvreg_write(pp, MVNETA_WIN_BASE(i), 0);
-++		mvreg_write(pp, MVNETA_WIN_SIZE(i), 0);
-++
-++		if (i < 4)
-++			mvreg_write(pp, MVNETA_WIN_REMAP(i), 0);
-++	}
-++
-++	/*
-++	 * Setup window #0 base 0x0 to target XBAR port 2 (AMB2), attribute 0xb,
-++	 * size 4GB AMB2 address decoder remaps 0x0 to DDR 64 bit base address
-++	 */
-++	mvreg_write(pp, MVNETA_WIN_BASE(0), (MVNETA_AC5_CNM_DDR_ATTR << 8) |
-++		    MVNETA_AC5_CNM_DDR_TARGET);
-++	mvreg_write(pp, MVNETA_WIN_SIZE(0),0xffff0000);
-++	mvreg_write(pp, MVNETA_BASE_ADDR_ENABLE, 0x3e);
-++}
-++
-+ /* Power up the port */
-+ static int mvneta_port_power_up(struct mvneta_port *pp, int phy_mode)
-+ {
-+@@ -4748,6 +4773,8 @@ static int mvneta_probe(struct platform_device *pdev)
-+ 	 */
-+ 	if (pp->dram_target_info || (pp->neta_type == MVNETA_TYPE_3700))
-+ 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
-++	if (pp->neta_type == MVNETA_TYPE_AC5)
-++		mvneta_conf_ac5_cnm_xbar_windows(pp);
-+ 
-+ 	pp->tx_ring_size = MVNETA_TXD_NUM;
-+ 	pp->rx_ring_size = MVNETA_RXD_NUM;
-+-- 
-+1.8.1.4
-+
-diff --git a/patch/0126-rd-ac5x-watchdog-support.patch b/patch/0126-rd-ac5x-watchdog-support.patch
-new file mode 100644
-index 0000000..ce8eab4
---- /dev/null
-+++ b/patch/0126-rd-ac5x-watchdog-support.patch
-@@ -0,0 +1,541 @@
-+From 890e324a5b20c7b86bf4372f298d67698ff328e9 Mon Sep 17 00:00:00 2001
-+From: Pavan Naregundi <pnaregundi@marvell.com>
-+Date: Mon, 14 Feb 2022 15:14:23 +0530
-+Subject: [PATCH] AC5X: watchdog support
-+
-+---
-+ arch/arm64/boot/dts/marvell/ac5.dtsi        |  14 +-
-+ drivers/watchdog/Kconfig                    |  16 +
-+ drivers/watchdog/Makefile                   |   1 +
-+ drivers/watchdog/ac5_gwd.c                  | 438 ++++++++++++++++++++++++++++
-+ 5 files changed, 469 insertions(+), 3 deletions(-)
++ arch/arm64/boot/dts/marvell/ac5.dtsi |    8 +
++ drivers/watchdog/Kconfig             |   16 +
++ drivers/watchdog/Makefile            |    1 
++ drivers/watchdog/ac5_gwd.c           |  454 ++++++++++++++++++++++++++++++++++
++ 4 files changed, 479 insertions(+)
 + create mode 100644 drivers/watchdog/ac5_gwd.c
 +
 +diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
-+index eeb10ac..dd85ff9 100644
++index 18b19f0da..b107347f7 100644
 +--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
 ++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
-+@@ -31,11 +31,11 @@
-+ 			no-map;
-+ 
-+ 			/* Base addr (first 2 cells) requires alignment, we choose start of memory */
-+-			reg = <0x2 0x0 0x0 0x400000>;
-++			reg = <0x2 0x400000 0x0 0x400000>;
-+ 		};
-+ 	};
-+ 
-+-	mvDma {
-++	mv_dma {
-+ 		compatible = "marvell,mv_dma";
-+ 		memory-region = <&prestera_rsvd>;
-+ 		status = "okay";
-+@@ -45,6 +45,8 @@
-+ 		serial0 = &uart0;
-+ 		spiflash0 = &spiflash0;
-+ 		gpio0 = &gpio0;
-++		ethernet0 = &eth0;
-++		ethernet1 = &eth1;
-+ 	};
-+ 
-+ 	psci {
-+@@ -358,6 +360,14 @@
++@@ -355,6 +355,14 @@ prestera {
 + 			status = "okay";
 + 		};
 + 
@@ -2633,50 +3205,50 @@ index 0000000..ce8eab4
 + 
 + 	gic: interrupt-controller@80600000 {
 +diff --git a/drivers/watchdog/Kconfig b/drivers/watchdog/Kconfig
-+index da31a4b..f40fa9b 100644
++index 01ce3f41c..a68a1a3b7 100644
 +--- a/drivers/watchdog/Kconfig
 ++++ b/drivers/watchdog/Kconfig
-+@@ -289,6 +289,22 @@ config ARMADA_37XX_WATCHDOG
++@@ -395,6 +395,22 @@ config ARMADA_37XX_WATCHDOG
 + 	   To compile this driver as a module, choose M here: the
 + 	   module will be called armada_37xx_wdt.
 + 
 ++config MARVELL_AC5_WATCHDOG
-++       tristate "Marvell AlleyCat 5 Watchdog"
-++       depends on ARM64
-++       depends on ARM_ARCH_TIMER
-++       select WATCHDOG_CORE
-++       help
-++         AC5 Watchdog has two stage timeouts:
-++         the first signal (WS0) is for alerting the system by interrupt,
-++         the second one (WS1) is a real hardware reset.
+++	tristate "Marvell AlleyCat 5 Watchdog"
+++	depends on ARM64
+++	depends on ARM_ARCH_TIMER
+++	select WATCHDOG_CORE
+++	help
+++	  AC5 Watchdog has two stage timeouts:
+++	  the first signal (WS0) is for alerting the system by interrupt,
+++	  the second one (WS1) is a real hardware reset.
 ++
-++         This driver can operate as a single stage or a two stages watchdog,
-++         depends on the module parameter "action" (moudle name is ac5-gwd).
+++	  This driver can operate as a single stage or a two stages watchdog,
+++	  depends on the module parameter "action" (moudle name is ac5-gwd).
 ++
-++         Note: the maximum timeout in the two stages mode is half of that in
-++         the single stage mode.
+++	  Note: the maximum timeout in the two stages mode is half of that in
+++	  the single stage mode.
 ++
 + config ASM9260_WATCHDOG
 + 	tristate "Alphascale ASM9260 watchdog"
 + 	depends on MACH_ASM9260 || COMPILE_TEST
 +diff --git a/drivers/watchdog/Makefile b/drivers/watchdog/Makefile
-+index 42709be..fee21ea 100644
++index 071a2e50b..acf3df558 100644
 +--- a/drivers/watchdog/Makefile
 ++++ b/drivers/watchdog/Makefile
-+@@ -38,6 +38,7 @@ obj-$(CONFIG_USBPCWATCHDOG) += pcwd_usb.o
-+ # ARM Architecture
++@@ -39,6 +39,7 @@ obj-$(CONFIG_USBPCWATCHDOG) += pcwd_usb.o
 + obj-$(CONFIG_ARM_SP805_WATCHDOG) += sp805_wdt.o
 + obj-$(CONFIG_ARM_SBSA_WATCHDOG) += sbsa_gwdt.o
-++obj-$(CONFIG_MARVELL_AC5_WATCHDOG) += ac5_gwd.o
 + obj-$(CONFIG_ARMADA_37XX_WATCHDOG) += armada_37xx_wdt.o
+++obj-$(CONFIG_MARVELL_AC5_WATCHDOG) += ac5_gwd.o
 + obj-$(CONFIG_ASM9260_WATCHDOG) += asm9260_wdt.o
 + obj-$(CONFIG_AT91RM9200_WATCHDOG) += at91rm9200_wdt.o
++ obj-$(CONFIG_AT91SAM9X_WATCHDOG) += at91sam9_wdt.o
 +diff --git a/drivers/watchdog/ac5_gwd.c b/drivers/watchdog/ac5_gwd.c
 +new file mode 100644
-+index 0000000..82d52ca
++index 000000000..28f4cdb72
 +--- /dev/null
 ++++ b/drivers/watchdog/ac5_gwd.c
-+@@ -0,0 +1,438 @@
++@@ -0,0 +1,454 @@
 ++/*
 ++ * AC5 Watchdog driver
 ++ *
@@ -2850,7 +3422,8 @@ index 0000000..ce8eab4
 ++	u32 low, high;
 ++
 ++	low = smc_readl(addr);
-++	high = smc_readl(addr + 1);
+++	high = smc_readl(addr + 4);
+++	low = smc_readl(addr); /* read twice, as a workaround to HW limitation */
 ++
 ++	return low + ((u64)high << 32);
 ++}
@@ -2937,12 +3510,27 @@ index 0000000..ce8eab4
 ++
 ++static int sbsa_gwdt_probe(struct platform_device *pdev)
 ++{
+++#define AC5_ID      0xB400
+++#define AC5X_ID     0x9800
+++#define IML_ID      0xA000
+++#define IMM_ID      0xA200
+++
+++#define WRITE_MASK(addr, mask, val)     \
+++	writel( (readl(addr) & (~(mask))) | val, addr);
+++
+++#define MAP_CLR_BIT(addr, bit)  \
+++	reg = devm_ioremap(dev, addr, 1); \
+++	if (IS_ERR(reg))    \
+++		return PTR_ERR(reg); \
+++	WRITE_MASK(reg, bit, 0); \
+++
 ++	u32 rf_base, cf_base;
 ++	struct device *dev = &pdev->dev;
 ++	struct watchdog_device *wdd;
 ++	struct sbsa_gwdt *gwdt;
 ++	struct resource *res;
 ++	int ret, irq;
+++	void *__iomem reg;
 ++	u32 status;
 ++
 ++	gwdt = devm_kzalloc(dev, sizeof(*gwdt), GFP_KERNEL);
@@ -3008,7 +3596,6 @@ index 0000000..ce8eab4
 ++		if (!action)
 ++			dev_warn(dev, "falling back to single stage mode.\n");
 ++	}
-++
 ++	/*
 ++	 * In the single stage mode, The first signal (WS0) is ignored,
 ++	 * the timeout is (WOR * 2), so the maximum timeout should be doubled.
@@ -3024,7 +3611,8 @@ index 0000000..ce8eab4
 ++	 */
 ++	sbsa_gwdt_set_timeout(wdd, wdd->timeout);
 ++
-++	ret = watchdog_register_device(wdd);
+++	watchdog_stop_on_reboot(wdd);
+++	ret = devm_watchdog_register_device(dev, wdd);
 ++	if (ret)
 ++		return ret;
 ++
@@ -3032,25 +3620,27 @@ index 0000000..ce8eab4
 ++	   Enable GWD reset out */
 ++	smc_writel(0xFFFFFFBF, 0x80210030);
 ++
+++	reg = devm_ioremap(dev, 0x7f90004c, 1);
+++	if (IS_ERR(reg))
+++		return PTR_ERR(reg);
+++	switch ((readl(reg) >> 4) & 0xFF00) {
+++	case AC5_ID:
+++		MAP_CLR_BIT(0x840F800C, BIT(6));
+++		break;
+++	case AC5X_ID:
+++		MAP_CLR_BIT(0x944F800C, BIT(7));
+++		break;
+++	case IML_ID:
+++	case IMM_ID:
+++		MAP_CLR_BIT(0x840F800C, BIT(7));
+++		break;
+++	default:
+++		dev_warn(dev, "Failed to enable DFX reset path\n");
+++	}
+++
 ++	dev_info(dev, "Initialized with %ds timeout @ %u Hz, action=%d.%s\n",
 ++		 wdd->timeout, gwdt->clk, action,
 ++		 status & SBSA_GWDT_WCS_EN ? " [enabled]" : "");
-++
-++	return 0;
-++}
-++
-++static void sbsa_gwdt_shutdown(struct platform_device *pdev)
-++{
-++	struct sbsa_gwdt *gwdt = platform_get_drvdata(pdev);
-++
-++	sbsa_gwdt_stop(&gwdt->wdd);
-++}
-++
-++static int sbsa_gwdt_remove(struct platform_device *pdev)
-++{
-++	struct sbsa_gwdt *gwdt = platform_get_drvdata(pdev);
-++
-++	watchdog_unregister_device(&gwdt->wdd);
 ++
 ++	return 0;
 ++}
@@ -3100,8 +3690,6 @@ index 0000000..ce8eab4
 ++		.of_match_table = sbsa_gwdt_of_match,
 ++	},
 ++	.probe = sbsa_gwdt_probe,
-++	.remove = sbsa_gwdt_remove,
-++	.shutdown = sbsa_gwdt_shutdown,
 ++	.id_table = sbsa_gwdt_pdev_match,
 ++};
 ++
@@ -3115,9 +3703,639 @@ index 0000000..ce8eab4
 ++MODULE_AUTHOR("Timur Tabi <timur@codeaurora.org>");
 ++MODULE_LICENSE("GPL v2");
 ++MODULE_ALIAS("platform:" DRV_NAME);
-+-- 
-+2.7.4
+diff --git a/patch/008-ac5x-emmc-4G-dma-fix.patch b/patch/008-ac5x-emmc-4G-dma-fix.patch
+new file mode 100644
+index 0000000..cef5c07
+--- /dev/null
++++ b/patch/008-ac5x-emmc-4G-dma-fix.patch
+@@ -0,0 +1,338 @@
++Subject: eMMC 4G DMA support + PIO
 +
++Change-Id: I7308d2244f7a75d3a21af3bb04129dd719565740
++Reviewed-on: http://vgitil10.il.marvell.com:8080/c/NPS/linux/+/98957
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam Liron <lnoam@marvell.com>
++---
++ .../bindings/mmc/marvell,xenon-sdhci.txt           |   53 ++++++++++++++++++++
++ arch/arm64/boot/dts/marvell/ac5.dtsi               |   43 ++++++++++------
++ arch/arm64/boot/dts/marvell/ac5_4G_db.dts          |   47 ++++++++++++++++++
++ arch/arm64/boot/dts/marvell/ac5x_4G_db.dts         |   40 +++++++++++++++
++ drivers/mmc/host/sdhci-xenon.c                     |   33 ++++++++++++
++ 5 files changed, 199 insertions(+), 17 deletions(-)
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5_4G_db.dts
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5x_4G_db.dts
++
++diff --git a/Documentation/devicetree/bindings/mmc/marvell,xenon-sdhci.txt b/Documentation/devicetree/bindings/mmc/marvell,xenon-sdhci.txt
++index ed1456f5c..2d42ccfd5 100644
++--- a/Documentation/devicetree/bindings/mmc/marvell,xenon-sdhci.txt
+++++ b/Documentation/devicetree/bindings/mmc/marvell,xenon-sdhci.txt
++@@ -13,6 +13,8 @@ Required Properties:
++   Must provide a second register area and marvell,pad-type.
++   - "marvell,armada-ap806-sdhci": For controllers on Armada AP806.
++   - "marvell,armada-cp110-sdhci": For controllers on Armada CP110.
+++  - "marvell,armada-ap810-sdhci": For controllers on Armada AP810.
+++  - "marvell,ac5-sdhci": For CnM on AC5, AC5X and derived.
++ 
++ - clocks:
++   Array of clocks required for SDHC.
++@@ -32,6 +34,13 @@ Required Properties:
++     in below.
++     Please also check property marvell,pad-type in below.
++ 
+++  * For "marvell,ac5-sdhci", one or two register areas.
+++    (reg-names "ctrl" & "decoder").
+++    The first one is mandatory for the Xenon IP registers.
+++    The second one is for systems where DMA mapping is required and is the
+++    related address decoder register (the value to configure is derived from
+++    the parent "dma-ranges").
+++
++   * For other compatible strings, one register area for Xenon IP.
++ 
++ Optional Properties:
++@@ -170,3 +179,47 @@ Example:
++ 
++ 		marvell,pad-type = "sd";
++ 	};
+++
+++
+++- For eMMC with compatible "marvell,ac5-sdhci" with one reg range (no dma):
+++	sdhci0: sdhci@805c0000 {
+++		compatible = "marvell,ac5-sdhci";
+++		reg = <0x0 0x805c0000 0x0 0x300>;
+++		reg-names = "ctrl", "decoder";
+++		interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+++		clocks = <&core_clock>;
+++		clock-names = "core";
+++		status = "okay";
+++		bus-width = <8>;
+++		/*marvell,xenon-phy-slow-mode;*/
+++		non-removable;
+++		mmc-ddr-1_8v;
+++		mmc-hs200-1_8v;
+++		mmc-hs400-1_8v;
+++	}; 
+++
+++- For eMMC with compatible "marvell,ac5-sdhci" with two reg ranges (with dma):
+++	mmc_dma: mmc-dma-peripherals@80500000 {
+++		compatible = "simple-bus";
+++		#address-cells = <0x2>;
+++		#size-cells = <0x2>;
+++		ranges;
+++		dma-ranges = <0x2 0x0 0x2 0x80000000 0x1 0x0>;
+++		dma-coherent;
+++
+++		sdhci0: sdhci@805c0000 {
+++			compatible = "marvell,ac5-sdhci", "marvell,armada-ap806-sdhci";
+++			reg = <0x0 0x805c0000 0x0 0x300>, <0x0 0x80440230 0x0 0x4>;
+++			reg-names = "ctrl", "decoder";
+++			interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+++			clocks = <&core_clock>;
+++			clock-names = "core";
+++			status = "okay";
+++			bus-width = <8>;
+++			/*marvell,xenon-phy-slow-mode;*/
+++			non-removable;
+++			mmc-ddr-1_8v;
+++			mmc-hs200-1_8v;
+++			mmc-hs400-1_8v;
+++		};
+++	};
++diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
++index b107347f7..7758ed3fe 100644
++--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
+++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
++@@ -150,6 +150,30 @@ gpio0: gpio@18100 {
++ 			};
++ 		};
++ 
+++		mmc_dma: mmc-dma-peripherals@80500000 {
+++				compatible = "simple-bus";
+++				#address-cells = <0x2>;
+++				#size-cells = <0x2>;
+++				ranges;
+++				dma-coherent;
+++
+++				sdhci0: sdhci@805c0000 {
+++					compatible = "marvell,ac5-sdhci", "marvell,armada-ap806-sdhci";
+++					reg = <0x0 0x805c0000 0x0 0x300>;
+++					reg-names = "ctrl", "decoder";
+++					interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
+++					clocks = <&core_clock>;
+++					clock-names = "core";
+++					status = "okay";
+++					bus-width = <8>;
+++					/*marvell,xenon-phy-slow-mode;*/
+++					non-removable;
+++					mmc-ddr-1_8v;
+++					mmc-hs200-1_8v;
+++					mmc-hs400-1_8v;
+++				};
+++		};
+++
++ 		/* Dedicated section for devices behind 32bit controllers so we
++ 		   can configure specific DMA mapping for them */
++ 		behind-32bit-controller@7f000000 {
++@@ -157,7 +181,7 @@ behind-32bit-controller@7f000000 {
++ 			#address-cells = <0x2>;
++ 			#size-cells = <0x2>;
++ 			ranges = <0x0 0x0 0x0 0x7f000000 0x0 0x1000000>;
++-			/* Host addresses starts at 0x2000000 */
+++			/* Host phy ram starts at 0x200M */
++ 			dma-ranges = <0x0 0x0 0x2 0x0 0x1 0x0>;
++ 			dma-coherent;
++ 
++@@ -311,21 +335,6 @@ spi@805a8000 {
++ 			status = "disabled";
++ 		};
++ 
++-		sdhci@805c0000 {
++-			compatible = "marvell, ac5-sdhci", "marvell,armada-ap806-sdhci";
++-			reg = <0x0 0x805c0000 0x0 0x300>;
++-			interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
++-			clocks = <&core_clock>;
++-			clock-names = "core";
++-			status = "okay";
++-			bus-width = <8>;
++-			//marvell,xenon-phy-slow-mode;
++-			non-removable;
++-			mmc-ddr-1_8v;
++-			mmc-hs200-1_8v;
++-			mmc-hs400-1_8v;
++-		};
++-
++ 		nand0: nand@805b00 {
++ 			compatible = "marvell,ac5-nand-controller";
++ 			reg =  <0x0 0x805b0000 0x0 0x00000054
++@@ -337,7 +346,6 @@ nand0: nand@805b00 {
++ 			clocks = <&core_clock>;
++ 			/*marvell,system-controller = <0x15>*/
++ 			status = "okay";
++-			nand-timing-mode = <1>;
++ 
++ 			nand@0 {
++ 				reg = <0x0>;
++@@ -415,6 +423,7 @@ L2_0: l2-cache0 {
++ 	memory@00000000 {
++ 		device_type = "memory";
++ 		reg = <0x2 0x00000000 0x0 0x40000000>;
+++		// linux,usable-memory = <0x2 0x00000000 0x0 0x80000000>;
++ 	};
++ 
++ };
++diff --git a/arch/arm64/boot/dts/marvell/ac5_4G_db.dts b/arch/arm64/boot/dts/marvell/ac5_4G_db.dts
++new file mode 100644
++index 000000000..8cc8b5c2b
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5_4G_db.dts
++@@ -0,0 +1,47 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5X 4G DB.
+++ *
+++ * Copyright (C) 2021 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell Alleycat 5X 4G development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++/ {
+++	model = "Marvell AC5 4G DB board";
+++};
+++
+++&mmc_dma {
+++	/* Host phy ram DMA mapping */
+++	dma-ranges = <0x2 0x0 0x2 0x80000000 0x1 0x0>;
+++};
+++
+++&sdhci0 {
+++	reg = <0x0 0x805c0000 0x0 0x300>, <0x0 0x80440230 0x0 0x4>;
+++};
+++
+++&eth0 {
+++	status = "okay";
+++	fixed-link {
+++		speed = <1000>;
+++		full-duplex;
+++	};
+++};
+++
+++&eth1 {
+++	status = "okay";
+++};
+++
+++&usb1 {
+++	compatible = "chipidea,usb2";
+++	phys = <&usb1phy>;
+++	phy-names = "usb-phy";
+++	dr_mode = "peripheral";
+++};
+++
++diff --git a/arch/arm64/boot/dts/marvell/ac5x_4G_db.dts b/arch/arm64/boot/dts/marvell/ac5x_4G_db.dts
++new file mode 100644
++index 000000000..009ce5fbc
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5x_4G_db.dts
++@@ -0,0 +1,40 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5X 4G DB.
+++ *
+++ * Copyright (C) 2021 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell Alleycat 5X 4G development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++/ {
+++	model = "Marvell AC5X 4G DB board";
+++};
+++
+++&mmc_dma {
+++	/* Host phy ram DMA mapping */
+++	dma-ranges = <0x2 0x0 0x2 0x80000000 0x1 0x0>;
+++};
+++
+++&sdhci0 {
+++	reg = <0x0 0x805c0000 0x0 0x300>, <0x0 0x80440230 0x0 0x4>;
+++};
+++
+++&eth0 {
+++	status = "okay";
+++	phy = <&phy0>;
+++};
+++
+++&usb1 {
+++	compatible = "chipidea,usb2";
+++	phys = <&usb1phy>;
+++	phy-names = "usb-phy";
+++	dr_mode = "peripheral";
+++};
+++
++diff --git a/drivers/mmc/host/sdhci-xenon.c b/drivers/mmc/host/sdhci-xenon.c
++index d509198c0..86fb89351 100644
++--- a/drivers/mmc/host/sdhci-xenon.c
+++++ b/drivers/mmc/host/sdhci-xenon.c
++@@ -17,6 +17,11 @@
++ #include <linux/of.h>
++ #include <linux/pm.h>
++ #include <linux/pm_runtime.h>
+++#include <linux/of_reserved_mem.h>
+++#include <linux/mm.h>
+++
+++#include <linux/dma-direct.h>
+++#include <../drivers/of/of_private.h>
++ 
++ #include "sdhci-pltfm.h"
++ #include "sdhci-xenon.h"
++@@ -411,6 +416,9 @@ static int xenon_probe_dt(struct platform_device *pdev)
++ 	struct xenon_priv *priv = sdhci_pltfm_priv(pltfm_host);
++ 	u32 sdhc_id, nr_sdhc;
++ 	u32 tuning_count;
+++	struct resource *decoder;
+++	const struct bus_dma_region *dmap = NULL;
+++	struct sysinfo si;
++ 
++ 	/* Disable HS200 on Armada AP806 */
++ 	if (of_device_is_compatible(np, "marvell,armada-ap806-sdhci"))
++@@ -439,6 +447,29 @@ static int xenon_probe_dt(struct platform_device *pdev)
++ 	}
++ 	priv->tuning_count = tuning_count;
++ 
+++	decoder = platform_get_resource_byname(pdev, IORESOURCE_MEM, "decoder");
+++	if (decoder) {
+++		if (!of_dma_get_range(np, &dmap)) {
+++			void __iomem *regs = ioremap(decoder->start, resource_size(decoder));
+++			if (!regs) {
+++				dev_err(mmc_dev(mmc), "Failed to map decoder address 0x%llx\n",
+++						decoder->start);
+++			} else {
+++				writel(dmap->cpu_start>>16, regs);
+++				iounmap(regs);
+++			}
+++		}
+++	}
+++
+++	si_meminfo(&si);
+++
+++	if (of_device_is_compatible(np, "marvell,ac5-sdhci") &&
+++			((si.totalram * si.mem_unit) > 0x80000000 /*2G*/)) {
+++		host->quirks |= SDHCI_QUIRK_BROKEN_DMA;
+++		host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
+++		dev_info(mmc_dev(mmc), "Disabling DMA because of 2GB DMA access limit.\n");
+++	}
+++
++ 	return xenon_phy_parse_dt(np, host);
++ }
++ 
++@@ -665,6 +696,8 @@ static const struct of_device_id sdhci_xenon_dt_ids[] = {
++ 	{ .compatible = "marvell,armada-ap806-sdhci",},
++ 	{ .compatible = "marvell,armada-cp110-sdhci",},
++ 	{ .compatible = "marvell,armada-3700-sdhci",},
+++	{ .compatible = "marvell,armada-ap810-sdhci",},
+++	{ .compatible = "marvell,ac5-sdhci",},
++ 	{}
++ };
++ MODULE_DEVICE_TABLE(of, sdhci_xenon_dt_ids);
+diff --git a/patch/009-ac5x-dts-base-addr.patch b/patch/009-ac5x-dts-base-addr.patch
+new file mode 100644
+index 0000000..7674ca3
+--- /dev/null
++++ b/patch/009-ac5x-dts-base-addr.patch
+@@ -0,0 +1,52 @@
++Subject: dts/ac5: Make base address not zero
++
++CPSS gets upset if base address is zero.
++Fix it by moving to 0x400000.
++
++While there, fix also comments styling errors.
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Yuval Shaia <yshaia@marvell.com>
++---
++ arch/arm64/boot/dts/marvell/ac5.dtsi |   27 ++++++++++++++++-----------
++ 1 file changed, 16 insertions(+), 11 deletions(-)
++
++diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
++index 7758ed3fe..7802ba9a9 100644
++--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
+++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
++@@ -25,17 +25,22 @@ reserved-memory {
++ 		ranges;
++ 
++ 		prestera_rsvd: buffer@200M {
++-			compatible = "shared-dma-pool"; /* to be used as a shared pool of
++-											DMA buffers for a set of devices
++-											*/
++-			no-map;	/* 	No one other than devices registered for that mem,
++-						may use this area
++-					*/
++-
++-			/*	addr (first 2 cells) need to be aligned with actual DMA that
++-				will be allocted, therefore we choose such addr, that will
++-				be aligned with many DMA sizes */
++-			reg = <0x2 0x0 0x0 0x400000>;
+++			/**
+++			 * To be used as a shared pool of DMA buffers for a set
+++			 * of devices
+++			 */
+++			compatible = "shared-dma-pool";
+++			/**
+++			 * No one other than devices registered for that mem may
+++			 * use this area
+++			 */
+++			no-map;
+++			/**
+++			 * Addr (first 2 cells) need to be aligned with actual
+++			 * DMA that will be allocted, therefore we choose such
+++			 * addr, that will be aligned with many DMA sizes
+++			 */
+++			reg = <0x2 0x400000 0x0 0x400000>;
++ 		};
++ 	};
++ 
+diff --git a/patch/010-ac5x-add-missing-pinctrl.patch b/patch/010-ac5x-add-missing-pinctrl.patch
+new file mode 100644
+index 0000000..737afc4
+--- /dev/null
++++ b/patch/010-ac5x-add-missing-pinctrl.patch
+@@ -0,0 +1,31 @@
++Subject: i2c fails in LK 5.4
++
++Fix failure of probing I2C, due to definitions in
++it's DTS node which require (missing) corresponding
++pinctrl definition
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam <lnoam@marvell.com>
++---
++ drivers/pinctrl/mvebu/pinctrl-ac5.c |    6 ++++--
++ 1 file changed, 4 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/pinctrl/mvebu/pinctrl-ac5.c b/drivers/pinctrl/mvebu/pinctrl-ac5.c
++index c996efd3a..c33c9fc5e 100644
++--- a/drivers/pinctrl/mvebu/pinctrl-ac5.c
+++++ b/drivers/pinctrl/mvebu/pinctrl-ac5.c
++@@ -75,9 +75,11 @@ static struct mvebu_mpp_mode ac5_mpp_modes[] = {
++ 	MPP_MODE(25,
++ 		 MPP_FUNCTION(0, "gpio",    NULL)),
++ 	MPP_MODE(26,
++-		 MPP_FUNCTION(0, "gpio",    NULL)),
+++		 MPP_FUNCTION(0, "gpio",    NULL),
+++		 MPP_FUNCTION(1, "i2c0-opt", "scl")),
++ 	MPP_MODE(27,
++-		 MPP_FUNCTION(0, "gpio",    NULL)),
+++		 MPP_FUNCTION(0, "gpio",    NULL),
+++		 MPP_FUNCTION(1, "i2c0-opt", "sda")),
++ 	MPP_MODE(28,
++ 		 MPP_FUNCTION(0, "gpio",    NULL)),
++ 	MPP_MODE(29,
+diff --git a/patch/011-ac5x-clock-fix.patch b/patch/011-ac5x-clock-fix.patch
+new file mode 100644
+index 0000000..a7a6325
+--- /dev/null
++++ b/patch/011-ac5x-clock-fix.patch
+@@ -0,0 +1,115 @@
++Subject: updated AC5 clocks in DTS
++
++Tested-by: Raz Adashi <raza@marvell.com>
++Reviewed-by: Raz Adashi <raza@marvell.com>
++Signed-off-by: Noam <lnoam@marvell.com>
++---
++ arch/arm64/boot/dts/marvell/ac5.dtsi |   34 ++++++++++++++++++++--------------
++ 1 file changed, 20 insertions(+), 14 deletions(-)
++
++diff --git a/arch/arm64/boot/dts/marvell/ac5.dtsi b/arch/arm64/boot/dts/marvell/ac5.dtsi
++index 7802ba9a9..1449d8b4b 100644
++--- a/arch/arm64/boot/dts/marvell/ac5.dtsi
+++++ b/arch/arm64/boot/dts/marvell/ac5.dtsi
++@@ -110,7 +110,7 @@ mdio: mdio@20000 {
++ 				#size-cells = <0>;
++ 				compatible = "marvell,orion-mdio";
++ 				reg = <0x22004 0x4>;
++-				clocks = <&core_clock>;
+++				clocks = <&cnm_clock>;
++ 				phy0: ethernet-phy@0 {
++ 					reg = < 0 0 >;
++ 				};
++@@ -120,7 +120,7 @@ i2c0: i2c@11000{
++ 				compatible = "marvell,mv78230-i2c";
++ 				reg = <0x11000 0x20>;
++ 
++-				clocks = <&core_clock>;
+++				clocks = <&cnm_clock>;
++ 				clock-names = "core";
++ 				interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
++ 				clock-frequency=<100000>;
++@@ -138,7 +138,7 @@ i2c1: i2c@11100{
++ 				compatible = "marvell,mv78230-i2c";
++ 				reg = <0x11100 0x20>;
++ 
++-				clocks = <&core_clock>;
+++				clocks = <&cnm_clock>;
++ 				clock-names = "core";
++ 				interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>;
++ 				clock-frequency=<100000>;
++@@ -167,7 +167,7 @@ sdhci0: sdhci@805c0000 {
++ 					reg = <0x0 0x805c0000 0x0 0x300>;
++ 					reg-names = "ctrl", "decoder";
++ 					interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
++-					clocks = <&core_clock>;
+++					clocks = <&emmc_clock>;
++ 					clock-names = "core";
++ 					status = "okay";
++ 					bus-width = <8>;
++@@ -194,7 +194,7 @@ eth0: ethernet@20000 {
++ 				compatible = "marvell,armada-ac5-neta";
++ 				reg = <0x0 0x20000 0x0 0x4000>;
++ 				interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
++-				clocks = <&core_clock>;
+++				clocks = <&cnm_clock>;
++ 				status = "disabled";
++ 				phy-mode = "sgmii";
++ 			};
++@@ -203,7 +203,7 @@ eth1: ethernet@24000 {
++ 				compatible = "marvell,armada-ac5-neta";
++ 				reg = <0x0 0x24000 0x0 0x4000>;
++ 				interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_HIGH>;
++-				clocks = <&core_clock>;
+++				clocks = <&cnm_clock>;
++ 				status = "disabled";
++ 				phy-mode = "sgmii";
++ 				fixed-link {
++@@ -271,25 +271,31 @@ pcie0: pcie@800a0000 {
++ 			num-lanes = <1>;
++ 			status = "disabled";
++ 
++-			clocks = <&core_clock>;
+++			clocks = <&cnm_clock>;
++ 		};
++ 
++-		core_clock: core_clock@0 {
+++		cnm_clock: cnm_clock@0 {
++ 			compatible = "fixed-clock";
++ 			#clock-cells = <0>;
++-			clock-frequency = <400000000>;
+++			clock-frequency = <328000000>;
++ 		};
++ 
++-		axi_clock: axi_clock@0 {
+++		spi_clock: spi_clock@0 {
++ 			compatible = "fixed-clock";
++ 			#clock-cells = <0>;
++-			clock-frequency = <325000000>;
+++			clock-frequency = <200000000>;
++ 		};
++ 
++-		spi_clock: spi_clock@0 {
+++		nand_clock: nand_clock@0 {
++ 			compatible = "fixed-clock";
++ 			#clock-cells = <0>;
++-			clock-frequency = <200000000>;
+++			clock-frequency = <400000000>;
+++		};
+++
+++		emmc_clock: emmc_clock@0 {
+++			compatible = "fixed-clock";
+++			#clock-cells = <0>;
+++			clock-frequency = <400000000>;
++ 		};
++ 
++ 		spi@805a0000 {
++@@ -348,7 +354,7 @@ nand0: nand@805b00 {
++ 			#address-cells = <0x1>;
++ 			#size-cells = <0x0>;
++ 			interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
++-			clocks = <&core_clock>;
+++			clocks = <&nand_clock>;
++ 			/*marvell,system-controller = <0x15>*/
++ 			status = "okay";
++ 
+diff --git a/patch/012-ac5xrd-dts.patch b/patch/012-ac5xrd-dts.patch
+new file mode 100644
+index 0000000..f43e16f
+--- /dev/null
++++ b/patch/012-ac5xrd-dts.patch
+@@ -0,0 +1,67 @@
++Subject: AC5X-RD DTS
++
++Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
++---
++ arch/arm64/boot/dts/marvell/Makefile |    1 +
++ arch/arm64/boot/dts/marvell/ac5x.dts |   43 ++++++++++++++++++++++++++++++++++
++ 2 files changed, 44 insertions(+)
++ create mode 100644 arch/arm64/boot/dts/marvell/ac5x.dts
++
++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
++index a69c931db..bb673fc3e 100644
++--- a/arch/arm64/boot/dts/marvell/Makefile
+++++ b/arch/arm64/boot/dts/marvell/Makefile
++@@ -20,3 +20,4 @@ dtb-$(CONFIG_ARCH_MVEBU) += cn9131-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += cn9132-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-7020-comexpress.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-7020-amc.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += ac5x.dtb
++diff --git a/arch/arm64/boot/dts/marvell/ac5x.dts b/arch/arm64/boot/dts/marvell/ac5x.dts
++new file mode 100644
++index 000000000..a7b67c653
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/ac5x.dts
++@@ -0,0 +1,43 @@
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree For AC5_db.
+++ *
+++ * Copyright (C) 2021 Marvell
+++ *
+++ */
+++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+++/*
+++ * Device Tree file for Marvell Alleycat 5 development board
+++ * This board file supports the B configuration of the board
+++ */
+++
+++#include "ac5.dtsi"
+++
+++/ {
+++	model = "Marvell AC5X RD board";
+++};
+++
+++&mdio {
+++	status = "okay";
+++	pinctrl-names = "default";
+++};
+++
+++&eth0 {
+++	status = "okay";
+++	phy = <&phy0>;
+++};
+++
+++&usb0 {
+++	status= "okay";
+++};
+++
+++&usb1 {
+++	compatible = "chipidea,usb2";
+++	phys = <&usb1phy>;
+++	phy-names = "usb-phy";
+++	dr_mode = "peripheral";
+++};
+++
+++&nand0 {
+++	status = "disabled";
+++};
 diff --git a/patch/kconfig-exclusions b/patch/kconfig-exclusions
 index 6d4f0e6..bc9d88b 100644
 --- a/patch/kconfig-exclusions
@@ -3400,27 +4618,29 @@ index 34be073..358856a 100644
  [armhf]
  CONFIG_EEPROM_SFF_8436=m
 diff --git a/patch/series b/patch/series
-index c0c5e9a..270d4b5 100755
+index c0c5e9a..32dd61e 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -164,6 +164,20 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
+@@ -162,8 +162,21 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
+ 0003-psample-define-the-macro-PSAMPLE_MD_EXTENDED_ATTR.patch
+ 
  #
- # Marvell platform patches for 4.19
+-# Marvell platform patches for 4.19
++# Marvell patches for 5.10
  armhf_secondary_boot_online.patch
++001-falcon-dts.patch
++002-ac5x-cnm-support.patch
++003-ac5x-mvneta-xbar-window.patch
++004-ac5x-spi-driver-fix.patch
++005-ac5x-gpio-userspace-support.patch
++006-ac5x-i2c-fix.patch
++007-ac5x-wd-support.patch
++008-ac5x-emmc-4G-dma-fix.patch
++009-ac5x-dts-base-addr.patch
++010-ac5x-add-missing-pinctrl.patch
++011-ac5x-clock-fix.patch
++012-ac5xrd-dts.patch
 +
-+# Marvell platform patches
-+0116-mtd-nand-marvell-add-support-for-2KB-8-bit-nand.patch
-+0120-arm64-pcie-irq.patch
-+0121-arm64-marvell-mvpp2.patch
-+0122-ehci-controller-fixes.patch
-+0123-rd-ac5x-dts-support.patch
-+0123-rd-ac5x-emmc-support.patch
-+0123-rd-ac5x-gpio-pinctrl-support.patch
-+0123-rd-ac5x-i2c-fixes.patch
-+#0123-rd-ac5x-pcie-changes.patch
-+0124-rd-ac5x-mvneta-mvmdio-changes.patch
-+0125-rd-ac5x-mvneta-xbar_window.patch
-+0126-rd-ac5x-watchdog-support.patch
  #
  #
  ############################################################
