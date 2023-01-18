@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="d9934448830e31f46ebe0db90d9bb16ec15469d3"
+SONIC_COMMIT="5e4a866e3311f859b9fe479aa379b38521de9725"
 
 #
 # END of CONFIGURATIONS
@@ -24,7 +24,7 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for master patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_01/files/master-bullseye/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bullseye/"
 
 # Patches
 PATCHES="generic_fixes_or_wa.patch
@@ -102,7 +102,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_01/files/mrvl_sonic_hwsku_ezb.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
