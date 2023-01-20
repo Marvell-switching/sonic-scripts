@@ -253,37 +253,3 @@ index 9bb3326fa..a07545a42 100644
  
  # ENABLE_HOST_SERVICE_ON_START - enable sonic-host-server for mgmt-framework and/or
  # telemetry containers to access host functionality by default
-diff --git a/sonic-slave-bullseye/Dockerfile.cleanup b/sonic-slave-bullseye/Dockerfile.cleanup
-new file mode 100644
-index 000000000..64acae799
---- /dev/null
-+++ b/sonic-slave-bullseye/Dockerfile.cleanup
-@@ -0,0 +1,11 @@
-+# Base docker build
-+FROM sonic-slave-bullseye:ce4a13dbafc
-+
-+# Copy the cache data to host
-+From scratch as output
-+COPY --from=sonic-slave-bullseye:ce4a13dbafc /cache.tgz cache.tgz
-+
-+# Clean up the cache data
-+FROM sonic-slave-bullseye:ce4a13dbafc as final
-+RUN rm /cache.tgz
-+
-diff --git a/sonic-slave-buster/Dockerfile.cleanup b/sonic-slave-buster/Dockerfile.cleanup
-new file mode 100644
-index 000000000..8ccd35865
---- /dev/null
-+++ b/sonic-slave-buster/Dockerfile.cleanup
-@@ -0,0 +1,11 @@
-+# Base docker build
-+FROM sonic-slave-buster:85796b21756
-+
-+# Copy the cache data to host
-+From scratch as output
-+COPY --from=sonic-slave-buster:85796b21756 /cache.tgz cache.tgz
-+
-+# Clean up the cache data
-+FROM sonic-slave-buster:85796b21756 as final
-+RUN rm /cache.tgz
-+
