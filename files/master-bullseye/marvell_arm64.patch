@@ -1,26 +1,117 @@
-diff --git a/platform/marvell-arm64/linux-kernel-arm64.mk b/platform/marvell-arm64/linux-kernel-arm64.mk
-index a953c9082..e7044dacc 100644
---- a/platform/marvell-arm64/linux-kernel-arm64.mk
-+++ b/platform/marvell-arm64/linux-kernel-arm64.mk
-@@ -1,6 +1,6 @@
- # linux kernel package for marvell arm64
+diff --git a/platform/marvell-arm64/docker-saiserver-mrvl.mk b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+index 90bb5ae99..498f35ffa 100644
+--- a/platform/marvell-arm64/docker-saiserver-mrvl.mk
++++ b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+@@ -3,7 +3,7 @@
+ DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
+ $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
+-$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BUSTER)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
  
- # Add platform specific DTB
+ $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 68670343b..1731e8dca 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -15,7 +15,8 @@ RUN apt-get purge -y syncd
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+-    python-pip          \
++    python3-pip		\
++    python-setuptools	\
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+@@ -24,7 +25,7 @@ RUN apt-get update \
+     cmake               \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.71.0
++    libboost-atomic1.74.0
+ 
+ RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
+ {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
+@@ -41,9 +42,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
++ && pip2 install cffi==1.7.0    \
++ && pip2 install --upgrade cffi==1.7.0 \
++ && pip2 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl.mk b/platform/marvell-arm64/docker-syncd-mrvl.mk
+index 39135311b..236f8a437 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl.mk
++++ b/platform/marvell-arm64/docker-syncd-mrvl.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ 
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+index d07c25231..84e3d5bde 100755
+--- a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
+diff --git a/platform/marvell-arm64/linux-kernel-arm64.mk b/platform/marvell-arm64/linux-kernel-arm64.mk
+deleted file mode 100644
+index a953c9082..000000000
+--- a/platform/marvell-arm64/linux-kernel-arm64.mk
++++ /dev/null
+@@ -1,6 +0,0 @@
+-# linux kernel package for marvell arm64
+-
+-# Add platform specific DTB
 -LINUX_KERNEL_DTB = linux-image-4.9.168-arm64.deb
-+LINUX_KERNEL_DTB = linux-image-5.10.0-18-arm64.deb
- $(LINUX_KERNEL_DTB)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/kernel/$(LINUX_KERNEL_DTB)
- SONIC_ONLINE_DEBS += $(LINUX_KERNEL_DTB)
+-$(LINUX_KERNEL_DTB)_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/kernel/$(LINUX_KERNEL_DTB)
+-SONIC_ONLINE_DEBS += $(LINUX_KERNEL_DTB)
+diff --git a/platform/marvell-arm64/linux/Makefile b/platform/marvell-arm64/linux/Makefile
+deleted file mode 100644
+index 89415f493..000000000
+--- a/platform/marvell-arm64/linux/Makefile
++++ /dev/null
+@@ -1,10 +0,0 @@
+-.ONESHELL:
+-SHELL = /bin/bash
+-.SHELLFLAGS += -e
+-
+-LINUX_KERNEL_MRVL_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/kernel/$(LINUX_KERNEL_DTB)
+-
+-$(addprefix $(DEST)/, $(LINUX_KERNEL_DTB)): $(DEST)/% :
+-	# get deb package
+-	wget -O $(DEST)/$(LINUX_KERNEL_DTB) $(LINUX_KERNEL_MRVL_URL)
+-
 diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
-index 3d916be4e..fd235b486 100644
+index 3d916be4e..491ce0a59 100644
 --- a/platform/marvell-arm64/one-image.mk
 +++ b/platform/marvell-arm64/one-image.mk
-@@ -5,6 +5,9 @@ $(SONIC_ONE_IMAGE)_MACHINE = marvell-arm64
+@@ -4,7 +4,10 @@ SONIC_ONE_IMAGE = sonic-marvell-arm64.bin
+ $(SONIC_ONE_IMAGE)_MACHINE = marvell-arm64
  $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
  $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
- $(SONIC_ONE_IMAGE)_INSTALLS += $(LINUX_KERNEL_DTB)
+-$(SONIC_ONE_IMAGE)_INSTALLS += $(LINUX_KERNEL_DTB)
++$(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8540_16CD_PLATFORM)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
-+$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX7312_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
  ifeq ($(INSTALL_DEBUG_TOOLS),y)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
@@ -60,29 +151,29 @@ index 000000000..34129b033
 +
 +SONIC_DPKG_DEBS += $(FALCON_DB98CX8580_32CD_PLATFORM)
 +
-diff --git a/platform/marvell-arm64/platform-rd98dx7312.mk b/platform/marvell-arm64/platform-rd98dx7312.mk
+diff --git a/platform/marvell-arm64/platform-rd98dx35xx.mk b/platform/marvell-arm64/platform-rd98dx35xx.mk
 new file mode 100644
-index 000000000..048050775
+index 000000000..9e5a6b18e
 --- /dev/null
-+++ b/platform/marvell-arm64/platform-rd98dx7312.mk
++++ b/platform/marvell-arm64/platform-rd98dx35xx.mk
 @@ -0,0 +1,8 @@
 +# AC5X Platform
 +
-+AC5X_VERSION=0.1
-+AC5X_RD98DX7312_PLATFORM = sonic-platform-rd98dx7312_$(AC5X_VERSION)_$(CONFIGURED_ARCH).deb
-+$(AC5X_RD98DX7312_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-rd98dx7312
-+$(AC5X_RD98DX7312_PLATFORM)_PLATFORM = arm64-marvell_rd98DX7312_32G16HVG6HLG-r0
-+SONIC_DPKG_DEBS += $(AC5X_RD98DX7312_PLATFORM)
++AC5X_VERSION=1.0
++AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx_$(AC5X_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xx_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-rd98dx35xx
++$(AC5X_RD98DX35xx_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx-r0
++SONIC_DPKG_DEBS += $(AC5X_RD98DX35xx_PLATFORM)
 +
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index 4ef62d36b..7185b8438 100644
+index 4ef62d36b..9043f480d 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
-@@ -2,27 +2,71 @@
+@@ -2,27 +2,70 @@
  
  # over ride default behaviour
  
-+PLATFORM_AC5X="arm64-marvell_rd98DX7312_32G16HVG6HLG-r0"
++PLATFORM_AC5X="arm64-marvell_rd98DX35xx-r0"
 +
  echo "Preparing for installation ... "
  
@@ -146,7 +237,7 @@ index 4ef62d36b..7185b8438 100644
  # global mount defines
  #demo_dev=/dev/sda1
  demo_mnt=/tmp
- #mtd_dev=/dev/$(cat /proc/mtd | grep "ENV" | grep -o "mtd[0-9]")
+-#mtd_dev=/dev/$(cat /proc/mtd | grep "ENV" | grep -o "mtd[0-9]")
 -FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
 +if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
 +    FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
@@ -157,7 +248,7 @@ index 4ef62d36b..7185b8438 100644
  UBOOT_FW_DEFAULT=1
  
  # Skip VID Header in UBIFS
-@@ -79,7 +123,12 @@ prepare_boot_menu() {
+@@ -79,11 +122,15 @@ prepare_boot_menu() {
                  echo "Error: Unable to detect $blk_dev $demo_dev"
                  exit 1
              fi
@@ -171,7 +262,11 @@ index 4ef62d36b..7185b8438 100644
              then
                  demo_dev=${blk_dev}1
              else
-@@ -104,17 +153,21 @@ prepare_boot_menu() {
+-                #demo_dev=$(echo $blk_dev | sed -e 's/\(mmcblk[0-9]\)/\1p/')$demo_part
+                 demo_dev=/dev/mmcblk0p1
+             fi
+         fi
+@@ -104,17 +151,21 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} sonic_version_2 $sonic_version_2 > /dev/null
      BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
      BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
@@ -197,32 +292,34 @@ index 4ef62d36b..7185b8438 100644
  
      fw_setenv ${FW_ARG} kernel_addr $kernel_addr > /dev/null
      fw_setenv ${FW_ARG} fdt_addr $fdt_addr > /dev/null
-@@ -125,15 +178,20 @@ prepare_boot_menu() {
+@@ -123,17 +174,19 @@ prepare_boot_menu() {
+     # Set boot configs
+     if [ ${IS_MASS} -eq 1 ]
      then
-         #USB_LOAD='ext4load usb 0 $kernel_addr $image_name; ext4load usb 0 $fdt_addr $fdt_name; ext4load usb 0 $initrd_addr $initrd_name'
+-        #USB_LOAD='ext4load usb 0 $kernel_addr $image_name; ext4load usb 0 $fdt_addr $fdt_name; ext4load usb 0 $initrd_addr $initrd_name'
          USB_LOAD='ext4load usb 0 $fit_addr $fit_name'
 -        fw_setenv ${FW_ARG} sonic_boot_load $USB_LOAD > /dev/null
 +        fw_setenv ${FW_ARG} sonic_boot_load "$USB_LOAD" > /dev/null
      else
-         #MMC_LOAD='ext4load mmc 0:'$demo_part' $kernel_addr $image_name; ext4load mmc 0:'$demo_part' $fdt_addr $fdt_name; ext4load mmc 0:'$demo_part' $initrd_addr $initrd_name'
+-        #MMC_LOAD='ext4load mmc 0:'$demo_part' $kernel_addr $image_name; ext4load mmc 0:'$demo_part' $fdt_addr $fdt_name; ext4load mmc 0:'$demo_part' $initrd_addr $initrd_name'
          MMC_LOAD='ext4load mmc 0:'$demo_part' $fit_addr $fit_name'
 -        fw_setenv ${FW_ARG} sonic_boot_load $MMC_LOAD > /dev/null
 +        fw_setenv ${FW_ARG} sonic_boot_load "$MMC_LOAD" > /dev/null
-     fi
-     #SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; booti $kernel_addr $initrd_addr $fdt_addr'
--    SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'
--    SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr'
++    fi
 +    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
 +        SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr#conf_ac5x'
 +        SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr#conf_ac5x'
 +    else
 +        SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'
 +        SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr'
-+    fi
+     fi
+-    #SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; booti $kernel_addr $initrd_addr $fdt_addr'
+-    SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr'
+-    SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr'
      BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait rootfstype=ext4 panic=1 console=ttyS0,115200 ${othbootargs} ${mtdparts} ${linuxargs}'
      fw_setenv ${FW_ARG} sonic_bootargs $BOOTARGS > /dev/null
      fw_setenv ${FW_ARG} sonic_bootcmd $SONIC_BOOT_CMD > /dev/null
-@@ -148,6 +206,21 @@ prepare_boot_menu() {
+@@ -148,6 +201,21 @@ prepare_boot_menu() {
  #Default block device is eMMC, if not look for usb storage
  get_install_device()
  {
@@ -244,7 +341,7 @@ index 4ef62d36b..7185b8438 100644
      mass_bus="target0:0:0"
      for i in a b c ; do
          if $(ls -l /sys/block/sd$i/device 2>/dev/null | grep -q "$mass_bus") ; then
-@@ -174,6 +247,62 @@ get_install_device()
+@@ -174,6 +242,62 @@ get_install_device()
  
  create_demo_partition() {
  
@@ -307,7 +404,7 @@ index 4ef62d36b..7185b8438 100644
      if [ ${IS_MASS} -eq 1 ]
      then
          # USB drive
-@@ -201,6 +330,19 @@ create_partition() {
+@@ -201,11 +325,23 @@ create_partition() {
  }
  
  mount_partition() {
@@ -327,22 +424,156 @@ index 4ef62d36b..7185b8438 100644
      if [ ${IS_MASS} -eq 1 ]
      then
          demo_dev=${blk_dev}1
+     else
+-        #demo_dev=$(echo $blk_dev | sed -e 's/\(mmcblk[0-9]\)/\1p/')$demo_part
+         demo_dev=/dev/mmcblk0p1
+     fi
+ 
+diff --git a/platform/marvell-arm64/prestera.mk b/platform/marvell-arm64/prestera.mk
+new file mode 100644
+index 000000000..d0459211c
+--- /dev/null
++++ b/platform/marvell-arm64/prestera.mk
+@@ -0,0 +1,12 @@
++# Marvell Prestera
++
++export MRVL_PRESTERA_VER = 1.0
++export MRVL_PRESTERA = mrvlprestera_$(MRVL_PRESTERA_VER)_$(PLATFORM_ARCH)
++export MRVL_PRESTERA_DEB = $(MRVL_PRESTERA).deb
++export MRVL_PRESTERA_SRC_URL = https://github.com/pavannaregundi/mrvl-prestera.git
++#export MRVL_PRESTERA_SRC_URL = https://github.com/Marvell-switching/mrvl-prestera.git
++export MRVL_PRESTERA_SRC_TAG = master
++
++$(MRVL_PRESTERA_DEB)_SRC_PATH = $(PLATFORM_PATH)/prestera
++$(MRVL_PRESTERA_DEB)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++SONIC_DPKG_DEBS += $(MRVL_PRESTERA_DEB)
+diff --git a/platform/marvell-arm64/prestera/debian/changelog b/platform/marvell-arm64/prestera/debian/changelog
+new file mode 100644
+index 000000000..3e1e97802
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/debian/changelog
+@@ -0,0 +1,5 @@
++mrvlprestera (1.0) unstable; urgency=low
++
++  * Prestera switch driver
++
++ -- Marvell <pnaregundi@marvell.com>  Fri, 19 Feb 2021 10:39:18 +0800
+diff --git a/platform/marvell-arm64/prestera/debian/compat b/platform/marvell-arm64/prestera/debian/compat
+new file mode 100644
+index 000000000..ec635144f
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/debian/compat
+@@ -0,0 +1 @@
++9
+diff --git a/platform/marvell-arm64/prestera/debian/control b/platform/marvell-arm64/prestera/debian/control
+new file mode 100755
+index 000000000..33a96b991
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/debian/control
+@@ -0,0 +1,15 @@
++Source: mrvlprestera
++Section: unknown
++Priority: optional
++Maintainer: Marvell <pnaregundi@marvell.com>
++Build-Depends: debhelper (>=9)
++Standards-Version: 3.9.6
++Homepage: <insert the upstream URL, if relevant>
++#Vcs-Git: git://anonscm.debian.org/collab-maint/mrvlprestera.git
++#Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/mrvlprestera.git
++
++Package: mrvlprestera
++Architecture: arm64
++Homepage: <insert the upstream URL, if relevant>
++Description: 
++	kernel modules for prestera switch driver 
+diff --git a/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template b/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template
+new file mode 100644
+index 000000000..5747270e5
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template
+@@ -0,0 +1,3 @@
++mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mvMbusDrv.ko /lib/modules/KVERSION/kernel/extra
++mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mvIntDrv.ko /lib/modules/KVERSION/kernel/extra
++mrvl-prestera/platform/arm64/*	/
+diff --git a/platform/marvell-arm64/prestera/debian/rules b/platform/marvell-arm64/prestera/debian/rules
+new file mode 100755
+index 000000000..8601b509e
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/debian/rules
+@@ -0,0 +1,55 @@
++#!/usr/bin/make -f
++
++include /usr/share/dpkg/pkg-info.mk
++
++PACKAGE_PRE_NAME := mrvlprestera
++ifneq ($(CROSS_BUILD_ENVIRON), y)
++KVERSION   ?= $(shell uname -r)
++endif
++KERNEL_SRC :=  /lib/modules/$(KVERSION)
++MOD_SRC_DIR:= $(shell pwd)
++MODULE_DIR := mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers
++
++%:
++	dh $@ --with systemd,python2,python3 --buildsystem=pybuild
++
++clean:
++	dh_testdir
++	dh_testroot
++	dh_clean
++
++build:
++	# get sources
++	rm -rf mrvl-prestera || true
++	git clone -b ${MRVL_PRESTERA_SRC_TAG} ${MRVL_PRESTERA_SRC_URL}
++	sed "s/KVERSION/${KVERSION}/g" /sonic/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template > /sonic/platform/marvell-arm64/prestera/debian/mrvlprestera.install
++
++	make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$(MODULE_DIR)/
++
++binary: binary-arch binary-indep
++	# Nothing to do
++
++binary-arch: 
++	# Nothing to do
++
++binary-indep:
++	dh_testdir
++	dh_installdirs
++
++	# Resuming debhelper scripts
++	dh_testroot
++	dh_install
++	dh_installchangelogs
++	dh_installdocs
++	dh_systemd_enable
++	dh_installinit
++	dh_systemd_start
++	dh_link
++	dh_fixperms
++	dh_compress
++	dh_strip
++	dh_installdeb
++	dh_gencontrol
++	dh_md5sums
++	dh_builddeb
++.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
-index e63059d3f..13f63d5c2 100644
+index e63059d3f..e549af165 100644
 --- a/platform/marvell-arm64/rules.mk
 +++ b/platform/marvell-arm64/rules.mk
-@@ -6,6 +6,9 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
+@@ -5,7 +5,10 @@ include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
+ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
  include $(PLATFORM_PATH)/libsaithrift-dev.mk
  include $(PLATFORM_PATH)/one-image.mk
- include $(PLATFORM_PATH)/linux-kernel-arm64.mk
+-include $(PLATFORM_PATH)/linux-kernel-arm64.mk
++include $(PLATFORM_PATH)/prestera.mk
 +include $(PLATFORM_PATH)/platform-db98cx8540-16cd.mk
 +include $(PLATFORM_PATH)/platform-db98cx8580-32cd.mk
-+include $(PLATFORM_PATH)/platform-rd98dx7312.mk
++include $(PLATFORM_PATH)/platform-rd98dx35xx.mk
  
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM) 	\
 diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
-index 6cf794729..5fc14f988 100644
+index 6cf794729..f6372ca68 100644
 --- a/platform/marvell-arm64/sai.mk
 +++ b/platform/marvell-arm64/sai.mk
 @@ -1,7 +1,7 @@
@@ -357,36 +588,25 @@ index 6cf794729..5fc14f988 100644
  $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
 new file mode 100644
-index 000000000..d7a0c459c
+index 000000000..871ec2a72
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,22 @@
 +#!/bin/bash
 +
 +# Platform init script for db98cx8540-16cd 
 +
-+# Load required kernel-mode drivers
-+load_kernel_drivers() {
-+    # Remove modules loaded during Linux init
-+    # FIX-ME: This will be removed in the future when Linux init no longer loads these
-+    rmmod i2c_mux_gpio
-+    rmmod i2c_dev
-+    rmmod i2c_mv64xxx
-+
-+    # Carefully control the load order here to ensure consistent i2c bus numbering
-+    modprobe i2c_mv64xxx
-+    modprobe i2c_dev
-+    modprobe i2c_mux_gpio
-+    modprobe eeprom
++db98cx8540_profile()
++{
++    MAC_ADDR=$(fw_printenv -n ethaddr)
++    find /usr/share/sonic/device/*db98cx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++    echo "db98cx8540: Updating switch mac address ${MAC_ADDR}"
 +}
++
 +
 +# - Main entry
 +
-+# Install kernel drivers required for i2c bus access
-+load_kernel_drivers
-+#entropy setting
-+#python /etc/entropy.py
-+
++db98cx8540_profile
 +# LOGIC to enumerate SFP eeprom devices - send 0x50 to kernel i2c driver - initialize devices
 +# the mux may be enumerated at number 4 or 5 so we check for the mux and skip if needed
 +# Get list of the mux channels
@@ -396,72 +616,31 @@ index 000000000..d7a0c459c
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh
 new file mode 100644
-index 000000000..3f32d766f
+index 000000000..1635484d0
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,21 @@
 +#!/bin/bash
 +
-+fw_uboot_env_cfg()
-+{
-+    echo "Setting up U-Boot environment..."
-+    MACH_FILE="/host/machine.conf"
-+    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+
-+    FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
-+
-+    echo $FW_ENV_DEFAULT > /etc/fw_env.config
-+}
++PLATFORM_FALCON="arm64-marvell_db98cx8540_16cd-r0"
++MACH_FILE="/host/machine.conf"
 +
 +db98cx8540_profile()
 +{
-+    MAC_ADDR=`ip link show eth0 | grep ether | awk '{print $2}'`
++    MAC_ADDR=$(fw_printenv -n ethaddr)
 +    find /usr/share/sonic/device/*db98cx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
 +    echo "db98cx8540: Updating switch mac address ${MAC_ADDR}"
 +}
 +
-+update_modulelist()
-+{
-+    MODULE_FILE="/etc/modules-load.d/marvell.conf"
-+
-+    echo "# Module list to load during the boot" > $MODULE_FILE
-+    echo "mvIntDrv" >> $MODULE_FILE
-+    echo "psample" >> $MODULE_FILE
-+}
-+
 +main()
 +{
-+    fw_uboot_env_cfg
-+    db98cx8540_profile
-+    update_modulelist
++    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
++    if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
++        db98cx8540_profile
++    fi
 +}
 +
 +main $@
-diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/entropy.py b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/entropy.py
-new file mode 100644
-index 000000000..338e2ad9b
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/entropy.py
-@@ -0,0 +1,19 @@
-+#!/usr/bin/python
-+import fcntl, struct
-+import time
-+from os import path
-+
-+RNDADDENTROPY=0x40085203
-+
-+def avail():
-+  with open("/proc/sys/kernel/random/entropy_avail", mode='r') as avail:
-+      return int(avail.read())
-+
-+if path.exists("/proc/sys/kernel/random/entropy_avail"):
-+    while 1:
-+        while avail() < 2048:
-+            with open('/dev/urandom', 'rb') as urnd, open("/dev/random", mode='wb') as rnd:
-+                d = urnd.read(512)
-+                t = struct.pack('ii', 4 * len(d), len(d)) + d
-+                fcntl.ioctl(rnd, RNDADDENTROPY, t)
-+        time.sleep(30)
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
 new file mode 100644
 index 000000000..f655e6646
@@ -3164,16 +3343,8 @@ index 000000000..6d52332a2
 +Depends: ${misc:Depends}
 +Description: <insert up to 60 chars description>
 + <insert long description, indented with spaces>
-diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/files b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/files
-new file mode 100644
-index 000000000..e9cd94f82
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/files
-@@ -0,0 +1,2 @@
-+sonic-platform-db98cx8540-16cd-db98cx8540_1.0_arm64.buildinfo unknown optional
-+sonic-platform-db98cx8540-16cd-db98cx8540_1.0_arm64.deb unknown optional
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/rules b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/rules
-new file mode 100644
+new file mode 100755
 index 000000000..00ca29b16
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/rules
@@ -3245,21 +3416,20 @@ index 000000000..00ca29b16
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
 new file mode 100644
-index 000000000..c7c9f0569
+index 000000000..3f5de523b
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.install
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,4 @@
 +db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh usr/local/bin
-+db98cx8540/scripts/entropy.py etc/
 +db98cx8540/scripts/db98cx8540-16cd-init.sh  usr/local/bin
 +db98cx8540/service/db98cx8540-16cd-init.service etc/systemd/system
 +db98cx8540/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_db98cx8540_16cd-r0
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst
 new file mode 100644
-index 000000000..e99887b11
+index 000000000..25094df69
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/debian/sonic-platform-db98cx8540-16cd-db98cx8540.postinst
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,10 @@
 +#!/bin/sh
 +# postinst script for sonic-platform-db98cx8540-16cd
 +#
@@ -3268,40 +3438,27 @@ index 000000000..e99887b11
 +sh /usr/local/bin/db98cx8540-16cd_plt_setup.sh
 +chmod a+x /usr/local/bin/db98cx8540-16cd-init.sh
 +systemctl enable db98cx8540-16cd-init.service
-+systemctl start db98cx8540-16cd-init.service
 +exit 0
 +
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh
 new file mode 100644
-index 000000000..63d02d63c
+index 000000000..d164985db
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,20 @@
 +#!/bin/bash
 +
 +# Platform init script for db98cx8580-32cd 
 +
-+# Load required kernel-mode drivers
-+load_kernel_drivers() {
-+    # Remove modules loaded during Linux init
-+    # FIX-ME: This will be removed in the future when Linux init no longer loads these
-+    rmmod i2c_mux_gpio
-+    rmmod i2c_dev
-+    rmmod i2c_mv64xxx
-+
-+    # Carefully control the load order here to ensure consistent i2c bus numbering
-+    modprobe i2c_mv64xxx
-+    modprobe i2c_dev
-+    modprobe i2c_mux_gpio
-+    modprobe eeprom
++db98cx8580_profile()
++{
++    MAC_ADDR=$(fw_printenv -n ethaddr)
++    find /usr/share/sonic/device/*db98cx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++    echo "db98cx8540: Updating switch mac address ${MAC_ADDR}"
 +}
 +
 +# - Main entry
-+
-+# Install kernel drivers required for i2c bus access
-+load_kernel_drivers
-+#entropy setting
-+#python /etc/entropy.py
++db98cx8580_profile
 +
 +# LOGIC to enumerate SFP eeprom devices - send 0x50 to kernel i2c driver - initialize devices
 +# the mux may be enumerated at number 4 or 5 so we check for the mux and skip if needed
@@ -3311,72 +3468,31 @@ index 000000000..63d02d63c
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh
 new file mode 100644
-index 000000000..5880bdb2b
+index 000000000..d35f90810
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,21 @@
 +#!/bin/bash
 +
-+fw_uboot_env_cfg()
-+{
-+    echo "Setting up U-Boot environment..."
-+    MACH_FILE="/host/machine.conf"
-+    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+
-+    FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
-+
-+    echo $FW_ENV_DEFAULT > /etc/fw_env.config
-+}
++PLATFORM_FALCON="arm64-marvell_db98cx8580_32cd-r0"
++MACH_FILE="/host/machine.conf"
 +
 +db98cx8580_profile()
 +{
-+    MAC_ADDR=`ip link show eth0 | grep ether | awk '{print $2}'`
++    MAC_ADDR=$(fw_printenv -n ethaddr)
 +    find /usr/share/sonic/device/*db98cx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
 +    echo "db98cx8540: Updating switch mac address ${MAC_ADDR}"
 +}
 +
-+update_modulelist()
-+{
-+    MODULE_FILE="/etc/modules-load.d/marvell.conf"
-+
-+    echo "# Module list to load during the boot" > $MODULE_FILE
-+    echo "mvIntDrv" >> $MODULE_FILE
-+    echo "psample" >> $MODULE_FILE
-+}
-+
 +main()
 +{
-+    fw_uboot_env_cfg
-+    db98cx8580_profile
-+    update_modulelist
++    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
++    if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
++        db98cx8580_profile
++    fi
 +}
 +
 +main $@
-diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/entropy.py b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/entropy.py
-new file mode 100644
-index 000000000..338e2ad9b
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/entropy.py
-@@ -0,0 +1,19 @@
-+#!/usr/bin/python
-+import fcntl, struct
-+import time
-+from os import path
-+
-+RNDADDENTROPY=0x40085203
-+
-+def avail():
-+  with open("/proc/sys/kernel/random/entropy_avail", mode='r') as avail:
-+      return int(avail.read())
-+
-+if path.exists("/proc/sys/kernel/random/entropy_avail"):
-+    while 1:
-+        while avail() < 2048:
-+            with open('/dev/urandom', 'rb') as urnd, open("/dev/random", mode='wb') as rnd:
-+                d = urnd.read(512)
-+                t = struct.pack('ii', 4 * len(d), len(d)) + d
-+                fcntl.ioctl(rnd, RNDADDENTROPY, t)
-+        time.sleep(30)
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
 new file mode 100644
 index 000000000..f4a194eba
@@ -6117,16 +6233,8 @@ index 000000000..f492af1fa
 +Depends: ${misc:Depends}
 +Description: <insert up to 60 chars description>
 + <insert long description, indented with spaces>
-diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/files b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/files
-new file mode 100644
-index 000000000..d504b151b
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/files
-@@ -0,0 +1,2 @@
-+sonic-platform-db98cx8580-32cd-db98cx8580_1.0_arm64.buildinfo unknown optional
-+sonic-platform-db98cx8580-32cd-db98cx8580_1.0_arm64.deb unknown optional
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/rules b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/rules
-new file mode 100644
+new file mode 100755
 index 000000000..931db35f0
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/rules
@@ -6198,22 +6306,21 @@ index 000000000..931db35f0
 +.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
 new file mode 100644
-index 000000000..799e06954
+index 000000000..1e9d2c9ef
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.install
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,5 @@
 +db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh usr/local/bin
-+db98cx8580/scripts/entropy.py etc/
 +db98cx8580/scripts/db98cx8580-32cd-init.sh  usr/local/bin
 +db98cx8580/service/db98cx8580-32cd-init.service etc/systemd/system
 +db98cx8580/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_db98cx8580_32cd-r0
 +
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst
 new file mode 100644
-index 000000000..6d598643c
+index 000000000..feaad8d76
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/debian/sonic-platform-db98cx8580-32cd-db98cx8580.postinst
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,10 @@
 +#!/bin/sh
 +# postinst script for sonic-platform-db98cx8580-32cd
 +#
@@ -6222,34 +6329,33 @@ index 000000000..6d598643c
 +sh /usr/local/bin/db98cx8580-32cd_plt_setup.sh
 +chmod a+x /usr/local/bin/db98cx8580-32cd-init.sh
 +systemctl enable db98cx8580-32cd-init.service
-+systemctl start db98cx8580-32cd-init.service
 +exit 0
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/changelog b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/changelog
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/changelog b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/changelog
 new file mode 100644
-index 000000000..e330ff5c3
+index 000000000..7d298cf77
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/changelog
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/changelog
 @@ -0,0 +1,5 @@
-+sonic-platform-rd98dx7312 (0.1) unstable; urgency=low
++sonic-platform-rd98dx35xx (1.0) unstable; urgency=low
 +
-+  * Add support for rd98dx7312.
++  * Add support for rd98dx35xx.
 +
 + -- Marvell <pnaregundi@marvell.com>  Mon, 30 Nov 2021 09:35:58 +0800
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/compat b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/compat
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/compat b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/compat
 new file mode 100644
 index 000000000..ec635144f
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/compat
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/compat
 @@ -0,0 +1 @@
 +9
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/control b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/control
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/control b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/control
 new file mode 100644
-index 000000000..babb61bc9
+index 000000000..b6ab54d3b
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/control
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/control
 @@ -0,0 +1,13 @@
-+Source: sonic-platform-rd98dx7312
++Source: sonic-platform-rd98dx35xx
 +Section: unknown
 +Priority: optional
 +Maintainer: Marvell <pnaregundi@marvell.com>
@@ -6257,38 +6363,29 @@ index 000000000..babb61bc9
 +Standards-Version: 3.9.6
 +Homepage: <insert the upstream URL, if relevant>
 +
-+Package: sonic-platform-rd98dx7312
++Package: sonic-platform-rd98dx35xx
 +Architecture: arm64
 +Depends: ${misc:Depends}
 +Description: <insert up to 60 chars description>
 + <insert long description, indented with spaces>
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/files b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/files
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/install b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/install
 new file mode 100644
-index 000000000..82513478a
+index 000000000..ec352c93e
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/files
-@@ -0,0 +1,2 @@
-+sonic-platform-rd98dx7312_0.1_arm64.buildinfo unknown optional
-+sonic-platform-rd98dx7312_0.1_arm64.deb unknown optional
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/install b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/install
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/install
+@@ -0,0 +1,4 @@
++rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh usr/local/bin
++rd98dx35xx/scripts/rd98dx35xx-init.sh usr/local/bin
++rd98dx35xx/service/rd98dx35xx-init.service etc/systemd/system
++rd98dx35xx/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_rd98DX35xx-r0
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/postinst b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/postinst
 new file mode 100644
-index 000000000..32131c723
+index 000000000..d3e2f92b3
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/install
-@@ -0,0 +1,5 @@
-+rd98dx7312/scripts/rd98dx7312_plt_setup.sh usr/local/bin
-+rd98dx7312/scripts/entropy.py etc/
-+rd98dx7312/scripts/rd98dx7312-init.sh usr/local/bin
-+rd98dx7312/service/rd98dx7312-init.service etc/systemd/system
-+rd98dx7312/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_rd98DX7312_32G16HVG6HLG-r0
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/postinst b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/postinst
-new file mode 100644
-index 000000000..cc8e2fe00
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/postinst
-@@ -0,0 +1,44 @@
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/postinst
+@@ -0,0 +1,43 @@
 +#!/bin/sh
-+# postinst script for sonic-platform-rd98dx7312
++# postinst script for sonic-platform-rd98dx35xx
 +#
 +# see: dh_installdeb(1)
 +
@@ -6309,10 +6406,9 @@ index 000000000..cc8e2fe00
 +
 +case "$1" in
 +    configure)
-+	sh /usr/local/bin/rd98dx7312_plt_setup.sh
-+	chmod a+x /usr/local/bin/rd98dx7312-init.sh
-+	systemctl enable rd98dx7312-init.service
-+	systemctl start rd98dx7312-init.service
++	sh /usr/local/bin/rd98dx35xx_plt_setup.sh
++	chmod a+x /usr/local/bin/rd98dx35xx-init.sh
++	systemctl enable rd98dx35xx-init.service
 +
 +    ;;
 +
@@ -6331,11 +6427,11 @@ index 000000000..cc8e2fe00
 +#DEBHELPER#
 +
 +exit 0
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules
-new file mode 100644
-index 000000000..7efb7f0de
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/rules
+new file mode 100755
+index 000000000..5f27b471c
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/debian/rules
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/debian/rules
 @@ -0,0 +1,62 @@
 +#!/usr/bin/make -f
 +# See debhelper(7) (uncomment to enable)
@@ -6345,9 +6441,9 @@ index 000000000..7efb7f0de
 +include /usr/share/dpkg/pkg-info.mk
 +#--------------------------------------------------------
 +
-+PACKAGE_PRE_NAME := sonic-platform-rd98dx7312
++PACKAGE_PRE_NAME := sonic-platform-rd98dx35xx
 +MOD_SRC_DIR:= $(shell pwd)
-+MODULE_DIRS:= rd98dx7312
++MODULE_DIRS:= rd98dx35xx
 +UTILS_DIR := utils
 +SERVICE_DIR := service
 +
@@ -6399,61 +6495,25 @@ index 000000000..7efb7f0de
 +	dh_builddeb
 +
 +.PHONY: build binary binary-arch binary-indep clean
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/entropy.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/entropy.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx-init.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx-init.sh
 new file mode 100644
-index 000000000..338e2ad9b
+index 000000000..6371cc1e8
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/entropy.py
-@@ -0,0 +1,19 @@
-+#!/usr/bin/python
-+import fcntl, struct
-+import time
-+from os import path
-+
-+RNDADDENTROPY=0x40085203
-+
-+def avail():
-+  with open("/proc/sys/kernel/random/entropy_avail", mode='r') as avail:
-+      return int(avail.read())
-+
-+if path.exists("/proc/sys/kernel/random/entropy_avail"):
-+    while 1:
-+        while avail() < 2048:
-+            with open('/dev/urandom', 'rb') as urnd, open("/dev/random", mode='wb') as rnd:
-+                d = urnd.read(512)
-+                t = struct.pack('ii', 4 * len(d), len(d)) + d
-+                fcntl.ioctl(rnd, RNDADDENTROPY, t)
-+        time.sleep(30)
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312-init.sh b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312-init.sh
-new file mode 100644
-index 000000000..81ea599bd
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312-init.sh
-@@ -0,0 +1,36 @@
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx-init.sh
+@@ -0,0 +1,25 @@
 +#!/bin/bash
 +
 +# Platform init script
 +
-+# Load required kernel-mode drivers
-+load_kernel_drivers() {
-+    # Remove modules loaded during Linux init
-+    # FIX-ME: This will be removed in the future when Linux init no longer loads these
-+    rmmod i2c_dev
-+    rmmod i2c_mv64xxx
-+
-+    # Carefully control the load order here to ensure consistent i2c bus numbering
-+    modprobe i2c_mv64xxx
-+    modprobe i2c_dev
-+    modprobe eeprom
-+    modprobe mvMbusDrv
++rd98DX35xx_profile()
++{
++	MAC_ADDR=$(fw_printenv -n ethaddr)
++	find /usr/share/sonic/device/*rd98DX35xx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++	echo "rd98DX35xx: Updating switch mac address ${MAC_ADDR}"
 +}
 +
-+# - Main entry
-+
-+# Install kernel drivers required for i2c bus access
-+load_kernel_drivers
-+#entropy setting
-+#python /etc/entropy.py
++# Main
++rd98DX35xx_profile
 +
 +# LOGIC to enumerate SFP eeprom devices - send 0x50 to kernel i2c driver - initialize devices
 +# the mux may be enumerated at number 4 or 5 so we check for the mux and skip if needed
@@ -6466,81 +6526,78 @@ index 000000000..81ea599bd
 +chmod 644 /sys/class/i2c-adapter/i2c-0/0-0052/eeprom
 +
 +exit 0
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312_plt_setup.sh b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312_plt_setup.sh
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh
 new file mode 100644
-index 000000000..de90137ee
+index 000000000..0e6fb3d2d
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/scripts/rd98dx7312_plt_setup.sh
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh
 @@ -0,0 +1,44 @@
 +#!/bin/bash
++
++PLATFORM_AC5X="arm64-marvell_rd98DX35xx-r0"
++MACH_FILE="/host/machine.conf"
 +
 +fw_uboot_env_cfg()
 +{
 +    echo "Setting up U-Boot environment..."
-+    MACH_FILE="/host/machine.conf"
-+    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
 +
 +    FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
-+
 +    echo $FW_ENV_DEFAULT > /etc/fw_env.config
 +}
 +
-+rd98DX7312_profile()
++rd98DX35xx_profile()
 +{
 +    MAC_ADDR=$(fw_printenv -n ethaddr)
-+    find /usr/share/sonic/device/*rd98DX7312* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
-+    echo "rd98DX7312: Updating switch mac address ${MAC_ADDR}"
++    find /usr/share/sonic/device/*rd98DX35xx* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++    echo "rd98DX35xx: Updating switch mac address ${MAC_ADDR}"
 +}
 +
 +update_modulelist()
 +{
 +    MODULE_FILE="/etc/modules-load.d/marvell.conf"
 +
-+    echo "# Module list to load during the boot" > $MODULE_FILE
-+    echo "mvIntDrv" >> $MODULE_FILE
-+    echo "psample" >> $MODULE_FILE
-+}
-+
-+haveged_service_cfg()
-+{
-+    # Workaround for failing haveged.service
-+    sed -i 's/^DAEMON_ARGS=.*/DAEMON_ARGS="-w 1024 -d 16"/' /etc/default/haveged
++    if grep -Fxq "mvMbusDrv" $MODULE_FILE
++    then
++        echo "Module list up to date"
++    else
++        echo "mvMbusDrv" >> $MODULE_FILE
++        modprobe mvMbusDrv
++    fi
 +}
 +
 +main()
 +{
-+    fw_uboot_env_cfg
-+    rd98DX7312_profile
-+    update_modulelist
-+    haveged_service_cfg
++    PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
++    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++        fw_uboot_env_cfg
++        rd98DX35xx_profile
++        update_modulelist
++    fi
 +}
 +
 +main $@
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/service/rd98dx7312-init.service b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/service/rd98dx7312-init.service
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/service/rd98dx35xx-init.service b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/service/rd98dx35xx-init.service
 new file mode 100644
-index 000000000..5db55f35e
+index 000000000..0d43c7e2e
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/service/rd98dx7312-init.service
-@@ -0,0 +1,14 @@
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/service/rd98dx35xx-init.service
+@@ -0,0 +1,11 @@
 +[Unit]
-+Description=Platform rd98DX7312 Service
-+Before=pmon.service
-+After=sysinit.target
-+DefaultDependencies=no
++Description=Platform rd98DX35xx Service
++After=rc-local.service
++Before=getty.target
 +
 +[Service]
-+ExecStart=/usr/local/bin/rd98dx7312-init.sh
-+KillSignal=SIGKILL
-+SuccessExitStatus=SIGKILL
-+#StandardOutput=tty
++ExecStart=/usr/local/bin/rd98dx35xx-init.sh
++StandardOutput=tty
 +
 +[Install]
 +WantedBy=multi-user.target
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/setup.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/setup.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/setup.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/setup.py
 new file mode 100644
-index 000000000..680538c70
+index 000000000..e6fe69d44
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/setup.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/setup.py
 @@ -0,0 +1,15 @@
 +#!/usr/bin/env python
 +
@@ -6554,23 +6611,23 @@ index 000000000..680538c70
 +   description='Module to initialize platforms',
 +
 +   packages=['sonic_platform'],
-+   package_dir={'sonic_platform': 'rd98dx7312/sonic_platform'},
++   package_dir={'sonic_platform': 'rd98dx35xx/sonic_platform'},
 +)
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/__init__.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/__init__.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/__init__.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/__init__.py
 new file mode 100644
 index 000000000..4bfefa0fb
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/__init__.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/__init__.py
 @@ -0,0 +1,3 @@
 +__all__ = ["platform", "chassis"]
 +from sonic_platform import *
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/chassis.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/chassis.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/chassis.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/chassis.py
 new file mode 100644
-index 000000000..a702fcf9e
+index 000000000..3c1ee8b08
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/chassis.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/chassis.py
 @@ -0,0 +1,265 @@
 +#!/usr/bin/env python
 +##################################################################
@@ -6616,8 +6673,8 @@ index 000000000..a702fcf9e
 +    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
 +    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
 +    HOST_CHK_CMD = "docker > /dev/null 2>&1"
-+    PLATFORM = "arm64-marvell_rd98DX7312_32G16HVG6HLG-r0"
-+    HWSKU = "rd98DX7312_32G16HVG6HLG"
++    PLATFORM = "arm64-marvell_rd98DX35xx-r0"
++    HWSKU = "rd98DX35xx"
 +
 +
 +    def __init__(self):
@@ -6837,11 +6894,11 @@ index 000000000..a702fcf9e
 +        else:
 +            return True, {'sfp':{}}
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/component.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/component.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/component.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/component.py
 new file mode 100644
 index 000000000..16e01486d
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/component.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/component.py
 @@ -0,0 +1,94 @@
 +########################################################################
 +#
@@ -6937,12 +6994,12 @@ index 000000000..16e01486d
 +        """
 +        return False
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/eeprom.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/eeprom.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/eeprom.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/eeprom.py
 new file mode 100644
-index 000000000..4a63074e5
+index 000000000..f43a84a87
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/eeprom.py
-@@ -0,0 +1,183 @@
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/eeprom.py
+@@ -0,0 +1,182 @@
 +#!/usr/bin/env python
 +
 +########################################################################
@@ -6992,7 +7049,6 @@ index 000000000..4a63074e5
 +
 +        if self.is_sys_eeprom:
 +            self.start_offset = 0
-+            #self.eeprom_path = "/etc/sonic/eeprom"
 +            self.eeprom_path = self.I2C_DIR + "i2c-0/0-0052/eeprom"
 +            # System EEPROM is in ONIE TlvInfo EEPROM format
 +            super(Eeprom, self).__init__(self.eeprom_path,
@@ -7126,11 +7182,11 @@ index 000000000..4a63074e5
 +        found in the system EEPROM.
 +        """
 +        return self.eeprom_tlv_dict
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/platform.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/platform.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/platform.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/platform.py
 new file mode 100644
 index 000000000..0b67a68b8
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/platform.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/platform.py
 @@ -0,0 +1,22 @@
 +#!/usr/bin/env python
 +
@@ -7154,11 +7210,11 @@ index 000000000..0b67a68b8
 +        PlatformBase.__init__(self)
 +        self._chassis = Chassis()
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp.py
 new file mode 100644
-index 000000000..1c9e73a5b
+index 000000000..f94583723
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp.py
 @@ -0,0 +1,968 @@
 +import os
 +import sys
@@ -7274,8 +7330,8 @@ index 000000000..1c9e73a5b
 +    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
 +    HOST_CHK_CMD = "docker > /dev/null 2>&1"
 +
-+    PLATFORM = "arm64-marvell_rd98DX7312_32G16HVG6HLG-r0"
-+    HWSKU = "rd98DX7312_32G16HVG6HLG"
++    PLATFORM = "arm64-marvell_rd98DX35xx-r0"
++    HWSKU = "rd98DX35xx"
 +
 +    port_to_i2c_mapping = 0
 +
@@ -8128,11 +8184,11 @@ index 000000000..1c9e73a5b
 +            integer: The 1-based relative physical position in parent device
 +        """
 +        return self.index
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp_event.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp_event.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp_event.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp_event.py
 new file mode 100644
 index 000000000..45afd59fc
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/sfp_event.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/sfp_event.py
 @@ -0,0 +1,117 @@
 +'''
 +listen for the SFP change event and return to chassis.
@@ -8251,11 +8307,11 @@ index 000000000..45afd59fc
 +                        time.sleep(timeout)
 +                    return True, {}
 +        return False, {}
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/watchdog.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/watchdog.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/watchdog.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/watchdog.py
 new file mode 100644
 index 000000000..2726d19d4
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/sonic_platform/watchdog.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/sonic_platform/watchdog.py
 @@ -0,0 +1,184 @@
 +"""
 +Module contains an implementation of SONiC Platform Base API and
@@ -8441,11 +8497,11 @@ index 000000000..2726d19d4
 +
 +        return timeleft
 +
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/utils/get-base-mac.py b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/utils/get-base-mac.py
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/utils/get-base-mac.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/utils/get-base-mac.py
 new file mode 100644
 index 000000000..fe271d04a
 --- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx7312/rd98dx7312/utils/get-base-mac.py
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/utils/get-base-mac.py
 @@ -0,0 +1,20 @@
 +#!/usr/bin/env python
 +
@@ -8468,7 +8524,7 @@ index 000000000..fe271d04a
 +if __name__ == '__main__':
 +    main()
 diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
-index 9b09d4cd3..2e3cc59ca 100644
+index 9b09d4cd3..5112b895a 100644
 --- a/platform/marvell-arm64/sonic_fit.its
 +++ b/platform/marvell-arm64/sonic_fit.its
 @@ -5,9 +5,9 @@
@@ -8568,76 +8624,3 @@ index 9b09d4cd3..2e3cc59ca 100644
              hash@1 {
                  algo = "sha1";
              };
-diff --git a/platform/marvell-arm64/docker-saiserver-mrvl.mk b/platform/marvell-arm64/docker-saiserver-mrvl.mk
-index 90bb5ae99..498f35ffa 100644
---- a/platform/marvell-arm64/docker-saiserver-mrvl.mk
-+++ b/platform/marvell-arm64/docker-saiserver-mrvl.mk
-@@ -3,7 +3,7 @@
- DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
- $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
- $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
--$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BUSTER)
-+$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
- SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
- 
- $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
-diff --git a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
-index 68670343b..1731e8dca 100644
---- a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
-+++ b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
-@@ -15,7 +15,8 @@ RUN apt-get purge -y syncd
- RUN apt-get update \
-  && apt-get -y install  \
-     net-tools           \
--    python-pip          \
-+    python3-pip		\
-+    python-setuptools	\
-     build-essential     \
-     libssl-dev          \
-     libffi-dev          \
-@@ -24,7 +25,7 @@ RUN apt-get update \
-     cmake               \
-     libqt5core5a        \
-     libqt5network5      \
--    libboost-atomic1.71.0
-+    libboost-atomic1.74.0
- 
- RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
- {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
-@@ -41,9 +42,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
-  && cd ..               \
-  && rm -fr nanomsg-1.0.0 \
-  && rm -f 1.0.0.tar.gz  \
-- && pip install cffi==1.7.0    \
-- && pip install --upgrade cffi==1.7.0 \
-- && pip install nnpy    \
-+ && pip2 install cffi==1.7.0    \
-+ && pip2 install --upgrade cffi==1.7.0 \
-+ && pip2 install nnpy    \
-  && mkdir -p /opt       \
-  && cd /opt             \
-  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
-diff --git a/platform/marvell-arm64/docker-syncd-mrvl.mk b/platform/marvell-arm64/docker-syncd-mrvl.mk
-index 39135311b..236f8a437 100644
---- a/platform/marvell-arm64/docker-syncd-mrvl.mk
-+++ b/platform/marvell-arm64/docker-syncd-mrvl.mk
-@@ -1,7 +1,7 @@
- # docker image for mrvl syncd
- 
- DOCKER_SYNCD_PLATFORM_CODE = mrvl
--include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
-+include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
- 
- $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
- 
-diff --git a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
-index 7ec04c49f..b5e70888a 100755
---- a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
-+++ b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
-@@ -1,5 +1,5 @@
- {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
--FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
-+FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
- 
- ARG docker_container_name
- 

@@ -11,18 +11,9 @@ index d39e73d..454bccf 100644
  		 pfc_detect_nephos.lua \
  		 pfc_detect_cisco-8000.lua \
 diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
-index cd6c94c..f4324c6 100644
+index d1b4188..93d66a2 100644
 --- a/orchagent/orchdaemon.cpp
 +++ b/orchagent/orchdaemon.cpp
-@@ -15,7 +15,7 @@ using namespace std;
- using namespace swss;
- 
- /* select() function timeout retry time */
--#define SELECT_TIMEOUT 1000
-+#define SELECT_TIMEOUT 1999999
- #define PFC_WD_POLL_MSECS 100
- 
- extern sai_switch_api_t*           sai_switch_api;
 @@ -518,6 +518,7 @@ bool OrchDaemon::init()
      }
      else if ((platform == INVM_PLATFORM_SUBSTRING)
