@@ -616,10 +616,10 @@ index 000000000..871ec2a72
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh
 new file mode 100644
-index 000000000..1635484d0
+index 000000000..172e50fbb
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd_plt_setup.sh
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,23 @@
 +#!/bin/bash
 +
 +PLATFORM_FALCON="arm64-marvell_db98cx8540_16cd-r0"
@@ -634,30 +634,29 @@ index 000000000..1635484d0
 +
 +main()
 +{
-+    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+    if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
-+        db98cx8540_profile
++    if [ -f "$MACH_FILE" ]; then
++        PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
++        if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
++            db98cx8540_profile
++        fi
 +    fi
 +}
 +
 +main $@
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
 new file mode 100644
-index 000000000..f655e6646
+index 000000000..2a29621b0
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,11 @@
 +[Unit]
 +Description=Platform db98cx8540-16cd Service
-+Before=pmon.service
-+After=sysinit.target
-+DefaultDependencies=no
++After=rc-local.service
++Before=getty.target
 +
 +[Service]
 +ExecStart=/usr/local/bin/db98cx8540-16cd-init.sh
-+KillSignal=SIGKILL
-+SuccessExitStatus=SIGKILL
-+#StandardOutput=tty
++StandardOutput=tty
 +
 +[Install]
 +WantedBy=multi-user.target
@@ -3468,10 +3467,10 @@ index 000000000..d164985db
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh
 new file mode 100644
-index 000000000..d35f90810
+index 000000000..12adc4abe
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd_plt_setup.sh
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,23 @@
 +#!/bin/bash
 +
 +PLATFORM_FALCON="arm64-marvell_db98cx8580_32cd-r0"
@@ -3486,30 +3485,29 @@ index 000000000..d35f90810
 +
 +main()
 +{
-+    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+    if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
-+        db98cx8580_profile
++    if [ -f "$MACH_FILE" ]; then
++        PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
++        if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
++            db98cx8580_profile
++        fi
 +    fi
 +}
 +
 +main $@
 diff --git a/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
 new file mode 100644
-index 000000000..f4a194eba
+index 000000000..e759256ba
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,11 @@
 +[Unit]
 +Description=Platform db98cx8580-32cd Service
-+Before=pmon.service
-+After=sysinit.target
-+DefaultDependencies=no
++After=rc-local.service
++Before=getty.target
 +
 +[Service]
 +ExecStart=/usr/local/bin/db98cx8580-32cd-init.sh
-+KillSignal=SIGKILL
-+SuccessExitStatus=SIGKILL
-+#StandardOutput=tty
++StandardOutput=tty
 +
 +[Install]
 +WantedBy=multi-user.target
@@ -6528,10 +6526,10 @@ index 000000000..6371cc1e8
 +exit 0
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh
 new file mode 100644
-index 000000000..0e6fb3d2d
+index 000000000..e59a38bed
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx/rd98dx35xx/scripts/rd98dx35xx_plt_setup.sh
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,46 @@
 +#!/bin/bash
 +
 +PLATFORM_AC5X="arm64-marvell_rd98DX35xx-r0"
@@ -6567,11 +6565,13 @@ index 000000000..0e6fb3d2d
 +
 +main()
 +{
-+    PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+    if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
-+        fw_uboot_env_cfg
-+        rd98DX35xx_profile
-+        update_modulelist
++    if [ -f "$MACH_FILE" ]; then
++        PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
++        if [ "$PLATFORM" = "$PLATFORM_AC5X" ]; then
++            fw_uboot_env_cfg
++            rd98DX35xx_profile
++            update_modulelist
++        fi
 +    fi
 +}
 +
