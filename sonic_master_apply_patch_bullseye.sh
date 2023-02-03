@@ -29,15 +29,13 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 # Patches
 PATCHES="generic_fixes_or_wa.patch
 	marvell_arm64.patch
-	marvell_x86.patch
-	sonic_config_engine.patch"
+	marvell_x86.patch"
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
+declare -a SUB_PATCHES=(SP1 SP2 SP3)
 declare -A SP1=([NAME]="sonic_swss.patch" [DIR]="src/sonic-swss")
-declare -A SP2=([NAME]="sonic_sairedis.patch" [DIR]="src/sonic-sairedis")
-declare -A SP3=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
-declare -A SP4=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP2=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
+declare -A SP3=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
 	
 
 log()
@@ -114,7 +112,7 @@ apply_hwsku_changes()
     echo "marvell" > device/marvell/arm64-marvell_db98cx8514_10cc-r0/platform_asic
     echo "marvell" > device/marvell/arm64-marvell_db98cx8540_16cd-r0/platform_asic
     echo "marvell" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
-    echo "marvell" > device/marvell/arm64-marvell_rd98DX7312_32G16HVG6HLG-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
