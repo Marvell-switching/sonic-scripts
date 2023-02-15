@@ -232,10 +232,10 @@ index 000000000..dd96fc4bb
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
 new file mode 100644
-index 000000000..be3473a8a
+index 000000000..457b632bb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,301 @@
 +##################################################################
 +# Module contains an implementation of SONiC Platform Base API and
 +# provides the platform information
@@ -293,8 +293,7 @@ index 000000000..be3473a8a
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +SYSLOG_IDENTIFIER = "chassis"
 +sonic_logger=logger.Logger(SYSLOG_IDENTIFIER)
@@ -945,10 +944,10 @@ index 000000000..73d3cfc11
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
 new file mode 100644
-index 000000000..e9b967f0e
+index 000000000..e62a76d74
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
-@@ -0,0 +1,1399 @@
+@@ -0,0 +1,1398 @@
 +#!/usr/bin/env python
 +import os
 +import sys
@@ -1005,8 +1004,7 @@ index 000000000..e9b967f0e
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +
 +INFO_OFFSET = 128
@@ -2350,10 +2348,10 @@ index 000000000..e9b967f0e
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
 new file mode 100644
-index 000000000..e2a72420f
+index 000000000..19da2330a
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,267 @@
 +#####################################################################
 +#listen to the SDK for the SFP change event and return to chassis.
 +#####################################################################
@@ -2403,8 +2401,7 @@ index 000000000..e2a72420f
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +
 +
