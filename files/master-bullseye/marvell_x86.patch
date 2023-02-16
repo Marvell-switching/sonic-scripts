@@ -47,7 +47,7 @@ index d8a205090..bfd2bbd22 100644
  $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
  
 diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
-index cb2f7eadb..a8b91dbcd 100755
+index 4de6df313..235a18141 100755
 --- a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
 +++ b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
 @@ -1,5 +1,5 @@
@@ -59,7 +59,7 @@ index cb2f7eadb..a8b91dbcd 100755
  
 diff --git a/platform/marvell/linux-modules.mk b/platform/marvell/linux-modules.mk
 new file mode 100644
-index 000000000..001200143
+index 000000000..8f534a251
 --- /dev/null
 +++ b/platform/marvell/linux-modules.mk
 @@ -0,0 +1,6 @@
@@ -232,10 +232,10 @@ index 000000000..dd96fc4bb
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
 new file mode 100644
-index 000000000..ee9770bbd
+index 000000000..457b632bb
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/chassis.py
-@@ -0,0 +1,307 @@
+@@ -0,0 +1,301 @@
 +##################################################################
 +# Module contains an implementation of SONiC Platform Base API and
 +# provides the platform information
@@ -293,8 +293,7 @@ index 000000000..ee9770bbd
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +SYSLOG_IDENTIFIER = "chassis"
 +sonic_logger=logger.Logger(SYSLOG_IDENTIFIER)
@@ -310,6 +309,10 @@ index 000000000..ee9770bbd
 +
 +    reset_reason_dict[0x08] = ChassisBase.REBOOT_CAUSE_THERMAL_OVERLOAD_CPU
 +    reset_reason_dict[0x10] = ChassisBase.REBOOT_CAUSE_WATCHDOG
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8514_10cc-r0"
 +    HWSKU = "db98cx8514_10cc"
 +
 +    def __init__(self):
@@ -353,16 +356,13 @@ index 000000000..ee9770bbd
 +            component = Component(i)
 +            self._component_list.append(component)
 +
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
 +    def __get_path_to_sai_profile_file(self):
-+        """
-+        Retrieve sai.profile path
-+        Returns:
-+            get_path_to_platform_dir(): get platform path depend on, whether we're running on container or on the host
-+            Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                                ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def get_sfp(self, index):
@@ -487,12 +487,6 @@ index 000000000..ee9770bbd
 +            is "REBOOT_CAUSE_HARDWARE_OTHER", the second string can be used
 +            to pass a description of the reboot cause.
 +        """
-+        #lrr = self._get_cpld_register('mb_reboot_cause')
-+        #if (lrr != 'ERR'):
-+        #    reset_reason = lrr
-+        #    if (reset_reason in self.reset_reason_dict):
-+        #        return (self.reset_reason_dict[reset_reason], None)
-+        #
 +        return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
 +
 +    def get_change_event(self, timeout=0):
@@ -950,10 +944,11 @@ index 000000000..73d3cfc11
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
 new file mode 100644
-index 000000000..c7149ca39
+index 000000000..e62a76d74
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp.py
-@@ -0,0 +1,1404 @@
+@@ -0,0 +1,1398 @@
++#!/usr/bin/env python
 +import os
 +import sys
 +import time
@@ -1009,8 +1004,7 @@ index 000000000..c7149ca39
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +
 +INFO_OFFSET = 128
@@ -1156,6 +1150,10 @@ index 000000000..c7149ca39
 +    """
 +    Falcon 2T  platform-specific Sfp class
 +    """
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8514_10cc-r0"
 +    HWSKU = "db98cx8514_10cc"
 +    port_to_i2c_mapping = 0
 +
@@ -1224,7 +1222,9 @@ index 000000000..c7149ca39
 +        else:
 +            return 'N/A'
 +
-+    
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
 +    def i2c_set(self, device_addr, offset, value):
 +        if smbus_present == 0:
 +                cmd = "i2cset -y 2 " + hex(device_addr) + " " + hex(offset) + " " + hex(value)
@@ -1234,27 +1234,15 @@ index 000000000..c7149ca39
 +                bus.write_byte_data(device_addr, offset, value)
 +
 +    def __get_path_to_port_config_file(self):
-+        """
-+        Retrieve port_config.ini path.
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns port_config.ini path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "port_config.ini"])
 +
 +    def __get_path_to_sai_profile_file(self):
-+        """
-+        Retrieve sai.profile path.
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def __read_eeprom_specific_bytes(self, offset, num_bytes):
@@ -2360,10 +2348,10 @@ index 000000000..c7149ca39
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
 new file mode 100644
-index 000000000..eadd9fff4
+index 000000000..19da2330a
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8514-10cc/db98cx8514/sonic_platform/sfp_event.py
-@@ -0,0 +1,258 @@
+@@ -0,0 +1,267 @@
 +#####################################################################
 +#listen to the SDK for the SFP change event and return to chassis.
 +#####################################################################
@@ -2413,8 +2401,7 @@ index 000000000..eadd9fff4
 +
 +sfputil_profiles = {
 +"F2T80x25G":profile_2T80x25G,
-+"F2T48x25G8x100G":profile_2T48x10G_8x100G,
-+"F2T48x10G8x100G":profile_2T48x10G_8x100G
++"F2T48x25G8x100G":profile_2T48x10G_8x100G
 +}
 +
 +
@@ -2423,6 +2410,13 @@ index 000000000..eadd9fff4
 +SYSTEM_NOT_READY = 'system_not_ready'
 +SYSTEM_READY = 'system_become_ready'
 +SYSTEM_FAIL = 'system_fail'
++
++PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++HOST_CHK_CMD = "docker > /dev/null 2>&1"
++PLATFORM = "x86_64-marvell_db98cx8514_10cc-r0"
++HWSKU = "db98cx8514_10cc"
++
 +#PORT numbers
 +PORT_START = 1
 +PORT_END = 80
@@ -2432,13 +2426,18 @@ index 000000000..eadd9fff4
 +class sfp_event:
 +    ''' Listen to plugin/plugout cable events '''
 +
-+    HWSKU = "db98cx8514_10cc"
 +    def __init__(self):
-+        
++       
 +        self.handle = None
 +        self.port_to_eeprom_mapping = {}
-+        self.PORT_START=PORT_START
-+        self.PORT_END=PORT_END
++        self.SFP_PORT_START=SFP_PORT_START
++        self.SFP_PORT_END=SFP_PORT_END
++        self.PLATFORM_ROOT_PATH=PLATFORM_ROOT_PATH
++        self.PLATFORM=PLATFORM
++        self.PMON_HWSKU_PATH=PMON_HWSKU_PATH
++        self.HOST_CHK_CMD = HOST_CHK_CMD
++        self.HWSKU = HWSKU
++
 +        eeprom_path="/sys/bus/i2c/devices/2-0050/eeprom"
 +
 +        x = self.PORT_START
@@ -2460,6 +2459,9 @@ index 000000000..eadd9fff4
 +    def deinitialize(self):
 +        if self.handle is None:
 +            return
++
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
 +
 +    def i2c_set(self, device_addr, offset, value):
 +        if smbus_present == 0:
@@ -2553,16 +2555,11 @@ index 000000000..eadd9fff4
 +            sfpstatus = int(sfpstatus_bin, 2)
 +
 +        return sfpstatus
++
 +    def __get_path_to_sai_file(self):
-+        """
-+        Retrieve sai.profile path
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def check_sfp_status(self, port_change, timeout):
@@ -2990,10 +2987,10 @@ index 000000000..4bfefa0fb
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py
 new file mode 100644
-index 000000000..b56f2c817
+index 000000000..8c191f77b
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/chassis.py
-@@ -0,0 +1,363 @@
+@@ -0,0 +1,311 @@
 +#!/usr/bin/env python
 +##################################################################
 +# Module contains an implementation of SONiC Platform Base API and
@@ -3012,13 +3009,26 @@ index 000000000..b56f2c817
 +except ImportError as e:
 +    raise ImportError(str(e) + "- required module not found")
 +
-+MAX_COMPONENT=2
 +MAX_SELECT_DELAY = 3600
++COPPER_PORT_START = 0
++COPPER_PORT_END = 0
 +SFP_PORT_START = 1
 +SFP_PORT_END = 132
 +PORT_END = 132
++MAX_COMPONENT=2
 +
-+profile_16x400G = {
++profile_6_4_db = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
++  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
++ 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
++ 24:"0x70,7",  25:"0x70,7",  26:"0x70,7",  27:"0x70,7",  28:"0x70,7",  29:"0x70,7",  30:"0x70,7",  31:"0x70,7",
++ 32:"0x70,0",  33:"0x70,0",  34:"0x70,0",  35:"0x70,0",  36:"0x70,0",  37:"0x70,0",  38:"0x70,0",  39:"0x70,0",
++ 40:"0x70,1",  41:"0x70,1",  42:"0x70,1",  43:"0x70,1",  44:"0x70,1",  45:"0x70,1",  46:"0x70,1",  47:"0x70,1",
++ 48:"0x70,2",  49:"0x70,2",  50:"0x70,2",  51:"0x70,2",  52:"0x70,3",  53:"0x70,3",  54:"0x70,3",  55:"0x70,3",
++ 56:"0x71,4",  57:"0x71,4",  58:"0x71,5",  59:"0x71,5",  60:"0x71,6",  61:"0x71,6",  62:"0x71,7",  63:"0x71,7",
++ 64:"0x71,0",  65:"0x71,1",  66:"0x71,2",  67:"0x71,3",  68:"0x74,4",  69:"0x74,5" }
++
++profile_128x50G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -3037,82 +3047,20 @@ index 000000000..b56f2c817
 +120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
 +128:"0x74,4", 129:"0x74,5" }
 +
-+profile_64x25G = {
++profile_48x25G_4x100G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
 +  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
 + 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
 + 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
 + 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
 + 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x74,4",  65:"0x74,5" }
-+
-+profile_32x25G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,1",  27:"0x71,1",  28:"0x71,2",  29:"0x71,2",  30:"0x71,3",  31:"0x71,3",
-+ 32:"0x74,4",  33:"0x74,5" }
-+
-+profile_16x25G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_16x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_24x25G_4x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,1",  29:"0x71,1",  30:"0x71,1",  31:"0x71,1",
-+ 32:"0x71,2",  33:"0x71,2",  34:"0x71,2",  35:"0x71,2",  36:"0x71,3",  37:"0x71,3",  38:"0x71,3",  39:"0x71,3",
-+ 40:"0x74,4",  41:"0x74,5" }
-+
-+profile_24x25G_8x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,0",  29:"0x71,0",  30:"0x71,0",  31:"0x71,0",
-+ 32:"0x71,1",  33:"0x71,1",  34:"0x71,1",  35:"0x71,1",  36:"0x71,1",  37:"0x71,1",  38:"0x71,1",  39:"0x71,1",
-+ 40:"0x71,2",  41:"0x71,2",  42:"0x71,2",  43:"0x71,2",  44:"0x71,2",  45:"0x71,2",  46:"0x71,2",  47:"0x71,2",
-+ 48:"0x71,3",  49:"0x71,3",  50:"0x71,3",  51:"0x71,3",  52:"0x71,3",  53:"0x71,3",  54:"0x71,3",  55:"0x71,3",
-+ 56:"0x74,4",  57:"0x74,5" }
-+
-+profile_48x25G_8x100G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,0",  53:"0x71,0",  54:"0x71,0",  55:"0x71,0",
-+ 56:"0x71,1",  57:"0x71,1",  58:"0x71,1",  59:"0x71,1",  60:"0x71,1",  61:"0x71,1",  62:"0x71,1",  63:"0x71,1",
-+ 64:"0x71,2",  65:"0x71,2",  66:"0x71,2",  67:"0x71,2",  68:"0x71,2",  69:"0x71,2",  70:"0x71,2",  71:"0x71,2",
-+ 72:"0x71,3",  73:"0x71,3",  74:"0x71,3",  75:"0x71,3",  76:"0x71,3",  77:"0x71,3",  78:"0x71,3",  79:"0x71,3",
-+ 80:"0x74,4",  81:"0x74,5" }
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x74,4",  53:"0x74,5" }
 +
 +sfputil_profiles = {
-+ "FALCON16X25G":profile_16x25G,
-+ "FC16x25GIXIA":profile_16x25G_ixia,
-+ "FALCON16x400G":profile_16x400G,
-+ "FALCON128x50G":profile_16x400G,
-+ "FALCON64x100G":profile_16x400G,
-+ "FC16x100G8x400G":profile_16x400G,
-+ "FC24x100G4x400G":profile_16x400G,
-+ "FC32x100G8x400G":profile_16x400G,
-+ "FALCON64x25G":profile_64x25G,
-+ "FALCON32x25G64":profile_32x25G,
-+ "FC24x254x200G64":profile_24x25G_4x200G,
-+ "FC24x258x100G64":profile_24x25G_8x200G,
-+ "FC48x10G8x100G":profile_48x25G_8x100G,
-+ "FC48x25G8x100G":profile_48x25G_8x100G
++ "FC6_8T-DB":profile_6_4_db,
++ "FC128x50G":profile_128x50G,
++ "FC48x25G4x100GR4":profile_48x25G_4x100G
 +}
-+
 +
 +SYSLOG_IDENTIFIER = "chassis"
 +sonic_logger=logger.Logger(SYSLOG_IDENTIFIER)
@@ -3128,13 +3076,19 @@ index 000000000..b56f2c817
 +
 +    reset_reason_dict[0x08] = ChassisBase.REBOOT_CAUSE_THERMAL_OVERLOAD_CPU
 +    reset_reason_dict[0x10] = ChassisBase.REBOOT_CAUSE_WATCHDOG
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8540_16cd-r0"
 +    HWSKU = "db98cx8540_16cd"
 +
 +
 +    def __init__(self):
 +        ChassisBase.__init__(self)
 +
-+        # Port numbers for Initialize SFP
++        # Port numbers for Initialize SFP list
++        self.COPPER_PORT_START = COPPER_PORT_START
++        self.COPPER_PORT_END = COPPER_PORT_END
 +        self.SFP_PORT_START = SFP_PORT_START
 +        self.SFP_PORT_END = SFP_PORT_END
 +        self.PORT_END = PORT_END
@@ -3165,16 +3119,13 @@ index 000000000..b56f2c817
 +            component = Component(i)
 +            self._component_list.append(component)
 +
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
 +    def __get_path_to_sai_profile_file(self):
-+        """
-+        Retrieve sai.profile path
-+        Returns:
-+            get_path_to_platform_dir(): get platform path depend on, whether we're running on container or on the host
-+            Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                                ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def get_sfp(self, index):
@@ -3299,12 +3250,6 @@ index 000000000..b56f2c817
 +            is "REBOOT_CAUSE_HARDWARE_OTHER", the second string can be used
 +            to pass a description of the reboot cause.
 +        """
-+        #lrr = self._get_cpld_register('mb_reboot_cause')
-+        #if (lrr != 'ERR'):
-+        #    reset_reason = lrr
-+        #    if (reset_reason in self.reset_reason_dict):
-+        #        return (self.reset_reason_dict[reset_reason], None)
-+        #
 +        return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
 +
 +    def get_change_event(self, timeout=0):
@@ -3727,10 +3672,10 @@ index 000000000..0b67a68b8
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py
 new file mode 100644
-index 000000000..39d8cb5da
+index 000000000..3da3b9d04
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp.py
-@@ -0,0 +1,1435 @@
+@@ -0,0 +1,1380 @@
 +#!/usr/bin/env python
 +import os
 +import time
@@ -3757,7 +3702,18 @@ index 000000000..39d8cb5da
 +except ImportError as e:
 +    smbus_present = 0
 +
-+profile_16x400G = {
++profile_6_4_db = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
++  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
++ 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
++ 24:"0x70,7",  25:"0x70,7",  26:"0x70,7",  27:"0x70,7",  28:"0x70,7",  29:"0x70,7",  30:"0x70,7",  31:"0x70,7",
++ 32:"0x70,0",  33:"0x70,0",  34:"0x70,0",  35:"0x70,0",  36:"0x70,0",  37:"0x70,0",  38:"0x70,0",  39:"0x70,0",
++ 40:"0x70,1",  41:"0x70,1",  42:"0x70,1",  43:"0x70,1",  44:"0x70,1",  45:"0x70,1",  46:"0x70,1",  47:"0x70,1",
++ 48:"0x70,2",  49:"0x70,2",  50:"0x70,2",  51:"0x70,2",  52:"0x70,3",  53:"0x70,3",  54:"0x70,3",  55:"0x70,3",
++ 56:"0x71,4",  57:"0x71,4",  58:"0x71,5",  59:"0x71,5",  60:"0x71,6",  61:"0x71,6",  62:"0x71,7",  63:"0x71,7",
++ 64:"0x71,0",  65:"0x71,1",  66:"0x71,2",  67:"0x71,3",  68:"0x74,4",  69:"0x74,5" }
++
++profile_128x50G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -3776,80 +3732,19 @@ index 000000000..39d8cb5da
 +120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
 +128:"0x74,4", 129:"0x74,5" }
 +
-+profile_64x25G = {
++profile_48x25G_4x100G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
 +  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
 + 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
 + 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
 + 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
 + 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x74,4",  65:"0x74,5" }
-+
-+profile_32x25G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,1",  27:"0x71,1",  28:"0x71,2",  29:"0x71,2",  30:"0x71,3",  31:"0x71,3",
-+ 32:"0x74,4",  33:"0x74,5" }
-+
-+profile_16x25G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_16x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_24x25G_4x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,1",  29:"0x71,1",  30:"0x71,1",  31:"0x71,1",
-+ 32:"0x71,2",  33:"0x71,2",  34:"0x71,2",  35:"0x71,2",  36:"0x71,3",  37:"0x71,3",  38:"0x71,3",  39:"0x71,3",
-+ 40:"0x74,4",  41:"0x74,5" }
-+
-+profile_24x25G_8x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,0",  29:"0x71,0",  30:"0x71,0",  31:"0x71,0",
-+ 32:"0x71,1",  33:"0x71,1",  34:"0x71,1",  35:"0x71,1",  36:"0x71,1",  37:"0x71,1",  38:"0x71,1",  39:"0x71,1",
-+ 40:"0x71,2",  41:"0x71,2",  42:"0x71,2",  43:"0x71,2",  44:"0x71,2",  45:"0x71,2",  46:"0x71,2",  47:"0x71,2",
-+ 48:"0x71,3",  49:"0x71,3",  50:"0x71,3",  51:"0x71,3",  52:"0x71,3",  53:"0x71,3",  54:"0x71,3",  55:"0x71,3",
-+ 56:"0x74,4",  57:"0x74,5" }
-+
-+profile_48x25G_8x100G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,0",  53:"0x71,0",  54:"0x71,0",  55:"0x71,0",
-+ 56:"0x71,1",  57:"0x71,1",  58:"0x71,1",  59:"0x71,1",  60:"0x71,1",  61:"0x71,1",  62:"0x71,1",  63:"0x71,1",
-+ 64:"0x71,2",  65:"0x71,2",  66:"0x71,2",  67:"0x71,2",  68:"0x71,2",  69:"0x71,2",  70:"0x71,2",  71:"0x71,2",
-+ 72:"0x71,3",  73:"0x71,3",  74:"0x71,3",  75:"0x71,3",  76:"0x71,3",  77:"0x71,3",  78:"0x71,3",  79:"0x71,3",
-+ 80:"0x74,4",  81:"0x74,5" }
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x74,4",  53:"0x74,5" }
 +
 +sfputil_profiles = {
-+ "FALCON16X25G":profile_16x25G,
-+ "FC16x25GIXIA":profile_16x25G_ixia,
-+ "FALCON16x400G":profile_16x400G,
-+ "FALCON128x50G":profile_16x400G,
-+ "FALCON64x100G":profile_16x400G,
-+ "FC16x100G8x400G":profile_16x400G,
-+ "FC24x100G4x400G":profile_16x400G,
-+ "FC32x100G8x400G":profile_16x400G,
-+ "FALCON64x25G":profile_64x25G,
-+ "FALCON32x25G64":profile_32x25G,
-+ "FC24x254x200G64":profile_24x25G_4x200G,
-+ "FC24x258x100G64":profile_24x25G_8x200G,
-+ "FC48x10G8x100G":profile_48x25G_8x100G,
-+ "FC48x25G8x100G":profile_48x25G_8x100G
++ "FC6_8T-DB":profile_6_4_db,
++ "FC128x50G":profile_128x50G,
++ "FC48x25G4x100GR4":profile_48x25G_4x100G
 +}
 +
 +INFO_OFFSET = 128
@@ -3984,6 +3879,10 @@ index 000000000..39d8cb5da
 +sonic_logger = logger.Logger(SYSLOG_IDENTIFIER)
 +
 +class Sfp(SfpBase):
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8540_16cd-r0"
 +    HWSKU = "db98cx8540_16cd"
 +    _port_start = 1
 +    _port_end = 132
@@ -4054,6 +3953,9 @@ index 000000000..39d8cb5da
 +            return 'N/A'
 +
 +    
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
 +    def i2c_set(self, device_addr, offset, value):
 +        if smbus_present == 0:
 +                cmd = "i2cset -y 2 " + hex(device_addr) + " " + hex(offset) + " " + hex(value)
@@ -4063,27 +3965,15 @@ index 000000000..39d8cb5da
 +                bus.write_byte_data(device_addr, offset, value)
 +
 +    def __get_path_to_port_config_file(self):
-+        """
-+        Retrieve port_config.ini path.
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns port_config.ini path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "port_config.ini"])
 +
 +    def __get_path_to_sai_profile_file(self):
-+        """
-+        Retrieve sai.profile path.
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def __read_eeprom_specific_bytes(self, offset, num_bytes):
@@ -5168,10 +5058,10 @@ index 000000000..39d8cb5da
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py
 new file mode 100644
-index 000000000..604eaf49e
+index 000000000..fef3aa3b2
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8540-16cd/db98cx8540/sonic_platform/sfp_event.py
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,217 @@
 +#!/usr/bin/env python
 +'''
 +listen to the SDK for the SFP change event and return to chassis.
@@ -5189,7 +5079,18 @@ index 000000000..604eaf49e
 +except ImportError as e:
 +    smbus_present = 0
 +
-+profile_16x400G = {
++profile_6_4_db = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
++  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
++ 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
++ 24:"0x70,7",  25:"0x70,7",  26:"0x70,7",  27:"0x70,7",  28:"0x70,7",  29:"0x70,7",  30:"0x70,7",  31:"0x70,7",
++ 32:"0x70,0",  33:"0x70,0",  34:"0x70,0",  35:"0x70,0",  36:"0x70,0",  37:"0x70,0",  38:"0x70,0",  39:"0x70,0",
++ 40:"0x70,1",  41:"0x70,1",  42:"0x70,1",  43:"0x70,1",  44:"0x70,1",  45:"0x70,1",  46:"0x70,1",  47:"0x70,1",
++ 48:"0x70,2",  49:"0x70,2",  50:"0x70,2",  51:"0x70,2",  52:"0x70,3",  53:"0x70,3",  54:"0x70,3",  55:"0x70,3",
++ 56:"0x71,4",  57:"0x71,4",  58:"0x71,5",  59:"0x71,5",  60:"0x71,6",  61:"0x71,6",  62:"0x71,7",  63:"0x71,7",
++ 64:"0x71,0",  65:"0x71,1",  66:"0x71,2",  67:"0x71,3",  68:"0x74,4",  69:"0x74,5" }
++
++profile_128x50G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -5208,80 +5109,19 @@ index 000000000..604eaf49e
 +120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
 +128:"0x74,4", 129:"0x74,5" }
 +
-+profile_64x25G = {
++profile_48x25G_4x100G = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
 +  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
 + 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
 + 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
 + 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
 + 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x74,4",  65:"0x74,5" }
-+
-+profile_32x25G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,1",  27:"0x71,1",  28:"0x71,2",  29:"0x71,2",  30:"0x71,3",  31:"0x71,3",
-+ 32:"0x74,4",  33:"0x74,5" }
-+
-+profile_16x25G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_16x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x74,4",  17:"0x74,5" }
-+
-+profile_24x25G_4x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,1",  29:"0x71,1",  30:"0x71,1",  31:"0x71,1",
-+ 32:"0x71,2",  33:"0x71,2",  34:"0x71,2",  35:"0x71,2",  36:"0x71,3",  37:"0x71,3",  38:"0x71,3",  39:"0x71,3",
-+ 40:"0x74,4",  41:"0x74,5" }
-+
-+profile_24x25G_8x200G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,5",   3:"0x70,5",   4:"0x70,6",   5:"0x70,6",   6:"0x70,7",   7:"0x70,7",
-+  8:"0x70,0",   9:"0x70,0",  10:"0x70,1",  11:"0x70,1",  12:"0x70,2",  13:"0x70,2",  14:"0x70,3",  15:"0x70,3",
-+ 16:"0x71,4",  17:"0x71,4",  18:"0x71,5",  19:"0x71,5",  20:"0x71,6",  21:"0x71,6",  22:"0x71,7",  23:"0x71,7",
-+ 24:"0x71,0",  25:"0x71,0",  26:"0x71,0",  27:"0x71,0",  28:"0x71,0",  29:"0x71,0",  30:"0x71,0",  31:"0x71,0",
-+ 32:"0x71,1",  33:"0x71,1",  34:"0x71,1",  35:"0x71,1",  36:"0x71,1",  37:"0x71,1",  38:"0x71,1",  39:"0x71,1",
-+ 40:"0x71,2",  41:"0x71,2",  42:"0x71,2",  43:"0x71,2",  44:"0x71,2",  45:"0x71,2",  46:"0x71,2",  47:"0x71,2",
-+ 48:"0x71,3",  49:"0x71,3",  50:"0x71,3",  51:"0x71,3",  52:"0x71,3",  53:"0x71,3",  54:"0x71,3",  55:"0x71,3",
-+ 56:"0x74,4",  57:"0x74,5" }
-+
-+profile_48x25G_8x100G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,0",  53:"0x71,0",  54:"0x71,0",  55:"0x71,0",
-+ 56:"0x71,1",  57:"0x71,1",  58:"0x71,1",  59:"0x71,1",  60:"0x71,1",  61:"0x71,1",  62:"0x71,1",  63:"0x71,1",
-+ 64:"0x71,2",  65:"0x71,2",  66:"0x71,2",  67:"0x71,2",  68:"0x71,2",  69:"0x71,2",  70:"0x71,2",  71:"0x71,2",
-+ 72:"0x71,3",  73:"0x71,3",  74:"0x71,3",  75:"0x71,3",  76:"0x71,3",  77:"0x71,3",  78:"0x71,3",  79:"0x71,3",
-+ 80:"0x74,4",  81:"0x74,5" }
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x74,4",  53:"0x74,5" }
 +
 +sfputil_profiles = {
-+ "FALCON16X25G":profile_16x25G,
-+ "FC16x25GIXIA":profile_16x25G_ixia,
-+ "FALCON16x400G":profile_16x400G,
-+ "FALCON128x50G":profile_16x400G,
-+ "FALCON64x100G":profile_16x400G,
-+ "FC16x100G8x400G":profile_16x400G,
-+ "FC24x100G4x400G":profile_16x400G,
-+ "FC32x100G8x400G":profile_16x400G,
-+ "FALCON64x25G":profile_64x25G,
-+ "FALCON32x25G64":profile_32x25G,
-+ "FC24x254x200G64":profile_24x25G_4x200G,
-+ "FC24x258x100G64":profile_24x25G_8x200G,
-+ "FC48x10G8x100G":profile_48x25G_8x100G,
-+ "FC48x25G8x100G":profile_48x25G_8x100G
++ "FC6_8T-DB":profile_6_4_db,
++ "FC128x50G":profile_128x50G,
++ "FC48x25G4x100GR4":profile_48x25G_4x100G
 +}
 +
 +
@@ -5292,6 +5132,11 @@ index 000000000..604eaf49e
 +SYSTEM_READY = 'system_become_ready'
 +SYSTEM_FAIL = 'system_fail'
 +
++PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++HOST_CHK_CMD = "docker > /dev/null 2>&1"
++PLATFORM = "x86_64-marvell_db98cx8540_16cd-r0"
++HWSKU = "db98cx8540_16cd"
 +
 +# SFP PORT numbers
 +SFP_PORT_START = 1
@@ -5304,13 +5149,19 @@ index 000000000..604eaf49e
 +class sfp_event:
 +    ''' Listen to plugin/plugout cable events '''
 +
-+    HWSKU = "db98cx8540_16cd"
++
 +    def __init__(self):
 +        
 +        self.handle = None
 +        self.port_to_eeprom_mapping = {}
 +        self.SFP_PORT_START=SFP_PORT_START
 +        self.SFP_PORT_END=SFP_PORT_END
++        self.PLATFORM_ROOT_PATH=PLATFORM_ROOT_PATH
++        self.PLATFORM=PLATFORM
++        self.PMON_HWSKU_PATH=PMON_HWSKU_PATH
++        self.HOST_CHK_CMD = HOST_CHK_CMD
++        self.HWSKU = HWSKU
++
 +        eeprom_path="/sys/bus/i2c/devices/2-0050/eeprom"
 +
 +        x = self.SFP_PORT_START
@@ -5332,6 +5183,9 @@ index 000000000..604eaf49e
 +        if self.handle is None:
 +            return
 +
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++    
 +    def i2c_set(self, device_addr, offset, value):
 +        if smbus_present == 0:
 +            cmd = "i2cset -y 2 " + hex(device_addr) + " " + hex(offset) + " " + hex(value)
@@ -5367,15 +5221,9 @@ index 000000000..604eaf49e
 +        return sfp_status
 +
 +    def __get_path_to_sai_file(self):
-+        """
-+        Retrieve sai.profile path
-+        Returns:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host.
-+             Returns sai.proile path.
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def check_sfp_status(self, port_change, timeout):
@@ -5807,10 +5655,10 @@ index 000000000..4bfefa0fb
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py
 new file mode 100644
-index 000000000..f90f8cdb4
+index 000000000..1b5611b6d
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/chassis.py
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,311 @@
 +#!/usr/bin/env python
 +##################################################################
 +# Module contains an implementation of SONiC Platform Base API and
@@ -5823,25 +5671,21 @@ index 000000000..f90f8cdb4
 +    from sonic_platform_base.chassis_base import ChassisBase
 +    from sonic_platform.sfp import Sfp
 +    from sonic_platform.eeprom import Eeprom
-+    from sonic_platform.component import Component
 +    from sonic_py_common import logger
++    from sonic_platform.component import Component
 +
 +except ImportError as e:
 +    raise ImportError(str(e) + "- required module not found")
 +
-+MAX_COMPONENT=2
 +MAX_SELECT_DELAY = 3600
 +COPPER_PORT_START = 0
 +COPPER_PORT_END = 0
 +SFP_PORT_START = 1
 +SFP_PORT_END = 257
 +PORT_END = 257
++MAX_COMPONENT=2
 +
-+
-+
-+
-+
-+profile_32x400G = {
++profile_12_8_db = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -5854,47 +5698,12 @@ index 000000000..f90f8cdb4
 + 72:"0x71,5",  73:"0x71,5",  74:"0x71,5",  75:"0x71,5",  76:"0x71,5",  77:"0x71,5",  78:"0x71,5",  79:"0x71,5",
 + 80:"0x71,6",  81:"0x71,6",  82:"0x71,6",  83:"0x71,6",  84:"0x71,6",  85:"0x71,6",  86:"0x71,6",  87:"0x71,6",
 + 88:"0x71,7",  89:"0x71,7",  90:"0x71,7",  91:"0x71,7",  92:"0x71,7",  93:"0x71,7",  94:"0x71,7",  95:"0x71,7",
-+ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,0", 101:"0x71,0", 102:"0x71,0", 103:"0x71,0",
-+104:"0x71,1", 105:"0x71,1", 106:"0x71,1", 107:"0x71,1", 108:"0x71,1", 109:"0x71,1", 110:"0x71,1", 111:"0x71,1",
-+112:"0x71,2", 113:"0x71,2", 114:"0x71,2", 115:"0x71,2", 116:"0x71,2", 117:"0x71,2", 118:"0x71,2", 119:"0x71,2",
-+120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
-+128:"0x72,4", 129:"0x72,4", 130:"0x72,4", 131:"0x72,4", 132:"0x72,4", 133:"0x72,4", 134:"0x72,4", 135:"0x72,4",
-+136:"0x72,5", 137:"0x72,5", 138:"0x72,5", 139:"0x72,5", 140:"0x72,5", 141:"0x72,5", 142:"0x72,5", 143:"0x72,5",
-+144:"0x72,6", 145:"0x72,6", 146:"0x72,6", 147:"0x72,6", 148:"0x72,6", 149:"0x72,6", 150:"0x72,6", 151:"0x72,6",
-+152:"0x72,7", 153:"0x72,7", 154:"0x72,7", 155:"0x72,7", 156:"0x72,7", 157:"0x72,7", 158:"0x72,7", 159:"0x72,7",
-+160:"0x72,0", 161:"0x72,0", 162:"0x72,0", 163:"0x72,0", 164:"0x72,0", 165:"0x72,0", 166:"0x72,0", 167:"0x72,0",
-+168:"0x72,1", 169:"0x72,1", 170:"0x72,1", 171:"0x72,1", 172:"0x72,1", 173:"0x72,1", 174:"0x72,1", 175:"0x72,1",
-+176:"0x72,2", 177:"0x72,2", 178:"0x72,2", 179:"0x72,2", 180:"0x72,2", 181:"0x72,2", 182:"0x72,2", 183:"0x72,2",
-+184:"0x72,3", 185:"0x72,3", 186:"0x72,3", 187:"0x72,3", 188:"0x72,3", 189:"0x72,3", 190:"0x72,3", 191:"0x72,3",
-+192:"0x73,4", 193:"0x73,4", 194:"0x73,4", 195:"0x73,4", 196:"0x73,4", 197:"0x73,4", 198:"0x73,4", 199:"0x73,4",
-+200:"0x73,5", 201:"0x73,5", 202:"0x73,5", 203:"0x73,5", 204:"0x73,5", 205:"0x73,5", 206:"0x73,5", 207:"0x73,5",
-+208:"0x73,6", 209:"0x73,6", 210:"0x73,6", 211:"0x73,6", 212:"0x73,6", 213:"0x73,6", 214:"0x73,6", 215:"0x73,6",
-+216:"0x73,7", 217:"0x73,7", 218:"0x73,7", 219:"0x73,7", 220:"0x73,7", 221:"0x73,7", 222:"0x73,7", 223:"0x73,7",
-+224:"0x73,0", 225:"0x73,0", 226:"0x73,0", 227:"0x73,0", 228:"0x73,0", 229:"0x73,0", 230:"0x73,0", 231:"0x73,0",
-+232:"0x73,1", 233:"0x73,1", 234:"0x73,1", 235:"0x73,1", 236:"0x73,1", 237:"0x73,1", 238:"0x73,1", 239:"0x73,1",
-+240:"0x73,2", 241:"0x73,2", 242:"0x73,2", 243:"0x73,2", 244:"0x73,2", 245:"0x73,2", 246:"0x73,2", 247:"0x73,2",
-+248:"0x73,3", 249:"0x73,3", 250:"0x73,3", 251:"0x73,3", 252:"0x73,3", 253:"0x73,3", 254:"0x73,3", 255:"0x73,3",
-+256:"0x74,4" }
-+
-+
-+profile_128x10G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x72,4",  65:"0x72,4",  66:"0x72,4",  67:"0x72,4",  68:"0x72,5",  69:"0x72,5",  70:"0x72,5",  71:"0x72,5",
-+ 72:"0x72,6",  73:"0x72,6",  74:"0x72,6",  75:"0x72,6",  76:"0x72,7",  77:"0x72,7",  78:"0x72,7",  79:"0x72,7",
-+ 80:"0x72,0",  81:"0x72,0",  82:"0x72,0",  83:"0x72,0",  84:"0x72,1",  85:"0x72,1",  86:"0x72,1",  87:"0x72,1",
-+ 88:"0x72,2",  89:"0x72,2",  90:"0x72,2",  91:"0x72,2",  92:"0x72,3",  93:"0x72,3",  94:"0x72,3",  95:"0x72,3",
-+ 96:"0x73,4",  97:"0x73,4",  98:"0x73,4",  99:"0x73,4", 100:"0x73,5", 101:"0x73,5", 102:"0x73,5", 103:"0x73,5",
-+104:"0x73,6", 105:"0x73,6", 106:"0x73,6", 107:"0x73,6", 108:"0x73,7", 109:"0x73,7", 110:"0x73,7", 111:"0x73,7",
-+112:"0x73,0", 113:"0x73,0", 114:"0x73,0", 115:"0x73,0", 116:"0x73,1", 117:"0x73,1", 118:"0x73,1", 119:"0x73,1",
-+120:"0x73,2", 121:"0x73,2", 122:"0x73,2", 123:"0x73,2", 124:"0x73,3", 125:"0x73,3", 126:"0x73,3", 127:"0x73,3",
-+128:"0x74,4" }
++ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,1", 101:"0x71,1", 102:"0x71,1", 103:"0x71,1",
++104:"0x71,2", 105:"0x71,2", 106:"0x71,2", 107:"0x71,2", 108:"0x71,3", 109:"0x71,3", 110:"0x71,3", 111:"0x71,3",
++112:"0x72,4", 113:"0x72,4", 114:"0x72,5", 115:"0x72,5", 116:"0x72,6", 117:"0x72,6", 118:"0x72,7", 119:"0x71,7",
++120:"0x72,0", 121:"0x72,0", 122:"0x72,1", 123:"0x72,1", 124:"0x72,2", 125:"0x72,2", 126:"0x72,3", 127:"0x72,3",
++128:"0x73,4", 129:"0x73,5", 130:"0x73,6", 131:"0x73,7", 132:"0x73,0", 133:"0x73,1", 134:"0x73,2", 135:"0x73,3",
++136:"0x74,4" }
 +
 +profile_32x25G = {
 + 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
@@ -5903,46 +5712,20 @@ index 000000000..f90f8cdb4
 +24:"0x73,4",  25:"0x73,5",  26:"0x73,6",  27:"0x73,7",  28:"0x73,0",  29:"0x73,1",  30:"0x73,2",  31:"0x73,3",
 +32:"0x74,4" }
 +
-+profile_32x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+32:"0x74,4" }
-+
-+profile_24x25G_8x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x73,0",  41:"0x73,0",  42:"0x73,0",  43:"0x73,0",  44:"0x73,1",  45:"0x73,1",  46:"0x73,1",  47:"0x73,1",
-+48:"0x73,2",  49:"0x73,2",  50:"0x73,2",  51:"0x73,2",  52:"0x73,3",  53:"0x73,3",  54:"0x73,3",  55:"0x73,3",
-+56:"0x74,4" }
-+
-+profile_24x25G_4x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x74,4" }
++profile_48x25G_8x100G = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4", 4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
++  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
++ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
++ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
++ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
++ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x72,4",  53:"0x72,5",  54:"0x72,6",  55:"0x72,7",
++ 56:"0x74,4" }
 +
 +sfputil_profiles = {
-+ "FALCON32X25G":profile_32x25G,
-+ "FC32x25GIXIA":profile_32x25G_ixia,
-+ "FALCON32x400G":profile_32x400G,
-+ "FALCON128x100G":profile_32x400G,
-+ "FALCON64x100GR4":profile_32x400G,
-+ "FC32x10016x400G":profile_32x400G,
-+ "FC48x100G8x400G":profile_32x400G,
-+ "FC96x100G8x400G":profile_32x400G,
-+ "FALCON128x10G":profile_128x10G,
-+ "FALCON128x25G":profile_128x10G,
-+ "FC64x25G64x10G":profile_128x10G,
-+ "FC24x25G4x200G":profile_24x25G_4x200G,
-+ "FC24x25G8x200G":profile_24x25G_8x200G,
-+ "FALCONEBOF":profile_24x25G_8x200G
++ "FC12_8T-DB":profile_12_8_db,
++ "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32X25G":profile_32x25G
 +}
 +
 +
@@ -5961,6 +5744,10 @@ index 000000000..f90f8cdb4
 +
 +    reset_reason_dict[0x08] = ChassisBase.REBOOT_CAUSE_THERMAL_OVERLOAD_CPU
 +    reset_reason_dict[0x10] = ChassisBase.REBOOT_CAUSE_WATCHDOG
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8580_32cd-r0"
 +    HWSKU = "db98cx8580_32cd"
 +
 +
@@ -5999,18 +5786,16 @@ index 000000000..f90f8cdb4
 +            component = Component(i)
 +            self._component_list.append(component)
 +
-+    def __get_path_to_sai_profile_file(self):
 +
-+        """
-+        Retrieve sai.profile path.
-+        Return:
-+            get_path_to_platform_dir() : get platform path, whether we're running on container or on the host
-+            Return path to  sai.profile
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
++    def __get_path_to_sai_profile_file(self):
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                                ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
++
 +
 +    def get_sfp(self, index):
 +        """
@@ -6105,6 +5890,18 @@ index 000000000..f90f8cdb4
 +        """
 +        return self._eeprom.system_eeprom_info()
 +
++    def get_reboot_cause(self):
++        """
++        Retrieves the cause of the previous reboot
++        Returns:
++            A tuple (string, string) where the first element is a string
++            containing the cause of the previous reboot. This string must be
++            one of the predefined strings in this class. If the first string
++            is "REBOOT_CAUSE_HARDWARE_OTHER", the second string can be used
++            to pass a description of the reboot cause.
++        """
++        return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
++
 +    def get_watchdog(self):
 +        """
 +        Retrieves hardware watchdog device on this chassis
@@ -6122,26 +5919,6 @@ index 000000000..f90f8cdb4
 +            sonic_logger.log_warning(" Fail to load watchdog {}".format(repr(e)))
 +
 +        return self._watchdog
-+
-+
-+
-+    def get_reboot_cause(self):
-+        """
-+        Retrieves the cause of the previous reboot
-+        Returns:
-+            A tuple (string, string) where the first element is a string
-+            containing the cause of the previous reboot. This string must be
-+            one of the predefined strings in this class. If the first string
-+            is "REBOOT_CAUSE_HARDWARE_OTHER", the second string can be used
-+            to pass a description of the reboot cause.
-+        """
-+        #lrr = self._get_cpld_register('mb_reboot_cause')
-+        #if (lrr != 'ERR'):
-+        #    reset_reason = lrr
-+        #    if (reset_reason in self.reset_reason_dict):
-+        #        return (self.reset_reason_dict[reset_reason], None)
-+        #
-+        return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
 +
 +    def get_change_event(self, timeout=0):
 +        """
@@ -6563,10 +6340,10 @@ index 000000000..0b67a68b8
 +
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py
 new file mode 100644
-index 000000000..588158b41
+index 000000000..3e699a0ce
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp.py
-@@ -0,0 +1,1445 @@
+@@ -0,0 +1,1378 @@
 +#!/usr/bin/env python
 +import os
 +import time
@@ -6593,8 +6370,7 @@ index 000000000..588158b41
 +except ImportError as e:
 +    smbus_present = 0
 +
-+
-+profile_32x400G = {
++profile_12_8_db = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -6607,47 +6383,12 @@ index 000000000..588158b41
 + 72:"0x71,5",  73:"0x71,5",  74:"0x71,5",  75:"0x71,5",  76:"0x71,5",  77:"0x71,5",  78:"0x71,5",  79:"0x71,5",
 + 80:"0x71,6",  81:"0x71,6",  82:"0x71,6",  83:"0x71,6",  84:"0x71,6",  85:"0x71,6",  86:"0x71,6",  87:"0x71,6",
 + 88:"0x71,7",  89:"0x71,7",  90:"0x71,7",  91:"0x71,7",  92:"0x71,7",  93:"0x71,7",  94:"0x71,7",  95:"0x71,7",
-+ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,0", 101:"0x71,0", 102:"0x71,0", 103:"0x71,0",
-+104:"0x71,1", 105:"0x71,1", 106:"0x71,1", 107:"0x71,1", 108:"0x71,1", 109:"0x71,1", 110:"0x71,1", 111:"0x71,1",
-+112:"0x71,2", 113:"0x71,2", 114:"0x71,2", 115:"0x71,2", 116:"0x71,2", 117:"0x71,2", 118:"0x71,2", 119:"0x71,2",
-+120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
-+128:"0x72,4", 129:"0x72,4", 130:"0x72,4", 131:"0x72,4", 132:"0x72,4", 133:"0x72,4", 134:"0x72,4", 135:"0x72,4",
-+136:"0x72,5", 137:"0x72,5", 138:"0x72,5", 139:"0x72,5", 140:"0x72,5", 141:"0x72,5", 142:"0x72,5", 143:"0x72,5",
-+144:"0x72,6", 145:"0x72,6", 146:"0x72,6", 147:"0x72,6", 148:"0x72,6", 149:"0x72,6", 150:"0x72,6", 151:"0x72,6",
-+152:"0x72,7", 153:"0x72,7", 154:"0x72,7", 155:"0x72,7", 156:"0x72,7", 157:"0x72,7", 158:"0x72,7", 159:"0x72,7",
-+160:"0x72,0", 161:"0x72,0", 162:"0x72,0", 163:"0x72,0", 164:"0x72,0", 165:"0x72,0", 166:"0x72,0", 167:"0x72,0",
-+168:"0x72,1", 169:"0x72,1", 170:"0x72,1", 171:"0x72,1", 172:"0x72,1", 173:"0x72,1", 174:"0x72,1", 175:"0x72,1",
-+176:"0x72,2", 177:"0x72,2", 178:"0x72,2", 179:"0x72,2", 180:"0x72,2", 181:"0x72,2", 182:"0x72,2", 183:"0x72,2",
-+184:"0x72,3", 185:"0x72,3", 186:"0x72,3", 187:"0x72,3", 188:"0x72,3", 189:"0x72,3", 190:"0x72,3", 191:"0x72,3",
-+192:"0x73,4", 193:"0x73,4", 194:"0x73,4", 195:"0x73,4", 196:"0x73,4", 197:"0x73,4", 198:"0x73,4", 199:"0x73,4",
-+200:"0x73,5", 201:"0x73,5", 202:"0x73,5", 203:"0x73,5", 204:"0x73,5", 205:"0x73,5", 206:"0x73,5", 207:"0x73,5",
-+208:"0x73,6", 209:"0x73,6", 210:"0x73,6", 211:"0x73,6", 212:"0x73,6", 213:"0x73,6", 214:"0x73,6", 215:"0x73,6",
-+216:"0x73,7", 217:"0x73,7", 218:"0x73,7", 219:"0x73,7", 220:"0x73,7", 221:"0x73,7", 222:"0x73,7", 223:"0x73,7",
-+224:"0x73,0", 225:"0x73,0", 226:"0x73,0", 227:"0x73,0", 228:"0x73,0", 229:"0x73,0", 230:"0x73,0", 231:"0x73,0",
-+232:"0x73,1", 233:"0x73,1", 234:"0x73,1", 235:"0x73,1", 236:"0x73,1", 237:"0x73,1", 238:"0x73,1", 239:"0x73,1",
-+240:"0x73,2", 241:"0x73,2", 242:"0x73,2", 243:"0x73,2", 244:"0x73,2", 245:"0x73,2", 246:"0x73,2", 247:"0x73,2",
-+248:"0x73,3", 249:"0x73,3", 250:"0x73,3", 251:"0x73,3", 252:"0x73,3", 253:"0x73,3", 254:"0x73,3", 255:"0x73,3",
-+256:"0x74,4" }
-+
-+
-+profile_128x10G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x72,4",  65:"0x72,4",  66:"0x72,4",  67:"0x72,4",  68:"0x72,5",  69:"0x72,5",  70:"0x72,5",  71:"0x72,5",
-+ 72:"0x72,6",  73:"0x72,6",  74:"0x72,6",  75:"0x72,6",  76:"0x72,7",  77:"0x72,7",  78:"0x72,7",  79:"0x72,7",
-+ 80:"0x72,0",  81:"0x72,0",  82:"0x72,0",  83:"0x72,0",  84:"0x72,1",  85:"0x72,1",  86:"0x72,1",  87:"0x72,1",
-+ 88:"0x72,2",  89:"0x72,2",  90:"0x72,2",  91:"0x72,2",  92:"0x72,3",  93:"0x72,3",  94:"0x72,3",  95:"0x72,3",
-+ 96:"0x73,4",  97:"0x73,4",  98:"0x73,4",  99:"0x73,4", 100:"0x73,5", 101:"0x73,5", 102:"0x73,5", 103:"0x73,5",
-+104:"0x73,6", 105:"0x73,6", 106:"0x73,6", 107:"0x73,6", 108:"0x73,7", 109:"0x73,7", 110:"0x73,7", 111:"0x73,7",
-+112:"0x73,0", 113:"0x73,0", 114:"0x73,0", 115:"0x73,0", 116:"0x73,1", 117:"0x73,1", 118:"0x73,1", 119:"0x73,1",
-+120:"0x73,2", 121:"0x73,2", 122:"0x73,2", 123:"0x73,2", 124:"0x73,3", 125:"0x73,3", 126:"0x73,3", 127:"0x73,3",
-+128:"0x74,4" }
++ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,1", 101:"0x71,1", 102:"0x71,1", 103:"0x71,1",
++104:"0x71,2", 105:"0x71,2", 106:"0x71,2", 107:"0x71,2", 108:"0x71,3", 109:"0x71,3", 110:"0x71,3", 111:"0x71,3",
++112:"0x72,4", 113:"0x72,4", 114:"0x72,5", 115:"0x72,5", 116:"0x72,6", 117:"0x72,6", 118:"0x72,7", 119:"0x71,7",
++120:"0x72,0", 121:"0x72,0", 122:"0x72,1", 123:"0x72,1", 124:"0x72,2", 125:"0x72,2", 126:"0x72,3", 127:"0x72,3",
++128:"0x73,4", 129:"0x73,5", 130:"0x73,6", 131:"0x73,7", 132:"0x73,0", 133:"0x73,1", 134:"0x73,2", 135:"0x73,3",
++136:"0x74,4" }
 +
 +profile_32x25G = {
 + 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
@@ -6656,46 +6397,20 @@ index 000000000..588158b41
 +24:"0x73,4",  25:"0x73,5",  26:"0x73,6",  27:"0x73,7",  28:"0x73,0",  29:"0x73,1",  30:"0x73,2",  31:"0x73,3",
 +32:"0x74,4" }
 +
-+profile_32x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+32:"0x74,4" }
-+
-+profile_24x25G_8x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x73,0",  41:"0x73,0",  42:"0x73,0",  43:"0x73,0",  44:"0x73,1",  45:"0x73,1",  46:"0x73,1",  47:"0x73,1",
-+48:"0x73,2",  49:"0x73,2",  50:"0x73,2",  51:"0x73,2",  52:"0x73,3",  53:"0x73,3",  54:"0x73,3",  55:"0x73,3",
-+56:"0x74,4" }
-+
-+profile_24x25G_4x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x74,4" }
++profile_48x25G_8x100G = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4", 4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
++  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
++ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
++ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
++ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
++ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x72,4",  53:"0x72,5",  54:"0x72,6",  55:"0x72,7",
++ 56:"0x74,4" }
 +
 +sfputil_profiles = {
-+ "FALCON32X25G":profile_32x25G,
-+ "FC32x25GIXIA":profile_32x25G_ixia,
-+ "FALCON32x400G":profile_32x400G,
-+ "FALCON128x100G":profile_32x400G,
-+ "FALCON64x100GR4":profile_32x400G,
-+ "FC32x10016x400G":profile_32x400G,
-+ "FC48x100G8x400G":profile_32x400G,
-+ "FC96x100G8x400G":profile_32x400G,
-+ "FALCON128x10G":profile_128x10G,
-+ "FALCON128x25G":profile_128x10G,
-+ "FC64x25G64x10G":profile_128x10G,
-+ "FC24x25G4x200G":profile_24x25G_4x200G,
-+ "FC24x25G8x200G":profile_24x25G_8x200G,
-+ "FALCONEBOF":profile_24x25G_8x200G
++ "FC12_8T-DB":profile_12_8_db,
++ "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32X25G":profile_32x25G
 +}
 +
 +
@@ -6831,6 +6546,10 @@ index 000000000..588158b41
 +sonic_logger = logger.Logger(SYSLOG_IDENTIFIER)
 +
 +class Sfp(SfpBase):
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "x86_64-marvell_db98cx8580_32cd-r0"
 +    HWSKU = "db98cx8580_32cd"
 +    _port_start = 1
 +    _port_end = 257
@@ -6900,6 +6619,9 @@ index 000000000..588158b41
 +        else:
 +            return 'N/A'
 +
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
 +    def i2c_set(self, device_addr, offset, value):
 +        if smbus_present == 0:
 +                cmd = "i2cset -y 2 " + hex(device_addr) + " " + hex(offset) + " " + hex(value)
@@ -6909,27 +6631,15 @@ index 000000000..588158b41
 +                bus.write_byte_data(device_addr, offset, value)
 +
 +    def __get_path_to_port_config_file(self):
-+        """
-+        Retrieve port_config.ini
-+        Return:
-+             get_path_to_platform_dir() : get platform path, whether we're running on container or on the host
-+             Return path to port_config.ini
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "port_config.ini"])
 +
 +    def __get_path_to_sai_profile_file(self):
-+        """
-+        Retrieve Platform path to read sai.profile
-+        Return:
-+             get_path_to_platform_dir() : get platform path, whether we're running on container or on the host
-+             Return path to  sai.profile
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def __read_eeprom_specific_bytes(self, offset, num_bytes):
@@ -8014,10 +7724,10 @@ index 000000000..588158b41
 +        return self.get_presence()
 diff --git a/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py
 new file mode 100644
-index 000000000..598cbe632
+index 000000000..f016a2444
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-db98cx8580-32cd/db98cx8580/sonic_platform/sfp_event.py
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,210 @@
 +#!/usr/bin/env python
 +'''
 +listen to the SDK for the SFP change event and return to chassis.
@@ -8035,8 +7745,7 @@ index 000000000..598cbe632
 +except ImportError as e:
 +    smbus_present = 0
 +
-+
-+profile_32x400G = {
++profile_12_8_db = {
 +  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,4",   5:"0x70,4",   6:"0x70,4",   7:"0x70,4",
 +  8:"0x70,5",   9:"0x70,5",  10:"0x70,5",  11:"0x70,5",  12:"0x70,5",  13:"0x70,5",  14:"0x70,5",  15:"0x70,5",
 + 16:"0x70,6",  17:"0x70,6",  18:"0x70,6",  19:"0x70,6",  20:"0x70,6",  21:"0x70,6",  22:"0x70,6",  23:"0x70,6",
@@ -8049,47 +7758,12 @@ index 000000000..598cbe632
 + 72:"0x71,5",  73:"0x71,5",  74:"0x71,5",  75:"0x71,5",  76:"0x71,5",  77:"0x71,5",  78:"0x71,5",  79:"0x71,5",
 + 80:"0x71,6",  81:"0x71,6",  82:"0x71,6",  83:"0x71,6",  84:"0x71,6",  85:"0x71,6",  86:"0x71,6",  87:"0x71,6",
 + 88:"0x71,7",  89:"0x71,7",  90:"0x71,7",  91:"0x71,7",  92:"0x71,7",  93:"0x71,7",  94:"0x71,7",  95:"0x71,7",
-+ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,0", 101:"0x71,0", 102:"0x71,0", 103:"0x71,0",
-+104:"0x71,1", 105:"0x71,1", 106:"0x71,1", 107:"0x71,1", 108:"0x71,1", 109:"0x71,1", 110:"0x71,1", 111:"0x71,1",
-+112:"0x71,2", 113:"0x71,2", 114:"0x71,2", 115:"0x71,2", 116:"0x71,2", 117:"0x71,2", 118:"0x71,2", 119:"0x71,2",
-+120:"0x71,3", 121:"0x71,3", 122:"0x71,3", 123:"0x71,3", 124:"0x71,3", 125:"0x71,3", 126:"0x71,3", 127:"0x71,3",
-+128:"0x72,4", 129:"0x72,4", 130:"0x72,4", 131:"0x72,4", 132:"0x72,4", 133:"0x72,4", 134:"0x72,4", 135:"0x72,4",
-+136:"0x72,5", 137:"0x72,5", 138:"0x72,5", 139:"0x72,5", 140:"0x72,5", 141:"0x72,5", 142:"0x72,5", 143:"0x72,5",
-+144:"0x72,6", 145:"0x72,6", 146:"0x72,6", 147:"0x72,6", 148:"0x72,6", 149:"0x72,6", 150:"0x72,6", 151:"0x72,6",
-+152:"0x72,7", 153:"0x72,7", 154:"0x72,7", 155:"0x72,7", 156:"0x72,7", 157:"0x72,7", 158:"0x72,7", 159:"0x72,7",
-+160:"0x72,0", 161:"0x72,0", 162:"0x72,0", 163:"0x72,0", 164:"0x72,0", 165:"0x72,0", 166:"0x72,0", 167:"0x72,0",
-+168:"0x72,1", 169:"0x72,1", 170:"0x72,1", 171:"0x72,1", 172:"0x72,1", 173:"0x72,1", 174:"0x72,1", 175:"0x72,1",
-+176:"0x72,2", 177:"0x72,2", 178:"0x72,2", 179:"0x72,2", 180:"0x72,2", 181:"0x72,2", 182:"0x72,2", 183:"0x72,2",
-+184:"0x72,3", 185:"0x72,3", 186:"0x72,3", 187:"0x72,3", 188:"0x72,3", 189:"0x72,3", 190:"0x72,3", 191:"0x72,3",
-+192:"0x73,4", 193:"0x73,4", 194:"0x73,4", 195:"0x73,4", 196:"0x73,4", 197:"0x73,4", 198:"0x73,4", 199:"0x73,4",
-+200:"0x73,5", 201:"0x73,5", 202:"0x73,5", 203:"0x73,5", 204:"0x73,5", 205:"0x73,5", 206:"0x73,5", 207:"0x73,5",
-+208:"0x73,6", 209:"0x73,6", 210:"0x73,6", 211:"0x73,6", 212:"0x73,6", 213:"0x73,6", 214:"0x73,6", 215:"0x73,6",
-+216:"0x73,7", 217:"0x73,7", 218:"0x73,7", 219:"0x73,7", 220:"0x73,7", 221:"0x73,7", 222:"0x73,7", 223:"0x73,7",
-+224:"0x73,0", 225:"0x73,0", 226:"0x73,0", 227:"0x73,0", 228:"0x73,0", 229:"0x73,0", 230:"0x73,0", 231:"0x73,0",
-+232:"0x73,1", 233:"0x73,1", 234:"0x73,1", 235:"0x73,1", 236:"0x73,1", 237:"0x73,1", 238:"0x73,1", 239:"0x73,1",
-+240:"0x73,2", 241:"0x73,2", 242:"0x73,2", 243:"0x73,2", 244:"0x73,2", 245:"0x73,2", 246:"0x73,2", 247:"0x73,2",
-+248:"0x73,3", 249:"0x73,3", 250:"0x73,3", 251:"0x73,3", 252:"0x73,3", 253:"0x73,3", 254:"0x73,3", 255:"0x73,3",
-+256:"0x74,4" }
-+
-+
-+profile_128x10G = {
-+  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
-+ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
-+ 48:"0x71,0",  49:"0x71,0",  50:"0x71,0",  51:"0x71,0",  52:"0x71,1",  53:"0x71,1",  54:"0x71,1",  55:"0x71,1",
-+ 56:"0x71,2",  57:"0x71,2",  58:"0x71,2",  59:"0x71,2",  60:"0x71,3",  61:"0x71,3",  62:"0x71,3",  63:"0x71,3",
-+ 64:"0x72,4",  65:"0x72,4",  66:"0x72,4",  67:"0x72,4",  68:"0x72,5",  69:"0x72,5",  70:"0x72,5",  71:"0x72,5",
-+ 72:"0x72,6",  73:"0x72,6",  74:"0x72,6",  75:"0x72,6",  76:"0x72,7",  77:"0x72,7",  78:"0x72,7",  79:"0x72,7",
-+ 80:"0x72,0",  81:"0x72,0",  82:"0x72,0",  83:"0x72,0",  84:"0x72,1",  85:"0x72,1",  86:"0x72,1",  87:"0x72,1",
-+ 88:"0x72,2",  89:"0x72,2",  90:"0x72,2",  91:"0x72,2",  92:"0x72,3",  93:"0x72,3",  94:"0x72,3",  95:"0x72,3",
-+ 96:"0x73,4",  97:"0x73,4",  98:"0x73,4",  99:"0x73,4", 100:"0x73,5", 101:"0x73,5", 102:"0x73,5", 103:"0x73,5",
-+104:"0x73,6", 105:"0x73,6", 106:"0x73,6", 107:"0x73,6", 108:"0x73,7", 109:"0x73,7", 110:"0x73,7", 111:"0x73,7",
-+112:"0x73,0", 113:"0x73,0", 114:"0x73,0", 115:"0x73,0", 116:"0x73,1", 117:"0x73,1", 118:"0x73,1", 119:"0x73,1",
-+120:"0x73,2", 121:"0x73,2", 122:"0x73,2", 123:"0x73,2", 124:"0x73,3", 125:"0x73,3", 126:"0x73,3", 127:"0x73,3",
-+128:"0x74,4" }
++ 96:"0x71,0",  97:"0x71,0",  98:"0x71,0",  99:"0x71,0", 100:"0x71,1", 101:"0x71,1", 102:"0x71,1", 103:"0x71,1",
++104:"0x71,2", 105:"0x71,2", 106:"0x71,2", 107:"0x71,2", 108:"0x71,3", 109:"0x71,3", 110:"0x71,3", 111:"0x71,3",
++112:"0x72,4", 113:"0x72,4", 114:"0x72,5", 115:"0x72,5", 116:"0x72,6", 117:"0x72,6", 118:"0x72,7", 119:"0x71,7",
++120:"0x72,0", 121:"0x72,0", 122:"0x72,1", 123:"0x72,1", 124:"0x72,2", 125:"0x72,2", 126:"0x72,3", 127:"0x72,3",
++128:"0x73,4", 129:"0x73,5", 130:"0x73,6", 131:"0x73,7", 132:"0x73,0", 133:"0x73,1", 134:"0x73,2", 135:"0x73,3",
++136:"0x74,4" }
 +
 +profile_32x25G = {
 + 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
@@ -8098,49 +7772,21 @@ index 000000000..598cbe632
 +24:"0x73,4",  25:"0x73,5",  26:"0x73,6",  27:"0x73,7",  28:"0x73,0",  29:"0x73,1",  30:"0x73,2",  31:"0x73,3",
 +32:"0x74,4" }
 +
-+profile_32x25G_ixia = {
-+ 0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4",   4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
-+ 8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
-+16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
-+24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
-+32:"0x74,4" }
-+
-+profile_24x25G_8x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x73,0",  41:"0x73,0",  42:"0x73,0",  43:"0x73,0",  44:"0x73,1",  45:"0x73,1",  46:"0x73,1",  47:"0x73,1",
-+48:"0x73,2",  49:"0x73,2",  50:"0x73,2",  51:"0x73,2",  52:"0x73,3",  53:"0x73,3",  54:"0x73,3",  55:"0x73,3",
-+56:"0x74,4" }
-+
-+profile_24x25G_4x200G = {
-+ 0:"0x70,4",   1:"0x70,5",   2:"0x70,6",   3:"0x70,7",   4:"0x70,0",   5:"0x70,1",   6:"0x70,2",   7:"0x70,3",
-+ 8:"0x71,4",   9:"0x71,5",  10:"0x71,6",  11:"0x71,7",  12:"0x71,0",  13:"0x71,1",  14:"0x71,2",  15:"0x71,3",
-+16:"0x72,4",  17:"0x72,5",  18:"0x72,6",  19:"0x72,7",  20:"0x72,0",  21:"0x72,1",  22:"0x72,2",  23:"0x72,3",
-+24:"0x73,4",  25:"0x73,4",  26:"0x73,4",  27:"0x73,4",  28:"0x73,5",  29:"0x73,5",  30:"0x73,5",  31:"0x73,5",
-+32:"0x73,6",  33:"0x73,6",  34:"0x73,6",  35:"0x73,6",  36:"0x73,7",  37:"0x73,7",  38:"0x73,7",  39:"0x73,7",
-+40:"0x74,4" }
++profile_48x25G_8x100G = {
++  0:"0x70,4",   1:"0x70,4",   2:"0x70,4",   3:"0x70,4", 4:"0x70,5",   5:"0x70,5",   6:"0x70,5",   7:"0x70,5",
++  8:"0x70,6",   9:"0x70,6",  10:"0x70,6",  11:"0x70,6",  12:"0x70,7",  13:"0x70,7",  14:"0x70,7",  15:"0x70,7",
++ 16:"0x70,0",  17:"0x70,0",  18:"0x70,0",  19:"0x70,0",  20:"0x70,1",  21:"0x70,1",  22:"0x70,1",  23:"0x70,1",
++ 24:"0x70,2",  25:"0x70,2",  26:"0x70,2",  27:"0x70,2",  28:"0x70,3",  29:"0x70,3",  30:"0x70,3",  31:"0x70,3",
++ 32:"0x71,4",  33:"0x71,4",  34:"0x71,4",  35:"0x71,4",  36:"0x71,5",  37:"0x71,5",  38:"0x71,5",  39:"0x71,5",
++ 40:"0x71,6",  41:"0x71,6",  42:"0x71,6",  43:"0x71,6",  44:"0x71,7",  45:"0x71,7",  46:"0x71,7",  47:"0x71,7",
++ 48:"0x71,0",  49:"0x71,1",  50:"0x71,2",  51:"0x71,3",  52:"0x72,4",  53:"0x72,5",  54:"0x72,6",  55:"0x72,7",
++ 56:"0x74,4" }
 +
 +sfputil_profiles = {
-+ "FALCON32X25G":profile_32x25G,
-+ "FC32x25GIXIA":profile_32x25G_ixia,
-+ "FALCON32x400G":profile_32x400G,
-+ "FALCON128x100G":profile_32x400G,
-+ "FALCON64x100GR4":profile_32x400G,
-+ "FC32x10016x400G":profile_32x400G,
-+ "FC48x100G8x400G":profile_32x400G,
-+ "FC96x100G8x400G":profile_32x400G,
-+ "FALCON128x10G":profile_128x10G,
-+ "FALCON128x25G":profile_128x10G,
-+ "FC64x25G64x10G":profile_128x10G,
-+ "FC24x25G4x200G":profile_24x25G_4x200G,
-+ "FC24x25G8x200G":profile_24x25G_8x200G,
-+ "FALCONEBOF":profile_24x25G_8x200G
++ "FC12_8T-DB":profile_12_8_db,
++ "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32X25G":profile_32x25G
 +}
-+
-+
 +
 +# system level event/error
 +EVENT_ON_ALL_SFP = '-1'
@@ -8148,6 +7794,11 @@ index 000000000..598cbe632
 +SYSTEM_READY = 'system_become_ready'
 +SYSTEM_FAIL = 'system_fail'
 +
++PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++HOST_CHK_CMD = "docker > /dev/null 2>&1"
++PLATFORM = "x86_64-marvell_db98cx8580_32cd-r0"
++HWSKU = "db98cx8580_32cd"
 +
 +# SFP PORT numbers
 +SFP_PORT_START = 1
@@ -8159,13 +7810,19 @@ index 000000000..598cbe632
 +
 +class sfp_event:
 +    ''' Listen to plugin/plugout cable events '''
-+    HWSKU = "db98cx8580_32cd"
++    
++
 +    def __init__(self):
 +        
 +        self.handle = None
 +        self.port_to_eeprom_mapping = {}
 +        self.SFP_PORT_START=SFP_PORT_START
 +        self.SFP_PORT_END=SFP_PORT_END
++        self.PLATFORM_ROOT_PATH=PLATFORM_ROOT_PATH
++        self.PLATFORM=PLATFORM
++        self.PMON_HWSKU_PATH=PMON_HWSKU_PATH
++        self.HOST_CHK_CMD = HOST_CHK_CMD
++        self.HWSKU = HWSKU
 +
 +        eeprom_path="/sys/bus/i2c/devices/2-0050/eeprom"
 +
@@ -8223,15 +7880,9 @@ index 000000000..598cbe632
 +        return sfp_status
 +
 +    def __get_path_to_sai_file(self):
-+        """
-+        Retrieve sai.profile path
-+        Return:
-+             get_path_to_platform_dir() : get platform path depend on, whether we're running on container or on the host
-+             Return path to  sai.profile
-+        """
-+        from sonic_py_common import device_info
-+        platform_path = device_info.get_path_to_platform_dir()
-+        hwsku_path = "/".join([platform_path, self.HWSKU])
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
 +        return "/".join([hwsku_path, "sai.profile"])
 +
 +    def check_sfp_status(self, port_change, timeout):
