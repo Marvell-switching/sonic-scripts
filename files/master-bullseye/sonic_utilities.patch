@@ -1,9 +1,20 @@
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 15 Feb 2023 10:57:59 +0530
+Subject: [PATCH] [generate_dump]: Enhance show techsupport for Marvell
+ platform
+
+Change-Id: Ibb5b5a860833e8d7834a1d72756d070c61f2ab37
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ scripts/generate_dump | 72 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 72 insertions(+)
+
 diff --git a/scripts/generate_dump b/scripts/generate_dump
-index 235c553..3ec8f71 100755
+index 2a7172f4c7..d0dcae29e9 100755
 --- a/scripts/generate_dump
 +++ b/scripts/generate_dump
-@@ -1056,6 +1056,74 @@ collect_mellanox() {
- 
+@@ -1157,6 +1157,73 @@ collect_mellanox_dfw_dumps() {
+     done
  }
  
 +###############################################################################
@@ -24,7 +35,6 @@ index 235c553..3ec8f71 100755
 +    if [ "$1" = "collect SER" ];then
 +        local cmd="sudo cat /var/log/syslog | grep \"Chip MARVELL occurs\""
 +    else
-+        #local cmd="docker exec syncd marvell_cmd -c \"$1\""
 +        local cmd="~/mrvlcmd -c \"$1\""
 +    fi
 +    save_cmd "$cmd" "sdkdump/$2"
@@ -77,7 +87,7 @@ index 235c553..3ec8f71 100755
  ###############################################################################
  # Collect Broadcom specific information
  # Globals:
-@@ -1580,6 +1648,11 @@ main() {
+@@ -1726,6 +1793,11 @@ main() {
          collect_cisco_8000
      fi
  

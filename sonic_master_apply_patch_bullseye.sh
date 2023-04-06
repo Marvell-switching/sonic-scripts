@@ -29,7 +29,8 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 # Patches
 PATCHES="generic_fixes_or_wa.patch
 	marvell_arm64.patch
-	marvell_x86.patch"
+	marvell_x86.patch
+	AC5X-with-external-cpu.patch"
 
 # Sub module patches
 declare -a SUB_PATCHES=(SP1 SP2 SP3)
@@ -109,10 +110,6 @@ apply_hwsku_changes()
     rm -fr device/marvell/arm64-marvell_db98cx8540_16cd-r0  || true
     rm -fr device/marvell/armhf-marvell_et6448m_52x-r0      || true
     tar -C device/marvell/ -xzf mrvl_sonic_hwsku_ezb.tgz
-    echo "marvell" > device/marvell/arm64-marvell_db98cx8514_10cc-r0/platform_asic
-    echo "marvell" > device/marvell/arm64-marvell_db98cx8540_16cd-r0/platform_asic
-    echo "marvell" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
-    echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
@@ -122,6 +119,14 @@ apply_hwsku_changes()
     mv device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/sfputil.py
     mv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/sfputil.py
     mv device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/sfputil.py
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_db98cx8514_10cc-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_db98cx8540_16cd-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_ext-r0/platform_asic
 }
 
 main()
