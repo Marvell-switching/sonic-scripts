@@ -1,3 +1,4 @@
+From 8a5567e34fb06a318a9702f01b255d1d8effa4b6 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Thu, 6 Apr 2023 04:44:43 +0000
 Subject: Add platform support for AC5X with external cpu
@@ -7,6 +8,12 @@ Subject: Add platform support for AC5X with external cpu
  platform/marvell-arm64/one-image.mk           |   1 +
  .../marvell-arm64/platform-rd98dx35xx-ext.mk  |   8 +
  platform/marvell-arm64/rules.mk               |   1 +
+ .../debian/changelog                          |   5 +
+ .../debian/compat                             |   1 +
+ .../debian/control                            |  13 +
+ .../debian/install                            |   5 +
+ .../debian/postinst                           |  10 +
+ .../debian/rules                              |  65 ++
  .../scripts/rd98dx35xx-ext-init.sh            |  20 +
  .../scripts/rd98dx35xx-ext_plt_setup.sh       |  23 +
  .../service/rd98dx35xx-ext-init.service       |  11 +
@@ -20,8 +27,14 @@ Subject: Add platform support for AC5X with external cpu
  .../sonic_platform/sfp_event.py               | 117 +++
  .../rd98dx35xx_ext/sonic_platform/watchdog.py | 184 ++++
  .../rd98dx35xx_ext/utils/get-base-mac.py      |  20 +
- 16 files changed, 1934 insertions(+)
+ 22 files changed, 2033 insertions(+)
  create mode 100644 platform/marvell-arm64/platform-rd98dx35xx-ext.mk
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+ create mode 100755 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
@@ -74,6 +87,141 @@ index e549af165..b5b8375d3 100644
  
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM) 	\
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+new file mode 100644
+index 000000000..3c816ad07
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+@@ -0,0 +1,5 @@
++sonic-platform-rd98dx35xx-ext (1.0) unstable; urgency=low
++
++  * Add support for rd98dx35xx-ext.
++
++ -- Marvell <pnaregundi@marvell.com>  Mon, 30 Nov 2021 09:35:58 +0800
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+new file mode 100644
+index 000000000..ec635144f
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+@@ -0,0 +1 @@
++9
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+new file mode 100644
+index 000000000..3930eeb96
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+@@ -0,0 +1,13 @@
++Source: sonic-platform-rd98dx35xx-ext
++Section: unknown
++Priority: optional
++Maintainer: Marvell
++Build-Depends: debhelper (>=9)
++Standards-Version: 3.9.6
++Homepage: <insert the upstream URL, if relevant>
++
++Package: sonic-platform-rd98dx35xx-ext
++Architecture: arm64
++Depends: ${misc:Depends}
++Description: <insert up to 60 chars description>
++ <insert long description, indented with spaces>
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+new file mode 100644
+index 000000000..8d486e0c3
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+@@ -0,0 +1,5 @@
++rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh usr/local/bin
++rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh  usr/local/bin
++rd98dx35xx_ext/service/rd98dx35xx-ext-init.service etc/systemd/system
++rd98dx35xx_ext/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_rd98DX35xx_ext-r0
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+new file mode 100644
+index 000000000..83cff7d37
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+@@ -0,0 +1,10 @@
++#!/bin/sh
++# postinst script for sonic-platform-rd98dx35xx-ext
++#
++# see: dh_installdeb(1)
++
++sh /usr/local/bin/rd98dx35xx-ext_plt_setup.sh
++chmod a+x /usr/local/bin/rd98dx35xx-ext-init.sh
++systemctl enable rd98dx35xx-ext-init.service
++exit 0
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
+new file mode 100755
+index 000000000..08971b680
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
+@@ -0,0 +1,65 @@
++#!/usr/bin/make -f
++# See debhelper(7) (uncomment to enable)
++# output every command that modifies files on the build system.
++#export DH_VERBOSE = 1
++
++include /usr/share/dpkg/pkg-info.mk
++#--------------------------------------------------------
++
++PACKAGE_PRE_NAME := sonic-platform-rd98dx35xx-ext
++MOD_SRC_DIR:= $(shell pwd)
++MODULE_DIRS:= rd98dx35xx_ext
++UTILS_DIR := utils
++SERVICE_DIR := service
++PLATFORM_DIR := sonic_platform
++
++%:
++	dh $@ --with systemd,python3 --buildsystem=pybuild
++
++clean:
++	dh_testdir
++	dh_testroot
++	dh_clean
++
++build:
++	(for mod in $(MODULE_DIRS); do \
++		python3 $${mod}/setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}; \
++	done)
++
++binary: binary-arch binary-indep
++	# Nothing to do
++
++binary-arch:
++	# Nothing to do
++
++binary-indep:
++	dh_testdir
++	dh_installdirs
++
++	# Custom package commands
++	(for mod in $(MODULE_DIRS); do \
++		dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/local/bin; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/systemd/system/; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
++		python2 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
++		python3 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
++	done)
++
++	# Resuming debhelper scripts
++	dh_testroot
++	dh_install
++	dh_installchangelogs
++	dh_installdocs
++	dh_systemd_enable
++	dh_installinit
++	dh_systemd_start
++	dh_link
++	dh_fixperms
++	dh_compress
++	dh_strip
++	dh_installdeb
++	dh_gencontrol
++	dh_md5sums
++	dh_builddeb
++
++.PHONY: build binary binary-arch binary-indep clean
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
 new file mode 100644
 index 000000000..ae4bcf9e7
