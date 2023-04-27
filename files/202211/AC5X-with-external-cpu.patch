@@ -1,0 +1,2229 @@
+From 8a5567e34fb06a318a9702f01b255d1d8effa4b6 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 6 Apr 2023 04:44:43 +0000
+Subject: Add platform support for AC5X with external cpu
+
+* Add rd98dx35xx-ext platform
+---
+ platform/marvell-arm64/one-image.mk           |   1 +
+ .../marvell-arm64/platform-rd98dx35xx-ext.mk  |   8 +
+ platform/marvell-arm64/rules.mk               |   1 +
+ .../debian/changelog                          |   5 +
+ .../debian/compat                             |   1 +
+ .../debian/control                            |  13 +
+ .../debian/install                            |   5 +
+ .../debian/postinst                           |  10 +
+ .../debian/rules                              |  65 ++
+ .../scripts/rd98dx35xx-ext-init.sh            |  20 +
+ .../scripts/rd98dx35xx-ext_plt_setup.sh       |  23 +
+ .../service/rd98dx35xx-ext-init.service       |  11 +
+ .../rd98dx35xx_ext/setup.py                   |  15 +
+ .../rd98dx35xx_ext/sonic_platform/__init__.py |   3 +
+ .../rd98dx35xx_ext/sonic_platform/chassis.py  | 265 +++++
+ .../sonic_platform/component.py               |  94 ++
+ .../rd98dx35xx_ext/sonic_platform/eeprom.py   | 182 ++++
+ .../rd98dx35xx_ext/sonic_platform/platform.py |  22 +
+ .../rd98dx35xx_ext/sonic_platform/sfp.py      | 968 ++++++++++++++++++
+ .../sonic_platform/sfp_event.py               | 117 +++
+ .../rd98dx35xx_ext/sonic_platform/watchdog.py | 184 ++++
+ .../rd98dx35xx_ext/utils/get-base-mac.py      |  20 +
+ 22 files changed, 2033 insertions(+)
+ create mode 100644 platform/marvell-arm64/platform-rd98dx35xx-ext.mk
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+ create mode 100755 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/setup.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/__init__.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/chassis.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/component.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/eeprom.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/platform.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp_event.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/watchdog.py
+ create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/utils/get-base-mac.py
+
+diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
+index 491ce0a59..05e797921 100644
+--- a/platform/marvell-arm64/one-image.mk
++++ b/platform/marvell-arm64/one-image.mk
+@@ -8,6 +8,7 @@ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8540_16CD_PLATFORM)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xxEXT_PLATFORM)
+ ifeq ($(INSTALL_DEBUG_TOOLS),y)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
+diff --git a/platform/marvell-arm64/platform-rd98dx35xx-ext.mk b/platform/marvell-arm64/platform-rd98dx35xx-ext.mk
+new file mode 100644
+index 000000000..1a3986fbe
+--- /dev/null
++++ b/platform/marvell-arm64/platform-rd98dx35xx-ext.mk
+@@ -0,0 +1,8 @@
++# AC5X External CPU Platform
++
++AC5X_VERSION=1.0
++AC5X_RD98DX35xxEXT_PLATFORM = sonic-platform-rd98dx35xx-ext_$(AC5X_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xxEXT_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-rd98dx35xx-ext
++$(AC5X_RD98DX35xxEXT_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_ext-r0
++SONIC_DPKG_DEBS += $(AC5X_RD98DX35xxEXT_PLATFORM)
++
+diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
+index e549af165..b5b8375d3 100644
+--- a/platform/marvell-arm64/rules.mk
++++ b/platform/marvell-arm64/rules.mk
+@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/prestera.mk
+ include $(PLATFORM_PATH)/platform-db98cx8540-16cd.mk
+ include $(PLATFORM_PATH)/platform-db98cx8580-32cd.mk
+ include $(PLATFORM_PATH)/platform-rd98dx35xx.mk
++include $(PLATFORM_PATH)/platform-rd98dx35xx-ext.mk
+ 
+ SONIC_ALL += $(SONIC_ONE_IMAGE) \
+              $(DOCKER_FPM) 	\
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+new file mode 100644
+index 000000000..3c816ad07
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
+@@ -0,0 +1,5 @@
++sonic-platform-rd98dx35xx-ext (1.0) unstable; urgency=low
++
++  * Add support for rd98dx35xx-ext.
++
++ -- Marvell <pnaregundi@marvell.com>  Mon, 30 Nov 2021 09:35:58 +0800
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+new file mode 100644
+index 000000000..ec635144f
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
+@@ -0,0 +1 @@
++9
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+new file mode 100644
+index 000000000..3930eeb96
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/control
+@@ -0,0 +1,13 @@
++Source: sonic-platform-rd98dx35xx-ext
++Section: unknown
++Priority: optional
++Maintainer: Marvell
++Build-Depends: debhelper (>=9)
++Standards-Version: 3.9.6
++Homepage: <insert the upstream URL, if relevant>
++
++Package: sonic-platform-rd98dx35xx-ext
++Architecture: arm64
++Depends: ${misc:Depends}
++Description: <insert up to 60 chars description>
++ <insert long description, indented with spaces>
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+new file mode 100644
+index 000000000..8d486e0c3
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
+@@ -0,0 +1,5 @@
++rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh usr/local/bin
++rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh  usr/local/bin
++rd98dx35xx_ext/service/rd98dx35xx-ext-init.service etc/systemd/system
++rd98dx35xx_ext/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_rd98DX35xx_ext-r0
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+new file mode 100644
+index 000000000..83cff7d37
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
+@@ -0,0 +1,10 @@
++#!/bin/sh
++# postinst script for sonic-platform-rd98dx35xx-ext
++#
++# see: dh_installdeb(1)
++
++sh /usr/local/bin/rd98dx35xx-ext_plt_setup.sh
++chmod a+x /usr/local/bin/rd98dx35xx-ext-init.sh
++systemctl enable rd98dx35xx-ext-init.service
++exit 0
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
+new file mode 100755
+index 000000000..08971b680
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
+@@ -0,0 +1,65 @@
++#!/usr/bin/make -f
++# See debhelper(7) (uncomment to enable)
++# output every command that modifies files on the build system.
++#export DH_VERBOSE = 1
++
++include /usr/share/dpkg/pkg-info.mk
++#--------------------------------------------------------
++
++PACKAGE_PRE_NAME := sonic-platform-rd98dx35xx-ext
++MOD_SRC_DIR:= $(shell pwd)
++MODULE_DIRS:= rd98dx35xx_ext
++UTILS_DIR := utils
++SERVICE_DIR := service
++PLATFORM_DIR := sonic_platform
++
++%:
++	dh $@ --with systemd,python3 --buildsystem=pybuild
++
++clean:
++	dh_testdir
++	dh_testroot
++	dh_clean
++
++build:
++	(for mod in $(MODULE_DIRS); do \
++		python3 $${mod}/setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}; \
++	done)
++
++binary: binary-arch binary-indep
++	# Nothing to do
++
++binary-arch:
++	# Nothing to do
++
++binary-indep:
++	dh_testdir
++	dh_installdirs
++
++	# Custom package commands
++	(for mod in $(MODULE_DIRS); do \
++		dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/local/bin; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/systemd/system/; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
++		python2 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
++		python3 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
++	done)
++
++	# Resuming debhelper scripts
++	dh_testroot
++	dh_install
++	dh_installchangelogs
++	dh_installdocs
++	dh_systemd_enable
++	dh_installinit
++	dh_systemd_start
++	dh_link
++	dh_fixperms
++	dh_compress
++	dh_strip
++	dh_installdeb
++	dh_gencontrol
++	dh_md5sums
++	dh_builddeb
++
++.PHONY: build binary binary-arch binary-indep clean
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
+new file mode 100644
+index 000000000..ae4bcf9e7
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
+@@ -0,0 +1,20 @@
++#!/bin/bash
++
++# Platform init script for rd98dx35xx-ext
++
++rd98dx35xx-ext_profile()
++{
++    MAC_ADDR=$(fw_printenv -n ethaddr)
++    find /usr/share/sonic/device/*rd98DX35xx_ext* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++    echo "rd98dx35xx_ext: Updating switch mac address ${MAC_ADDR}"
++}
++
++# - Main entry
++rd98dx35xx-ext_profile
++
++# LOGIC to enumerate SFP eeprom devices - send 0x50 to kernel i2c driver - initialize devices
++# the mux may be enumerated at number 4 or 5 so we check for the mux and skip if needed
++# Get list of the mux channels
++# Enumerate the SFP eeprom device on each mux channel
++echo optoe2 0x50 > /sys/bus/i2c/devices/i2c-0/new_device
++exit 0
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
+new file mode 100644
+index 000000000..53017f3fb
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
+@@ -0,0 +1,23 @@
++#!/bin/bash
++
++PLATFORM_FALCON="arm64-marvell_rd98DX35xx_ext-r0"
++MACH_FILE="/host/machine.conf"
++
++rd98dx35xx_ext_profile()
++{
++    MAC_ADDR=$(fw_printenv -n ethaddr)
++    find /usr/share/sonic/device/*rd98DX35xx_ext* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
++    echo "rd98dx35xx_ext: Updating switch mac address ${MAC_ADDR}"
++}
++
++main()
++{
++    if [ -f "$MACH_FILE" ]; then
++        PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
++        if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
++            rd98dx35xx_ext_profile
++        fi
++    fi
++}
++
++main $@
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
+new file mode 100644
+index 000000000..0f7abd3e4
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
+@@ -0,0 +1,11 @@
++[Unit]
++Description=Platform rd98dx35xx-ext Service
++After=rc-local.service
++Before=getty.target
++
++[Service]
++ExecStart=/usr/local/bin/rd98dx35xx-ext-init.sh
++StandardOutput=tty
++
++[Install]
++WantedBy=multi-user.target
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/setup.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/setup.py
+new file mode 100644
+index 000000000..492cadb3c
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/setup.py
+@@ -0,0 +1,15 @@
++#!/usr/bin/env python
++
++import os
++from setuptools import setup
++os.listdir
++
++setup(
++   name='sonic_platform',
++   version='1.0',
++   description='Module to initialize platforms',
++
++   packages=['sonic_platform'],
++   package_dir={'sonic_platform': 'rd98dx35xx_ext/sonic_platform'},
++)
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/__init__.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/__init__.py
+new file mode 100644
+index 000000000..4bfefa0fb
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/__init__.py
+@@ -0,0 +1,3 @@
++__all__ = ["platform", "chassis"]
++from sonic_platform import *
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/chassis.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/chassis.py
+new file mode 100644
+index 000000000..b831f2613
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/chassis.py
+@@ -0,0 +1,265 @@
++#!/usr/bin/env python
++##################################################################
++# Module contains an implementation of SONiC Platform Base API and
++# provides the platform information
++##################################################################
++
++try:
++    import os
++    import sys
++    from sonic_platform_base.chassis_base import ChassisBase
++    from sonic_platform.sfp import Sfp
++    from sonic_platform.eeprom import Eeprom
++    from sonic_py_common import logger
++    from sonic_platform.component import Component
++
++except ImportError as e:
++    raise ImportError(str(e) + "- required module not found")
++
++MAX_SELECT_DELAY = 3600
++COPPER_PORT_START = 1
++COPPER_PORT_END = 48
++SFP_PORT_START =49 
++SFP_PORT_END = 54 
++PORT_END = 54
++MAX_COMPONENT=2
++
++
++SYSLOG_IDENTIFIER = "chassis"
++sonic_logger=logger.Logger(SYSLOG_IDENTIFIER)
++class Chassis(ChassisBase):
++    """
++    Platform-specific Chassis class
++    derived from Dell S6000 platform.
++    customized for the platform.
++    """
++    reset_reason_dict = {}
++    reset_reason_dict[0x02] = ChassisBase.REBOOT_CAUSE_POWER_LOSS
++    reset_reason_dict[0x20] = ChassisBase.REBOOT_CAUSE_THERMAL_OVERLOAD_ASIC
++
++    reset_reason_dict[0x08] = ChassisBase.REBOOT_CAUSE_THERMAL_OVERLOAD_CPU
++    reset_reason_dict[0x10] = ChassisBase.REBOOT_CAUSE_WATCHDOG
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++    PLATFORM = "arm64-marvell_rd98DX35xx_ext-r0"
++    HWSKU = "rd98DX35xx_ext"
++
++
++    def __init__(self):
++        ChassisBase.__init__(self)
++        # Port numbers for Initialize SFP list
++        self.COPPER_PORT_START = COPPER_PORT_START
++        self.COPPER_PORT_END = COPPER_PORT_END
++        self.SFP_PORT_START = SFP_PORT_START
++        self.SFP_PORT_END = SFP_PORT_END
++        self.PORT_END = PORT_END
++
++        eeprom_path = '/sys/bus/i2c/devices/0-0050/eeprom'
++
++        # for non-sfp ports create dummy objects for copper / non-sfp ports
++        for index in range(self.COPPER_PORT_START, self.COPPER_PORT_END+1):
++            port=index-1
++            sfp_node = Sfp(index, 'COPPER', 'N/A', 'N/A')
++            self._sfp_list.append(sfp_node)
++
++        for index in range(self.SFP_PORT_START, self.SFP_PORT_END+1):
++            i2cdev = 0
++            port=index-1
++            port_eeprom_path = eeprom_path
++            if not os.path.exists(port_eeprom_path):
++                sonic_logger.log_info(" DEBUG - path %s -- did not exist " % port_eeprom_path )
++            sfp_node = Sfp(index, 'SFP', port_eeprom_path, i2cdev )
++            self._sfp_list.append(sfp_node)
++        self.sfp_event_initialized = False
++
++        # Instantiate ONIE system eeprom object
++        self._eeprom = Eeprom()
++
++        for i in range(MAX_COMPONENT):
++             component = Component(i)
++             self._component_list.append(component)
++
++
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
++    def get_sfp(self, index):
++        """
++        Retrieves sfp represented by (1-based) index <index>
++        Args:
++            index: An integer, the index (1-based) of the sfp to retrieve.
++            The index should be the sequence of physical SFP ports in a chassis,
++            starting from 1.
++            For example, 1 for first SFP port in the chassis and so on.
++        Returns:
++            An object dervied from SfpBase representing the specified sfp
++        """
++        sfp = None
++        try:
++            # The index will start from 1
++            sfp = self._sfp_list[index-1]
++        except IndexError:
++            sys.stderr.write("SFP index {} out of range (1-{})\n".format(
++                             index, len(self._sfp_list)))
++        return sfp
++
++    def get_name(self):
++        """
++        Retrieves the name of the chassis
++        Returns:
++            string: The name of the chassis
++        """
++        return self._eeprom.modelstr()
++
++    def get_presence(self):
++        """
++        Retrieves the presence of the chassis
++        Returns:
++            bool: True if chassis is present, False if not
++        """
++        return True
++
++    def get_model(self):
++        """
++        Retrieves the model number (or part number) of the chassis
++        Returns:
++            string: Model/part number of chassis
++        """
++        return self._eeprom.part_number_str()
++
++    def get_serial(self):
++        """
++        Retrieves the serial number of the chassis (Service tag)
++        Returns:
++            string: Serial number of chassis
++        """
++        return self._eeprom.serial_str()
++
++    def get_status(self):
++        """
++        Retrieves the operational status of the chassis
++        Returns:
++            bool: A boolean value, True if chassis is operating properly
++            False if not
++        """
++        return True
++
++    def get_base_mac(self):
++        """
++        Retrieves the base MAC address for the chassis
++
++        Returns:
++            A string containing the MAC address in the format
++            'XX:XX:XX:XX:XX:XX'
++        """
++        return self._eeprom.base_mac_addr()
++
++    def get_serial_number(self):
++        """
++        Retrieves the hardware serial number for the chassis
++
++        Returns:
++            A string containing the hardware serial number for this
++            chassis.
++        """
++        return self._eeprom.serial_number_str()
++
++    def get_system_eeprom_info(self):
++        """
++        Retrieves the full content of system EEPROM information for the
++        chassis
++
++        Returns:
++            A dictionary where keys are the type code defined in
++            OCP ONIE TlvInfo EEPROM format and values are their
++            corresponding values.
++        """
++        return self._eeprom.system_eeprom_info()
++
++    def get_reboot_cause(self):
++        """
++        Retrieves the cause of the previous reboot
++        Returns:
++            A tuple (string, string) where the first element is a string
++            containing the cause of the previous reboot. This string must be
++            one of the predefined strings in this class. If the first string
++            is "REBOOT_CAUSE_HARDWARE_OTHER", the second string can be used
++            to pass a description of the reboot cause.
++        """
++        #lrr = self._get_cpld_register('mb_reboot_cause')
++        #if (lrr != 'ERR'):
++        #    reset_reason = lrr
++        #    if (reset_reason in self.reset_reason_dict):
++        #        return (self.reset_reason_dict[reset_reason], None)
++        #
++        return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
++
++    def get_watchdog(self):
++        """
++        Retrieves hardware watchdog device on this chassis
++
++        Returns:
++            An object derived from WatchdogBase representing the hardware
++            watchdog device
++        """
++        try:
++            if self._watchdog is None:
++                from sonic_platform.watchdog import WatchdogImplBase
++                watchdog_device_path = "/dev/watchdog0"
++                self._watchdog = WatchdogImplBase(watchdog_device_path)
++        except Exception as e:
++            sonic_logger.log_warning(" Fail to load watchdog {}".format(repr(e)))
++
++        return self._watchdog
++
++    def get_change_event(self, timeout=0):
++        """
++        Returns a nested dictionary containing all devices which have
++        experienced a change at chassis level
++        Args:
++            timeout: Timeout in milliseconds (optional). If timeout == 0,
++                this method will block until a change is detected.
++        Returns:
++            (bool, dict):
++                - True if call successful, False if not;
++                - A nested dictionary where key is a device type,
++                  value is a dictionary with key:value pairs in the format of
++                  {'device_id':'device_event'},
++                  where device_id is the device ID for this device and
++                        device_event,
++                             status='1' represents device inserted,
++                             status='0' represents device removed.
++                  Ex. {'fan':{'0':'0', '2':'1'}, 'sfp':{'11':'0'}}
++                      indicates that fan 0 has been removed, fan 2
++                      has been inserted and sfp 11 has been removed.
++        """
++        # Initialize SFP event first
++        if not self.sfp_event_initialized:
++            from sonic_platform.sfp_event import sfp_event
++            self.sfp_event = sfp_event()
++            self.sfp_event.initialize()
++            self.MAX_SELECT_EVENT_RETURNED = self.PORT_END
++            self.sfp_event_initialized = True
++
++        wait_for_ever = (timeout == 0)
++        port_dict = {}
++        if wait_for_ever:
++            # xrcvd will call this monitor loop in the "SYSTEM_READY" state
++            # logger.log_info(" wait_for_ever get_change_event %d" % timeout)
++            timeout = MAX_SELECT_DELAY
++            while True:
++                status = self.sfp_event.check_sfp_status( port_dict, timeout)
++                if not port_dict == {}:
++                    break
++        else:
++            # At boot up and in "INIT" state call from xrcvd will have a timeout value
++            # return true without change after timeout and will transition to "SYSTEM_READY"
++            # logger.log_info(" initial get_change_event %d" % timeout )
++            status = self.sfp_event.check_sfp_status( port_dict, timeout)
++
++        if status:
++            return True, {'sfp':port_dict}
++        else:
++            return True, {'sfp':{}}
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/component.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/component.py
+new file mode 100644
+index 000000000..16e01486d
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/component.py
+@@ -0,0 +1,94 @@
++########################################################################
++#
++# Module contains an implementation of SONiC Platform Base API and
++# provides the Components' (e.g., BIOS, CPLD, FPGA, etc.) available in
++# the platform
++#
++########################################################################
++
++try:
++    import sys
++    import subprocess
++    from sonic_platform_base.component_base import ComponentBase
++except ImportError as e:
++    raise ImportError(str(e) + "- required module not found")
++
++
++if sys.version_info[0] < 3:
++    import commands as cmd
++else:
++    import subprocess as cmd
++
++
++class Component(ComponentBase):
++    """platform-specific Component class"""
++
++    CHASSIS_COMPONENTS = [
++        ["U-Boot", "Performs initialization during booting"],
++        ["ONIE-VERSION", "ONIE - Open Network Install Environment"],
++    ]
++
++    def __init__(self, component_index):
++        self.index = component_index
++        self.name = self.CHASSIS_COMPONENTS[self.index][0]
++        self.description = self.CHASSIS_COMPONENTS[self.index][1]
++
++    def _get_command_result(self, cmdline):
++        try:
++            proc = subprocess.Popen(cmdline.split(), stdout=subprocess.PIPE,
++                                    stderr=subprocess.STDOUT)
++            stdout = proc.communicate()[0]
++            proc.wait()
++            result = stdout.rstrip('\n')
++        except OSError:
++            result = None
++
++        return result
++
++
++    def get_name(self):
++        """
++        Retrieves the name of the component
++
++        Returns:
++            A string containing the name of the component
++        """
++        return self.name
++
++    def get_description(self):
++        """
++        Retrieves the description of the component
++
++        Returns:
++            A string containing the description of the component
++        """
++        return self.description
++
++    def get_firmware_version(self):
++        """
++        Retrieves the firmware version of the component
++
++        Returns:
++            A string containing the firmware version of the component
++        """
++
++        if self.index == 0:
++            cmdstatus, uboot_version = cmd.getstatusoutput('grep --null-data ^U-Boot /dev/mtd0ro | cut -d" " -f2')
++            return uboot_version
++
++        if self.index == 1:
++            cmdstatus, onie_version = cmd.getstatusoutput('grep ^onie_version /host/machine.conf | cut -f2 -d"="')
++            return onie_version
++
++    def install_firmware(self, image_path):
++        """
++        Installs firmware to the component
++
++        Args:
++            image_path: A string, path to firmware image
++
++        Returns:
++            A boolean, True if install was successful, False if not
++        """
++        return False
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/eeprom.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/eeprom.py
+new file mode 100644
+index 000000000..f43a84a87
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/eeprom.py
+@@ -0,0 +1,182 @@
++#!/usr/bin/env python
++
++########################################################################
++#
++# Module contains platform specific implementation of SONiC Platform
++# Base API and provides the EEPROMs' information.
++#
++# The different EEPROMs available are as follows:
++# - System EEPROM : Contains Serial number, Service tag, Base MA
++#                   address, etc. in ONIE TlvInfo EEPROM format.
++# - PSU EEPROM : Contains Serial number, Part number, Service Tag,
++#                PSU type, Revision.
++# - Fan EEPROM : Contains Serial number, Part number, Service Tag,
++#                Fan type, Number of Fans in Fantray, Revision.
++########################################################################
++
++
++try:
++    from sonic_platform_base.sonic_eeprom.eeprom_base import EepromDecoder
++    from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
++except ImportError as e:
++    raise ImportError(str(e) + "- required module not found")
++
++
++# PSU eeprom fields in format required by EepromDecoder
++psu_eeprom_format = [
++    ('PPID', 's', 20), ('DPN Rev', 's', 3), ('Service Tag', 's', 7),
++    ('Part Number', 's', 10), ('Part Num Revision', 's', 3),
++    ('Mfg Test', 's', 2), ('Redundant copy', 's', 83), ('PSU Type', 's', 1),
++    ('Fab Rev', 's', 2)
++    ]
++
++# Fan eeprom fields in format required by EepromDecoder
++fan_eeprom_format = [
++    ('Model', 's', 12), ('Serial Number', 's', 13)
++    ]
++
++
++class Eeprom(TlvInfoDecoder):
++
++    I2C_DIR = "/sys/class/i2c-adapter/"
++
++    def __init__(self, is_psu=False, psu_index=0, is_fan=False, fan_index=0):
++        self.is_psu_eeprom = is_psu
++        self.is_fan_eeprom = is_fan
++        self.is_sys_eeprom = not (is_psu | is_fan)
++
++        if self.is_sys_eeprom:
++            self.start_offset = 0
++            self.eeprom_path = self.I2C_DIR + "i2c-0/0-0052/eeprom"
++            # System EEPROM is in ONIE TlvInfo EEPROM format
++            super(Eeprom, self).__init__(self.eeprom_path,
++                                         self.start_offset, '', True)
++            self._load_system_eeprom()
++        else:
++            print ("No other eeprom")
++
++    def _load_system_eeprom(self):
++        """
++        Reads the system EEPROM and retrieves the values corresponding
++        to the codes defined as per ONIE TlvInfo EEPROM format and fills
++        them in a dictionary.
++        """
++        try:
++            # Read System EEPROM as per ONIE TlvInfo EEPROM format.
++            self.eeprom_data = self.read_eeprom()
++        except Exception as e:
++            self.base_mac = 'NA'
++            self.serial_number = 'NA'
++            self.part_number = 'NA'
++            self.model_str = 'NA'
++            self.serial = 'NA'
++            self.eeprom_tlv_dict = dict()
++        else:
++            eeprom = self.eeprom_data
++            self.eeprom_tlv_dict = dict()
++
++            if not self.is_valid_tlvinfo_header(eeprom):
++                self.base_mac = 'NA'
++                self.serial_number = 'NA'
++                self.part_number = 'NA'
++                self.model_str = 'NA'
++                self.serial = 'NA'
++                return
++
++            total_length = (eeprom[9] << 8) | eeprom[10]
++            tlv_index = self._TLV_INFO_HDR_LEN
++            tlv_end = self._TLV_INFO_HDR_LEN + total_length
++
++            while (tlv_index + 2) < len(eeprom) and tlv_index < tlv_end:
++                if not self.is_valid_tlv(eeprom[tlv_index:]):
++                    break
++
++                tlv = eeprom[tlv_index:tlv_index + 2
++                             + eeprom[tlv_index + 1]]
++                code = "0x%02X" % (tlv[0])
++
++                if tlv[0] == self._TLV_CODE_VENDOR_EXT:
++                    value = str((tlv[2] << 24) | (tlv[3] << 16) |
++                                (tlv[4]<< 8) | tlv[5])
++                    value += str(tlv[6:6 + tlv[1]])
++                else:
++                    name, value = self.decoder(None, tlv)
++
++                self.eeprom_tlv_dict[code] = value
++                if eeprom[tlv_index] == self._TLV_CODE_CRC_32:
++                    break
++
++                tlv_index += eeprom[tlv_index+1] + 2
++
++            self.base_mac = self.eeprom_tlv_dict.get(
++                                "0x%X" % (self._TLV_CODE_MAC_BASE), 'NA')
++            self.serial_number = self.eeprom_tlv_dict.get(
++                                "0x%X" % (self._TLV_CODE_SERIAL_NUMBER), 'NA')
++            self.part_number = self.eeprom_tlv_dict.get(
++                                "0x%X" % (self._TLV_CODE_PART_NUMBER), 'NA')
++            self.model_str = self.eeprom_tlv_dict.get(
++                                "0x%X" % (self._TLV_CODE_PRODUCT_NAME), 'NA')
++            self.serial = self.eeprom_tlv_dict.get(
++                                "0x%X" % (self._TLV_CODE_SERVICE_TAG), 'NA')
++
++    def _get_eeprom_field(self, field_name):
++        """
++        For a field name specified in the EEPROM format, returns the
++        presence of the field and the value for the same.
++        """
++        field_start = 0
++        for field in self.format:
++            field_end = field_start + field[2]
++            if field[0] == field_name:
++                return (True, self.eeprom_data[field_start:field_end])
++            field_start = field_end
++
++        return (False, None)
++
++    def serial_number_str(self):
++        """
++        Returns the serial number.
++        """
++        return self.serial_number
++
++    def part_number_str(self):
++        """
++        Returns the part number.
++        """
++        return self.part_number
++
++    def airflow_fan_type(self):
++        """
++        Returns the airflow fan type.
++        """
++        if self.is_psu_eeprom:
++            return int(self.psu_type.encode('hex'), 16)
++        if self.is_fan_eeprom:
++            return int(self.fan_type.encode('hex'), 16)
++
++    # System EEPROM specific methods
++    def base_mac_addr(self):
++        """
++        Returns the base MAC address found in the system EEPROM.
++        """
++        return self.base_mac
++
++    def modelstr(self):
++        """
++        Returns the Model name.
++        """
++        return self.model_str
++
++    def serial_str(self):
++        """
++        Returns the servicetag number.
++        """
++        return self.serial
++
++    def system_eeprom_info(self):
++        """
++        Returns a dictionary, where keys are the type code defined in
++        ONIE EEPROM format and values are their corresponding values
++        found in the system EEPROM.
++        """
++        return self.eeprom_tlv_dict
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/platform.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/platform.py
+new file mode 100644
+index 000000000..0b67a68b8
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/platform.py
+@@ -0,0 +1,22 @@
++#!/usr/bin/env python
++
++#############################################################################
++#
++# Module contains an implementation of SONiC Platform Base API and
++# provides the platform information
++#
++#############################################################################
++
++try:
++    from sonic_platform_base.platform_base import PlatformBase
++    from sonic_platform.chassis import Chassis
++except ImportError as e:
++    raise ImportError(str(e) + "- required module not found")
++
++
++class Platform(PlatformBase):
++
++    def __init__(self):
++        PlatformBase.__init__(self)
++        self._chassis = Chassis()
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp.py
+new file mode 100644
+index 000000000..64cdea476
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp.py
+@@ -0,0 +1,968 @@
++import os
++import sys
++
++try:
++    from sonic_platform_base.sfp_base import SfpBase
++    from sonic_platform_base.sonic_sfp.sff8472 import sff8472InterfaceId
++    from sonic_platform_base.sonic_sfp.sff8472 import sff8472Dom
++    from sonic_platform_base.sonic_sfp.sfputilhelper import SfpUtilHelper
++    from sonic_py_common import logger
++except ImportError as e:
++    raise ImportError(str(e) + "- required module not found")
++
++if sys.version_info[0] < 3:
++    import commands as cmd
++else:
++    import subprocess as cmd
++
++smbus_present = 1
++
++try:
++    import smbus
++except ImportError as e:
++    smbus_present = 0
++
++
++INFO_OFFSET = 128
++DOM_OFFSET = 0
++
++# definitions of the offset and width for values in XCVR info eeprom
++XCVR_INTFACE_BULK_OFFSET = 0
++
++XCVR_INTFACE_BULK_WIDTH_SFP = 21
++XCVR_TYPE_OFFSET = 0
++XCVR_TYPE_WIDTH = 1
++XCVR_EXT_TYPE_OFFSET = 1
++XCVR_EXT_TYPE_WIDTH = 1
++XCVR_CONNECTOR_OFFSET = 2
++XCVR_CONNECTOR_WIDTH = 1
++XCVR_COMPLIANCE_CODE_OFFSET = 3
++XCVR_COMPLIANCE_CODE_WIDTH = 8
++XCVR_ENCODING_OFFSET = 11
++XCVR_ENCODING_WIDTH = 1
++XCVR_NBR_OFFSET = 12
++XCVR_NBR_WIDTH = 1
++XCVR_EXT_RATE_SEL_OFFSET = 13
++XCVR_EXT_RATE_SEL_WIDTH = 1
++XCVR_CABLE_LENGTH_OFFSET = 14
++
++XCVR_CABLE_LENGTH_WIDTH_SFP = 6
++XCVR_VENDOR_NAME_OFFSET = 20
++XCVR_VENDOR_NAME_WIDTH = 16
++XCVR_VENDOR_OUI_OFFSET = 37
++XCVR_VENDOR_OUI_WIDTH = 3
++XCVR_VENDOR_PN_OFFSET = 40
++XCVR_VENDOR_PN_WIDTH = 16
++XCVR_HW_REV_OFFSET = 56
++
++XCVR_HW_REV_WIDTH_SFP = 4
++XCVR_VENDOR_SN_OFFSET = 68
++XCVR_VENDOR_SN_WIDTH = 16
++XCVR_VENDOR_DATE_OFFSET = 84
++XCVR_VENDOR_DATE_WIDTH = 8
++XCVR_DOM_CAPABILITY_OFFSET = 92
++XCVR_DOM_CAPABILITY_WIDTH = 2
++XCVR_INTERFACE_DATA_START = 0
++XCVR_INTERFACE_DATA_SIZE = 92
++
++SFP_DOM_BULK_DATA_START = 96
++SFP_DOM_BULK_DATA_SIZE = 10
++
++SFP_MODULE_ADDRA2_OFFSET = 256
++SFP_MODULE_THRESHOLD_OFFSET = 0
++SFP_MODULE_THRESHOLD_WIDTH = 56
++SFP_CHANNL_THRESHOLD_OFFSET = 112
++SFP_CHANNL_THRESHOLD_WIDTH = 2
++
++SFP_TEMPE_OFFSET = 96
++SFP_TEMPE_WIDTH = 2
++SFP_VOLT_OFFSET = 98
++SFP_VOLT_WIDTH = 2
++SFP_CHANNL_MON_OFFSET = 100
++SFP_CHANNL_MON_WIDTH = 6
++SFP_CHANNL_STATUS_OFFSET = 110
++SFP_CHANNL_STATUS_WIDTH = 1
++
++sfp_cable_length_tup = ('LengthSMFkm-UnitsOfKm', 'LengthSMF(UnitsOf100m)',
++                        'Length50um(UnitsOf10m)', 'Length62.5um(UnitsOfm)',
++                        'LengthCable(UnitsOfm)', 'LengthOM3(UnitsOf10m)')
++
++sfp_compliance_code_tup = ('10GEthernetComplianceCode', 'InfinibandComplianceCode',
++                           'ESCONComplianceCodes', 'SONETComplianceCodes',
++                           'EthernetComplianceCodes', 'FibreChannelLinkLength',
++                           'FibreChannelTechnology', 'SFP+CableTechnology',
++                           'FibreChannelTransmissionMedia', 'FibreChannelSpeed')
++
++COPPER_TYPE = "COPPER"
++SFP_TYPE = "SFP"
++
++# SFP PORT numbers
++SFP_PORT_START = 49
++SFP_PORT_END = 54
++
++SYSLOG_IDENTIFIER = "xcvrd"
++sonic_logger = logger.Logger(SYSLOG_IDENTIFIER)
++
++
++class Sfp(SfpBase):
++    """Platform-specific Sfp class"""
++
++    # Paths
++    PLATFORM_ROOT_PATH = "/usr/share/sonic/device"
++    PMON_HWSKU_PATH = "/usr/share/sonic/hwsku"
++    HOST_CHK_CMD = "docker > /dev/null 2>&1"
++
++    PLATFORM = "arm64-marvell_rd98DX35xx_ext-r0"
++    HWSKU = "rd98DX35xx_ext"
++
++    port_to_i2c_mapping = 0
++
++    def __init__(self, index, sfp_type, eeprom_path, port_i2c_map):
++        SfpBase.__init__(self)
++
++        self.index = index
++        self.port_num = index
++        self.sfp_type = sfp_type
++        self.eeprom_path = eeprom_path
++        self.port_to_i2c_mapping = port_i2c_map
++        self.port_name = sfp_type + str(index)
++        self.port_to_eeprom_mapping = {}
++
++        self.port_to_eeprom_mapping[index] = eeprom_path
++
++        self.info_dict_keys = ['type', 'hardware_rev', 'serial', 'manufacturer',
++                               'model', 'connector', 'encoding', 'ext_identifier',
++                               'ext_rateselect_compliance', 'cable_type', 'cable_length',
++                               'nominal_bit_rate', 'specification_compliance',
++                               'type_abbrv_name', 'vendor_date', 'vendor_oui']
++
++        self.dom_dict_keys = ['rx_los', 'tx_fault', 'reset_status', 'power_lpmode',
++                              'tx_disable', 'tx_disable_channel', 'temperature',
++                              'voltage', 'rx1power', 'rx2power', 'rx3power',
++                              'rx4power', 'tx1bias', 'tx2bias', 'tx3bias', 'tx4bias',
++                              'tx1power', 'tx2power', 'tx3power', 'tx4power']
++
++        self.threshold_dict_keys = ['temphighalarm', 'temphighwarning', 'templowalarm',
++                                    'templowwarning', 'vcchighalarm', 'vcchighwarning',
++                                    'vcclowalarm', 'vcclowwarning', 'rxpowerhighalarm',
++                                    'rxpowerhighwarning', 'rxpowerlowalarm', 'rxpowerlowwarning',
++                                    'txpowerhighalarm', 'txpowerhighwarning', 'txpowerlowalarm',
++                                    'txpowerlowwarning', 'txbiashighalarm', 'txbiashighwarning',
++                                    'txbiaslowalarm', 'txbiaslowwarning']
++
++        self.dom_supported = False
++        self.dom_temp_supported = False
++        self.dom_volt_supported = False
++        self.dom_rx_power_supported = False
++        self.dom_tx_power_supported = False
++        self.calibration = 0
++
++    def __convert_string_to_num(self, value_str):
++        if "-inf" in value_str:
++            return 'N/A'
++        elif "Unknown" in value_str:
++            return 'N/A'
++        elif 'dBm' in value_str:
++            t_str = value_str.rstrip('dBm')
++            return float(t_str)
++        elif 'mA' in value_str:
++            t_str = value_str.rstrip('mA')
++            return float(t_str)
++        elif 'C' in value_str:
++            t_str = value_str.rstrip('C')
++            return float(t_str)
++        elif 'Volts' in value_str:
++            t_str = value_str.rstrip('Volts')
++            return float(t_str)
++        else:
++            return 'N/A'
++
++    def __is_host(self):
++        return os.system(self.HOST_CHK_CMD) == 0
++
++    def __get_path_to_port_config_file(self):
++        platform_path = "/".join([self.PLATFORM_ROOT_PATH, self.PLATFORM])
++        hwsku_path = "/".join([platform_path, self.HWSKU]
++                              ) if self.__is_host() else self.PMON_HWSKU_PATH
++        return "/".join([hwsku_path, "port_config.ini"])
++
++    def __read_eeprom_specific_bytes(self, offset, num_bytes):
++        sysfsfile_eeprom = None
++
++        eeprom_raw = []
++        for i in range(0, num_bytes):
++            eeprom_raw.append("0x00")
++
++        sysfs_sfp_i2c_client_eeprom_path = self.port_to_eeprom_mapping[self.port_num]
++
++        try:
++            sysfsfile_eeprom = open(
++                sysfs_sfp_i2c_client_eeprom_path, mode="rb", buffering=0)
++            sysfsfile_eeprom.seek(offset)
++            raw = sysfsfile_eeprom.read(num_bytes)
++            for n in range(0, num_bytes):
++                eeprom_raw[n] = hex(raw[n])[2:].zfill(2)
++        except Exception as e:
++            pass
++        finally:
++            if sysfsfile_eeprom:
++                sysfsfile_eeprom.close()
++        return eeprom_raw
++
++    def _dom_capability_detect(self):
++        if self.sfp_type == "SFP":
++            sfpi_obj = sff8472InterfaceId()
++            if sfpi_obj is None:
++                return None
++            sfp_dom_capability_raw = self.__read_eeprom_specific_bytes(
++                XCVR_DOM_CAPABILITY_OFFSET, XCVR_DOM_CAPABILITY_WIDTH)
++            if sfp_dom_capability_raw is not None:
++                sfp_dom_capability = int(sfp_dom_capability_raw[0], 16)
++                self.dom_supported = (sfp_dom_capability & 0x40 != 0)
++                if self.dom_supported:
++                    self.dom_temp_supported = True
++                    self.dom_volt_supported = True
++                    self.dom_rx_power_supported = True
++                    self.dom_tx_power_supported = True
++                    if sfp_dom_capability & 0x20 != 0:
++                        self.calibration = 1
++                    elif sfp_dom_capability & 0x10 != 0:
++                        self.calibration = 2
++                    else:
++                        self.calibration = 0
++                else:
++                    self.dom_temp_supported = False
++                    self.dom_volt_supported = False
++                    self.dom_rx_power_supported = False
++                    self.dom_tx_power_supported = False
++                    self.calibration = 0
++                self.dom_tx_disable_supported = (
++                    int(sfp_dom_capability_raw[1], 16) & 0x40 != 0)
++        else:
++            self.dom_supported = False
++            self.dom_temp_supported = False
++            self.dom_volt_supported = False
++            self.dom_rx_power_supported = False
++            self.dom_tx_power_supported = False
++
++    def get_transceiver_info(self):
++        """
++        Retrieves transceiver info of this SFP
++        Returns:
++            A dict which contains following keys/values :
++        ========================================================================
++        keys                       |Value Format   |Information
++        ---------------------------|---------------|----------------------------
++        type                       |1*255VCHAR     |type of SFP
++        hardware_rev               |1*255VCHAR     |hardware version of SFP
++        serial                     |1*255VCHAR     |serial number of the SFP
++        manufacturer               |1*255VCHAR     |SFP vendor name
++        model                      |1*255VCHAR     |SFP model name
++        connector                  |1*255VCHAR     |connector information
++        encoding                   |1*255VCHAR     |encoding information
++        ext_identifier             |1*255VCHAR     |extend identifier
++        ext_rateselect_compliance  |1*255VCHAR     |extended rateSelect compliance
++        cable_length               |INT            |cable length in m
++        nominal_bit_rate           |INT            |nominal bit rate by 100Mbs
++        specification_compliance   |1*255VCHAR     |specification compliance
++        type_abbrv_name            |1*255VCHAR     |type of SFP (abbreviated)
++        vendor_date                |1*255VCHAR     |vendor date
++        vendor_oui                 |1*255VCHAR     |vendor OUI
++        application_advertisement  |1*255VCHAR     |supported applications advertisement
++        ========================================================================
++         """
++
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        compliance_code_dict = {}
++        transceiver_info_dict = dict.fromkeys(self.info_dict_keys, 'N/A')
++
++        if not self.get_presence():
++            return transceiver_info_dict
++
++        if self.sfp_type == SFP_TYPE:
++            offset = 0
++            vendor_rev_width = XCVR_HW_REV_WIDTH_SFP
++            interface_info_bulk_width = XCVR_INTFACE_BULK_WIDTH_SFP
++
++            sfpi_obj = sff8472InterfaceId()
++            if sfpi_obj is None:
++                print("Error: sfp_object open failed")
++                return None
++
++            sfp_interface_bulk_raw = self.__read_eeprom_specific_bytes(
++                offset + XCVR_INTERFACE_DATA_START, XCVR_INTERFACE_DATA_SIZE)
++            if sfp_interface_bulk_raw is None:
++                return None
++
++            start = XCVR_INTFACE_BULK_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + interface_info_bulk_width
++            sfp_interface_bulk_data = sfpi_obj.parse_sfp_info_bulk(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_VENDOR_NAME_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + XCVR_VENDOR_NAME_WIDTH
++            sfp_vendor_name_data = sfpi_obj.parse_vendor_name(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_VENDOR_PN_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + XCVR_VENDOR_PN_WIDTH
++            sfp_vendor_pn_data = sfpi_obj.parse_vendor_pn(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_HW_REV_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + vendor_rev_width
++            sfp_vendor_rev_data = sfpi_obj.parse_vendor_rev(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_VENDOR_SN_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + XCVR_VENDOR_SN_WIDTH
++            sfp_vendor_sn_data = sfpi_obj.parse_vendor_sn(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_VENDOR_OUI_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + XCVR_VENDOR_OUI_WIDTH
++            sfp_vendor_oui_data = sfpi_obj.parse_vendor_oui(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            start = XCVR_VENDOR_DATE_OFFSET - XCVR_INTERFACE_DATA_START
++            end = start + XCVR_VENDOR_DATE_WIDTH
++            sfp_vendor_date_data = sfpi_obj.parse_vendor_date(
++                sfp_interface_bulk_raw[start: end], 0)
++
++            transceiver_info_dict['type'] = sfp_interface_bulk_data \
++                ['data']['type']['value']
++            transceiver_info_dict['manufacturer'] = sfp_vendor_name_data \
++                ['data']['Vendor Name']['value']
++            transceiver_info_dict['model'] = sfp_vendor_pn_data \
++                ['data']['Vendor PN']['value']
++            transceiver_info_dict['hardware_rev'] = sfp_vendor_rev_data \
++                ['data']['Vendor Rev']['value']
++            transceiver_info_dict['serial'] = sfp_vendor_sn_data \
++                ['data']['Vendor SN']['value']
++            transceiver_info_dict['vendor_oui'] = sfp_vendor_oui_data \
++                ['data']['Vendor OUI']['value']
++            transceiver_info_dict['vendor_date'] = sfp_vendor_date_data \
++                ['data']['VendorDataCode(YYYY-MM-DD Lot)']['value']
++            transceiver_info_dict['connector'] = sfp_interface_bulk_data \
++                ['data']['Connector']['value']
++            transceiver_info_dict['encoding'] = sfp_interface_bulk_data \
++                ['data']['EncodingCodes']['value']
++            transceiver_info_dict['ext_identifier'] = sfp_interface_bulk_data \
++                ['data']['Extended Identifier']['value']
++            transceiver_info_dict['ext_rateselect_compliance'] = sfp_interface_bulk_data \
++                ['data']['RateIdentifier']['value']
++            transceiver_info_dict['type_abbrv_name'] = sfp_interface_bulk_data \
++                ['data']['type_abbrv_name']['value']
++
++            for key in sfp_cable_length_tup:
++                if key in sfp_interface_bulk_data['data']:
++                    transceiver_info_dict['cable_type'] = key
++                    transceiver_info_dict['cable_length'] = \
++                        str(sfp_interface_bulk_data['data'][key]['value'])
++
++            for key in sfp_compliance_code_tup:
++                if key in sfp_interface_bulk_data['data']['Specification compliance']['value']:
++                    compliance_code_dict[key] = sfp_interface_bulk_data \
++                        ['data']['Specification compliance']['value'][key]['value']
++
++            transceiver_info_dict['specification_compliance'] = \
++                str(compliance_code_dict)
++            transceiver_info_dict['nominal_bit_rate'] = \
++                str(sfp_interface_bulk_data['data']['NominalSignallingRate(UnitsOf100Mbd)']['value'])
++            transceiver_info_dict['application_advertisement'] = 'N/A'
++
++        return transceiver_info_dict
++
++    def get_transceiver_bulk_status(self):
++        """
++        Retrieves transceiver bulk status of this SFP
++        Returns:
++            A dict which contains following keys/values :
++        ========================================================================
++        keys                       |Value Format   |Information
++        ---------------------------|---------------|----------------------------
++        rx_los                     |BOOLEAN        |RX loss-of-signal status, True if has RX los, False if not.
++        tx_fault                   |BOOLEAN        |TX fault status, True if has TX fault, False if not.
++        reset_status               |BOOLEAN        |reset status, True if SFP in reset, False if not.
++        lp_mode                    |BOOLEAN        |low power mode status, True in lp mode, False if not.
++        tx_disable                 |BOOLEAN        |TX disable status, True TX disabled, False if not.
++        tx_disabled_channel        |HEX            |disabled TX channels in hex, bits 0 to 3 represent channel 0
++                                   |               |to channel 3.
++        temperature                |INT            |module temperature in Celsius
++        voltage                    |INT            |supply voltage in mV
++        tx<n>bias                  |INT            |TX Bias Current in mA, n is the channel number,
++                                   |               |for example, tx2bias stands for tx bias of channel 2.
++        rx<n>power                 |INT            |received optical power in mW, n is the channel number,
++                                   |               |for example, rx2power stands for rx power of channel 2.
++        tx<n>power                 |INT            |TX output power in mW, n is the channel number,
++                                   |               |for example, tx2power stands for tx power of channel 2.
++        ========================================================================
++        """
++
++        transceiver_dom_info_dict = dict.fromkeys(self.dom_dict_keys, 'N/A')
++
++        if self.sfp_type == COPPER_TYPE:
++            return transceiver_dom_info_dict
++
++        if self.sfp_type == SFP_TYPE:
++
++            self._dom_capability_detect()
++            if not self.dom_supported:
++                return transceiver_dom_info_dict
++
++            offset = 256
++            sfpd_obj = sff8472Dom()
++            if sfpd_obj is None:
++                return transceiver_dom_info_dict
++            sfpd_obj._calibration_type = self.calibration
++
++            dom_data_raw = self.__read_eeprom_specific_bytes(
++                (offset + SFP_DOM_BULK_DATA_START), SFP_DOM_BULK_DATA_SIZE)
++
++            start = SFP_TEMPE_OFFSET - SFP_DOM_BULK_DATA_START
++            end = start + SFP_TEMPE_WIDTH
++            dom_temperature_data = sfpd_obj.parse_temperature(
++                dom_data_raw[start: end], 0)
++
++            start = SFP_VOLT_OFFSET - SFP_DOM_BULK_DATA_START
++            end = start + SFP_VOLT_WIDTH
++            dom_voltage_data = sfpd_obj.parse_voltage(
++                dom_data_raw[start: end], 0)
++
++            start = SFP_CHANNL_MON_OFFSET - SFP_DOM_BULK_DATA_START
++            end = start + SFP_CHANNL_MON_WIDTH
++            dom_channel_monitor_data = sfpd_obj.parse_channel_monitor_params(
++                dom_data_raw[start: end], 0)
++
++            transceiver_dom_info_dict['temperature'] = self.__convert_string_to_num(
++                dom_temperature_data['data']['Temperature']['value'])
++            transceiver_dom_info_dict['voltage'] = self.__convert_string_to_num(
++                dom_voltage_data['data']['Vcc']['value'])
++            transceiver_dom_info_dict['rx1power'] = self.__convert_string_to_num(
++                dom_channel_monitor_data['data']['RXPower']['value'])
++            transceiver_dom_info_dict['tx1bias'] = self.__convert_string_to_num(
++                dom_channel_monitor_data['data']['TXBias']['value'])
++            transceiver_dom_info_dict['tx1power'] = self.__convert_string_to_num(
++                dom_channel_monitor_data['data']['TXPower']['value'])
++
++        transceiver_dom_info_dict['rx_los'] = self.get_rx_los()
++        transceiver_dom_info_dict['tx_fault'] = self.get_tx_fault()
++        transceiver_dom_info_dict['reset_status'] = self.get_reset_status()
++        transceiver_dom_info_dict['lp_mode'] = self.get_lpmode()
++
++        return transceiver_dom_info_dict
++
++    def get_transceiver_threshold_info(self):
++        """
++        Retrieves transceiver threshold info of this SFP
++        Returns:
++            A dict which contains following keys/values :
++        ========================================================================
++        keys                       |Value Format   |Information
++        ---------------------------|---------------|----------------------------
++        temphighalarm              |FLOAT          |High Alarm Threshold value of temperature in Celsius.
++        templowalarm               |FLOAT          |Low Alarm Threshold value of temperature in Celsius.
++        temphighwarning            |FLOAT          |High Warning Threshold value of temperature in Celsius.
++        templowwarning             |FLOAT          |Low Warning Threshold value of temperature in Celsius.
++        vcchighalarm               |FLOAT          |High Alarm Threshold value of supply voltage in mV.
++        vcclowalarm                |FLOAT          |Low Alarm Threshold value of supply voltage in mV.
++        vcchighwarning             |FLOAT          |High Warning Threshold value of supply voltage in mV.
++        vcclowwarning              |FLOAT          |Low Warning Threshold value of supply voltage in mV.
++        rxpowerhighalarm           |FLOAT          |High Alarm Threshold value of received power in dBm.
++        rxpowerlowalarm            |FLOAT          |Low Alarm Threshold value of received power in dBm.
++        rxpowerhighwarning         |FLOAT          |High Warning Threshold value of received power in dBm.
++        rxpowerlowwarning          |FLOAT          |Low Warning Threshold value of received power in dBm.
++        txpowerhighalarm           |FLOAT          |High Alarm Threshold value of transmit power in dBm.
++        txpowerlowalarm            |FLOAT          |Low Alarm Threshold value of transmit power in dBm.
++        txpowerhighwarning         |FLOAT          |High Warning Threshold value of transmit power in dBm.
++        txpowerlowwarning          |FLOAT          |Low Warning Threshold value of transmit power in dBm.
++        txbiashighalarm            |FLOAT          |High Alarm Threshold value of tx Bias Current in mA.
++        txbiaslowalarm             |FLOAT          |Low Alarm Threshold value of tx Bias Current in mA.
++        txbiashighwarning          |FLOAT          |High Warning Threshold value of tx Bias Current in mA.
++        txbiaslowwarning           |FLOAT          |Low Warning Threshold value of tx Bias Current in mA.
++        ========================================================================
++        """
++        transceiver_dom_threshold_info_dict = dict.fromkeys(
++            self.threshold_dict_keys, 'N/A')
++
++        if self.sfp_type == COPPER_TYPE:
++            return transceiver_dom_threshold_info_dict
++
++        if self.sfp_type == SFP_TYPE:
++
++            offset = SFP_MODULE_ADDRA2_OFFSET
++
++            self._dom_capability_detect()
++            if not self.dom_supported:
++                return transceiver_dom_threshold_info_dict
++
++            sfpd_obj = sff8472Dom(None, self.calibration)
++            if sfpd_obj is None:
++                return transceiver_dom_threshold_info_dict
++
++            dom_module_threshold_raw = self.__read_eeprom_specific_bytes((offset + SFP_MODULE_THRESHOLD_OFFSET),
++                                                                         SFP_MODULE_THRESHOLD_WIDTH)
++            if dom_module_threshold_raw is not None:
++                dom_module_threshold_data = sfpd_obj.parse_alarm_warning_threshold(
++                    dom_module_threshold_raw, 0)
++            else:
++                return transceiver_dom_threshold_info_dict
++
++            # Threshold Data
++            transceiver_dom_threshold_info_dict['temphighalarm'] = dom_module_threshold_data['data']['TempHighAlarm']['value']
++            transceiver_dom_threshold_info_dict['templowalarm'] = dom_module_threshold_data['data']['TempLowAlarm']['value']
++            transceiver_dom_threshold_info_dict['temphighwarning'] = dom_module_threshold_data['data']['TempHighWarning']['value']
++            transceiver_dom_threshold_info_dict['templowwarning'] = dom_module_threshold_data['data']['TempLowWarning']['value']
++            transceiver_dom_threshold_info_dict['vcchighalarm'] = dom_module_threshold_data['data']['VoltageHighAlarm']['value']
++            transceiver_dom_threshold_info_dict['vcclowalarm'] = dom_module_threshold_data['data']['VoltageLowAlarm']['value']
++            transceiver_dom_threshold_info_dict['vcchighwarning'] = dom_module_threshold_data[
++                'data']['VoltageHighWarning']['value']
++            transceiver_dom_threshold_info_dict['vcclowwarning'] = dom_module_threshold_data['data']['VoltageLowWarning']['value']
++            transceiver_dom_threshold_info_dict['txbiashighalarm'] = dom_module_threshold_data['data']['BiasHighAlarm']['value']
++            transceiver_dom_threshold_info_dict['txbiaslowalarm'] = dom_module_threshold_data['data']['BiasLowAlarm']['value']
++            transceiver_dom_threshold_info_dict['txbiashighwarning'] = dom_module_threshold_data['data']['BiasHighWarning']['value']
++            transceiver_dom_threshold_info_dict['txbiaslowwarning'] = dom_module_threshold_data['data']['BiasLowWarning']['value']
++            transceiver_dom_threshold_info_dict['txpowerhighalarm'] = dom_module_threshold_data['data']['TXPowerHighAlarm']['value']
++            transceiver_dom_threshold_info_dict['txpowerlowalarm'] = dom_module_threshold_data['data']['TXPowerLowAlarm']['value']
++            transceiver_dom_threshold_info_dict['txpowerhighwarning'] = dom_module_threshold_data['data']['TXPowerHighWarning']['value']
++            transceiver_dom_threshold_info_dict['txpowerlowwarning'] = dom_module_threshold_data['data']['TXPowerLowWarning']['value']
++            transceiver_dom_threshold_info_dict['rxpowerhighalarm'] = dom_module_threshold_data['data']['RXPowerHighAlarm']['value']
++            transceiver_dom_threshold_info_dict['rxpowerlowalarm'] = dom_module_threshold_data['data']['RXPowerLowAlarm']['value']
++            transceiver_dom_threshold_info_dict['rxpowerhighwarning'] = dom_module_threshold_data['data']['RXPowerHighWarning']['value']
++            transceiver_dom_threshold_info_dict['rxpowerlowwarning'] = dom_module_threshold_data['data']['RXPowerLowWarning']['value']
++
++        return transceiver_dom_threshold_info_dict
++
++    def get_reset_status(self):
++        """
++        Retrieves the reset status of SFP
++        Returns:
++            A Boolean, True if reset enabled, False if disabled
++        """
++        self._dom_capability_detect()
++        if not self.dom_supported:
++            return False
++        if self.sfp_type == COPPER_TYPE:
++            return False
++
++        if self.sfp_type == SFP_TYPE:
++            offset = 0
++
++            dom_channel_monitor_raw = self.__read_eeprom_specific_bytes(
++                (offset + SFP_CHANNL_STATUS_OFFSET), SFP_CHANNL_STATUS_WIDTH)
++
++            if dom_channel_monitor_raw is not None:
++                return False
++            else:
++                return True
++
++    def get_rx_los(self):
++        """
++        Retrieves the RX LOS (lost-of-signal) status of SFP
++        Returns:
++            A Boolean, True if SFP has RX LOS, False if not.
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return None
++        if not self.dom_supported:
++            return None
++        rx_los_list = []
++
++        offset = 256
++        dom_channel_monitor_raw = self.__read_eeprom_specific_bytes((offset + SFP_CHANNL_STATUS_OFFSET), SFP_CHANNL_STATUS_WIDTH)
++        if dom_channel_monitor_raw is not None:
++            rx_los_data = int(dom_channel_monitor_raw[0], 16)
++            rx_los_list.append(rx_los_data & 0x02 != 0)
++        else:
++            return None
++
++        return rx_los_list
++
++    def get_tx_fault(self):
++        """
++        Retrieves the TX fault status of SFP
++        Returns:
++            A Boolean, True if SFP has TX fault, False if not
++            Note : TX fault status is lached until a call to get_tx_fault or a reset.
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return None
++        if not self.dom_supported:
++            return None
++        tx_fault_list = []
++
++        offset = 256
++        dom_channel_monitor_raw = self.__read_eeprom_specific_bytes((offset + SFP_CHANNL_STATUS_OFFSET), SFP_CHANNL_STATUS_WIDTH)
++        if dom_channel_monitor_raw is not None:
++            tx_fault_data = int(dom_channel_monitor_raw[0], 16)
++            tx_fault_list.append(tx_fault_data & 0x04 != 0)
++        else:
++            return None
++        return tx_fault_list
++
++
++    def get_tx_disable(self):
++        """
++        Retrieves the tx_disable status of this SFP
++        Returns:
++            A Boolean, True if tx_disable is enabled, False if disabled
++        """
++
++        if self.sfp_type == COPPER_TYPE:
++            return None
++        if not self.dom_supported:
++            return None
++
++        tx_disable_list = []
++        offset = 256
++        dom_channel_monitor_raw = self.__read_eeprom_specific_bytes((offset + SFP_CHANNL_STATUS_OFFSET), SFP_CHANNL_STATUS_WIDTH)
++        if dom_channel_monitor_raw is not None:
++            tx_disable_data = int(dom_channel_monitor_raw[0], 16)
++            tx_disable_list.append(tx_disable_data & 0xC0 != 0)
++        else:
++            return None
++
++        return tx_disable_list
++
++    def get_tx_disable_channel(self):
++        """
++        Retrieves the TX disabled channels in this SFP
++        Returns:
++            A hex of 4 bits (bit 0 to bit 3 as channel 0 to channel 3) to represent
++            TX channels which have been disabled in this SFP.
++            As an example, a returned value of 0x5 indicates that channel 0
++            and channel 2 have been disabled.
++        """
++        tx_disable_list = self.get_tx_disable()
++        if tx_disable_list is None:
++            return 0
++        tx_disabled = 0
++        for i in range(len(tx_disable_list)):
++            if tx_disable_list[i]:
++                tx_disabled |= 1 << i
++        return tx_disabled
++
++    def get_lpmode(self):
++        """
++        Retrieves the lpmode (low power mode) status of this SFP
++        Returns:
++            A Boolean, True if lpmode is enabled, False if disabled
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return False
++        if self.sfp_type == SFP_TYPE:
++            return False
++
++    def get_power_override(self):
++        """
++        Retrieves the power-override status of this SFP
++        Returns:
++            A Boolean, True if power-override is enabled, False if disabled
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return False
++        if self.sfp_type == SFP_TYPE:
++            return False
++
++    def get_temperature(self):
++        """
++        Retrieves the temperature of this SFP
++        Returns:
++            An integer number of current temperature in Celsius
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        transceiver_bulk_status = self.get_transceiver_bulk_status()
++        return transceiver_bulk_status.get("temperature", "N/A")
++
++    def get_voltage(self):
++        """
++        Retrieves the supply voltage of this SFP
++        Returns:
++            An integer number of supply voltage in mV
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        transceiver_bulk_status = self.get_transceiver_bulk_status()
++        return transceiver_bulk_status.get("voltage", "N/A")
++
++    def get_tx_bias(self):
++        """
++        Retrieves the TX bias current of this SFP
++        Returns:
++
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        tx_bias_list = []
++        transceiver_bulk_status = self.get_transceiver_bulk_status()
++        tx_bias_list.append(transceiver_bulk_status.get("tx1bias", "N/A"))
++
++        return tx_bias_list
++
++
++    def get_rx_power(self):
++        """
++        Retrieves the received optical power for this SFP
++        Returns:
++            A list of four integer numbers, representing received optical
++            power in mW for channel 0 to channel 4.
++            Ex. ['1.77', '1.71', '1.68', '1.70']
++        """
++        rx_power_list = []
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        if self.sfp_type == SFP_TYPE:
++
++            offset = 256
++
++            sfpd_obj = sff8472Dom()
++            if sfpd_obj is None:
++                return None
++
++            self._dom_capability_detect()
++            if self.dom_supported:
++                sfpd_obj._calibration_type = self.calibration
++
++                dom_channel_monitor_raw = self.__read_eeprom_specific_bytes(
++                    (offset + SFP_CHANNL_MON_OFFSET), SFP_CHANNL_MON_WIDTH)
++                if dom_channel_monitor_raw is not None:
++                    dom_channel_monitor_data = sfpd_obj.parse_channel_monitor_params(
++                        dom_channel_monitor_raw, 0)
++                    rx_power_list.append(self.__convert_string_to_num(
++                        dom_channel_monitor_data['data']['RXPower']['value']))
++                else:
++                    return None
++            else:
++                return None
++
++        return rx_power_list
++
++    def get_tx_power(self):
++        """
++        Retrieves the TX power of this SFP
++        Returns:
++            A list of four integer numbers, representing TX power in mW
++            for channel 0 to channel 4.
++            Ex. ['1.86', '1.86', '1.86', '1.86']
++        """
++        tx_power_list = []
++
++        if self.sfp_type == COPPER_TYPE:
++            return None
++
++        if self.sfp_type == SFP_TYPE:
++
++            offset = 256
++            sfpd_obj = sff8472Dom()
++            if sfpd_obj is None:
++                return None
++
++            self._dom_capability_detect()
++            if self.dom_supported:
++                sfpd_obj._calibration_type = self.calibration
++
++                dom_channel_monitor_raw = self.__read_eeprom_specific_bytes(
++                    (offset + SFP_CHANNL_MON_OFFSET), SFP_CHANNL_MON_WIDTH)
++                if dom_channel_monitor_raw is not None:
++                    dom_channel_monitor_data = sfpd_obj.parse_channel_monitor_params(
++                        dom_channel_monitor_raw, 0)
++                    tx_power_list.append(self.__convert_string_to_num(
++                        dom_channel_monitor_data['data']['TXPower']['value']))
++                else:
++                    return None
++            else:
++                return None
++        return tx_power_list
++
++    def reset(self):
++        """
++        Reset SFP.
++        Returns:
++            A boolean, True if successful, False if not
++        """
++        # RJ45 and SFP ports not resettable
++        return False
++
++    def tx_disable(self, tx_disable):
++        """
++        Disable SFP TX
++        Args:
++            tx_disable : A Boolean, True to enable tx_disable mode, False to disable
++                         tx_disable mode.
++        Returns:
++            A boolean, True if tx_disable is set successfully, False if not
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return False
++
++        if smbus_present == 0:  # if called from sfputil outside of pmon
++            cmdstatus, register = cmd.getstatusoutput('sudo i2cget -y 0 0x76 0x8')
++            if cmdstatus:
++                sonic_logger.log_warning("sfp cmdstatus i2c get failed %s" % register )
++                return False
++            register = int(register, 16)
++        else:
++            bus = smbus.SMBus(0)
++            DEVICE_ADDRESS = 0x76
++            DEVICE_REG = 0x8
++            register = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
++
++        pos = [1, 2, 4, 8, 16, 32]
++        mask = pos[self.index-SFP_PORT_START]
++        if tx_disable == True:
++            setbits = register | mask
++        else:
++            setbits = register & ~mask
++
++        if smbus_present == 0:  # if called from sfputil outside of pmon
++            cmdstatus, output = cmd.getstatusoutput('sudo i2cset -y -m 0x0f 0 0x76 0x8 %d' % setbits)
++            if cmdstatus:
++                sonic_logger.log_warning("sfp cmdstatus i2c write failed %s" % output )
++                return False
++        else:
++            bus = smbus.SMBus(0)
++            DEVICE_ADDRESS = 0x76
++            DEVICE_REG = 0x8
++            bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG, setbits)
++
++        return True
++
++    def tx_disable_channel(self, channel, disable):
++        """
++        Sets the tx_disable for specified SFP channels
++        Args:
++            channel : A hex of 4 bits (bit 0 to bit 3) which represent channel 0 to 3,
++                      e.g. 0x5 for channel 0 and channel 2.
++            disable : A boolean, True to disable TX channels specified in channel,
++                      False to enable
++        Returns:
++            A boolean, True if successful, False if not
++        """
++
++        return NotImplementedError
++
++    def set_lpmode(self, lpmode):
++        """
++        Sets the lpmode (low power mode) of SFP
++        Args:
++            lpmode: A Boolean, True to enable lpmode, False to disable it
++            Note  : lpmode can be overridden by set_power_override
++        Returns:
++            A boolean, True if lpmode is set successfully, False if not
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return False
++        if self.sfp_type == SFP_TYPE:
++            return False
++
++    def set_power_override(self, power_override, power_set):
++        """
++        Sets SFP power level using power_override and power_set
++        Args:
++            power_override :
++                    A Boolean, True to override set_lpmode and use power_set
++                    to control SFP power, False to disable SFP power control
++                    through power_override/power_set and use set_lpmode
++                    to control SFP power.
++            power_set :
++                    Only valid when power_override is True.
++                    A Boolean, True to set SFP to low power mode, False to set
++                    SFP to high power mode.
++        Returns:
++            A boolean, True if power-override and power_set are set successfully,
++            False if not
++        """
++
++        return NotImplementedError
++
++    def get_name(self):
++        """
++        Retrieves the name of the device
++            Returns:
++            string: The name of the device
++        """
++        sfputil_helper = SfpUtilHelper()
++        sfputil_helper.read_porttab_mappings(
++            self.__get_path_to_port_config_file())
++        name = sfputil_helper.logical[self.index-1] or "Unknown"
++        return name
++
++    def get_presence(self):
++        """
++        Retrieves the presence
++        Returns:
++            bool: True if is present, False if not
++        """
++        if self.sfp_type == COPPER_TYPE:
++            return False
++
++        if smbus_present == 0:  # if called from sfputil outside of pmon
++            cmdstatus, sfpstatus = cmd.getstatusoutput('sudo i2cget -y 0 0x76 0xa')
++            sfpstatus = int(sfpstatus, 16)
++        else:
++            bus = smbus.SMBus(0)
++            DEVICE_ADDRESS = 0x76
++            DEVICE_REG = 0xa
++            sfpstatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
++
++        pos = [1, 2, 4, 8, 16, 32]
++        bit_pos = pos[self.index-SFP_PORT_START]
++        sfpstatus = sfpstatus & (bit_pos)
++
++        if sfpstatus == 0:
++            return True
++
++        return False
++
++    def get_model(self):
++        """
++        Retrieves the model number (or part number) of the device
++        Returns:
++            string: Model/part number of device
++        """
++        transceiver_dom_info_dict = self.get_transceiver_info()
++        return transceiver_dom_info_dict.get("model", "N/A")
++
++    def get_serial(self):
++        """
++        Retrieves the serial number of the device
++        Returns:
++            string: Serial number of device
++        """
++        transceiver_dom_info_dict = self.get_transceiver_info()
++        return transceiver_dom_info_dict.get("serial", "N/A")
++
++    def get_status(self):
++        """
++        Retrieves the operational status of the device
++        Returns:
++            A boolean value, True if device is operating properly, False if not
++        """
++        return self.get_presence()
++
++    def is_replaceable(self):
++        """
++        Indicate whether this device is replaceable.
++        Returns:
++            bool: True if it is replaceable.
++        """
++
++        if self.sfp_type == "SFP":
++            return True
++        else:
++            return False
++
++    def get_position_in_parent(self):
++        """
++        Retrieves 1-based relative physical position in parent device
++        Returns:
++            integer: The 1-based relative physical position in parent device
++        """
++        return self.index
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp_event.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp_event.py
+new file mode 100644
+index 000000000..2101bc527
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/sfp_event.py
+@@ -0,0 +1,117 @@
++'''
++listen for the SFP change event and return to chassis.
++'''
++import sys
++import time
++from sonic_py_common import logger
++
++smbus_present = 1
++
++try:
++    import smbus
++except ImportError as e:
++    smbus_present = 0
++
++if sys.version_info[0] < 3:
++    import commands as cmd
++else:
++    import subprocess as cmd
++
++# system level event/error
++EVENT_ON_ALL_SFP = '-1'
++SYSTEM_NOT_READY = 'system_not_ready'
++SYSTEM_READY = 'system_become_ready'
++SYSTEM_FAIL = 'system_fail'
++
++# SFP PORT numbers
++SFP_PORT_START = 49
++SFP_PORT_END = 54
++
++SYSLOG_IDENTIFIER = "sfp_event"
++sonic_logger = logger.Logger(SYSLOG_IDENTIFIER)
++
++
++class sfp_event:
++    ''' Listen to plugin/plugout cable events '''
++
++    def __init__(self):
++        self.handle = None
++
++    def initialize(self):
++        self.modprs_register = 0
++        # Get Transceiver status
++        time.sleep(5)
++        self.modprs_register = self._get_transceiver_status()
++        sonic_logger.log_info("Initial SFP presence=%d" % self.modprs_register)
++
++    def deinitialize(self):
++        if self.handle is None:
++            return
++
++    def _get_transceiver_status(self):
++        if smbus_present == 0:
++            sonic_logger.log_info("  PMON - smbus ERROR - DEBUG sfp_event   ")
++            cmdstatus, sfpstatus = cmd.getstatusoutput('sudo i2cget -y 0 0x76 0xa')
++            sfpstatus = int(sfpstatus, 16)
++        else:
++            bus = smbus.SMBus(0)
++            DEVICE_ADDRESS = 0x76
++            DEVICE_REG = 0xa
++            sfpstatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
++
++            sfpstatus = ~sfpstatus
++            sfpstatus = sfpstatus & 0xF
++
++        return sfpstatus
++
++    def check_sfp_status(self, port_change, timeout):
++        """
++        check_sfp_status called from get_change_event, this will return correct
++            status of all 4 SFP ports if there is a change in any of them
++        """
++        start_time = time.time()
++        port = SFP_PORT_START
++        forever = False
++
++        if timeout == 0:
++            forever = True
++        elif timeout > 0:
++            timeout = timeout / float(1000)  # Convert to secs
++        else:
++            return False, {}
++        end_time = start_time + timeout
++
++        if (start_time > end_time):
++            return False, {}  # Time wrap or possibly incorrect timeout
++
++        while (timeout >= 0):
++            # Check for OIR events and return updated port_change
++            reg_value = self._get_transceiver_status()
++            if (reg_value != self.modprs_register):
++                changed_ports = (self.modprs_register ^ reg_value)
++                while (port >= SFP_PORT_START and port <= SFP_PORT_END):
++                    # Mask off the bit corresponding to our port
++                    mask = (1 << port-SFP_PORT_START)
++                    if (changed_ports & mask):
++                        # ModPrsL is active high
++                        if reg_value & mask == 0:
++                            port_change[port] = '0'
++                        else:
++                            port_change[port] = '1'
++                    port += 1
++
++                # Update reg value
++                self.modprs_register = reg_value
++                return True, port_change
++
++            if forever:
++                time.sleep(1)
++            else:
++                timeout = end_time - time.time()
++                if timeout >= 1:
++                    time.sleep(1)  # We poll at 1 second granularity
++                else:
++                    if timeout > 0:
++                        time.sleep(timeout)
++                    return True, {}
++        return False, {}
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/watchdog.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/watchdog.py
+new file mode 100644
+index 000000000..2726d19d4
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/watchdog.py
+@@ -0,0 +1,184 @@
++"""
++Module contains an implementation of SONiC Platform Base API and
++provides access to hardware watchdog
++"""
++
++import os
++import fcntl
++import array
++
++from sonic_platform_base.watchdog_base import WatchdogBase
++from sonic_py_common import logger
++
++""" ioctl constants """
++IO_READ = 0x80000000
++IO_SIZE_INT = 0x00040000
++IO_READ_WRITE = 0xC0000000
++IO_TYPE_WATCHDOG = ord('W') << 8
++
++WDR_INT = IO_READ | IO_SIZE_INT | IO_TYPE_WATCHDOG
++WDWR_INT = IO_READ_WRITE | IO_SIZE_INT | IO_TYPE_WATCHDOG
++
++""" Watchdog ioctl commands """
++WDIOC_SETOPTIONS = 4 | WDR_INT
++WDIOC_KEEPALIVE = 5 | WDR_INT
++WDIOC_SETTIMEOUT = 6 | WDWR_INT
++WDIOC_GETTIMEOUT = 7 | WDR_INT
++WDIOC_GETTIMELEFT = 10 | WDR_INT
++
++""" Watchdog status constants """
++WDIOS_DISABLECARD = 0x0001
++WDIOS_ENABLECARD = 0x0002
++
++""" watchdog sysfs """
++WD_SYSFS_PATH = "/sys/class/watchdog/"
++
++WD_COMMON_ERROR = -1
++
++sonic_logger = logger.Logger()
++
++
++class WatchdogImplBase(WatchdogBase):
++    """
++    Base class that implements common logic for interacting
++    with watchdog using ioctl commands
++    """
++
++    def __init__(self, wd_device_path):
++        """
++        Open a watchdog handle
++        @param wd_device_path Path to watchdog device
++        """
++
++        self.watchdog_path = wd_device_path
++        self.watchdog = os.open(self.watchdog_path, os.O_WRONLY)
++
++        # Opening a watchdog descriptor starts
++        # watchdog timer; by default it should be stopped
++        self._disablewatchdog()
++        self.armed = False
++        self.timeout = self._gettimeout()
++
++    def disarm(self):
++        """
++        Disarm the hardware watchdog
++
++        Returns:
++            A boolean, True if watchdog is disarmed successfully, False
++            if not
++        """
++        sonic_logger.log_info(" Debug disarm watchdog ")
++
++        try:
++            self._disablewatchdog()
++            self.armed = False
++            self.timeout = 0
++        except IOError:
++            return False
++
++        return True
++
++    def _disablewatchdog(self):
++        """
++        Turn off the watchdog timer
++        """
++
++        req = array.array('h', [WDIOS_DISABLECARD])
++        fcntl.ioctl(self.watchdog, WDIOC_SETOPTIONS, req, False)
++
++    def _settimeout(self, seconds):
++        """
++        Set watchdog timer timeout
++        @param seconds - timeout in seconds
++        @return is the actual set timeout
++        """
++
++        req = array.array('I', [seconds])
++        fcntl.ioctl(self.watchdog, WDIOC_SETTIMEOUT, req, True)
++
++        return int(req[0])
++
++    def _gettimeout(self):
++        """
++        Get watchdog timeout
++        @return watchdog timeout
++        """
++
++        req = array.array('I', [0])
++        fcntl.ioctl(self.watchdog, WDIOC_GETTIMEOUT, req, True)
++
++        return int(req[0])
++
++    def _gettimeleft(self):
++        """
++        Get time left before watchdog timer expires
++        @return time left in seconds
++        """
++
++        req = array.array('I', [0])
++        fcntl.ioctl(self.watchdog, WDIOC_GETTIMELEFT, req, True)
++
++        return int(req[0])
++
++
++    def arm(self, seconds):
++        """
++        Implements arm WatchdogBase API
++        """
++        sonic_logger.log_info(" Debug arm watchdog4 ")
++        ret = WD_COMMON_ERROR
++        if seconds < 0:
++            return ret
++
++        try:
++            if self.timeout != seconds:
++                self.timeout = self._settimeout(seconds)
++            if self.armed:
++                self._keepalive()
++            else:
++                sonic_logger.log_info(" Debug arm watchdog5 ")
++                self._enablewatchdog()
++                self.armed = True
++            ret = self.timeout
++        except IOError:
++            pass
++
++        return ret
++
++    def _enablewatchdog(self):
++        """
++        Turn on the watchdog timer
++        """
++
++        req = array.array('h', [WDIOS_ENABLECARD])
++        fcntl.ioctl(self.watchdog, WDIOC_SETOPTIONS, req, False)
++
++    def _keepalive(self):
++        """
++        Keep alive watchdog timer
++        """
++
++        fcntl.ioctl(self.watchdog, WDIOC_KEEPALIVE)
++
++    def is_armed(self):
++        """
++        Implements is_armed WatchdogBase API
++        """
++
++        return self.armed
++
++    def get_remaining_time(self):
++        """
++        Implements get_remaining_time WatchdogBase API
++        """
++
++        timeleft = WD_COMMON_ERROR
++
++        if self.armed:
++            try:
++                timeleft = self._gettimeleft()
++            except IOError:
++                pass
++
++        return timeleft
++
+diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/utils/get-base-mac.py b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/utils/get-base-mac.py
+new file mode 100644
+index 000000000..fe271d04a
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/utils/get-base-mac.py
+@@ -0,0 +1,20 @@
++#!/usr/bin/env python
++
++def main():
++    try:
++        import sonic_platform.platform
++        import sonic_platform.chassis
++    except ImportError, e:
++        raise ImportError (str(e) + "- required module not found")
++
++    chassis = sonic_platform.platform.Platform().get_chassis()
++    if chassis is None:
++        print "DEBUG chassis was None  "
++             
++    base_mac = chassis.get_base_mac()
++    print base_mac
++
++    return
++
++if __name__ == '__main__':
++    main()
+-- 
+2.25.1
+
