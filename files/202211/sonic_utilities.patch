@@ -1,0 +1,101 @@
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 15 Feb 2023 10:57:59 +0530
+Subject: [PATCH] [generate_dump]: Enhance show techsupport for Marvell
+ platform
+
+Change-Id: Ibb5b5a860833e8d7834a1d72756d070c61f2ab37
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ scripts/generate_dump | 72 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 72 insertions(+)
+
+diff --git a/scripts/generate_dump b/scripts/generate_dump
+index 2a7172f4c7..d0dcae29e9 100755
+--- a/scripts/generate_dump
++++ b/scripts/generate_dump
+@@ -1157,6 +1157,73 @@ collect_mellanox_dfw_dumps() {
+     done
+ }
+ 
++###############################################################################
++# Runs a given marvellcmd command in all namesapces in case of multi ASIC platform
++# Globals:
++#  NUM_ASICS
++# Arguments:
++#  cmd: The command to run. Make sure that arguments with spaces have quotes
++#  filename: the filename to save the output as in $BASE/dump
++#  do_gzip: (OPTIONAL) true or false. Should the output be gzipped
++# Returns:
++#  None
++###############################################################################
++save_marvellcmd() {
++    trap 'handle_error $? $LINENO' ERR
++
++    mkdir -p $LOGDIR/sdkdump
++    if [ "$1" = "collect SER" ];then
++        local cmd="sudo cat /var/log/syslog | grep \"Chip MARVELL occurs\""
++    else
++        local cmd="~/mrvlcmd -c \"$1\""
++    fi
++    save_cmd "$cmd" "sdkdump/$2"
++}
++
++###############################################################################
++# Collect Marvell specific information
++# Globals:
++#  None
++# Arguments:
++#  None
++# Returns:
++#  None
++###############################################################################
++collect_marvell() {
++    trap 'handle_error $? $LINENO' ERR
++
++    docker cp syncd:/usr/bin/mrvlcmd ~/
++    save_marvellcmd "show version" "CPSS_version"
++    save_marvellcmd "collect SER" "SER_table"
++    save_marvellcmd "show traffic cpu rx statistic device 0" "CPU_stat"
++    save_marvellcmd "show interfaces status all" "INTERFACE_config"
++    save_marvellcmd "show port monitor" "PORT_mirror"
++    save_marvellcmd "show vlan device 0" "VLAN_table"
++    save_marvellcmd "show ip route device 0" "IP_route"
++    save_marvellcmd "show ipv6 route device 0" "IPV6_route"
++    save_marvellcmd "show ip route_fdb device 0" "IP_forward_route"
++    save_marvellcmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
++    save_marvellcmd "show ip next-hop device 0" "NH_table"
++    save_marvellcmd "show mac address-table device 0" "MAC_forward"
++    save_marvellcmd "show mac address-table count device 0" "MAC_count"
++    save_marvellcmd "show tail-drop-allocated buffers all" "Tail_drop"
++    save_marvellcmd "show policy device 0" "POLICER_table"
++    save_marvellcmd "show system policy-tcam utilization device 0" "Policy_count"
++    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
++    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
++    save_marvellcmd "debug-mode;show drop counters 0" "Drop_count"
++    save_marvellcmd "debug-mode;dump all registers" "REGISTER_table"
++    save_marvellcmd "debug-mode;dump all tables0" "HW_table_0"
++    save_marvellcmd "debug-mode;dump all tables1" "HW_table_1"
++    save_marvellcmd "debug-mode;dump all tables2" "HW_table_2"
++    save_marvellcmd "debug-mode;dump all tables3" "HW_table_3"
++    save_marvellcmd "debug-mode;dump all tables4" "HW_table_4"
++    save_marvellcmd "debug-mode;dump all tables5" "HW_table_5"
++    save_marvellcmd "debug-mode;dump all tables6" "HW_table_6"
++    save_marvellcmd "debug-mode;dump all tables7" "HW_table_7"
++    rm ~/mrvlcmd
++}
++
+ ###############################################################################
+ # Collect Broadcom specific information
+ # Globals:
+@@ -1726,6 +1793,11 @@ main() {
+         collect_cisco_8000
+     fi
+ 
++    if [ "$asic" = "marvell" ]; then
++        collect_marvell
++    fi
++
++
+     # 2nd counter snapshot late. Need 2 snapshots to make sense of counters trend.
+     save_counter_snapshot $asic 2
+ 

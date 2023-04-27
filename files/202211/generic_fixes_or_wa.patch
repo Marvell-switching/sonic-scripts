@@ -1,0 +1,18 @@
+diff --git a/files/initramfs-tools/modules b/files/initramfs-tools/modules
+index 349bf3761..0fa55292a 100644
+--- a/files/initramfs-tools/modules
++++ b/files/initramfs-tools/modules
+@@ -5,3 +5,4 @@ nls_ascii
+ nls_cp437
+ nls_utf8
+ nvme
++i2c-dev
+diff --git a/files/initramfs-tools/modules.arm b/files/initramfs-tools/modules.arm
+index 074105195..1916c6c5f 100644
+--- a/files/initramfs-tools/modules.arm
++++ b/files/initramfs-tools/modules.arm
+@@ -12,3 +12,4 @@ ofpart
+ mtdswap
+ mtd_blkdevs
+ adt7475
++i2c-dev
