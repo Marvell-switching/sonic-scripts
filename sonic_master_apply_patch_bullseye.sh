@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="3cf50ca7fc28dcd193e93bcb10f0583c13d38f2d"
+SONIC_COMMIT="1b63543e7f29450ffe462e19880df283d1798156"
 
 #
 # END of CONFIGURATIONS
@@ -33,11 +33,11 @@ PATCHES="generic_fixes_or_wa.patch
 	AC5X-with-external-cpu.patch"
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
 declare -A SP1=([NAME]="sonic_swss.patch" [DIR]="src/sonic-swss")
 declare -A SP2=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
 declare -A SP3=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
-	
+declare -A SP4=([NAME]="sonic_sairedis.patch" [DIR]="src/sonic-sairedis")
 
 log()
 {

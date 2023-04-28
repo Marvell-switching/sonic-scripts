@@ -16,3 +16,26 @@ index 074105195..1916c6c5f 100644
  mtd_blkdevs
  adt7475
 +i2c-dev
+diff --git a/installer/default_platform.conf b/installer/default_platform.conf
+index ddf59baff..3a6ec4cc3 100755
+--- a/installer/default_platform.conf
++++ b/installer/default_platform.conf
+@@ -434,16 +434,9 @@ bootloader_menu_config()
+         ${onie_bin} onie-support /tmp
+         mv $onie_initrd_tmp/tmp/onie-support*.tar.bz2 $demo_mnt/$image_dir/
+ 
++
+         if [ "$firmware" = "uefi" ] ; then
+-            secure_boot_state=$(mokutil --sb-state)
+-            echo secure_boot_state=$secure_boot_state
+-            if [ "$secure_boot_state" = "SecureBoot enabled" ]; then
+-                echo "UEFI Secure Boot is enabled"
+-                demo_install_uefi_shim "$demo_mnt" "$blk_dev"
+-            else
+-                echo "UEFI Secure Boot is disabled"
+-                demo_install_uefi_grub "$demo_mnt" "$blk_dev"
+-            fi
++        demo_install_uefi_grub "$demo_mnt" "$blk_dev"
+         else
+         demo_install_grub "$demo_mnt" "$blk_dev"
+         fi

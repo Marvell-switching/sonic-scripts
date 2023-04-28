@@ -1,0 +1,13 @@
+diff --git a/lib/sairedis.h b/lib/sairedis.h
+index 6539f84..bf03e16 100644
+--- a/lib/sairedis.h
++++ b/lib/sairedis.h
+@@ -43,7 +43,7 @@ extern "C" {
+ /**
+  * @brief Default synchronous operation response timeout in milliseconds.
+  */
+-#define SAI_REDIS_DEFAULT_SYNC_OPERATION_RESPONSE_TIMEOUT (60*1000)
++#define SAI_REDIS_DEFAULT_SYNC_OPERATION_RESPONSE_TIMEOUT (1999999)
+ 
+ typedef enum _sai_redis_notify_syncd_t
+ {
