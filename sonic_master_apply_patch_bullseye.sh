@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="3cf50ca7fc28dcd193e93bcb10f0583c13d38f2d"
+SONIC_COMMIT="4b033deb77b16c03e5441368eecc06d9dc1e6310"
 
 #
 # END of CONFIGURATIONS
@@ -24,7 +24,7 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for master patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_02/files/master-bullseye/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bullseye/"
 
 # Patches
 PATCHES="generic_fixes_or_wa.patch
@@ -33,11 +33,11 @@ PATCHES="generic_fixes_or_wa.patch
 	AC5X-with-external-cpu.patch"
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
 declare -A SP1=([NAME]="sonic_swss.patch" [DIR]="src/sonic-swss")
 declare -A SP2=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
 declare -A SP3=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
-	
+declare -A SP4=([NAME]="sonic_sairedis.patch" [DIR]="src/sonic-sairedis")
 
 log()
 {
@@ -101,7 +101,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_02/files/mrvl_sonic_hwsku_ezb.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
