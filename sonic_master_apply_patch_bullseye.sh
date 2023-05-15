@@ -28,6 +28,7 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 
 # Patches
 PATCHES="generic_fixes_or_wa.patch
+	14589.patch
 	marvell_arm64.patch
 	marvell_x86.patch
 	AC5X-with-external-cpu.patch"
