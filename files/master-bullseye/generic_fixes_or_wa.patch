@@ -16,44 +16,6 @@ index 074105195..1916c6c5f 100644
  mtd_blkdevs
  adt7475
 +i2c-dev
-diff --git a/installer/default_platform.conf b/installer/default_platform.conf
-index ddf59baff..888cb8adf 100755
---- a/installer/default_platform.conf
-+++ b/installer/default_platform.conf
-@@ -435,17 +435,25 @@ bootloader_menu_config()
-         mv $onie_initrd_tmp/tmp/onie-support*.tar.bz2 $demo_mnt/$image_dir/
- 
-         if [ "$firmware" = "uefi" ] ; then
--            secure_boot_state=$(mokutil --sb-state)
--            echo secure_boot_state=$secure_boot_state
--            if [ "$secure_boot_state" = "SecureBoot enabled" ]; then
--                echo "UEFI Secure Boot is enabled"
--                demo_install_uefi_shim "$demo_mnt" "$blk_dev"
-+            reg_sb_guid=$(efivar -l | grep "SecureBoot")
-+            secure_boot_state=""
-+            if echo "$reg_sb_guid" | grep -q "SecureBoot";then
-+                secure_boot_state=$(efivar -d --name $reg_sb_guid)
-             else
--                echo "UEFI Secure Boot is disabled"
--                demo_install_uefi_grub "$demo_mnt" "$blk_dev"
-+                echo "Current UEFI do not support Secure Boot feature"
-+                secure_boot_state="0"
-             fi
-+		    echo secure_boot_state=$secure_boot_state
-+		    if [ "$secure_boot_state" -eq 1 ]; then
-+			    echo "UEFI Secure Boot is enabled - Installing shim bootloader"
-+			    demo_install_uefi_shim "$demo_mnt" "$blk_dev"
-+		    else
-+			    echo "UEFI Secure Boot is disabled"
-+			    echo "UEFI Secure Boot is disabled - Installing regular grub bootloader"
-+			    demo_install_uefi_grub "$demo_mnt" "$blk_dev"
-+		    fi
-         else
--        demo_install_grub "$demo_mnt" "$blk_dev"
-+            demo_install_grub "$demo_mnt" "$blk_dev"
-         fi
-     fi
- 
 diff --git a/build_debian.sh b/build_debian.sh
 index 4eae97dbe..133a02f95 100755
 --- a/build_debian.sh
