@@ -1,35 +1,26 @@
+From 18acceb95e854c9def56e6856418c1cf3f373f17 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 14 Jun 2023 11:19:36 +0000
+Subject: Generic fixes or WA
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ files/initramfs-tools/modules   |  1 +
+ installer/default_platform.conf | 16 +++++++++++++++-
+ installer/install.sh            | 23 +++++++++++++++++++++++
+ 3 files changed, 39 insertions(+), 1 deletion(-)
+
 diff --git a/files/initramfs-tools/modules b/files/initramfs-tools/modules
-index 349bf3761..0fa55292a 100644
+index 546660dae..117e9b323 100644
 --- a/files/initramfs-tools/modules
 +++ b/files/initramfs-tools/modules
-@@ -5,3 +5,4 @@ nls_ascii
- nls_cp437
+@@ -6,3 +6,4 @@ nls_cp437
  nls_utf8
  nvme
+ zstd
 +i2c-dev
-diff --git a/files/initramfs-tools/modules.arm b/files/initramfs-tools/modules.arm
-index 074105195..1916c6c5f 100644
---- a/files/initramfs-tools/modules.arm
-+++ b/files/initramfs-tools/modules.arm
-@@ -12,3 +12,4 @@ ofpart
- mtdswap
- mtd_blkdevs
- adt7475
-+i2c-dev
-diff --git a/build_debian.sh b/build_debian.sh
-index 4eae97dbe..133a02f95 100755
---- a/build_debian.sh
-+++ b/build_debian.sh
-@@ -531,6 +531,7 @@ sudo LANG=C DEBIAN_FRONTEND=noninteractive chroot $FILESYSTEM_ROOT apt-get purge
- sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install 'setuptools==49.6.00'
- sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install 'wheel==0.35.1'
- 
-+sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install 'requests==2.29.0'
- # docker Python API package is needed by Ansible docker module as well as some SONiC applications
- sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install 'docker==5.0.3'
- 
 diff --git a/installer/default_platform.conf b/installer/default_platform.conf
-index ddf59baff..f8cdd3c25 100755
+index 559e7ab3c..a3f52e947 100755
 --- a/installer/default_platform.conf
 +++ b/installer/default_platform.conf
 @@ -75,7 +75,8 @@ create_partition()
@@ -60,7 +51,7 @@ index ddf59baff..f8cdd3c25 100755
      local demo_mnt="$1"
      local blk_dev="$2"
  
-@@ -589,6 +594,9 @@ menuentry '$demo_grub_entry' {
+@@ -598,6 +603,9 @@ menuentry '$demo_grub_entry' {
  }
  EOF
  
@@ -70,7 +61,7 @@ index ddf59baff..f8cdd3c25 100755
      if [ "$install_env" = "onie" ]; then
          # Add menu entries for ONIE -- use the grub fragment provided by the
          # ONIE distribution.
-@@ -622,5 +630,11 @@ EOF
+@@ -620,5 +628,11 @@ EOF
      cd /
  
      echo "Installed SONiC base image $demo_volume_label successfully"
@@ -158,3 +149,6 @@ index 51b5a75eb..3d5b62ea0 100755
  fi
  
  echo "ONIE_IMAGE_PART_SIZE=$demo_part_size"
+-- 
+2.25.1
+

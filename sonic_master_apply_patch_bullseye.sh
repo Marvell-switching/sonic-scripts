@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="4b033deb77b16c03e5441368eecc06d9dc1e6310"
+SONIC_COMMIT="29051072abcbf6b46876fc5fb5835e1c78229776"
 
 #
 # END of CONFIGURATIONS
@@ -27,18 +27,20 @@ FULL_PATH=`pwd`
 WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bullseye/"
 
 # Patches
-PATCHES="generic_fixes_or_wa.patch
-	14589.patch
-	marvell_arm64.patch
-	marvell_x86.patch
-	AC5X-with-external-cpu.patch"
+SERIES="0001-Marvell-arm64-Support-for-lazy-install-sdk-drivers.patch
+        0002-marvell-arm64-Add-platform-support-for-rd98DX35xx.patch
+        0003-marvell-arm64-Add-platform-support-db98cx8540.patch
+        0004-marvell-arm64-Add-platform-support-db98cx8580.patch
+        0005-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
+        0006-Generic-fixes-or-WA.patch"
+
+PATCHES="marvell_x86.patch"
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
-declare -A SP1=([NAME]="sonic_swss.patch" [DIR]="src/sonic-swss")
-declare -A SP2=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
-declare -A SP3=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP4=([NAME]="sonic_sairedis.patch" [DIR]="src/sonic-sairedis")
+declare -a SUB_PATCHES=(SP1 SP2 SP3)
+declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
+declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
+declare -A SP3=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
 
 log()
 {
@@ -60,6 +62,22 @@ pre_patch_help()
     log "<<FOR ARM64>> make configure PLATFORM=marvell-arm64 PLATFORM_ARCH=arm64"
     log "<<FOR INTEL>> make configure PLATFORM=marvell"
     log "make all"
+}
+
+apply_patch_series()
+{
+    for patch in $SERIES
+    do
+        echo $patch
+        pushd patches
+        wget -c $WGET_PATH/$patch
+        popd
+        git am patches/$patch
+        if [ $? -ne 0 ]; then
+            log "ERROR: Failed to apply patch $patch"
+            exit 1
+        fi
+    done
 }
 
 apply_patches()
@@ -90,7 +108,7 @@ apply_submodule_patches()
     	wget -c $WGET_PATH/${!patch}
         popd
 	    pushd ${!dir}
-    	patch -p1 < $CWD/patches/${!patch}
+        git am $CWD/patches/${!patch}
         if [ $? -ne 0 ]; then
 	        log "ERROR: Failed to apply patch ${!patch}"
             exit 1
@@ -149,6 +167,8 @@ main()
     date > ${FULL_PATH}/${LOG_FILE}
     [ -d patches ] || mkdir patches
 
+    # Apply patch series
+    apply_patch_series
     # Apply patches
     apply_patches
     # Apply submodule patches
