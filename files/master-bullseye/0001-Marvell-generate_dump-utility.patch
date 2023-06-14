@@ -1,9 +1,9 @@
-From a1aba83baabbc2443fd3ae86000f9433e2f87716 Mon Sep 17 00:00:00 2001
-From: yangyangx <yangyangx@marvell.com>
-Date: Mon, 5 Jun 2023 06:53:24 +0000
-Subject: [PATCH] [generate_dump]: Enhance show techsupport for Marvell
- platform
+From 50520b31cd9f1cc73d455d20e98c36bbbf17b423 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 14 Jun 2023 11:43:04 +0000
+Subject: Marvell generate_dump utility
 
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  scripts/generate_dump | 66 +++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 66 insertions(+)

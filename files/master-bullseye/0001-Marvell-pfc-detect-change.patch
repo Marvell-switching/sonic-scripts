@@ -1,5 +1,18 @@
+From e751bc1070ed2a7a12f02d271b695010367654eb Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 14 Jun 2023 11:44:52 +0000
+Subject: Marvell pfc detect change
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ orchagent/Makefile.am            |  1 +
+ orchagent/orchdaemon.cpp         |  3 +-
+ orchagent/pfc_detect_marvell.lua | 99 ++++++++++++++++++++++++++++++++
+ 3 files changed, 102 insertions(+), 1 deletion(-)
+ create mode 100644 orchagent/pfc_detect_marvell.lua
+
 diff --git a/orchagent/Makefile.am b/orchagent/Makefile.am
-index d39e73d..454bccf 100644
+index 5e3cd74..34f10be 100644
 --- a/orchagent/Makefile.am
 +++ b/orchagent/Makefile.am
 @@ -19,6 +19,7 @@ dist_swss_DATA = \
@@ -11,10 +24,10 @@ index d39e73d..454bccf 100644
  		 pfc_detect_nephos.lua \
  		 pfc_detect_cisco-8000.lua \
 diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
-index d1b4188..93d66a2 100644
+index a652b9b..16a098c 100644
 --- a/orchagent/orchdaemon.cpp
 +++ b/orchagent/orchdaemon.cpp
-@@ -518,6 +518,7 @@ bool OrchDaemon::init()
+@@ -522,6 +522,7 @@ bool OrchDaemon::init()
      }
      else if ((platform == INVM_PLATFORM_SUBSTRING)
               || (platform == BFN_PLATFORM_SUBSTRING)
@@ -22,7 +35,7 @@ index d1b4188..93d66a2 100644
               || (platform == NPS_PLATFORM_SUBSTRING))
      {
  
-@@ -549,7 +550,7 @@ bool OrchDaemon::init()
+@@ -553,7 +554,7 @@ bool OrchDaemon::init()
  
          static const vector<sai_queue_attr_t> queueAttrIds;
  
@@ -136,3 +149,6 @@ index 0000000..6e5b710
 +
 +return rets
 +
+-- 
+2.25.1
+

@@ -1,21 +1,20 @@
-From 8a5567e34fb06a318a9702f01b255d1d8effa4b6 Mon Sep 17 00:00:00 2001
+From fc4809260c1fb6f068c9ebcce90f6ff43940ca80 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Thu, 6 Apr 2023 04:44:43 +0000
-Subject: Add platform support for AC5X with external cpu
+Date: Mon, 5 Jun 2023 09:57:30 +0000
+Subject: marvell-arm64: Add platform support rd98DX35xx_ext
 
-* Add rd98dx35xx-ext platform
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  platform/marvell-arm64/one-image.mk           |   1 +
- .../marvell-arm64/platform-rd98dx35xx-ext.mk  |   8 +
+ .../marvell-arm64/platform-rd98dx35xx-ext.mk  |  10 +
  platform/marvell-arm64/rules.mk               |   1 +
  .../debian/changelog                          |   5 +
  .../debian/compat                             |   1 +
  .../debian/control                            |  13 +
- .../debian/install                            |   5 +
- .../debian/postinst                           |  10 +
- .../debian/rules                              |  65 ++
+ .../debian/install                            |   4 +
+ .../debian/postinst                           |  12 +
+ .../debian/rules                              |  78 ++
  .../scripts/rd98dx35xx-ext-init.sh            |  20 +
- .../scripts/rd98dx35xx-ext_plt_setup.sh       |  23 +
  .../service/rd98dx35xx-ext-init.service       |  11 +
  .../rd98dx35xx_ext/setup.py                   |  15 +
  .../rd98dx35xx_ext/sonic_platform/__init__.py |   3 +
@@ -27,7 +26,7 @@ Subject: Add platform support for AC5X with external cpu
  .../sonic_platform/sfp_event.py               | 117 +++
  .../rd98dx35xx_ext/sonic_platform/watchdog.py | 184 ++++
  .../rd98dx35xx_ext/utils/get-base-mac.py      |  20 +
- 22 files changed, 2033 insertions(+)
+ 21 files changed, 2026 insertions(+)
  create mode 100644 platform/marvell-arm64/platform-rd98dx35xx-ext.mk
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
@@ -36,7 +35,6 @@ Subject: Add platform support for AC5X with external cpu
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
  create mode 100755 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh
- create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/setup.py
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/sonic_platform/__init__.py
@@ -50,39 +48,41 @@ Subject: Add platform support for AC5X with external cpu
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/utils/get-base-mac.py
 
 diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
-index 491ce0a59..05e797921 100644
+index b9fc5cca3..f5eb36504 100644
 --- a/platform/marvell-arm64/one-image.mk
 +++ b/platform/marvell-arm64/one-image.mk
-@@ -8,6 +8,7 @@ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+@@ -9,6 +9,7 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
  $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8540_16CD_PLATFORM)
  $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
- $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xxEXT_PLATFORM)
  ifeq ($(INSTALL_DEBUG_TOOLS),y)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
 diff --git a/platform/marvell-arm64/platform-rd98dx35xx-ext.mk b/platform/marvell-arm64/platform-rd98dx35xx-ext.mk
 new file mode 100644
-index 000000000..1a3986fbe
+index 000000000..137239ea3
 --- /dev/null
 +++ b/platform/marvell-arm64/platform-rd98dx35xx-ext.mk
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,10 @@
 +# AC5X External CPU Platform
 +
++include $(PLATFORM_PATH)/prestera.mk
 +AC5X_VERSION=1.0
 +AC5X_RD98DX35xxEXT_PLATFORM = sonic-platform-rd98dx35xx-ext_$(AC5X_VERSION)_$(CONFIGURED_ARCH).deb
 +$(AC5X_RD98DX35xxEXT_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-rd98dx35xx-ext
++$(AC5X_RD98DX35xxEXT_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
 +$(AC5X_RD98DX35xxEXT_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_ext-r0
 +SONIC_DPKG_DEBS += $(AC5X_RD98DX35xxEXT_PLATFORM)
 +
 diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
-index e549af165..b5b8375d3 100644
+index cf7a116d0..78f3839d5 100644
 --- a/platform/marvell-arm64/rules.mk
 +++ b/platform/marvell-arm64/rules.mk
-@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/prestera.mk
+@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/platform-nokia.mk
+ include $(PLATFORM_PATH)/platform-rd98dx35xx.mk
  include $(PLATFORM_PATH)/platform-db98cx8540-16cd.mk
  include $(PLATFORM_PATH)/platform-db98cx8580-32cd.mk
- include $(PLATFORM_PATH)/platform-rd98dx35xx.mk
 +include $(PLATFORM_PATH)/platform-rd98dx35xx-ext.mk
  
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
@@ -126,37 +126,38 @@ index 000000000..3930eeb96
 + <insert long description, indented with spaces>
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
 new file mode 100644
-index 000000000..8d486e0c3
+index 000000000..f6f052c40
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/install
-@@ -0,0 +1,5 @@
-+rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh usr/local/bin
+@@ -0,0 +1,4 @@
 +rd98dx35xx_ext/scripts/rd98dx35xx-ext-init.sh  usr/local/bin
 +rd98dx35xx_ext/service/rd98dx35xx-ext-init.service etc/systemd/system
 +rd98dx35xx_ext/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-marvell_rd98DX35xx_ext-r0
-+
++rd98dx35xx_ext/mrvl-prestera/platform/arm64/7020/* /
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
 new file mode 100644
-index 000000000..83cff7d37
+index 000000000..d25fa2406
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/postinst
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,12 @@
 +#!/bin/sh
 +# postinst script for sonic-platform-rd98dx35xx-ext
 +#
 +# see: dh_installdeb(1)
 +
-+sh /usr/local/bin/rd98dx35xx-ext_plt_setup.sh
 +chmod a+x /usr/local/bin/rd98dx35xx-ext-init.sh
++depmod -a
++systemctl restart kmod
 +systemctl enable rd98dx35xx-ext-init.service
++systemctl start rd98dx35xx-ext-init.service
 +exit 0
 +
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
 new file mode 100755
-index 000000000..08971b680
+index 000000000..755fb40f8
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/rules
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,78 @@
 +#!/usr/bin/make -f
 +# See debhelper(7) (uncomment to enable)
 +# output every command that modifies files on the build system.
@@ -166,11 +167,16 @@ index 000000000..08971b680
 +#--------------------------------------------------------
 +
 +PACKAGE_PRE_NAME := sonic-platform-rd98dx35xx-ext
++ifneq ($(CROSS_BUILD_ENVIRON), y)
++KVERSION   ?= $(shell uname -r)
++endif
++KERNEL_SRC :=  /lib/modules/$(KVERSION)
++INSTALL_MOD_DIR := kernel/extra/
 +MOD_SRC_DIR:= $(shell pwd)
 +MODULE_DIRS:= rd98dx35xx_ext
 +UTILS_DIR := utils
 +SERVICE_DIR := service
-+PLATFORM_DIR := sonic_platform
++PRESTERA_MODULE_DIR := mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers
 +
 +%:
 +	dh $@ --with systemd,python3 --buildsystem=pybuild
@@ -182,6 +188,12 @@ index 000000000..08971b680
 +
 +build:
 +	(for mod in $(MODULE_DIRS); do \
++		cd $(MOD_SRC_DIR)/$${mod}/; \
++		rm -rf mrvl-prestera || true; \
++		git clone ${MRVL_PRESTERA_SRC_URL}; \
++		cd mrvl-prestera && git checkout ${MRVL_PRESTERA_SRC_TAG} && cd ..; \
++		cd $(MOD_SRC_DIR); \
++		make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$${mod}/$(PRESTERA_MODULE_DIR)/ || exit 1; \
 +		python3 $${mod}/setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}; \
 +	done)
 +
@@ -197,11 +209,13 @@ index 000000000..08971b680
 +
 +	# Custom package commands
 +	(for mod in $(MODULE_DIRS); do \
-+		dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/local/bin; \
-+		cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/systemd/system/; \
-+		cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
-+		python2 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
-+		python3 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
++		dh_installdirs -p$(PACKAGE_PRE_NAME) /$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
++		dh_installdirs -p$(PACKAGE_PRE_NAME) /usr/local/bin; \
++		dh_installdirs -p$(PACKAGE_PRE_NAME) /lib/systemd/system; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)/lib/systemd/system/; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)/usr/local/bin/; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(PRESTERA_MODULE_DIR)/mvIntDrv.ko debian/$(PACKAGE_PRE_NAME)/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
++		python3 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME) --install-layout=deb; \
 +	done)
 +
 +	# Resuming debhelper scripts
@@ -248,45 +262,16 @@ index 000000000..ae4bcf9e7
 +# Enumerate the SFP eeprom device on each mux channel
 +echo optoe2 0x50 > /sys/bus/i2c/devices/i2c-0/new_device
 +exit 0
-diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
-new file mode 100644
-index 000000000..53017f3fb
---- /dev/null
-+++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/scripts/rd98dx35xx-ext_plt_setup.sh
-@@ -0,0 +1,23 @@
-+#!/bin/bash
-+
-+PLATFORM_FALCON="arm64-marvell_rd98DX35xx_ext-r0"
-+MACH_FILE="/host/machine.conf"
-+
-+rd98dx35xx_ext_profile()
-+{
-+    MAC_ADDR=$(fw_printenv -n ethaddr)
-+    find /usr/share/sonic/device/*rd98DX35xx_ext* -name profile.ini | xargs sed -i "s/switchMacAddress=.*/switchMacAddress=$MAC_ADDR/g"
-+    echo "rd98dx35xx_ext: Updating switch mac address ${MAC_ADDR}"
-+}
-+
-+main()
-+{
-+    if [ -f "$MACH_FILE" ]; then
-+        PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+        if [ "$PLATFORM" = "$PLATFORM_FALCON" ]; then
-+            rd98dx35xx_ext_profile
-+        fi
-+    fi
-+}
-+
-+main $@
 diff --git a/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
 new file mode 100644
-index 000000000..0f7abd3e4
+index 000000000..10a8574f6
 --- /dev/null
 +++ b/platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/rd98dx35xx_ext/service/rd98dx35xx-ext-init.service
 @@ -0,0 +1,11 @@
 +[Unit]
 +Description=Platform rd98dx35xx-ext Service
-+After=rc-local.service
-+Before=getty.target
++After=sysinit.target
++Before=pmon.target
 +
 +[Service]
 +ExecStart=/usr/local/bin/rd98dx35xx-ext-init.sh
