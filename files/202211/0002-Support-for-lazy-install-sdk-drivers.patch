@@ -1,0 +1,353 @@
+From b0554781c64820ad945119e04a7539eecdfa6ee8 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 12 Jun 2023 10:54:33 +0000
+Subject: Support for lazy install sdk drivers
+
+This change brings in support for lazy install for Marvell
+prestera SDK drivers for platform-nokia.
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/platform-nokia.mk      |  1 +
+ platform/marvell-arm64/platform.conf          |  4 +-
+ platform/marvell-arm64/prestera.mk            | 10 +---
+ .../marvell-arm64/prestera/debian/changelog   |  5 --
+ platform/marvell-arm64/prestera/debian/compat |  1 -
+ .../marvell-arm64/prestera/debian/control     | 15 -----
+ .../debian/mrvlprestera.install.template      |  3 -
+ platform/marvell-arm64/prestera/debian/rules  | 56 -------------------
+ platform/marvell-arm64/prestera/mrvl-prestera |  1 +
+ platform/marvell-arm64/rules.mk               |  1 -
+ .../7215/scripts/nokia-7215-init.sh           |  4 +-
+ .../7215/scripts/nokia-7215_plt_setup.sh      | 33 -----------
+ .../sonic-platform-nokia/debian/rules         | 10 ++++
+ .../debian/sonic-platform-nokia-7215.install  |  2 +-
+ .../debian/sonic-platform-nokia-7215.postinst |  3 +-
+ platform/marvell-arm64/sonic_fit.its          |  2 +-
+ 16 files changed, 21 insertions(+), 130 deletions(-)
+ delete mode 100644 platform/marvell-arm64/prestera/debian/changelog
+ delete mode 100644 platform/marvell-arm64/prestera/debian/compat
+ delete mode 100644 platform/marvell-arm64/prestera/debian/control
+ delete mode 100644 platform/marvell-arm64/prestera/debian/mrvlprestera.install.template
+ delete mode 100755 platform/marvell-arm64/prestera/debian/rules
+ create mode 160000 platform/marvell-arm64/prestera/mrvl-prestera
+ delete mode 100644 platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215_plt_setup.sh
+
+diff --git a/platform/marvell-arm64/platform-nokia.mk b/platform/marvell-arm64/platform-nokia.mk
+index 7d89c1190..7bb4eea34 100644
+--- a/platform/marvell-arm64/platform-nokia.mk
++++ b/platform/marvell-arm64/platform-nokia.mk
+@@ -1,5 +1,6 @@
+ # Nokia Platform
+ 
++include $(PLATFORM_PATH)/prestera.mk
+ NOKIA_7215_PLATFORM_VERSION = 1.0
+ export NOKIA_7215_PLATFORM_VERSION
+ SONIC_KERNEL_DEB_PKG = $(LINUX_KERNEL)
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index 4de0dadd2..427746f52 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -37,7 +37,7 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
+     fit_addr=0x210000000
+     initrd_addr=0x206000000
+ 
+-    fdt_fname="/boot/ac5x.dtb"
++    fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/ac5-98dx35xx-rd.dtb"
+ 
+     FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
+     demo_part=2
+@@ -48,7 +48,7 @@ else
+     fit_addr=0x8000000
+     initrd_addr=0x2000000
+ 
+-    fdt_fname="/boot/armada-7020-comexpress.dtb"
++    fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/armada-7020-comexpress.dtb"
+ 
+     FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
+     demo_part=1
+diff --git a/platform/marvell-arm64/prestera.mk b/platform/marvell-arm64/prestera.mk
+index fc7debaf5..466bc9b94 100644
+--- a/platform/marvell-arm64/prestera.mk
++++ b/platform/marvell-arm64/prestera.mk
+@@ -1,11 +1,3 @@
+ # Marvell Prestera
+-
+-export MRVL_PRESTERA_VER = 1.0
+-export MRVL_PRESTERA = mrvlprestera_$(MRVL_PRESTERA_VER)_$(PLATFORM_ARCH)
+-export MRVL_PRESTERA_DEB = $(MRVL_PRESTERA).deb
+ export MRVL_PRESTERA_SRC_URL = https://github.com/Marvell-switching/mrvl-prestera.git
+-export MRVL_PRESTERA_SRC_TAG = MRVL_PRESTERA_DRIVER_1.3
+-
+-$(MRVL_PRESTERA_DEB)_SRC_PATH = $(PLATFORM_PATH)/prestera
+-$(MRVL_PRESTERA_DEB)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
+-SONIC_DPKG_DEBS += $(MRVL_PRESTERA_DEB)
++export MRVL_PRESTERA_SRC_TAG = MRVL_PRESTERA_DRIVER_1.5
+diff --git a/platform/marvell-arm64/prestera/debian/changelog b/platform/marvell-arm64/prestera/debian/changelog
+deleted file mode 100644
+index 3e1e97802..000000000
+--- a/platform/marvell-arm64/prestera/debian/changelog
++++ /dev/null
+@@ -1,5 +0,0 @@
+-mrvlprestera (1.0) unstable; urgency=low
+-
+-  * Prestera switch driver
+-
+- -- Marvell <pnaregundi@marvell.com>  Fri, 19 Feb 2021 10:39:18 +0800
+diff --git a/platform/marvell-arm64/prestera/debian/compat b/platform/marvell-arm64/prestera/debian/compat
+deleted file mode 100644
+index ec635144f..000000000
+--- a/platform/marvell-arm64/prestera/debian/compat
++++ /dev/null
+@@ -1 +0,0 @@
+-9
+diff --git a/platform/marvell-arm64/prestera/debian/control b/platform/marvell-arm64/prestera/debian/control
+deleted file mode 100644
+index 33a96b991..000000000
+--- a/platform/marvell-arm64/prestera/debian/control
++++ /dev/null
+@@ -1,15 +0,0 @@
+-Source: mrvlprestera
+-Section: unknown
+-Priority: optional
+-Maintainer: Marvell <pnaregundi@marvell.com>
+-Build-Depends: debhelper (>=9)
+-Standards-Version: 3.9.6
+-Homepage: <insert the upstream URL, if relevant>
+-#Vcs-Git: git://anonscm.debian.org/collab-maint/mrvlprestera.git
+-#Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/mrvlprestera.git
+-
+-Package: mrvlprestera
+-Architecture: arm64
+-Homepage: <insert the upstream URL, if relevant>
+-Description: 
+-	kernel modules for prestera switch driver 
+diff --git a/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template b/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template
+deleted file mode 100644
+index 5747270e5..000000000
+--- a/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template
++++ /dev/null
+@@ -1,3 +0,0 @@
+-mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mvMbusDrv.ko /lib/modules/KVERSION/kernel/extra
+-mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mvIntDrv.ko /lib/modules/KVERSION/kernel/extra
+-mrvl-prestera/platform/arm64/*	/
+diff --git a/platform/marvell-arm64/prestera/debian/rules b/platform/marvell-arm64/prestera/debian/rules
+deleted file mode 100755
+index bf223af19..000000000
+--- a/platform/marvell-arm64/prestera/debian/rules
++++ /dev/null
+@@ -1,56 +0,0 @@
+-#!/usr/bin/make -f
+-
+-include /usr/share/dpkg/pkg-info.mk
+-
+-PACKAGE_PRE_NAME := mrvlprestera
+-ifneq ($(CROSS_BUILD_ENVIRON), y)
+-KVERSION   ?= $(shell uname -r)
+-endif
+-KERNEL_SRC :=  /lib/modules/$(KVERSION)
+-MOD_SRC_DIR:= $(shell pwd)
+-MODULE_DIR := mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers
+-
+-%:
+-	dh $@ --with systemd,python2,python3 --buildsystem=pybuild
+-
+-clean:
+-	dh_testdir
+-	dh_testroot
+-	dh_clean
+-
+-build:
+-	# get sources
+-	rm -rf mrvl-prestera || true
+-	git clone ${MRVL_PRESTERA_SRC_URL}
+-	cd mrvl-prestera && git checkout ${MRVL_PRESTERA_SRC_TAG} && cd ..	
+-	sed "s/KVERSION/${KVERSION}/g" /sonic/platform/marvell-arm64/prestera/debian/mrvlprestera.install.template > /sonic/platform/marvell-arm64/prestera/debian/mrvlprestera.install
+-
+-	make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$(MODULE_DIR)/
+-
+-binary: binary-arch binary-indep
+-	# Nothing to do
+-
+-binary-arch: 
+-	# Nothing to do
+-
+-binary-indep:
+-	dh_testdir
+-	dh_installdirs
+-
+-	# Resuming debhelper scripts
+-	dh_testroot
+-	dh_install
+-	dh_installchangelogs
+-	dh_installdocs
+-	dh_systemd_enable
+-	dh_installinit
+-	dh_systemd_start
+-	dh_link
+-	dh_fixperms
+-	dh_compress
+-	dh_strip
+-	dh_installdeb
+-	dh_gencontrol
+-	dh_md5sums
+-	dh_builddeb
+-.PHONY: build binary binary-arch binary-indep clean
+diff --git a/platform/marvell-arm64/prestera/mrvl-prestera b/platform/marvell-arm64/prestera/mrvl-prestera
+new file mode 160000
+index 000000000..e7f48e0e7
+--- /dev/null
++++ b/platform/marvell-arm64/prestera/mrvl-prestera
+@@ -0,0 +1 @@
++Subproject commit e7f48e0e73233d28fda3a8ff3010ad10a67e9428
+diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
+index 0e8e18d14..d583157bf 100644
+--- a/platform/marvell-arm64/rules.mk
++++ b/platform/marvell-arm64/rules.mk
+@@ -5,7 +5,6 @@ include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
+ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/one-image.mk
+-include $(PLATFORM_PATH)/prestera.mk
+ include $(PLATFORM_PATH)/platform-nokia.mk
+ 
+ SONIC_ALL += $(SONIC_ONE_IMAGE) \
+diff --git a/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215-init.sh b/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215-init.sh
+index 9659bee7c..7e8ad21c5 100644
+--- a/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215-init.sh
++++ b/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215-init.sh
+@@ -6,7 +6,7 @@
+ load_kernel_drivers() {
+ #placeholder for now
+ 	echo "Loading Kernel Drivers"
+-    sudo insmod /lib/modules/5.10.0-18-2-arm64/nokia_7215_ixs_a1_cpld.ko
++    sudo insmod /lib/modules/5.10.0-18-2-arm64/kernel/extra/nokia_7215_ixs_a1_cpld.ko
+ }
+ 
+ nokia_7215_profile()
+@@ -53,4 +53,4 @@ echo nokia_7215_a1_cpld 0x41 > /sys/bus/i2c/devices/i2c-0/new_device
+ # Ensure switch is programmed with base MAC addr
+ nokia_7215_profile
+ 
+-exit 0
+\ No newline at end of file
++exit 0
+diff --git a/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215_plt_setup.sh b/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215_plt_setup.sh
+deleted file mode 100644
+index b7a6022e6..000000000
+--- a/platform/marvell-arm64/sonic-platform-nokia/7215/scripts/nokia-7215_plt_setup.sh
++++ /dev/null
+@@ -1,33 +0,0 @@
+-#!/bin/bash
+-
+-fw_uboot_env_cfg()
+-{
+-    echo "Setting up U-Boot environment..."
+-    MACH_FILE="/host/machine.conf"
+-    PLATFORM=`sed -n 's/onie_platform=\(.*\)/\1/p' $MACH_FILE`
+-
+-    FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
+-
+-    echo $FW_ENV_DEFAULT > /etc/fw_env.config
+-}
+-
+-update_modulelist()
+-{
+-    MODULE_FILE="/etc/modules-load.d/marvell.conf"
+-    if grep -Fxq "mvMbusDrv" $MODULE_FILE
+-    then
+-        echo "Module list up to date"
+-    else
+-        echo "mvMbusDrv" >> $MODULE_FILE
+-        modprobe mvMbusDrv
+-    fi
+-
+-}
+-
+-main()
+-{
+-    fw_uboot_env_cfg
+-    update_modulelist
+-}
+-
+-main $@
+diff --git a/platform/marvell-arm64/sonic-platform-nokia/debian/rules b/platform/marvell-arm64/sonic-platform-nokia/debian/rules
+index aa8ba7955..0d792e337 100755
+--- a/platform/marvell-arm64/sonic-platform-nokia/debian/rules
++++ b/platform/marvell-arm64/sonic-platform-nokia/debian/rules
+@@ -11,10 +11,12 @@ ifneq ($(CROSS_BUILD_ENVIRON), y)
+ KVERSION   ?= $(shell uname -r)
+ endif
+ KERNEL_SRC :=  /lib/modules/$(KVERSION)
++INSTALL_MOD_DIR := kernel/extra/
+ MOD_SRC_DIR:= $(shell pwd)
+ MODULE_DIRS:= 7215
+ UTILS_DIR := utils
+ MODULE_DIR:= modules
++PRESTERA_MODULE_DIR := mrvl-prestera/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers
+ SERVICE_DIR := service
+ PLATFORM_DIR := sonic_platform
+ 
+@@ -28,6 +30,12 @@ clean:
+ 
+ build:
+ 	(for mod in $(MODULE_DIRS); do \
++		cd $(MOD_SRC_DIR)/$${mod}/; \
++		rm -rf mrvl-prestera || true; \
++		git clone ${MRVL_PRESTERA_SRC_URL}; \
++		cd mrvl-prestera && git checkout ${MRVL_PRESTERA_SRC_TAG} && cd ..; \
++		cd $(MOD_SRC_DIR); \
++		make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$${mod}/$(PRESTERA_MODULE_DIR)/ || exit 1; \
+ 		make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$${mod}/modules || exit 1; \
+ 		python3 $${mod}/setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}; \
+ 	done)
+@@ -50,6 +58,8 @@ binary-indep:
+ 		dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /lib/systemd/system; \
+ 		cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/systemd/system/; \
+ 		cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
++		cp $(MOD_SRC_DIR)/$${mod}/$(PRESTERA_MODULE_DIR)/mvMbusDrv.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
++		cp $(MOD_SRC_DIR)/$${mod}/$(PRESTERA_MODULE_DIR)/mvIntDrv.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
+ 		cp $(MOD_SRC_DIR)/$${mod}/$(MODULE_DIR)/*.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
+ 		python3 $${mod}/setup.py install --root=$(MOD_SRC_DIR)/debian/$(PACKAGE_PRE_NAME)-$${mod} --install-layout=deb; \
+ 	done)
+diff --git a/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.install b/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.install
+index 8bfbd8efd..27d052537 100644
+--- a/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.install
++++ b/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.install
+@@ -1,4 +1,4 @@
+-7215/scripts/nokia-7215_plt_setup.sh usr/local/bin
+ 7215/scripts/nokia-7215-init.sh usr/local/bin
+ 7215/service/nokia-7215init.service  etc/systemd/system
+ 7215/sonic_platform-1.0-py3-none-any.whl usr/share/sonic/device/arm64-nokia_ixs7215_52xb-r0
++7215/mrvl-prestera/platform/arm64/ac5x/* /
+diff --git a/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.postinst b/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.postinst
+index 4cd13f5b0..e48b6feee 100644
+--- a/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.postinst
++++ b/platform/marvell-arm64/sonic-platform-nokia/debian/sonic-platform-nokia-7215.postinst
+@@ -20,8 +20,9 @@ set -e
+ 
+ case "$1" in
+     configure)
+-        sh /usr/local/bin/nokia-7215_plt_setup.sh
+         chmod a+x /usr/local/bin/nokia-7215-init.sh
++        depmod -a
++        systemctl restart kmod
+         systemctl enable nokia-7215init.service
+         systemctl start nokia-7215init.service
+ 
+diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
+index b70877b27..eb136bd27 100644
+--- a/platform/marvell-arm64/sonic_fit.its
++++ b/platform/marvell-arm64/sonic_fit.its
+@@ -20,7 +20,7 @@
+         };
+         fdt_ac5x {
+             description = "Flattened Device Tree blob for AC5x";
+-            data = /incbin/("/boot/ac5x.dtb");
++            data = /incbin/("/usr/lib/linux-image-5.10.0-18-2-arm64/marvell/ac5-98dx35xx-rd.dtb");
+             type = "flat_dt";
+             arch = "arm64";
+             compression = "none";
+-- 
+2.25.1
+

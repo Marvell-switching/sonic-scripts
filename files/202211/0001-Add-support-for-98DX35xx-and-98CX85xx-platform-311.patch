@@ -1,6 +1,9 @@
-From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Wed, 15 Mar 2023 10:55:59 +0530
-Subject: [PATCH 1/3] Add patches for marvell-arm64 support
+From 7de808a88d2b470f46ebf739c8e128b240c2f490 Mon Sep 17 00:00:00 2001
+From: pavannaregundi <92989231+pavannaregundi@users.noreply.github.com>
+Date: Wed, 17 May 2023 06:49:27 +0530
+Subject: Add support for 98DX35xx and 98CX85xx platform (#311)
+
+* Add patches for marvell-arm64 support
 
 These are set of patches for supporting Marvells 98DX35xx series of
 switching products.
@@ -67,6 +70,57 @@ Patches 0001 to 0012 are backport of upstream patches.
 
 Change-Id: I9eb90d25c91c62e9ff7eee54f403411caeccd43f
 Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+
+* Add DTS support for 7020 ComExpress
+
+These are set of patches for supporting Armada 7020 comexpress card
+hosting integrated CPUs used in Marvells 98CX85xx switching products.
+
+0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
+ - Patch adds documentation for 7020 comexpress.
+
+0020-dts-marvell-Add-support-for-7020-comexpress.patch
+ - Patch defines device tree for 7020 comexpress.
+
+Change-Id: I56bc4d7a826201be0931fa109590723f98b74447
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+
+* Update kernel configuration for Marvell platforms
+
+Inclusions:
+EEPROM support for SFPs and QSFP.
+    CONFIG_EEPROM_SFF_8436=m
+    CONFIG_EEPROM_OPTOE=m
+
+Support I2C busses connected through a MUX.
+    CONFIG_I2C_MUX_GPIO=m
+
+NAND flash support, used for accessing uboot environment variables.
+    CONFIG_MTD_RAW_NAND=m
+    CONFIG_MTD_NAND_ECC_SW_BCH=y
+    CONFIG_MTD_NAND_MARVELL=m
+
+Enable fan controller driver.
+    CONFIG_SENSORS_EMC2305=m
+
+Enable watchdog for AC5X.
+ - CONFIG_MARVELL_AC5_WATCHDOG=m`
+
+Exclusions:
+Overcome following dmesg error during boot.
+    - UBIFS error: cannot initialize compressor zstd, error -2
+        - CONFIG_UBIFS_FS_ZSTD
+
+    - crypto-safexcel f2800000.crypto: HW init failed (-2)
+        - CONFIG_CRYPTO_DEV_SAFEXCEL
+        - EIP197 cryptographic engine is not used.
+
+Change-Id: Iaf0aeb8c309c85644dc640a9144f4a7bc37d71a2
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+
+---------
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  ...ell-Document-the-AC5-AC5X-compatible.patch |  80 +++
  ...t-mvneta-Add-marvell-armada-ac5-neta.patch |  30 +
@@ -86,8 +140,12 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  ...016-ac5-marvell-Add-support-for-emmc.patch |  61 ++
  patch/0017-usb-ehci-Add-support-for-ac5.patch |  38 ++
  ...-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch | 169 ++++++
- patch/series                                  |  21 +-
- 19 files changed, 2305 insertions(+), 1 deletion(-)
+ ...ngs-marvell-Add-ARMADA-7K-properties.patch |  27 +
+ ...vell-Add-support-for-7020-comexpress.patch | 196 +++++++
+ patch/kconfig-exclusions                      |   4 +
+ patch/kconfig-inclusions                      |  11 +
+ patch/series                                  |  23 +-
+ 23 files changed, 2545 insertions(+), 1 deletion(-)
  create mode 100644 patch/0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
  create mode 100644 patch/0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
  create mode 100644 patch/0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
@@ -106,10 +164,12 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  create mode 100644 patch/0016-ac5-marvell-Add-support-for-emmc.patch
  create mode 100644 patch/0017-usb-ehci-Add-support-for-ac5.patch
  create mode 100644 patch/0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
+ create mode 100644 patch/0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
+ create mode 100644 patch/0020-dts-marvell-Add-support-for-7020-comexpress.patch
 
 diff --git a/patch/0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch b/patch/0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
 new file mode 100644
-index 000000000..879f3f76c
+index 0000000..879f3f7
 --- /dev/null
 +++ b/patch/0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
 @@ -0,0 +1,80 @@
@@ -195,7 +255,7 @@ index 000000000..879f3f76c
 +
 diff --git a/patch/0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch b/patch/0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
 new file mode 100644
-index 000000000..0a9c47f84
+index 0000000..0a9c47f
 --- /dev/null
 +++ b/patch/0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
 @@ -0,0 +1,30 @@
@@ -231,7 +291,7 @@ index 000000000..0a9c47f84
 +
 diff --git a/patch/0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch b/patch/0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
 new file mode 100644
-index 000000000..bb6e11f22
+index 0000000..bb6e11f
 --- /dev/null
 +++ b/patch/0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
 @@ -0,0 +1,467 @@
@@ -704,7 +764,7 @@ index 000000000..bb6e11f22
 +
 diff --git a/patch/0004-arm64-dts-marvell-Add-UART1-3-for-AC5-AC5X.patch b/patch/0004-arm64-dts-marvell-Add-UART1-3-for-AC5-AC5X.patch
 new file mode 100644
-index 000000000..6e24a86c8
+index 0000000..6e24a86
 --- /dev/null
 +++ b/patch/0004-arm64-dts-marvell-Add-UART1-3-for-AC5-AC5X.patch
 @@ -0,0 +1,57 @@
@@ -767,7 +827,7 @@ index 000000000..6e24a86c8
 +
 diff --git a/patch/0005-arm64-dts-marvell-98dx25xx-Fix-i2c-gpios-property.patch b/patch/0005-arm64-dts-marvell-98dx25xx-Fix-i2c-gpios-property.patch
 new file mode 100644
-index 000000000..fc5cf48ab
+index 0000000..fc5cf48
 --- /dev/null
 +++ b/patch/0005-arm64-dts-marvell-98dx25xx-Fix-i2c-gpios-property.patch
 @@ -0,0 +1,43 @@
@@ -816,7 +876,7 @@ index 000000000..fc5cf48ab
 +
 diff --git a/patch/0006-arm64-dts-Update-cache-properties-for-marvell.patch b/patch/0006-arm64-dts-Update-cache-properties-for-marvell.patch
 new file mode 100644
-index 000000000..4d6c1bb20
+index 0000000..4d6c1bb
 --- /dev/null
 +++ b/patch/0006-arm64-dts-Update-cache-properties-for-marvell.patch
 @@ -0,0 +1,88 @@
@@ -910,7 +970,7 @@ index 000000000..4d6c1bb20
 +
 diff --git a/patch/0007-arm64-dts-marvell-AC5-AC5X-Fix-address-for-UART1.patch b/patch/0007-arm64-dts-marvell-AC5-AC5X-Fix-address-for-UART1.patch
 new file mode 100644
-index 000000000..5981a009c
+index 0000000..5981a00
 --- /dev/null
 +++ b/patch/0007-arm64-dts-marvell-AC5-AC5X-Fix-address-for-UART1.patch
 @@ -0,0 +1,29 @@
@@ -945,7 +1005,7 @@ index 000000000..5981a009c
 +
 diff --git a/patch/0008-mtd-rawnand-marvell-Add-missing-layouts.patch b/patch/0008-mtd-rawnand-marvell-Add-missing-layouts.patch
 new file mode 100644
-index 000000000..8c46523d8
+index 0000000..8c46523
 --- /dev/null
 +++ b/patch/0008-mtd-rawnand-marvell-Add-missing-layouts.patch
 @@ -0,0 +1,44 @@
@@ -995,7 +1055,7 @@ index 000000000..8c46523d8
 +
 diff --git a/patch/0009-pinctrl-mvebu-Add-driver-for-98DX2530-SoC.patch b/patch/0009-pinctrl-mvebu-Add-driver-for-98DX2530-SoC.patch
 new file mode 100644
-index 000000000..454b45880
+index 0000000..454b458
 --- /dev/null
 +++ b/patch/0009-pinctrl-mvebu-Add-driver-for-98DX2530-SoC.patch
 @@ -0,0 +1,313 @@
@@ -1314,7 +1374,7 @@ index 000000000..454b45880
 +
 diff --git a/patch/0010-arm64-marvell-Enable-the-98DX2530-pinctrl-driver.patch b/patch/0010-arm64-marvell-Enable-the-98DX2530-pinctrl-driver.patch
 new file mode 100644
-index 000000000..872b843de
+index 0000000..872b843
 --- /dev/null
 +++ b/patch/0010-arm64-marvell-Enable-the-98DX2530-pinctrl-driver.patch
 @@ -0,0 +1,36 @@
@@ -1356,7 +1416,7 @@ index 000000000..872b843de
 +
 diff --git a/patch/0011-net-mvneta-Add-support-for-98DX2530-Ethernet-port.patch b/patch/0011-net-mvneta-Add-support-for-98DX2530-Ethernet-port.patch
 new file mode 100644
-index 000000000..16675a0fd
+index 0000000..16675a0
 --- /dev/null
 +++ b/patch/0011-net-mvneta-Add-support-for-98DX2530-Ethernet-port.patch
 @@ -0,0 +1,69 @@
@@ -1431,7 +1491,7 @@ index 000000000..16675a0fd
 +
 diff --git a/patch/0012-spi-a3700-Support-big-endianness-for-AC5-SPI-driver.patch b/patch/0012-spi-a3700-Support-big-endianness-for-AC5-SPI-driver.patch
 new file mode 100644
-index 000000000..b53e5ac2e
+index 0000000..b53e5ac
 --- /dev/null
 +++ b/patch/0012-spi-a3700-Support-big-endianness-for-AC5-SPI-driver.patch
 @@ -0,0 +1,41 @@
@@ -1478,7 +1538,7 @@ index 000000000..b53e5ac2e
 +
 diff --git a/patch/0013-dt-bindings-ac5-Add-mmc-and-usb-properties.patch b/patch/0013-dt-bindings-ac5-Add-mmc-and-usb-properties.patch
 new file mode 100644
-index 000000000..cbd535907
+index 0000000..cbd5359
 --- /dev/null
 +++ b/patch/0013-dt-bindings-ac5-Add-mmc-and-usb-properties.patch
 @@ -0,0 +1,72 @@
@@ -1556,7 +1616,7 @@ index 000000000..cbd535907
 +
 diff --git a/patch/0014-dts-ac5-marvell-Add-switching-mmc-watchdog-node.patch b/patch/0014-dts-ac5-marvell-Add-switching-mmc-watchdog-node.patch
 new file mode 100644
-index 000000000..f31207860
+index 0000000..f312078
 --- /dev/null
 +++ b/patch/0014-dts-ac5-marvell-Add-switching-mmc-watchdog-node.patch
 @@ -0,0 +1,124 @@
@@ -1686,7 +1746,7 @@ index 000000000..f31207860
 +
 diff --git a/patch/0015-ac5-marvell-Add-watchdog-support.patch b/patch/0015-ac5-marvell-Add-watchdog-support.patch
 new file mode 100644
-index 000000000..85c2ba657
+index 0000000..85c2ba6
 --- /dev/null
 +++ b/patch/0015-ac5-marvell-Add-watchdog-support.patch
 @@ -0,0 +1,524 @@
@@ -2216,7 +2276,7 @@ index 000000000..85c2ba657
 +
 diff --git a/patch/0016-ac5-marvell-Add-support-for-emmc.patch b/patch/0016-ac5-marvell-Add-support-for-emmc.patch
 new file mode 100644
-index 000000000..f82df8d5b
+index 0000000..f82df8d
 --- /dev/null
 +++ b/patch/0016-ac5-marvell-Add-support-for-emmc.patch
 @@ -0,0 +1,61 @@
@@ -2283,7 +2343,7 @@ index 000000000..f82df8d5b
 +
 diff --git a/patch/0017-usb-ehci-Add-support-for-ac5.patch b/patch/0017-usb-ehci-Add-support-for-ac5.patch
 new file mode 100644
-index 000000000..48dfaf832
+index 0000000..48dfaf8
 --- /dev/null
 +++ b/patch/0017-usb-ehci-Add-support-for-ac5.patch
 @@ -0,0 +1,38 @@
@@ -2327,7 +2387,7 @@ index 000000000..48dfaf832
 +
 diff --git a/patch/0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch b/patch/0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
 new file mode 100644
-index 000000000..51378bc87
+index 0000000..51378bc
 --- /dev/null
 +++ b/patch/0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
 @@ -0,0 +1,169 @@
@@ -2500,67 +2560,9 @@ index 000000000..51378bc87
 +-- 
 +2.25.1
 +
-diff --git a/patch/series b/patch/series
-index e86f8589f..57e1401cc 100755
---- a/patch/series
-+++ b/patch/series
-@@ -186,8 +186,27 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
- 0003-psample-define-the-macro-PSAMPLE_MD_EXTENDED_ATTR.patch
- 
- #
--# Marvell platform patches for 4.19
-+# Marvell platform patches for 5.10
- armhf_secondary_boot_online.patch
-+0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
-+0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
-+0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
-+0004-arm64-dts-marvell-Add-UART1-3-for-AC5-AC5X.patch
-+0005-arm64-dts-marvell-98dx25xx-Fix-i2c-gpios-property.patch
-+0006-arm64-dts-Update-cache-properties-for-marvell.patch
-+0007-arm64-dts-marvell-AC5-AC5X-Fix-address-for-UART1.patch
-+0008-mtd-rawnand-marvell-Add-missing-layouts.patch
-+0009-pinctrl-mvebu-Add-driver-for-98DX2530-SoC.patch
-+0010-arm64-marvell-Enable-the-98DX2530-pinctrl-driver.patch
-+0011-net-mvneta-Add-support-for-98DX2530-Ethernet-port.patch
-+0012-spi-a3700-Support-big-endianness-for-AC5-SPI-driver.patch
-+0013-dt-bindings-ac5-Add-mmc-and-usb-properties.patch
-+0014-dts-ac5-marvell-Add-switching-mmc-watchdog-node.patch
-+0015-ac5-marvell-Add-watchdog-support.patch
-+0016-ac5-marvell-Add-support-for-emmc.patch
-+0017-usb-ehci-Add-support-for-ac5.patch
-+0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
-+
- #
- #
- ############################################################
-
-From 2251eab708a690b8b960dfa3bbeecd1b011352c8 Mon Sep 17 00:00:00 2001
-From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Wed, 15 Mar 2023 13:48:28 +0530
-Subject: [PATCH 2/3] Add DTS support for 7020 ComExpress
-
-These are set of patches for supporting Armada 7020 comexpress card
-hosting integrated CPUs used in Marvells 98CX85xx switching products.
-
-0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
- - Patch adds documentation for 7020 comexpress.
-
-0020-dts-marvell-Add-support-for-7020-comexpress.patch
- - Patch defines device tree for 7020 comexpress.
-
-Change-Id: I56bc4d7a826201be0931fa109590723f98b74447
-Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
----
- ...ngs-marvell-Add-ARMADA-7K-properties.patch |  27 +++
- ...vell-Add-support-for-7020-comexpress.patch | 196 ++++++++++++++++++
- patch/series                                  |   2 +
- 3 files changed, 225 insertions(+)
- create mode 100644 patch/0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
- create mode 100644 patch/0020-dts-marvell-Add-support-for-7020-comexpress.patch
-
 diff --git a/patch/0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch b/patch/0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
 new file mode 100644
-index 000000000..61b39c7a4
+index 0000000..61b39c7
 --- /dev/null
 +++ b/patch/0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
 @@ -0,0 +1,27 @@
@@ -2593,7 +2595,7 @@ index 000000000..61b39c7a4
 +
 diff --git a/patch/0020-dts-marvell-Add-support-for-7020-comexpress.patch b/patch/0020-dts-marvell-Add-support-for-7020-comexpress.patch
 new file mode 100644
-index 000000000..31ed7f534
+index 0000000..31ed7f5
 --- /dev/null
 +++ b/patch/0020-dts-marvell-Add-support-for-7020-comexpress.patch
 @@ -0,0 +1,196 @@
@@ -2793,62 +2795,8 @@ index 000000000..31ed7f534
 +-- 
 +2.25.1
 +
-diff --git a/patch/series b/patch/series
-index 57e1401cc..6e2e7a0bf 100755
---- a/patch/series
-+++ b/patch/series
-@@ -206,6 +206,8 @@ armhf_secondary_boot_online.patch
- 0016-ac5-marvell-Add-support-for-emmc.patch
- 0017-usb-ehci-Add-support-for-ac5.patch
- 0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
-+0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
-+0020-dts-marvell-Add-support-for-7020-comexpress.patch
- 
- #
- #
-
-From 3ea55be69340e85b68487cb70c1073ebcd539670 Mon Sep 17 00:00:00 2001
-From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Wed, 15 Mar 2023 13:57:15 +0530
-Subject: [PATCH 3/3] Update kernel configuration for Marvell platforms
-
-Inclusions:
-EEPROM support for SFPs and QSFP.
-    CONFIG_EEPROM_SFF_8436=m
-    CONFIG_EEPROM_OPTOE=m
-
-Support I2C busses connected through a MUX.
-    CONFIG_I2C_MUX_GPIO=m
-
-NAND flash support, used for accessing uboot environment variables.
-    CONFIG_MTD_RAW_NAND=m
-    CONFIG_MTD_NAND_ECC_SW_BCH=y
-    CONFIG_MTD_NAND_MARVELL=m
-
-Enable fan controller driver.
-    CONFIG_SENSORS_EMC2305=m
-
-Enable watchdog for AC5X.
- - CONFIG_MARVELL_AC5_WATCHDOG=m`
-
-Exclusions:
-Overcome following dmesg error during boot.
-    - UBIFS error: cannot initialize compressor zstd, error -2
-        - CONFIG_UBIFS_FS_ZSTD
-
-    - crypto-safexcel f2800000.crypto: HW init failed (-2)
-        - CONFIG_CRYPTO_DEV_SAFEXCEL
-        - EIP197 cryptographic engine is not used.
-
-Change-Id: Iaf0aeb8c309c85644dc640a9144f4a7bc37d71a2
-Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
----
- patch/kconfig-exclusions |  4 ++++
- patch/kconfig-inclusions | 11 +++++++++++
- 2 files changed, 15 insertions(+)
-
 diff --git a/patch/kconfig-exclusions b/patch/kconfig-exclusions
-index 6d4f0e622..91313abc0 100644
+index 6d4f0e6..91313ab 100644
 --- a/patch/kconfig-exclusions
 +++ b/patch/kconfig-exclusions
 @@ -15,6 +15,10 @@ CONFIG_THERMAL_STATISTICS
@@ -2863,11 +2811,11 @@ index 6d4f0e622..91313abc0 100644
  
  [marvell-armhf]
 diff --git a/patch/kconfig-inclusions b/patch/kconfig-inclusions
-index a4dbe48d1..dd290dc25 100644
+index 650db2f..2887cea 100644
 --- a/patch/kconfig-inclusions
 +++ b/patch/kconfig-inclusions
-@@ -114,6 +114,17 @@ CONFIG_SPI_INTEL_SPI_PLATFORM=m
- CONFIG_SPI_INTEL_SPI=m
+@@ -98,6 +98,17 @@ CONFIG_SENSORS_POWR1220=m
+ 
  
  [arm64]
 +# For Marvell
@@ -2884,3 +2832,41 @@ index a4dbe48d1..dd290dc25 100644
  
  [armhf]
  CONFIG_EEPROM_SFF_8436=m
+diff --git a/patch/series b/patch/series
+index e86f858..6e2e7a0 100755
+--- a/patch/series
++++ b/patch/series
+@@ -186,8 +186,29 @@ cisco-hwmon-pmbus_core-pec-support-check.patch
+ 0003-psample-define-the-macro-PSAMPLE_MD_EXTENDED_ATTR.patch
+ 
+ #
+-# Marvell platform patches for 4.19
++# Marvell platform patches for 5.10
+ armhf_secondary_boot_online.patch
++0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
++0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
++0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
++0004-arm64-dts-marvell-Add-UART1-3-for-AC5-AC5X.patch
++0005-arm64-dts-marvell-98dx25xx-Fix-i2c-gpios-property.patch
++0006-arm64-dts-Update-cache-properties-for-marvell.patch
++0007-arm64-dts-marvell-AC5-AC5X-Fix-address-for-UART1.patch
++0008-mtd-rawnand-marvell-Add-missing-layouts.patch
++0009-pinctrl-mvebu-Add-driver-for-98DX2530-SoC.patch
++0010-arm64-marvell-Enable-the-98DX2530-pinctrl-driver.patch
++0011-net-mvneta-Add-support-for-98DX2530-Ethernet-port.patch
++0012-spi-a3700-Support-big-endianness-for-AC5-SPI-driver.patch
++0013-dt-bindings-ac5-Add-mmc-and-usb-properties.patch
++0014-dts-ac5-marvell-Add-switching-mmc-watchdog-node.patch
++0015-ac5-marvell-Add-watchdog-support.patch
++0016-ac5-marvell-Add-support-for-emmc.patch
++0017-usb-ehci-Add-support-for-ac5.patch
++0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
++0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
++0020-dts-marvell-Add-support-for-7020-comexpress.patch
++
+ #
+ #
+ ############################################################
+-- 
+2.25.1
+
