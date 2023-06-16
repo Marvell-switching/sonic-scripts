@@ -5,14 +5,14 @@
 
 
 #
-# patch script for ARM64 Falcon and AC5X board
+# patch script for ARM64/Intel Falcon and AC5X board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="5ac1051f8f02d02769867ee269a891edbc062ca8"
+SONIC_COMMIT="deb94af61b0b4b9bb6a6d5b12bf6e22b61419e78"
 
 #
 # END of CONFIGURATIONS
@@ -23,21 +23,26 @@ CUR_DIR=$(basename `pwd`)
 LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
-# Path for 202211 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202211_01/files/202211/"
+# Path for master patches
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/202211/"
 
 # Patches
-PATCHES="generic_fixes_or_wa.patch
-	marvell_arm64.patch
-	marvell_x86.patch
-	AC5X-with-external-cpu.patch"
+SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
+    0002-Support-for-lazy-install-sdk-drivers.patch
+    0003-marvell-arm64-Add-platform-support-for-rd98DX35xx.patch
+    0004-marvell-arm64-Add-platform-support-db98cx8540.patch
+    0005-marvell-arm64-Add-platform-support-db98cx8580.patch
+    0006-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
+    0007-Generic-fixes-or-WA.patch"
+
+PATCHES="marvell_x86.patch"
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3)
-declare -A SP1=([NAME]="sonic_swss.patch" [DIR]="src/sonic-swss")
-declare -A SP2=([NAME]="sonic_utilities.patch" [DIR]="src/sonic-utilities")
-declare -A SP3=([NAME]="sonic_linux_kernel.patch" [DIR]="src/sonic-linux-kernel")
-	
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
+declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
+declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
+declare -A SP3=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
+declare -A SP4=([NAME]="0001-Add-support-for-98DX35xx-and-98CX85xx-platform-311.patch" [DIR]="src/sonic-linux-kernel")
 
 log()
 {
@@ -48,7 +53,7 @@ log()
 pre_patch_help()
 {
     log "STEPS TO BUILD:"
-    log "git clone https://github.com/sonic-net/sonic-buildimage.git -b 202211"
+    log "git clone https://github.com/sonic-net/sonic-buildimage.git"
     log "cd sonic-buildimage"
     log "git checkout $SONIC_COMMIT"
     log "make init"
@@ -56,9 +61,25 @@ pre_patch_help()
     log "<<Apply patches using patch script>>"
     log "bash $0"
 
-    log "<<FOR ARM64>> NOSTRETCH=1 make configure PLATFORM=marvell-arm64 PLATFORM_ARCH=arm64"
-    log "<<FOR INTEL>> NOSTRETCH=1 make configure PLATFORM=marvell"
+    log "<<FOR ARM64>> make configure PLATFORM=marvell-arm64 PLATFORM_ARCH=arm64"
+    log "<<FOR INTEL>> make configure PLATFORM=marvell"
     log "make all"
+}
+
+apply_patch_series()
+{
+    for patch in $SERIES
+    do
+        echo $patch
+        pushd patches
+        wget -c $WGET_PATH/$patch
+        popd
+        git am patches/$patch
+        if [ $? -ne 0 ]; then
+            log "ERROR: Failed to apply patch $patch"
+            exit 1
+        fi
+    done
 }
 
 apply_patches()
@@ -89,7 +110,7 @@ apply_submodule_patches()
     	wget -c $WGET_PATH/${!patch}
         popd
 	    pushd ${!dir}
-    	patch -p1 < $CWD/patches/${!patch}
+        git am $CWD/patches/${!patch}
         if [ $? -ne 0 ]; then
 	        log "ERROR: Failed to apply patch ${!patch}"
             exit 1
@@ -101,7 +122,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202211_01/files/mrvl_sonic_hwsku_ezb.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
@@ -148,6 +169,8 @@ main()
     date > ${FULL_PATH}/${LOG_FILE}
     [ -d patches ] || mkdir patches
 
+    # Apply patch series
+    apply_patch_series
     # Apply patches
     apply_patches
     # Apply submodule patches
