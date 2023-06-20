@@ -33,7 +33,8 @@ SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
     0004-marvell-arm64-Add-platform-support-db98cx8540.patch
     0005-marvell-arm64-Add-platform-support-db98cx8580.patch
     0006-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
-    0007-Generic-fixes-or-WA.patch"
+    0007-Generic-fixes-or-WA.patch
+    0008-Unified-sdk-driver-changes.patch"
 
 PATCHES="marvell_x86.patch"
 
