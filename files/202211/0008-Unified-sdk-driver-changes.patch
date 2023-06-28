@@ -1,26 +1,26 @@
-From 31b1a5f53282afb659c194564ec84c6b8e663143 Mon Sep 17 00:00:00 2001
+From 68049e1e38feb5c19cdb1f626b812b213e784659 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 19 Jun 2023 11:57:04 +0000
 Subject: Unified sdk driver changes
 
 Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- platform/marvell-arm64/platform.conf                   | 10 +++++++---
- platform/marvell-arm64/prestera.mk                     |  6 ++++--
- platform/marvell-arm64/prestera/mrvl-prestera          |  1 -
- .../sonic-platform-db98cx8540-16cd/debian/rules        |  4 ++--
- .../sonic-platform-db98cx8580-32cd/debian/rules        |  4 ++--
- .../marvell-arm64/sonic-platform-nokia/debian/rules    |  5 ++---
- .../sonic-platform-rd98dx35xx-ext/debian/rules         |  4 ++--
- .../sonic-platform-rd98dx35xx/debian/rules             |  5 ++---
- 8 files changed, 21 insertions(+), 18 deletions(-)
+ platform/marvell-arm64/platform.conf                  | 11 ++++++++---
+ platform/marvell-arm64/prestera.mk                    |  6 ++++--
+ platform/marvell-arm64/prestera/mrvl-prestera         |  1 -
+ .../sonic-platform-db98cx8540-16cd/debian/rules       |  4 ++--
+ .../sonic-platform-db98cx8580-32cd/debian/rules       |  4 ++--
+ .../marvell-arm64/sonic-platform-nokia/debian/rules   |  5 ++---
+ .../sonic-platform-rd98dx35xx-ext/debian/rules        |  4 ++--
+ .../sonic-platform-rd98dx35xx/debian/rules            |  5 ++---
+ 8 files changed, 22 insertions(+), 18 deletions(-)
  delete mode 160000 platform/marvell-arm64/prestera/mrvl-prestera
 
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index b96c94b6c..87a3bb8be 100644
+index b96c94b6c..24d7e876c 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
-@@ -27,10 +27,14 @@ fi
+@@ -27,10 +27,15 @@ fi
  PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
  echo "Intalling SONiC from $install_env on Platform $PLATFORM"
  
@@ -31,12 +31,13 @@ index b96c94b6c..87a3bb8be 100644
      arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1 ;;
 -    *) PLATFORM_AC5X=0;;
 +
++    arm64-marvell_rd98DX35xx_ext-r0 | \
 +    arm64-marvell_db98cx8540_16cd-r0 | \
 +    arm64-marvell_db98cx8580_32cd-r0) plt_cmdline_linux="default_hugepagesz=32M hugepagesz=32M hugepages=4";;
  esac
  
  if [ $PLATFORM_AC5X -eq 1 ]; then
-@@ -195,8 +199,8 @@ prepare_boot_menu() {
+@@ -195,8 +200,8 @@ prepare_boot_menu() {
      BORDER='echo "---------------------------------------------------";echo;'
      fw_setenv ${FW_ARG} print_menu $BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER > /dev/null
  
