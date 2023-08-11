@@ -5,14 +5,14 @@
 
 
 #
-# patch script for ARM64/Intel Falcon and AC5X board
+# patch script for ARM64 Falcon and AC5X board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="deb94af61b0b4b9bb6a6d5b12bf6e22b61419e78"
+SONIC_COMMIT="1e1974709169b2241cc7b8588fce12d76c38daff"
 
 #
 # END of CONFIGURATIONS
@@ -34,16 +34,19 @@ SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
     0005-marvell-arm64-Add-platform-support-db98cx8580.patch
     0006-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
     0007-Generic-fixes-or-WA.patch
-    0008-Unified-sdk-driver-changes.patch"
+    0008-Unified-sdk-driver-changes.patch
+    0009-marvell-arm64-Add-platform-support-for-CN9131.patch"
 
-PATCHES="marvell_x86.patch"
+PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5 SP6)
 declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
 declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
 declare -A SP3=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
 declare -A SP4=([NAME]="0001-Add-support-for-98DX35xx-and-98CX85xx-platform-311.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP5=([NAME]="0002-ac5x-8G-DDR-support-changes.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP6=([NAME]="0003-marvell-Add-support-for-CN913X-DB-Comexpress.patch" [DIR]="src/sonic-linux-kernel")
 
 log()
 {
@@ -149,6 +152,7 @@ apply_hwsku_changes()
     echo "marvell-arm64" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
     echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
     echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_ext-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
 }
 
 main()
