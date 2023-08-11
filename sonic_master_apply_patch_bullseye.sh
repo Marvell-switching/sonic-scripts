@@ -5,14 +5,14 @@
 
 
 #
-# patch script for ARM64/Intel Falcon and AC5X board
+# patch script for ARM64 Falcon and AC5X board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="29051072abcbf6b46876fc5fb5835e1c78229776"
+SONIC_COMMIT="5d91bd14cdfcb3ed0a9c348d9c75eb286ad88596"
 
 #
 # END of CONFIGURATIONS
@@ -32,15 +32,16 @@ SERIES="0001-Marvell-arm64-Support-for-lazy-install-sdk-drivers.patch
         0003-marvell-arm64-Add-platform-support-db98cx8540.patch
         0004-marvell-arm64-Add-platform-support-db98cx8580.patch
         0005-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
-        0006-Generic-fixes-or-WA.patch"
+        0006-marvell-arm64-Add-platform-support-for-CN9131.patch"
 
-PATCHES="marvell_x86.patch"
+PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
 declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
-declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
-declare -A SP3=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
+declare -A SP2=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
+declare -A SP3=([NAME]="0001-ac5x-8G-DDR-support-changes.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP4=([NAME]="0002-marvell-Add-support-for-CN913X-DB-Comexpress.patch" [DIR]="src/sonic-linux-kernel")
 
 log()
 {
@@ -146,6 +147,7 @@ apply_hwsku_changes()
     echo "marvell-arm64" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
     echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
     echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_ext-r0/platform_asic
+    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
 }
 
 main()

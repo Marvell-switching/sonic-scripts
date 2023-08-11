@@ -1,4 +1,4 @@
-From 13f3bd16d34b997b57a759bcd8b7e0329a8bbbc1 Mon Sep 17 00:00:00 2001
+From d9665e64f22eb82b9eeebb125b94140694b0d30c Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 5 Jun 2023 09:51:21 +0000
 Subject: marvell-arm64: Add platform support db98cx8580
@@ -7,6 +7,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  platform/marvell-arm64/one-image.mk           |    1 +
  .../marvell-arm64/platform-db98cx8580-32cd.mk |   13 +
+ platform/marvell-arm64/platform.conf          |    3 +-
  platform/marvell-arm64/rules.mk               |    1 +
  .../scripts/db98cx8580-32cd-init.sh           |   20 +
  .../service/db98cx8580-32cd-init.service      |   11 +
@@ -26,7 +27,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  .../debian/rules                              |   78 +
  ...latform-db98cx8580-32cd-db98cx8580.install |    5 +
  ...atform-db98cx8580-32cd-db98cx8580.postinst |   12 +
- 21 files changed, 2584 insertions(+)
+ 22 files changed, 2586 insertions(+), 1 deletion(-)
  create mode 100644 platform/marvell-arm64/platform-db98cx8580-32cd.mk
  create mode 100644 platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/scripts/db98cx8580-32cd-init.sh
  create mode 100644 platform/marvell-arm64/sonic-platform-db98cx8580-32cd/db98cx8580/service/db98cx8580-32cd-init.service
@@ -78,6 +79,20 @@ index 000000000..2bf54c19c
 +
 +SONIC_DPKG_DEBS += $(FALCON_DB98CX8580_32CD_PLATFORM)
 +
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index fe2c539d9..cd4120d1b 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -32,7 +32,8 @@ case $PLATFORM in
+     arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1 ;;
+     *) PLATFORM_AC5X=0;;
+ 
+-    arm64-marvell_db98cx8540_16cd-r0) plt_cmdline_linux="hugepages=4";;
++    arm64-marvell_db98cx8540_16cd-r0 | \
++    arm64-marvell_db98cx8580_32cd-r0) plt_cmdline_linux="hugepages=4";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
 diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
 index 1f15a1500..cf7a116d0 100644
 --- a/platform/marvell-arm64/rules.mk

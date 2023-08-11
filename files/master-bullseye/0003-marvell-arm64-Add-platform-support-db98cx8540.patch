@@ -1,4 +1,4 @@
-From fc474afb8ab2ba8bfe14163f28eb3dcaf4939b89 Mon Sep 17 00:00:00 2001
+From 7416e18b221aba7dceb3bcdab403d46bd7262f0f Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 5 Jun 2023 09:49:43 +0000
 Subject: marvell-arm64: Add platform support db98cx8540
@@ -7,6 +7,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  platform/marvell-arm64/one-image.mk           |    1 +
  .../marvell-arm64/platform-db98cx8540-16cd.mk |   13 +
+ platform/marvell-arm64/platform.conf          |    2 +
  platform/marvell-arm64/rules.mk               |    1 +
  .../scripts/db98cx8540-16cd-init.sh           |   22 +
  .../service/db98cx8540-16cd-init.service      |   11 +
@@ -27,7 +28,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  ...latform-db98cx8540-16cd-db98cx8540.install |    4 +
  ...atform-db98cx8540-16cd-db98cx8540.postinst |   12 +
  platform/marvell-arm64/sonic_fit.its          |   49 +-
- 22 files changed, 2636 insertions(+), 1 deletion(-)
+ 23 files changed, 2638 insertions(+), 1 deletion(-)
  create mode 100644 platform/marvell-arm64/platform-db98cx8540-16cd.mk
  create mode 100644 platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/scripts/db98cx8540-16cd-init.sh
  create mode 100644 platform/marvell-arm64/sonic-platform-db98cx8540-16cd/db98cx8540/service/db98cx8540-16cd-init.service
@@ -79,6 +80,19 @@ index 000000000..2e46fd04b
 +
 +SONIC_DPKG_DEBS += $(FALCON_DB98CX8540_16CD_PLATFORM)
 +
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index b96c94b6c..fe2c539d9 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -31,6 +31,8 @@ case $PLATFORM in
+     arm64-nokia_ixs7215_52xb-r0 | \
+     arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1 ;;
+     *) PLATFORM_AC5X=0;;
++
++    arm64-marvell_db98cx8540_16cd-r0) plt_cmdline_linux="hugepages=4";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
 diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
 index 5fa1c40b1..1f15a1500 100644
 --- a/platform/marvell-arm64/rules.mk
