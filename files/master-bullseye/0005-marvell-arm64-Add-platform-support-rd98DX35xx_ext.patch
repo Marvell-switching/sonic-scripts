@@ -1,4 +1,4 @@
-From fc4809260c1fb6f068c9ebcce90f6ff43940ca80 Mon Sep 17 00:00:00 2001
+From ee8fb262e60e8bf61066f1d5af7fb6785ac7e26b Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 5 Jun 2023 09:57:30 +0000
 Subject: marvell-arm64: Add platform support rd98DX35xx_ext
@@ -7,6 +7,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  platform/marvell-arm64/one-image.mk           |   1 +
  .../marvell-arm64/platform-rd98dx35xx-ext.mk  |  10 +
+ platform/marvell-arm64/platform.conf          |   1 +
  platform/marvell-arm64/rules.mk               |   1 +
  .../debian/changelog                          |   5 +
  .../debian/compat                             |   1 +
@@ -26,7 +27,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  .../sonic_platform/sfp_event.py               | 117 +++
  .../rd98dx35xx_ext/sonic_platform/watchdog.py | 184 ++++
  .../rd98dx35xx_ext/utils/get-base-mac.py      |  20 +
- 21 files changed, 2026 insertions(+)
+ 22 files changed, 2027 insertions(+)
  create mode 100644 platform/marvell-arm64/platform-rd98dx35xx-ext.mk
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/changelog
  create mode 100644 platform/marvell-arm64/sonic-platform-rd98dx35xx-ext/debian/compat
@@ -75,6 +76,18 @@ index 000000000..137239ea3
 +$(AC5X_RD98DX35xxEXT_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_ext-r0
 +SONIC_DPKG_DEBS += $(AC5X_RD98DX35xxEXT_PLATFORM)
 +
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index cd4120d1b..af32ece07 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -32,6 +32,7 @@ case $PLATFORM in
+     arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1 ;;
+     *) PLATFORM_AC5X=0;;
+ 
++    arm64-marvell_rd98DX35xx_ext-r0 | \
+     arm64-marvell_db98cx8540_16cd-r0 | \
+     arm64-marvell_db98cx8580_32cd-r0) plt_cmdline_linux="hugepages=4";;
+ esac
 diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
 index cf7a116d0..78f3839d5 100644
 --- a/platform/marvell-arm64/rules.mk

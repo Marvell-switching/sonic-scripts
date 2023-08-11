@@ -1,7 +1,7 @@
-From 4568475430185248e29725387e8a2964a05fffca Mon Sep 17 00:00:00 2001
+From 37cf2f887f49cfd48a8e6c7672d58fa46250e748 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 12 Jun 2023 10:54:33 +0000
-Subject: [Marvell-arm64]: Support for lazy install sdk drivers
+Subject: Support for lazy install sdk drivers
 
 This change brings in support for lazy install for Marvell
 prestera SDK drivers for platform-nokia.
