@@ -1,20 +1,19 @@
-From cdb2b0fa3eeaf75e34cef061c086d05df3b3f22a Mon Sep 17 00:00:00 2001
+From 5a23f56a2da22fce35d970e82bdf70372c68deb7 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Tue, 8 Aug 2023 08:04:49 +0000
+Date: Wed, 16 Aug 2023 03:44:43 +0000
 Subject: ac5x: 8G DDR support changes
 
-Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- patch/0022-8G-DDR-support-changes.patch | 670 ++++++++++++++++++++++++
+ patch/0021-8G-DDR-support-changes.patch | 670 ++++++++++++++++++++++++
  patch/series                            |   1 +
  2 files changed, 671 insertions(+)
- create mode 100644 patch/0022-8G-DDR-support-changes.patch
+ create mode 100644 patch/0021-8G-DDR-support-changes.patch
 
-diff --git a/patch/0022-8G-DDR-support-changes.patch b/patch/0022-8G-DDR-support-changes.patch
+diff --git a/patch/0021-8G-DDR-support-changes.patch b/patch/0021-8G-DDR-support-changes.patch
 new file mode 100644
 index 0000000..48fc73f
 --- /dev/null
-+++ b/patch/0022-8G-DDR-support-changes.patch
++++ b/patch/0021-8G-DDR-support-changes.patch
 @@ -0,0 +1,670 @@
 +From: Pavan Naregundi <pnaregundi@marvell.com>
 +Date: Wed, 26 Jul 2023 02:57:33 +0000
@@ -687,14 +686,14 @@ index 0000000..48fc73f
 +2.25.1
 +
 diff --git a/patch/series b/patch/series
-index b9ccfc3..543d166 100755
+index 6e2e7a0..fba4355 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -212,6 +212,7 @@ armhf_secondary_boot_online.patch
+@@ -208,6 +208,7 @@ armhf_secondary_boot_online.patch
+ 0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
  0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
  0020-dts-marvell-Add-support-for-7020-comexpress.patch
- 0021-arm64-dts-marvell-Add-Nokia-7215-IXS-A1-board.patch
-+0022-8G-DDR-support-changes.patch
++0021-8G-DDR-support-changes.patch
  
  #
  #
