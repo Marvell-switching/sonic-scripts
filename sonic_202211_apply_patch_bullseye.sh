@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="1e1974709169b2241cc7b8588fce12d76c38daff"
+SONIC_COMMIT="cd6636d4d25894236b76735aae9a6e582bb8a8b2"
 
 #
 # END of CONFIGURATIONS
@@ -33,7 +33,6 @@ SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
     0004-marvell-arm64-Add-platform-support-db98cx8540.patch
     0005-marvell-arm64-Add-platform-support-db98cx8580.patch
     0006-marvell-arm64-Add-platform-support-rd98DX35xx_ext.patch
-    0007-Generic-fixes-or-WA.patch
     0008-Unified-sdk-driver-changes.patch
     0009-marvell-arm64-Add-platform-support-for-CN9131.patch"
 
