@@ -1,4 +1,4 @@
-From 7de808a88d2b470f46ebf739c8e128b240c2f490 Mon Sep 17 00:00:00 2001
+From 79897639f3c1db13ff6df744bd5db5b7217ae2c3 Mon Sep 17 00:00:00 2001
 From: pavannaregundi <92989231+pavannaregundi@users.noreply.github.com>
 Date: Wed, 17 May 2023 06:49:27 +0530
 Subject: Add support for 98DX35xx and 98CX85xx platform (#311)
@@ -136,7 +136,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  ...rt-big-endianness-for-AC5-SPI-driver.patch |  41 ++
  ...dings-ac5-Add-mmc-and-usb-properties.patch |  72 +++
  ...vell-Add-switching-mmc-watchdog-node.patch | 124 +++++
- ...015-ac5-marvell-Add-watchdog-support.patch | 524 ++++++++++++++++++
+ ...015-ac5-marvell-Add-watchdog-support.patch | 525 ++++++++++++++++++
  ...016-ac5-marvell-Add-support-for-emmc.patch |  61 ++
  patch/0017-usb-ehci-Add-support-for-ac5.patch |  38 ++
  ...-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch | 169 ++++++
@@ -145,7 +145,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  patch/kconfig-exclusions                      |   4 +
  patch/kconfig-inclusions                      |  11 +
  patch/series                                  |  23 +-
- 23 files changed, 2545 insertions(+), 1 deletion(-)
+ 23 files changed, 2546 insertions(+), 1 deletion(-)
  create mode 100644 patch/0001-dt-bindings-marvell-Document-the-AC5-AC5X-compatible.patch
  create mode 100644 patch/0002-dt-bindings-net-mvneta-Add-marvell-armada-ac5-neta.patch
  create mode 100644 patch/0003-arm64-dts-marvell-Add-Armada-98DX2530-SoC-and-RD-AC5.patch
@@ -1746,10 +1746,10 @@ index 0000000..f312078
 +
 diff --git a/patch/0015-ac5-marvell-Add-watchdog-support.patch b/patch/0015-ac5-marvell-Add-watchdog-support.patch
 new file mode 100644
-index 0000000..85c2ba6
+index 0000000..75a5bab
 --- /dev/null
 +++ b/patch/0015-ac5-marvell-Add-watchdog-support.patch
-@@ -0,0 +1,524 @@
+@@ -0,0 +1,525 @@
 +From: Pavan Naregundi <pnaregundi@marvell.com>
 +Date: Fri, 10 Mar 2023 00:43:32 +0000
 +ac5: marvell: Add watchdog support
@@ -1764,8 +1764,8 @@ index 0000000..85c2ba6
 +---
 + drivers/watchdog/Kconfig   |  16 ++
 + drivers/watchdog/Makefile  |   1 +
-+ drivers/watchdog/ac5_gwd.c | 458 +++++++++++++++++++++++++++++++++++++
-+ 3 files changed, 475 insertions(+)
++ drivers/watchdog/ac5_gwd.c | 459 +++++++++++++++++++++++++++++++++++++
++ 3 files changed, 476 insertions(+)
 + create mode 100644 drivers/watchdog/ac5_gwd.c
 +
 +diff --git a/drivers/watchdog/Kconfig b/drivers/watchdog/Kconfig
@@ -1809,10 +1809,10 @@ index 0000000..85c2ba6
 + obj-$(CONFIG_AT91SAM9X_WATCHDOG) += at91sam9_wdt.o
 +diff --git a/drivers/watchdog/ac5_gwd.c b/drivers/watchdog/ac5_gwd.c
 +new file mode 100644
-+index 000000000..5ba877b9b
++index 000000000..994d1a2db
 +--- /dev/null
 ++++ b/drivers/watchdog/ac5_gwd.c
-+@@ -0,0 +1,458 @@
++@@ -0,0 +1,459 @@
 ++// SPDX-License-Identifier: GPL-2.0
 ++/*
 ++ * AC5 Watchdog driver
@@ -1996,6 +1996,7 @@ index 0000000..85c2ba6
 ++	low = smc_readl(addr);
 ++	high = smc_readl(addr + 4);
 ++	low = smc_readl(addr); /* read twice, as a workaround to HW limitation */
+++	high = smc_readl(addr + 4); /* read twice, as a workaround to HW limitation */
 ++
 ++	return low + ((u64)high << 32);
 ++}

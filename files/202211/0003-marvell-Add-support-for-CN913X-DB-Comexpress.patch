@@ -1,24 +1,23 @@
-From 9320649ed098f48947742b2197df2a0d535c0995 Mon Sep 17 00:00:00 2001
+From 561bf8ed877f7321fd6b0ff0053eb32ff7918323 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Thu, 10 Aug 2023 10:01:42 +0000
+Date: Wed, 16 Aug 2023 03:48:30 +0000
 Subject: marvell: Add support for CN913X DB Comexpress
 
-Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
  ...vell-Add-CN913X-DB-Compexpress-board.patch | 547 ++++++++++++++++++
  patch/kconfig-inclusions                      |   2 +
  patch/series                                  |   1 +
  3 files changed, 550 insertions(+)
- create mode 100644 patch/0023-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
+ create mode 100644 patch/0022-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
 
-diff --git a/patch/0023-dts-marvell-Add-CN913X-DB-Compexpress-board.patch b/patch/0023-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
+diff --git a/patch/0022-dts-marvell-Add-CN913X-DB-Compexpress-board.patch b/patch/0022-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
 new file mode 100644
-index 0000000..a8df0a0
+index 0000000..35b0d7a
 --- /dev/null
-+++ b/patch/0023-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
++++ b/patch/0022-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
 @@ -0,0 +1,547 @@
 +From: Pavan Naregundi <pnaregundi@marvell.com>
-+Date: Wed, 9 Aug 2023 10:33:33 +0000
++Date: Wed, 16 Aug 2023 05:48:03 +0000
 +dts: marvell: Add CN913X-DB-Compexpress board
 +
 +Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
@@ -31,13 +30,13 @@ index 0000000..a8df0a0
 + create mode 100644 arch/arm64/boot/dts/marvell/cn9131-db-comexpress.dts
 +
 +diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
-+index b53edc9b7..a7c304aa7 100644
++index 6873ad448..bc8f21b97 100644
 +--- a/arch/arm64/boot/dts/marvell/Makefile
 ++++ b/arch/arm64/boot/dts/marvell/Makefile
-+@@ -19,3 +19,5 @@ dtb-$(CONFIG_ARCH_MVEBU) += cn9132-db.dtb
++@@ -18,3 +18,5 @@ dtb-$(CONFIG_ARCH_MVEBU) += cn9131-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += cn9132-db.dtb
 + dtb-$(CONFIG_ARCH_MVEBU) += ac5-98dx35xx-rd.dtb
 + dtb-$(CONFIG_ARCH_MVEBU) += armada-7020-comexpress.dtb
-+ dtb-$(CONFIG_ARCH_MVEBU) += 7215-ixs-a1.dtb
 ++dtb-$(CONFIG_ARCH_MVEBU) += cn9130-db-comexpress.dtb
 ++dtb-$(CONFIG_ARCH_MVEBU) += cn9131-db-comexpress.dtb
 +diff --git a/arch/arm64/boot/dts/marvell/cn9130-db-comexpress.dts b/arch/arm64/boot/dts/marvell/cn9130-db-comexpress.dts
@@ -565,10 +564,10 @@ index 0000000..a8df0a0
 +2.25.1
 +
 diff --git a/patch/kconfig-inclusions b/patch/kconfig-inclusions
-index dd290dc..b9f1420 100644
+index 2887cea..acc8dd8 100644
 --- a/patch/kconfig-inclusions
 +++ b/patch/kconfig-inclusions
-@@ -122,9 +122,11 @@ CONFIG_MTD_RAW_NAND=m
+@@ -106,9 +106,11 @@ CONFIG_MTD_RAW_NAND=m
  CONFIG_MTD_NAND_ECC_SW_BCH=y
  CONFIG_MTD_NAND_MARVELL=m
  CONFIG_SENSORS_EMC2305=m
@@ -581,14 +580,14 @@ index dd290dc..b9f1420 100644
  [armhf]
  CONFIG_EEPROM_SFF_8436=m
 diff --git a/patch/series b/patch/series
-index 543d166..4d706f6 100755
+index fba4355..6d89b0c 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -213,6 +213,7 @@ armhf_secondary_boot_online.patch
+@@ -209,6 +209,7 @@ armhf_secondary_boot_online.patch
+ 0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
  0020-dts-marvell-Add-support-for-7020-comexpress.patch
- 0021-arm64-dts-marvell-Add-Nokia-7215-IXS-A1-board.patch
- 0022-8G-DDR-support-changes.patch
-+0023-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
+ 0021-8G-DDR-support-changes.patch
++0022-dts-marvell-Add-CN913X-DB-Compexpress-board.patch
  
  #
  #
