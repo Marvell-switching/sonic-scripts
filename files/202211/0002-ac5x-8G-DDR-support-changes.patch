@@ -1,4 +1,4 @@
-From 5a23f56a2da22fce35d970e82bdf70372c68deb7 Mon Sep 17 00:00:00 2001
+From e5d5732008cc8179151ce0760b5023c3961322fd Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Wed, 16 Aug 2023 03:44:43 +0000
 Subject: ac5x: 8G DDR support changes
@@ -11,7 +11,7 @@ Subject: ac5x: 8G DDR support changes
 
 diff --git a/patch/0021-8G-DDR-support-changes.patch b/patch/0021-8G-DDR-support-changes.patch
 new file mode 100644
-index 0000000..48fc73f
+index 0000000..540b0ab
 --- /dev/null
 +++ b/patch/0021-8G-DDR-support-changes.patch
 @@ -0,0 +1,670 @@
@@ -123,7 +123,7 @@ index 0000000..48fc73f
 ++
 ++CFLAGS_mvneta.o += -mno-outline-atomics
 +diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index 81f42ae08..f8dce822a 100644
++index 81f42ae08..23243ec7b 100644
 +--- a/drivers/net/ethernet/marvell/mvneta.c
 ++++ b/drivers/net/ethernet/marvell/mvneta.c
 +@@ -39,6 +39,10 @@
@@ -288,7 +288,7 @@ index 0000000..48fc73f
 ++    void *virt_addr;
 ++	struct page *page=NULL;
 ++
-++    if (pp->neta_ac5) {
+++    if (pp->ac5_with_more_than_4gb) {
 ++            /*
 ++             * page pool is good for XDP but assumes no limitation
 ++             * on DMA addressing. This is not the case for AC5/X/IM.
