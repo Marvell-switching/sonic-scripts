@@ -42,7 +42,7 @@ PATCHES=""
 declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5 SP6 SP7 SP8)
 declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
 declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
-declare -A SP2=([NAME]="0002-Use-kexec_load-syscall-for-stability.patch" [DIR]="src/sonic-utilities")
+declare -A SP3=([NAME]="0002-Use-kexec_load-syscall-for-stability.patch" [DIR]="src/sonic-utilities")
 declare -A SP4=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
 declare -A SP5=([NAME]="0001-Add-support-for-98DX35xx-and-98CX85xx-platform-311.patch" [DIR]="src/sonic-linux-kernel")
 declare -A SP6=([NAME]="0002-ac5x-8G-DDR-support-changes.patch" [DIR]="src/sonic-linux-kernel")
