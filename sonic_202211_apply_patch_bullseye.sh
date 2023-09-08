@@ -23,8 +23,8 @@ CUR_DIR=$(basename `pwd`)
 LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
-# Path for master patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/202211/"
+# Path for 202211 patches
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/20221_02/files/202211/"
 
 # Patches
 SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
@@ -39,13 +39,15 @@ SERIES="0001-Add-support-for-Nokia-7215-A1-platform-13795.patch
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5 SP6)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5 SP6 SP7 SP8)
 declare -A SP1=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
 declare -A SP2=([NAME]="0001-Marvell-generate_dump-utility.patch" [DIR]="src/sonic-utilities")
-declare -A SP3=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
-declare -A SP4=([NAME]="0001-Add-support-for-98DX35xx-and-98CX85xx-platform-311.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP5=([NAME]="0002-ac5x-8G-DDR-support-changes.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP6=([NAME]="0003-marvell-Add-support-for-CN913X-DB-Comexpress.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP2=([NAME]="0002-Use-kexec_load-syscall-for-stability.patch" [DIR]="src/sonic-utilities")
+declare -A SP4=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
+declare -A SP5=([NAME]="0001-Add-support-for-98DX35xx-and-98CX85xx-platform-311.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP6=([NAME]="0002-ac5x-8G-DDR-support-changes.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP7=([NAME]="0003-marvell-Add-support-for-CN913X-DB-Comexpress.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP8=([NAME]="0004-arm64-Enable-CONFIG_KEXEC_FILE.patch" [DIR]="src/sonic-linux-kernel")
 
 log()
 {
@@ -56,7 +58,7 @@ log()
 pre_patch_help()
 {
     log "STEPS TO BUILD:"
-    log "git clone https://github.com/sonic-net/sonic-buildimage.git"
+    log "git clone https://github.com/sonic-net/sonic-buildimage.git -b 202211"
     log "cd sonic-buildimage"
     log "git checkout $SONIC_COMMIT"
     log "make init"
@@ -125,7 +127,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/20221_02/files/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true

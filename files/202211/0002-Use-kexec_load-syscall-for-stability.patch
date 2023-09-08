@@ -1,0 +1,26 @@
+From fd4d6566f221c7969babf08555920a2dfc495097 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Fri, 8 Sep 2023 08:51:46 +0000
+Subject: Use kexec_load syscall for stability
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ scripts/fast-reboot | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/fast-reboot b/scripts/fast-reboot
+index a18fe61e..2a41fd22 100755
+--- a/scripts/fast-reboot
++++ b/scripts/fast-reboot
+@@ -454,7 +454,7 @@ function invoke_kexec() {
+ 
+ function load_kernel() {
+     # Load kernel into the memory
+-    invoke_kexec -a
++    invoke_kexec -c
+ }
+ 
+ function load_kernel_secure() {
+-- 
+2.25.1
+
