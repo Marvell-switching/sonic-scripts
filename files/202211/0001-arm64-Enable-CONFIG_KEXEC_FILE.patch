@@ -1,0 +1,29 @@
+From 82ebf562cd7bd5fdb38254fe2a75e8aad1037baf Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 13 Sep 2023 04:46:05 +0000
+Subject: arm64: Enable CONFIG_KEXEC_FILE
+
+This change enables CONFIG_KEXEC_FILE to make kexec_file_load() system
+call available. This functionality is needed for warm-reboot support.
+
+Change-Id: Iaf10e1a153bbac2e344d0c9646e7fa1fe5f7429d
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ patch/kconfig-inclusions | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/patch/kconfig-inclusions b/patch/kconfig-inclusions
+index 2887cea..305a6ed 100644
+--- a/patch/kconfig-inclusions
++++ b/patch/kconfig-inclusions
+@@ -106,6 +106,7 @@ CONFIG_MTD_RAW_NAND=m
+ CONFIG_MTD_NAND_ECC_SW_BCH=y
+ CONFIG_MTD_NAND_MARVELL=m
+ CONFIG_SENSORS_EMC2305=m
++CONFIG_KEXEC_FILE=y
+ 
+ [marvell-arm64]
+ CONFIG_MARVELL_AC5_WATCHDOG=m
+-- 
+2.25.1
+

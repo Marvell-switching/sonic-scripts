@@ -1,35 +1,45 @@
-From e5d5732008cc8179151ce0760b5023c3961322fd Mon Sep 17 00:00:00 2001
+From d6e011efda8b8639e1bffe8dc8c81f89a326ce77 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Wed, 16 Aug 2023 03:44:43 +0000
-Subject: ac5x: 8G DDR support changes
+Date: Tue, 26 Sep 2023 08:54:26 +0000
+Subject: marvell: ac5: Support boards with more that 4G DDR
 
+The usb and mvneta controller has only 32-bit addressing addressing
+in AC5/X. Driver support  for such devices using these reserved memory
+in drivers which forces allocation from the lower 4GB of DDR memory.
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- patch/0021-8G-DDR-support-changes.patch | 670 ++++++++++++++++++++++++
- patch/series                            |   1 +
- 2 files changed, 671 insertions(+)
- create mode 100644 patch/0021-8G-DDR-support-changes.patch
+ ...Support-boards-with-more-than-4G-DDR.patch | 100 ++++
+ ...-Support-board-with-more-than-4G-DDR.patch |  84 +++
+ ...-Support-board-with-more-than-4G-DDR.patch | 509 ++++++++++++++++++
+ patch/series                                  |   3 +
+ 4 files changed, 696 insertions(+)
+ create mode 100644 patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
+ create mode 100644 patch/0022-usb-ac5-Support-board-with-more-than-4G-DDR.patch
+ create mode 100644 patch/0023-mvneta-ac5x-Support-board-with-more-than-4G-DDR.patch
 
-diff --git a/patch/0021-8G-DDR-support-changes.patch b/patch/0021-8G-DDR-support-changes.patch
+diff --git a/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch b/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
 new file mode 100644
-index 0000000..540b0ab
+index 0000000..b6bd3f4
 --- /dev/null
-+++ b/patch/0021-8G-DDR-support-changes.patch
-@@ -0,0 +1,670 @@
++++ b/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
+@@ -0,0 +1,100 @@
 +From: Pavan Naregundi <pnaregundi@marvell.com>
-+Date: Wed, 26 Jul 2023 02:57:33 +0000
-+ac5x: 8G DDR support changes
++Date: Thu, 14 Sep 2023 04:15:41 +0000
++dts: ac5: Support boards with more than 4G DDR
++
++Add reserved memory definition for mvneta and usb in device tree.
++These reserved memory are required to implement bounce buffer in usb
++orion ehci and mvneta drivers.
 +
 +Signed-off-by: Elad Nachman <enachman@marvell.com>
 +---
-+ arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi |  45 +++
-+ .../boot/dts/marvell/ac5-98dx35xx-rd.dts      |   2 +-
-+ drivers/net/ethernet/marvell/Makefile         |   3 +
-+ drivers/net/ethernet/marvell/mvneta.c         | 320 ++++++++++++++++--
-+ drivers/usb/host/ehci-orion.c                 |  43 +++
-+ 5 files changed, 378 insertions(+), 35 deletions(-)
++ arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi | 45 +++++++++++++++++++
++ .../boot/dts/marvell/ac5-98dx35xx-rd.dts      |  2 +-
++ 2 files changed, 46 insertions(+), 1 deletion(-)
 +
 +diff --git a/arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi b/arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi
-+index f1f96799b..dc9d74103 100644
++index f1f96799b..ee1f98853 100644
 +--- a/arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi
 ++++ b/arch/arm64/boot/dts/marvell/ac5-98dx25xx.dtsi
 +@@ -16,6 +16,49 @@ / {
@@ -66,9 +76,9 @@ index 0000000..540b0ab
 ++			 */
 ++			compatible = "shared-dma-pool";
 ++			/**
-++			  * No one other than devices registered for that mem may
-++			  * use this area
-++			  */
+++			 * No one other than devices registered for that mem may
+++			 * use this area
+++			 */
 ++			no-map;
 ++			/**
 ++			 * Addr (first 2 cells) need to be aligned with actual
@@ -111,33 +121,145 @@ index 0000000..540b0ab
 + 	};
 + 
 + 	usb1phy: usb-phy {
++-- 
++2.25.1
++
+diff --git a/patch/0022-usb-ac5-Support-board-with-more-than-4G-DDR.patch b/patch/0022-usb-ac5-Support-board-with-more-than-4G-DDR.patch
+new file mode 100644
+index 0000000..95cf3dd
+--- /dev/null
++++ b/patch/0022-usb-ac5-Support-board-with-more-than-4G-DDR.patch
+@@ -0,0 +1,84 @@
++From: Pavan Naregundi <pnaregundi@marvell.com>
++Date: Thu, 14 Sep 2023 04:13:44 +0000
++usb: ac5: Support board with more than 4G DDR
++
++AC5/X/IM support DMA only from the lower 32-bit or 4GB of memory.
++Use reserved memory for boards with more that 4GB memory in USB orion
++EHCI driver probe function to initialize the USB bounce buffer.
++
++Signed-off-by: Elad Nachman <enachman@marvell.com>
++---
++ drivers/usb/host/ehci-orion.c | 43 +++++++++++++++++++++++++++++++++++
++ 1 file changed, 43 insertions(+)
++
++diff --git a/drivers/usb/host/ehci-orion.c b/drivers/usb/host/ehci-orion.c
++index 488a2ba86..5c2e4754a 100644
++--- a/drivers/usb/host/ehci-orion.c
+++++ b/drivers/usb/host/ehci-orion.c
++@@ -19,6 +19,9 @@
++ #include <linux/usb/hcd.h>
++ #include <linux/io.h>
++ #include <linux/dma-mapping.h>
+++#include <linux/mm.h>
+++#include <linux/of_reserved_mem.h>
+++
++ 
++ #include "ehci.h"
++ 
++@@ -215,6 +218,9 @@ static int ehci_orion_drv_probe(struct platform_device *pdev)
++ 	int irq, err;
++ 	enum orion_ehci_phy_ver phy_version;
++ 	struct orion_ehci_hcd *priv;
+++	struct device_node *rmem_np, *np = pdev->dev.of_node;
+++	struct sysinfo si;
+++	struct reserved_mem *rmem;
++ 
++ 	if (usb_disabled())
++ 		return -ENODEV;
++@@ -304,6 +310,43 @@ static int ehci_orion_drv_probe(struct platform_device *pdev)
++ 		dev_warn(&pdev->dev, "USB phy version isn't supported.\n");
++ 	}
++ 
+++	/*
+++	 * AC5/X/IM support DMA only from the lower 32-bit / 4GB
+++	 * of memory. Hence need to use bounce buffer if we have
+++	 * more than 4GB of memory:
+++	 */
+++	si_meminfo(&si);
+++
+++	if ((of_device_is_compatible(np, "marvell,ac5-ehci")) &&
+++	    ((si.totalram * (u64)si.mem_unit) > 0xffffffffLU /* 4GB */)) {
+++		dev_info(&pdev->dev, "Trying to allocate USB bounce buffer...\n");
+++
+++		/*
+++		 * Use reserved memory attached to this device in the
+++		 * device tree as bounce buffer memory:
+++		 */
+++		rmem_np = of_parse_phandle(np, "memory-region", 0);
+++		if (!rmem_np) {
+++			dev_err(&pdev->dev, "reserved-memory not found in DTS for AC5 bounce buffer!\n");
+++			err = -EINVAL;
+++			goto err_dis_clk;
+++		}
+++
+++		rmem = of_reserved_mem_lookup(rmem_np);
+++		if (!rmem) {
+++			of_node_put(rmem_np);
+++			err = -EINVAL;
+++			goto err_dis_clk;
+++		}
+++		of_node_put(rmem_np);
+++
+++		err = usb_hcd_setup_local_mem(hcd, rmem->base, rmem->base, rmem->size);
+++
+++		if (err < 0) {
+++			dev_err(&pdev->dev, "Could not allocate USB bounce buffer!\n");
+++			goto err_dis_clk;
+++		}
+++	}
++ 	err = usb_add_hcd(hcd, irq, IRQF_SHARED);
++ 	if (err)
++ 		goto err_dis_clk;
++-- 
++2.25.1
++
+diff --git a/patch/0023-mvneta-ac5x-Support-board-with-more-than-4G-DDR.patch b/patch/0023-mvneta-ac5x-Support-board-with-more-than-4G-DDR.patch
+new file mode 100644
+index 0000000..4dee4fa
+--- /dev/null
++++ b/patch/0023-mvneta-ac5x-Support-board-with-more-than-4G-DDR.patch
+@@ -0,0 +1,509 @@
++From: Pavan Naregundi <pnaregundi@marvell.com>
++Date: Thu, 14 Sep 2023 04:10:44 +0000
++mvneta: ac5x: Support board with more than 4G DDR
++
++The mvneta controller has only internal 32-bit addressing interface.
++Above 4GB memory is supported impementing bounce buffer from reserved
++memory, managed internally as ring of buffers.
++
++Signed-off-by: Elad Nachman <enachman@marvell.com>
++Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
++---
++ drivers/net/ethernet/marvell/Makefile |   2 +
++ drivers/net/ethernet/marvell/mvneta.c | 305 +++++++++++++++++++++++---
++ 2 files changed, 277 insertions(+), 30 deletions(-)
++
 +diff --git a/drivers/net/ethernet/marvell/Makefile b/drivers/net/ethernet/marvell/Makefile
-+index 9f88fe822..e005245bb 100644
++index 9f88fe822..edd574e46 100644
 +--- a/drivers/net/ethernet/marvell/Makefile
 ++++ b/drivers/net/ethernet/marvell/Makefile
-+@@ -13,3 +13,6 @@ obj-$(CONFIG_SKGE) += skge.o
++@@ -13,3 +13,5 @@ obj-$(CONFIG_SKGE) += skge.o
 + obj-$(CONFIG_SKY2) += sky2.o
 + obj-y		+= octeontx2/
 + obj-y		+= prestera/
 ++
-++
 ++CFLAGS_mvneta.o += -mno-outline-atomics
 +diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index 81f42ae08..23243ec7b 100644
++index 81f42ae08..18ead3f60 100644
 +--- a/drivers/net/ethernet/marvell/mvneta.c
 ++++ b/drivers/net/ethernet/marvell/mvneta.c
-+@@ -39,6 +39,10 @@
++@@ -39,6 +39,9 @@
 + #include <net/tso.h>
 + #include <net/page_pool.h>
 + #include <linux/bpf_trace.h>
 ++#include <linux/of_reserved_mem.h>
 ++#include <linux/dma-direct.h>
 ++#include <linux/mm.h>
-++
 + 
 + /* Registers */
 + #define MVNETA_RXQ_CONFIG_REG(q)                (0x1400 + ((q) << 2))
-+@@ -323,6 +327,9 @@
++@@ -323,6 +326,9 @@
 +  */
 + #define MVNETA_RX_PKT_OFFSET_CORRECTION		64
 + 
@@ -147,7 +269,7 @@ index 0000000..540b0ab
 + #define MVNETA_RX_PKT_SIZE(mtu) \
 + 	ALIGN((mtu) + MVNETA_MH_SIZE + MVNETA_VLAN_TAG_LEN + \
 + 	      ETH_HLEN + ETH_FCS_LEN,			     \
-+@@ -518,6 +525,10 @@ struct mvneta_port {
++@@ -518,6 +524,10 @@ struct mvneta_port {
 + 	bool neta_ac5;
 + 	u16 rx_offset_correction;
 + 	const struct mbus_dram_target_info *dram_target_info;
@@ -158,7 +280,7 @@ index 0000000..540b0ab
 + };
 + 
 + /* The mvneta_tx_desc and mvneta_rx_desc structures describe the
-+@@ -618,6 +629,7 @@ struct mvneta_tx_buf {
++@@ -618,6 +628,7 @@ struct mvneta_tx_buf {
 + 		struct xdp_frame *xdpf;
 + 		struct sk_buff *skb;
 + 	};
@@ -166,7 +288,7 @@ index 0000000..540b0ab
 + };
 + 
 + struct mvneta_tx_queue {
-+@@ -720,6 +732,72 @@ static int global_port_id;
++@@ -720,6 +731,73 @@ static int global_port_id;
 + #define MVNETA_DRIVER_VERSION "1.0"
 + 
 + /* Utility/helper methods */
@@ -179,7 +301,7 @@ index 0000000..540b0ab
 ++	do {
 ++		if (pp->bufs_ring[i]) {
 ++			pg = pp->bufs_ring[i];
-++			if ( (!pg) || (!__sync_bool_compare_and_swap (&pp->bufs_ring[i], pg, 0)) )
+++			if (!pg || (!__sync_bool_compare_and_swap(&pp->bufs_ring[i], pg, 0)))
 ++				continue;
 ++			pp->bufs_ring_out_idx = (i + 1) & MVNETA_MAX_BUFS_RING_MASK;
 ++			*phys_addr = page_private(pg);
@@ -200,7 +322,7 @@ index 0000000..540b0ab
 ++
 ++	do {
 ++		if (!pp->bufs_ring[i]) {
-++			if (!__sync_bool_compare_and_swap (&pp->bufs_ring[i], 0, pg))
+++			if (!__sync_bool_compare_and_swap(&pp->bufs_ring[i], 0, pg))
 ++				continue;
 ++			pp->bufs_ring_in_idx = (i + 1) & MVNETA_MAX_BUFS_RING_MASK;
 ++			return true;
@@ -222,7 +344,8 @@ index 0000000..540b0ab
 ++		loop++;
 ++		if (!pp->bufs_ring[i]) {
 ++			clrd++;
-++			pp->bufs_ring[i] = dma_alloc_pages(pp->dev->dev.parent, PAGE_SIZE, &phys_addr, DMA_FROM_DEVICE, GFP_KERNEL);
+++			pp->bufs_ring[i] = dma_alloc_pages(pp->dev->dev.parent, PAGE_SIZE,
+++							   &phys_addr, DMA_FROM_DEVICE, GFP_KERNEL);
 ++			if (pp->bufs_ring[i]) {
 ++				/* pre-fault page for optimum performance: */
 ++				*(int *)(page_to_virt(pp->bufs_ring[i])) = 0;
@@ -239,7 +362,7 @@ index 0000000..540b0ab
 + 
 + /* Write helper method */
 + static void mvreg_write(struct mvneta_port *pp, u32 offset, u32 data)
-+@@ -1845,18 +1923,28 @@ static void mvneta_txq_bufs_free(struct mvneta_port *pp,
++@@ -1845,9 +1923,18 @@ static void mvneta_txq_bufs_free(struct mvneta_port *pp,
 + 			txq->txq_get_index;
 + 
 + 		mvneta_txq_inc_get(txq);
@@ -254,79 +377,73 @@ index 0000000..540b0ab
 + 
 + 		if (!IS_TSO_HEADER(txq, tx_desc->buf_phys_addr) &&
 +-		    buf->type != MVNETA_TYPE_XDP_TX)
-++				buf->type != MVNETA_TYPE_XDP_TX &&
-++				!pp->ac5_with_more_than_4gb)
+++		     buf->type != MVNETA_TYPE_XDP_TX &&
+++		     !pp->ac5_with_more_than_4gb)
 + 			dma_unmap_single(pp->dev->dev.parent,
-+-					 tx_desc->buf_phys_addr,
-+-					 tx_desc->data_size, DMA_TO_DEVICE);
-++					tx_desc->buf_phys_addr,
-++					tx_desc->data_size, DMA_TO_DEVICE);
-+ 		if (buf->type == MVNETA_TYPE_SKB && buf->skb) {
++ 					 tx_desc->buf_phys_addr,
++ 					 tx_desc->data_size, DMA_TO_DEVICE);
++@@ -1855,8 +1942,9 @@ static void mvneta_txq_bufs_free(struct mvneta_port *pp,
 + 			bytes_compl += buf->skb->len;
 + 			pkts_compl++;
 + 			dev_kfree_skb_any(buf->skb);
 +-		} else if (buf->type == MVNETA_TYPE_XDP_TX ||
 +-			   buf->type == MVNETA_TYPE_XDP_NDO) {
 ++		} else if ((buf->type == MVNETA_TYPE_XDP_TX ||
-++					buf->type == MVNETA_TYPE_XDP_NDO) &&
-++				!pp->ac5_with_more_than_4gb) {
+++			    buf->type == MVNETA_TYPE_XDP_NDO) &&
+++			    !pp->ac5_with_more_than_4gb) {
 + 			if (napi && buf->type == MVNETA_TYPE_XDP_TX)
 + 				xdp_return_frame_rx_napi(buf->xdpf);
 + 			else
-+@@ -1896,14 +1984,44 @@ static int mvneta_rx_refill(struct mvneta_port *pp,
++@@ -1896,14 +1984,42 @@ static int mvneta_rx_refill(struct mvneta_port *pp,
 + 			    gfp_t gfp_mask)
 + {
 + 	dma_addr_t phys_addr;
 +-	struct page *page;
-+-
+++	void *virt_addr;
+++	struct page *page = NULL;
+++
+++	if (pp->ac5_with_more_than_4gb) {
+++		/* Page pool is good for XDP but assumes no limitation
+++		 * on DMA addressing. This is not the case for AC5/X/IM.
+++		 * For those SOCs, we need to use the coherent allocation
+++		 * instead, which will force the allocation to happen
+++		 * from the coherent first 4GB of DDR.
+++		 * Basically, the coherent allocation leaves us with a page,
+++		 * which is compatible with the page pool deallocation system,
+++		 * so this is the only place where we need to modify
+++		 * the allocation scheme.
+++		 * If using the AC5 bounce buffer workaround for memory greater
+++		 * than 4GB, then get from buffer pool filled in probe function,
+++		 * else resort to standard allocation scheme which usually
+++		 * goes to the atomic (limited) pool:
+++		 */
+++		page = mvneta_get_page_from_buf_ring(pp, &phys_addr);
++ 
 +-	page = page_pool_alloc_pages(rxq->page_pool,
 +-				     gfp_mask | __GFP_NOWARN);
 +-	if (!page)
 +-		return -ENOMEM;
-+-
+++		if (!page) {
+++			page = dma_alloc_pages(pp->dev->dev.parent, PAGE_SIZE,
+++					       &phys_addr, DMA_FROM_DEVICE, gfp_mask);
+++		}
+++		if (!page)
+++			return -ENOMEM;
+++
+++		phys_addr += pp->rx_offset_correction;
+++	} else {
+++		page = page_pool_alloc_pages(rxq->page_pool,
+++					     gfp_mask | __GFP_NOWARN);
+++		if (!page)
+++			return -ENOMEM;
++ 
 +-	phys_addr = page_pool_get_dma_addr(page) + pp->rx_offset_correction;
-++    void *virt_addr;
-++	struct page *page=NULL;
-++
-++    if (pp->ac5_with_more_than_4gb) {
-++            /*
-++             * page pool is good for XDP but assumes no limitation
-++             * on DMA addressing. This is not the case for AC5/X/IM.
-++             * For those SOCs, we need to use the coherent allocation
-++             * instead, which will force the allocation to happen
-++             * from the coherent first 4GB of DDR.
-++             * Basically, the coherent allocation leaves us with a page,
-++             * which is compatible with the page pool deallocation system,
-++             * so this is the only place where we need to modify
-++             * the allocation scheme.
-++			 * If using the AC5 bounce buffer workaround for memory greater
-++			 * than 4GB, then get from buffer pool filled in probe function,
-++			 * else resort to standard allocation scheme which usually
-++			 * goes to the atomic (limited) pool:
-++	     */
-++	    if (pp->ac5_with_more_than_4gb)
-++		    page = mvneta_get_page_from_buf_ring(pp, &phys_addr);
-++
-++	    if (!page) {
-++		    page = dma_alloc_pages(pp->dev->dev.parent, PAGE_SIZE,
-++				    &phys_addr, DMA_FROM_DEVICE, gfp_mask);
-++	    }
-++	    if (!page)
-++		    return -ENOMEM;
-++
-++            phys_addr += pp->rx_offset_correction;
-++    } else {
-++            page = page_pool_alloc_pages(rxq->page_pool,
-++                            gfp_mask | __GFP_NOWARN);
-++            if (!page)
-++                    return -ENOMEM;
-++
-++            phys_addr = page_pool_get_dma_addr(page) + pp->rx_offset_correction;
-++    }
+++		phys_addr = page_pool_get_dma_addr(page) + pp->rx_offset_correction;
+++	}
 + 	mvneta_rx_desc_fill(rx_desc, phys_addr, page, rxq);
 + 
 + 	return 0;
-+@@ -1971,7 +2089,10 @@ static void mvneta_rxq_drop_pkts(struct mvneta_port *pp,
++@@ -1971,7 +2087,10 @@ static void mvneta_rxq_drop_pkts(struct mvneta_port *pp,
 + 		if (!data || !(rx_desc->buf_phys_addr))
 + 			continue;
 + 
@@ -338,7 +455,7 @@ index 0000000..540b0ab
 + 	}
 + 	if (xdp_rxq_info_is_reg(&rxq->xdp_rxq))
 + 		xdp_rxq_info_unreg(&rxq->xdp_rxq);
-+@@ -2248,7 +2369,10 @@ mvneta_swbm_rx_frame(struct mvneta_port *pp,
++@@ -2248,7 +2367,10 @@ mvneta_swbm_rx_frame(struct mvneta_port *pp,
 + 	}
 + 	*size = *size - len;
 + 
@@ -350,7 +467,7 @@ index 0000000..540b0ab
 + 	dma_sync_single_for_cpu(dev->dev.parent,
 + 				rx_desc->buf_phys_addr,
 + 				len, dma_dir);
-+@@ -2286,7 +2410,10 @@ mvneta_swbm_add_rx_fragment(struct mvneta_port *pp,
++@@ -2286,7 +2408,10 @@ mvneta_swbm_add_rx_fragment(struct mvneta_port *pp,
 + 		len = *size;
 + 		data_len = len - ETH_FCS_LEN;
 + 	}
@@ -362,7 +479,7 @@ index 0000000..540b0ab
 + 	dma_sync_single_for_cpu(dev->dev.parent,
 + 				rx_desc->buf_phys_addr,
 + 				len, dma_dir);
-+@@ -2313,6 +2440,52 @@ mvneta_swbm_build_skb(struct mvneta_port *pp, struct mvneta_rx_queue *rxq,
++@@ -2313,6 +2438,51 @@ mvneta_swbm_build_skb(struct mvneta_port *pp, struct mvneta_rx_queue *rxq,
 + 	int i, num_frags = sinfo->nr_frags;
 + 	struct sk_buff *skb;
 + 
@@ -375,8 +492,7 @@ index 0000000..540b0ab
 ++
 ++			size += skb_frag_size(frag);
 ++		}
-++		/*
-++		 * increase allocation size to account for extra
+++		/* increase allocation size to account for extra
 ++		 * headroom and tailroom need by the kernel
 ++		 */
 ++		skb = __alloc_skb(size + 128, GFP_ATOMIC, 0, 0);
@@ -415,7 +531,7 @@ index 0000000..540b0ab
 + 	skb = build_skb(xdp->data_hard_start, PAGE_SIZE);
 + 	if (!skb)
 + 		return ERR_PTR(-ENOMEM);
-+@@ -2591,13 +2764,27 @@ mvneta_tso_put_hdr(struct sk_buff *skb,
++@@ -2591,13 +2761,26 @@ mvneta_tso_put_hdr(struct sk_buff *skb,
 + 	int hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
 + 	struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
 + 	struct mvneta_tx_desc *tx_desc;
@@ -430,22 +546,21 @@ index 0000000..540b0ab
 +-				 txq->txq_put_index * TSO_HEADER_SIZE;
 ++	if (pp->ac5_with_more_than_4gb) {
 ++		pg = mvneta_get_page_from_buf_ring(pp, &dma_addr);
-++		BUG_ON(pg == NULL);
+++		BUG_ON(!pg);
 ++		tx_desc->buf_phys_addr = page_to_phys(pg);
 ++		buf->pg = pg;
 ++		memcpy(page_to_virt(pg),
-++				txq->tso_hdrs + txq->txq_put_index * TSO_HEADER_SIZE,
-++				tx_desc->data_size);
-++	}
-++	else {
+++		       txq->tso_hdrs + txq->txq_put_index * TSO_HEADER_SIZE,
+++		       tx_desc->data_size);
+++	} else {
 ++		tx_desc->buf_phys_addr = txq->tso_hdrs_phys +
-++			txq->txq_put_index * TSO_HEADER_SIZE;
+++					 txq->txq_put_index * TSO_HEADER_SIZE;
 ++	}
 ++
 + 	buf->type = MVNETA_TYPE_SKB;
 + 	buf->skb = NULL;
 + 
-+@@ -2611,15 +2798,27 @@ mvneta_tso_put_data(struct net_device *dev, struct mvneta_tx_queue *txq,
++@@ -2611,15 +2794,26 @@ mvneta_tso_put_data(struct net_device *dev, struct mvneta_tx_queue *txq,
 + {
 + 	struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
 + 	struct mvneta_tx_desc *tx_desc;
@@ -463,32 +578,31 @@ index 0000000..540b0ab
 +-		return -ENOMEM;
 ++	if (pp->ac5_with_more_than_4gb) {
 ++		pg = mvneta_get_page_from_buf_ring(pp, &dma_addr);
-++		BUG_ON(pg == NULL);
+++		BUG_ON(!pg);
 ++		tx_desc->buf_phys_addr = page_to_phys(pg);
 ++		buf->pg = pg;
 ++		memcpy(page_to_virt(pg), data, size);
-++	}
-++	else {
+++	} else {
 ++		tx_desc->buf_phys_addr = dma_map_single(dev->dev.parent, data,
-++				size, DMA_TO_DEVICE);
+++							size, DMA_TO_DEVICE);
 ++		if (unlikely(dma_mapping_error(dev->dev.parent,
-++						tx_desc->buf_phys_addr))) {
+++					       tx_desc->buf_phys_addr))) {
 ++			mvneta_txq_desc_put(txq);
 ++			return -ENOMEM;
 ++		}
 + 	}
 + 
 + 	tx_desc->command = 0;
-+@@ -2713,6 +2912,8 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
++@@ -2713,6 +2907,8 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
 + 				  struct mvneta_tx_queue *txq)
 + {
 + 	struct mvneta_tx_desc *tx_desc;
-++    struct page *pg;
-++    dma_addr_t dma_addr;
+++	struct page *pg;
+++	dma_addr_t dma_addr;
 + 	int i, nr_frags = skb_shinfo(skb)->nr_frags;
 + 
 + 	for (i = 0; i < nr_frags; i++) {
-+@@ -2723,9 +2924,17 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
++@@ -2723,9 +2919,17 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
 + 		tx_desc = mvneta_txq_next_desc_get(txq);
 + 		tx_desc->data_size = skb_frag_size(frag);
 + 
@@ -497,19 +611,19 @@ index 0000000..540b0ab
 +-				       tx_desc->data_size, DMA_TO_DEVICE);
 ++		if (pp->ac5_with_more_than_4gb) {
 ++			pg = mvneta_get_page_from_buf_ring(pp, &dma_addr);
-++			BUG_ON(pg == NULL);
+++			BUG_ON(!pg);
 ++			tx_desc->buf_phys_addr = page_to_phys(pg);
 ++			buf->pg = pg;
 ++			memcpy(page_to_virt(pg), addr, tx_desc->data_size);
-++		}
-++		else
+++		} else {
 ++			tx_desc->buf_phys_addr =
 ++				dma_map_single(pp->dev->dev.parent, addr,
-++						tx_desc->data_size, DMA_TO_DEVICE);
+++					       tx_desc->data_size, DMA_TO_DEVICE);
+++		}
 + 
 + 		if (dma_mapping_error(pp->dev->dev.parent,
 + 				      tx_desc->buf_phys_addr)) {
-+@@ -2775,6 +2984,8 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
++@@ -2775,6 +2979,8 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
 + 	int len = skb->len;
 + 	int frags = 0;
 + 	u32 tx_cmd;
@@ -518,7 +632,7 @@ index 0000000..540b0ab
 + 
 + 	if (!netif_running(dev))
 + 		goto out;
-+@@ -2793,9 +3004,18 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
++@@ -2793,9 +2999,18 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
 + 
 + 	tx_desc->data_size = skb_headlen(skb);
 + 
@@ -527,20 +641,20 @@ index 0000000..540b0ab
 +-						DMA_TO_DEVICE);
 ++	if (pp->ac5_with_more_than_4gb) {
 ++		pg = mvneta_get_page_from_buf_ring(pp, &dma_addr);
-++		BUG_ON(pg == NULL);
+++		BUG_ON(!pg);
 ++		tx_desc->buf_phys_addr = page_to_phys(pg);
 ++		memcpy(page_to_virt(pg), skb->data, tx_desc->data_size);
 ++		buf->pg = pg;
-++	}
-++	else
+++	} else {
 ++		tx_desc->buf_phys_addr = dma_map_single(dev->dev.parent, skb->data,
-++				tx_desc->data_size,
-++				DMA_TO_DEVICE);
+++							tx_desc->data_size,
+++							DMA_TO_DEVICE);
+++	}
 ++
 + 	if (unlikely(dma_mapping_error(dev->dev.parent,
 + 				       tx_desc->buf_phys_addr))) {
 + 		mvneta_txq_desc_put(txq);
-+@@ -3400,7 +3620,7 @@ static int mvneta_txq_sw_init(struct mvneta_port *pp,
++@@ -3400,7 +3615,7 @@ static int mvneta_txq_sw_init(struct mvneta_port *pp,
 + 
 + 	txq->last_desc = txq->size - 1;
 + 
@@ -549,7 +663,7 @@ index 0000000..540b0ab
 + 	if (!txq->buf)
 + 		return -ENOMEM;
 + 
-+@@ -5076,6 +5296,7 @@ static int mvneta_probe(struct platform_device *pdev)
++@@ -5076,6 +5291,7 @@ static int mvneta_probe(struct platform_device *pdev)
 + 	int tx_csum_limit;
 + 	int err;
 + 	int cpu;
@@ -557,7 +671,7 @@ index 0000000..540b0ab
 + 
 + 	dev = devm_alloc_etherdev_mqs(&pdev->dev, sizeof(struct mvneta_port),
 + 				      txq_number, rxq_number);
-+@@ -5208,12 +5429,31 @@ static int mvneta_probe(struct platform_device *pdev)
++@@ -5208,12 +5424,29 @@ static int mvneta_probe(struct platform_device *pdev)
 + 	if (pp->dram_target_info || pp->neta_armada3700)
 + 		mvneta_conf_mbus_windows(pp, pp->dram_target_info);
 + 
@@ -568,8 +682,7 @@ index 0000000..540b0ab
 + 	SET_NETDEV_DEV(dev, &pdev->dev);
 + 
 ++	if (pp->neta_ac5) {
-++		/*
-++		 * AC5/X/IM support DMA only from the lower 32-bit / 4GB
+++		/* AC5/X/IM support DMA only from the lower 32-bit / 4GB
 ++		 * of memory. Hence need to use bounce buffer if we have
 ++		 * more than 4GB of memory:
 ++		 */
@@ -578,9 +691,8 @@ index 0000000..540b0ab
 ++			dev_info(&pdev->dev, "Implementing AC5 internal bounce buffer\n");
 ++			pp->ac5_with_more_than_4gb = true;
 ++			err = of_reserved_mem_device_init(&pdev->dev);
-++			if (err) {
+++			if (err)
 ++				dev_err(&pdev->dev, "Could not get reserved memory\n");
-++			}
 ++			dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(34));
 ++			mvneta_fill_pages_at_buf_ring(pp);
 ++		}
@@ -592,7 +704,7 @@ index 0000000..540b0ab
 + 	pp->id = global_port_id++;
 + 
 + 	/* Obtain access to BM resources if enabled and already initialized */
-+@@ -5318,9 +5558,21 @@ static int mvneta_probe(struct platform_device *pdev)
++@@ -5318,9 +5551,21 @@ static int mvneta_probe(struct platform_device *pdev)
 + /* Device removal routine */
 + static int mvneta_remove(struct platform_device *pdev)
 + {
@@ -604,9 +716,9 @@ index 0000000..540b0ab
 ++		for (i = 0; i < MVNETA_MAX_BUFS_RING; i++) {
 ++			if (pp->bufs_ring[i]) {
 ++				dma_free_pages(&pdev->dev, PAGE_SIZE,
-++						pp->bufs_ring[i],
-++						page_private(pp->bufs_ring[i]),
-++						DMA_FROM_DEVICE);
+++					       pp->bufs_ring[i],
+++					       page_private(pp->bufs_ring[i]),
+++					       DMA_FROM_DEVICE);
 ++			}
 ++		}
 ++	}
@@ -614,86 +726,20 @@ index 0000000..540b0ab
 + 	unregister_netdev(dev);
 + 	clk_disable_unprepare(pp->clk_bus);
 + 	clk_disable_unprepare(pp->clk);
-+diff --git a/drivers/usb/host/ehci-orion.c b/drivers/usb/host/ehci-orion.c
-+index 488a2ba86..e2d731049 100644
-+--- a/drivers/usb/host/ehci-orion.c
-++++ b/drivers/usb/host/ehci-orion.c
-+@@ -19,6 +19,9 @@
-+ #include <linux/usb/hcd.h>
-+ #include <linux/io.h>
-+ #include <linux/dma-mapping.h>
-++#include <linux/mm.h>
-++#include <linux/of_reserved_mem.h>
-++
-+ 
-+ #include "ehci.h"
-+ 
-+@@ -215,6 +218,9 @@ static int ehci_orion_drv_probe(struct platform_device *pdev)
-+ 	int irq, err;
-+ 	enum orion_ehci_phy_ver phy_version;
-+ 	struct orion_ehci_hcd *priv;
-++	struct device_node *rmem_np, *np = pdev->dev.of_node;
-++	struct sysinfo si;
-++	struct reserved_mem *rmem;
-+ 
-+ 	if (usb_disabled())
-+ 		return -ENODEV;
-+@@ -304,6 +310,43 @@ static int ehci_orion_drv_probe(struct platform_device *pdev)
-+ 		dev_warn(&pdev->dev, "USB phy version isn't supported.\n");
-+ 	}
-+ 
-++	/*
-++	 * AC5/X/IM support DMA only from the lower 32-bit / 4GB
-++	 * of memory. Hence need to use bounce buffer if we have
-++	 * more than 4GB of memory:
-++	 */
-++	si_meminfo(&si);
-++
-++	if ((of_device_is_compatible(np, "marvell,ac5-ehci")) &&
-++			((si.totalram * (u64)si.mem_unit) > 0xffffffffLU /* 4GB */)) {
-++		dev_info(&pdev->dev, "Trying to allocate USB bounce buffer...\n");
-++
-++		/*
-++		 * Use reserved memory attached to this device in the
-++		 * device tree as bounce buffer memory:
-++		 */
-++		rmem_np = of_parse_phandle(np, "memory-region", 0);
-++		if (!rmem_np) {
-++			dev_err(&pdev->dev, "reserved-memory not found in DTS for AC5 bounce buffer!\n");
-++			err = -EINVAL;
-++			goto err_dis_clk;
-++		}
-++
-++		rmem = of_reserved_mem_lookup(rmem_np);
-++		if (!rmem) {
-++			of_node_put(rmem_np);
-++			err = -EINVAL;
-++			goto err_dis_clk;
-++		}
-++		of_node_put(rmem_np);
-++
-++		err = usb_hcd_setup_local_mem(hcd, rmem->base, rmem->base, rmem->size);
-++
-++		if (err < 0) {
-++			dev_err(&pdev->dev, "Could not allocate USB bounce buffer!\n");
-++			goto err_dis_clk;
-++		}
-++	}
-+ 	err = usb_add_hcd(hcd, irq, IRQF_SHARED);
-+ 	if (err)
-+ 		goto err_dis_clk;
 +-- 
 +2.25.1
 +
 diff --git a/patch/series b/patch/series
-index 6e2e7a0..fba4355 100755
+index c59fad4..71ccf7a 100755
 --- a/patch/series
 +++ b/patch/series
-@@ -208,6 +208,7 @@ armhf_secondary_boot_online.patch
+@@ -211,6 +211,9 @@ armhf_secondary_boot_online.patch
  0018-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
  0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
  0020-dts-marvell-Add-support-for-7020-comexpress.patch
-+0021-8G-DDR-support-changes.patch
++0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
++0022-usb-ac5-Support-board-with-more-than-4G-DDR.patch
++0023-mvneta-ac5x-Support-board-with-more-than-4G-DDR.patch
  
  #
  #
