@@ -1,0 +1,89 @@
+From 48aa8829ef2ae8bd69f586729e4ab1ec160b0207 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 16 Oct 2023 06:59:33 +0000
+Subject: [Marvell-arm64]: Migrate dockers to bullseye
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/docker-saiserver-mrvl.mk       |  2 +-
+ .../marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2 | 11 ++++++-----
+ platform/marvell-arm64/docker-syncd-mrvl.mk           |  2 +-
+ .../marvell-arm64/docker-syncd-mrvl/Dockerfile.j2     |  2 +-
+ 4 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/platform/marvell-arm64/docker-saiserver-mrvl.mk b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+index 90bb5ae99..498f35ffa 100644
+--- a/platform/marvell-arm64/docker-saiserver-mrvl.mk
++++ b/platform/marvell-arm64/docker-saiserver-mrvl.mk
+@@ -3,7 +3,7 @@
+ DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
+ $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
+-$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BUSTER)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
+ 
+ $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 68670343b..6bd7fb9c7 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -15,7 +15,8 @@ RUN apt-get purge -y syncd
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+-    python-pip          \
++    python3-pip		\
++    python3-setuptools	\
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+@@ -24,7 +25,7 @@ RUN apt-get update \
+     cmake               \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.71.0
++    libboost-atomic1.74.0
+ 
+ RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
+ {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
+@@ -41,9 +42,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
++ && pip3 install cffi==1.7.0    \
++ && pip3 install --upgrade cffi==1.7.0 \
++ && pip3 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl.mk b/platform/marvell-arm64/docker-syncd-mrvl.mk
+index 39135311b..236f8a437 100644
+--- a/platform/marvell-arm64/docker-syncd-mrvl.mk
++++ b/platform/marvell-arm64/docker-syncd-mrvl.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ 
+diff --git a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+index d07c25231..84e3d5bde 100755
+--- a/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell-arm64/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
+-- 
+2.25.1
+

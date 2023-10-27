@@ -1,0 +1,38 @@
+From 54f174b66ce130961870ca5332fea09181cd5658 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 16 Oct 2023 07:02:09 +0000
+Subject: Update sai debian to 1.11.0-9
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/sai.mk       | 4 ++--
+ platform/marvell-arm64/sai/Makefile | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
+index 6cf794729..f99146ab0 100644
+--- a/platform/marvell-arm64/sai.mk
++++ b/platform/marvell-arm64/sai.mk
+@@ -1,7 +1,7 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.5.1
+-export MRVL_SAI = mrvllibsai_$(PLATFORM_ARCH)_$(MRVL_SAI_VERSION).deb
++export MRVL_SAI_VERSION = 1.11.0-9
++export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ 
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
+diff --git a/platform/marvell-arm64/sai/Makefile b/platform/marvell-arm64/sai/Makefile
+index 3e990575c..07048e014 100644
+--- a/platform/marvell-arm64/sai/Makefile
++++ b/platform/marvell-arm64/sai/Makefile
+@@ -6,4 +6,4 @@ MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/m
+ 
+ $(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
+ 	# get deb package
+-	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL)
++	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL) || rm -f $(DEST)/$(MRVL_SAI)
+-- 
+2.25.1
+
