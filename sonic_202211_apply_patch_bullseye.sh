@@ -174,13 +174,13 @@ main()
 
     # Apply patch series
     apply_patch_series
+    git submodule update --init
     # Apply patches
     apply_patches
     # Apply submodule patches
     apply_submodule_patches
     # Apply hwsku changes
     #apply_hwsku_changes
-    git submodule update --init
 }
 
 main $@
