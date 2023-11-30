@@ -1,0 +1,36 @@
+diff --git a/scripts/generate_dump b/scripts/generate_dump
+index b8902fb2..2a5ea954 100755
+--- a/scripts/generate_dump
++++ b/scripts/generate_dump
+@@ -1274,6 +1274,20 @@ collect_broadcom() {
+     copy_from_masic_docker "syncd" "/var/log/bcm_diag_post" "/var/log/bcm_diag_post"
+ }
+ 
++##############################################################################
++# collect_innovium
++# Globals:
++#   None
++# Arguments:
++#   None
++# Retuens:
++#   None
++##############################################################################
++collect_innovium() {
++	save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
++	save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
++}
++
+ ###############################################################################
+ # Collect Barefoot specific information
+ # Globals:
+@@ -1693,6 +1707,10 @@ main() {
+         collect_broadcom
+     fi
+ 
++    if [ "$asic" = "innovium" ]; then
++        collect_innovium
++    fi
++
+     if [ "$asic" = "cisco-8000" ]; then
+         collect_cisco_8000
+     fi

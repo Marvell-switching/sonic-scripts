@@ -1,0 +1,26 @@
+From 02d46fa35b2c4466bd13fe20fbcfa3b461950564 Mon Sep 17 00:00:00 2001
+From: builder <ksridharan@marvell.com>
+Date: Thu, 30 Nov 2023 19:33:22 -0800
+Subject: [PATCH 4/4] marvell-midstone Compilation Error in master branch
+ #14826
+
+---
+ .../midstone-200i/modules/mc24lc64t.c                           | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/innovium/sonic-platform-modules-cel/midstone-200i/modules/mc24lc64t.c b/platform/innovium/sonic-platform-modules-cel/midstone-200i/modules/mc24lc64t.c
+index a391056d0..002172f58 100755
+--- a/platform/innovium/sonic-platform-modules-cel/midstone-200i/modules/mc24lc64t.c
++++ b/platform/innovium/sonic-platform-modules-cel/midstone-200i/modules/mc24lc64t.c
+@@ -94,7 +94,7 @@ static int mc24lc64t_probe(struct i2c_client *client,
+                         sizeof(struct mc24lc64t_data), GFP_KERNEL)))
+                 return -ENOMEM;
+ 
+-        drvdata->fake_client = i2c_new_dummy(client->adapter, client->addr + 1);
++        drvdata->fake_client = i2c_new_dummy_device(client->adapter, client->addr + 1);
+         if (!drvdata->fake_client)
+                 return -ENOMEM;
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,199 @@
+From 737c6a83d7877f925f16cc4df8f48672b5756ccb Mon Sep 17 00:00:00 2001
+From: builder <ksridharan@marvell.com>
+Date: Thu, 30 Nov 2023 05:18:18 -0800
+Subject: [PATCH] marvell-x86-syncd-docker-TL10-and-SAI-inclusions
+
+Signed-off-by: builder <ksridharan@marvell.com>
+---
+ platform/innovium/docker-syncd-invm-rpc.mk          |  3 ++-
+ .../innovium/docker-syncd-invm-rpc/Dockerfile.j2    |  8 +++-----
+ platform/innovium/docker-syncd-invm.mk              |  8 +++++---
+ platform/innovium/docker-syncd-invm/Dockerfile.j2   |  4 ++--
+ platform/innovium/invm-sai.mk                       |  6 ++++--
+ platform/innovium/one-image.mk                      |  1 +
+ platform/innovium/platform-modules-marvell.mk       | 13 +++++++++++++
+ platform/innovium/rules.mk                          |  5 ++---
+ 8 files changed, 32 insertions(+), 16 deletions(-)
+ create mode 100644 platform/innovium/platform-modules-marvell.mk
+
+diff --git a/platform/innovium/docker-syncd-invm-rpc.mk b/platform/innovium/docker-syncd-invm-rpc.mk
+index 8ccbef57d..b2d54b9c8 100755
+--- a/platform/innovium/docker-syncd-invm-rpc.mk
++++ b/platform/innovium/docker-syncd-invm-rpc.mk
+@@ -2,9 +2,10 @@
+ 
+ DOCKER_SYNCD_INVM_RPC = docker-syncd-invm-rpc.gz
+ $(DOCKER_SYNCD_INVM_RPC)_PATH = $(PLATFORM_PATH)/docker-syncd-invm-rpc
+-$(DOCKER_SYNCD_INVM_RPC)_DEPENDS += $(SYNCD_RPC) $(LIBTHRIFT) $(INVM_LIBSAI) $(PTF)
++$(DOCKER_SYNCD_INVM_RPC)_DEPENDS += $(SYNCD_RPC) $(LIBTHRIFT) $(INVM_LIBSAI) $(PTF) $(INVM_SHELL)
+ $(DOCKER_SYNCD_INVM_RPC)_LOAD_DOCKERS += $(DOCKER_SYNCD_BASE)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SYNCD_INVM_RPC)
++SONIC_BUSTER_DOCKERS += $(DOCKER_SYNCD_INVM_RPC)
+ ifeq ($(ENABLE_SYNCD_RPC),y)
+ SONIC_INSTALL_DOCKER_IMAGES += $(DOCKER_SYNCD_INVM_RPC)
+ endif
+diff --git a/platform/innovium/docker-syncd-invm-rpc/Dockerfile.j2 b/platform/innovium/docker-syncd-invm-rpc/Dockerfile.j2
+index 5ad93088c..7ddccc3ab 100755
+--- a/platform/innovium/docker-syncd-invm-rpc/Dockerfile.j2
++++ b/platform/innovium/docker-syncd-invm-rpc/Dockerfile.j2
+@@ -9,19 +9,20 @@ debs/{{ deb }}{{' '}}
+ {%- endfor -%}
+ debs/
+ 
+-RUN dpkg -P syncd
++RUN apt-get purge -y syncd
+ 
+ ## Pre-install the fundamental packages
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+     python-pip          \
++    python-setuptools   \
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+     python-dev          \
+-    libpython2.7        \
+     libjansson4         \
++    libyaml-dev         \
+     wget                \
+     cmake               \
+     libqt5core5a        \
+@@ -43,9 +44,6 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
+  && pip install numpy   \
+  && pip install scipy   \
+  && pip install setuptools   \
+diff --git a/platform/innovium/docker-syncd-invm.mk b/platform/innovium/docker-syncd-invm.mk
+index f500515c5..f7017e09e 100755
+--- a/platform/innovium/docker-syncd-invm.mk
++++ b/platform/innovium/docker-syncd-invm.mk
+@@ -3,17 +3,19 @@
+ DOCKER_SYNCD_PLATFORM_CODE = invm
+ include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
+ 
+-$(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD) $(PYTHON_SDK_API) $(INVM_LIBSAI)
++$(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD) $(PYTHON_SDK_API) $(INVM_LIBSAI) $(INVM_SHELL)
+ 
+ $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
+                                 $(LIBSWSSCOMMON_DBG) \
+                                 $(LIBSAIMETADATA_DBG) \
+                                 $(LIBSAIREDIS_DBG)
+ 
+-SONIC_STRETCH_DOCKERS += $(DOCKER_SYNCD_BASE)
+-SONIC_STRETCH_DBG_DOCKERS += $(DOCKER_SYNCD_BASE_DBG)
++SONIC_BUSTER_DOCKERS += $(DOCKER_SYNCD_BASE)
++SONIC_BUSTER_DBG_DOCKERS += $(DOCKER_SYNCD_BASE_DBG)
++
+ 
+ $(DOCKER_SYNCD_BASE)_VERSION = 1.0.0
+ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
++$(DOCKER_SYNCD_BASE)_MACHINE = innovium
+ 
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/warmboot:/var/warmboot
+diff --git a/platform/innovium/docker-syncd-invm/Dockerfile.j2 b/platform/innovium/docker-syncd-invm/Dockerfile.j2
+index 0811d044b..449f0d346 100755
+--- a/platform/innovium/docker-syncd-invm/Dockerfile.j2
++++ b/platform/innovium/docker-syncd-invm/Dockerfile.j2
+@@ -1,4 +1,4 @@
+-FROM docker-config-engine-stretch-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
+@@ -15,8 +15,8 @@ debs/
+ 
+ # Needed for Innovium Debug Shell
+ RUN apt-get install -y net-tools
+-RUN apt-get install -y libpython2.7
+ RUN apt-get install -y libjansson4
++RUN apt-get install -y libyaml-dev
+ 
+ RUN dpkg -i \
+ {% for deb in docker_syncd_invm_debs.split(' ') -%}
+diff --git a/platform/innovium/invm-sai.mk b/platform/innovium/invm-sai.mk
+index 25e490e44..02719e080 100755
+--- a/platform/innovium/invm-sai.mk
++++ b/platform/innovium/invm-sai.mk
+@@ -1,15 +1,17 @@
+ # INVM SAI
+ 
+-INVM_SAI_ONLINE = https://github.com/Innovium/SONiC/raw/master/debian/master
++INVM_SAI_ONLINE = https://github.com/Innovium/SONiC/raw/master/debian/202211
+ 
+ INVM_LIBSAI = isai.deb
+ INVM_HSAI   = saihdr.deb
+ INVM_DRV    = ipd.deb
++INVM_SHELL  = ishell.deb
+ 
+ $(INVM_LIBSAI)_URL = $(INVM_SAI_ONLINE)/$(INVM_LIBSAI)
+ $(INVM_HSAI)_URL   =  $(INVM_SAI_ONLINE)/$(INVM_HSAI)
+ $(INVM_DRV)_URL    =  $(INVM_SAI_ONLINE)/$(INVM_DRV)
++$(INVM_SHELL)_URL  =  $(INVM_SAI_ONLINE)/$(INVM_SHELL)
+ 
+ $(eval $(call add_conflict_package,$(INVM_HSAI),$(LIBSAIVS_DEV)))
+ 
+-SONIC_ONLINE_DEBS  += $(INVM_LIBSAI) $(INVM_HSAI) $(INVM_DRV)
++SONIC_ONLINE_DEBS  += $(INVM_LIBSAI) $(INVM_HSAI) $(INVM_DRV) $(INVM_SHELL)
+diff --git a/platform/innovium/one-image.mk b/platform/innovium/one-image.mk
+index 2cae779d7..fafc28c9c 100755
+--- a/platform/innovium/one-image.mk
++++ b/platform/innovium/one-image.mk
+@@ -8,6 +8,7 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(CEL_MIDSTONE_200I_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(DELTA_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NETBERG_AURORA_715_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(TL10_DBMVTX9180_PLATFORM)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(INVM_DRV)
+ $(SONIC_ONE_IMAGE)_DOCKERS  += $(SONIC_INSTALL_DOCKER_IMAGES)
+ SONIC_INSTALLERS += $(SONIC_ONE_IMAGE)
+diff --git a/platform/innovium/platform-modules-marvell.mk b/platform/innovium/platform-modules-marvell.mk
+new file mode 100644
+index 000000000..741b71083
+--- /dev/null
++++ b/platform/innovium/platform-modules-marvell.mk
+@@ -0,0 +1,13 @@
++# Teralynx 10 Platform
++
++TL10_DBMVTX9180_VERSION = 1.0
++
++export TL10_DBMVTX9180_VERSION
++
++TL10_DBMVTX9180_PLATFORM = sonic-platform-marvell-dbmvtx9180_$(TL10_DBMVTX9180_VERSION)_$(CONFIGURED_ARCH).deb
++$(TL10_DBMVTX9180_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-modules-marvell
++$(TL10_DBMVTX9180_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++$(TL10_DBMVTX9180_PLATFORM)_PLATFORM = x86_64-marvell_dbmvtx9180-r0
++
++SONIC_DPKG_DEBS += $(TL10_DBMVTX9180_PLATFORM)
++
+diff --git a/platform/innovium/rules.mk b/platform/innovium/rules.mk
+index 39e695575..57770300f 100755
+--- a/platform/innovium/rules.mk
++++ b/platform/innovium/rules.mk
+@@ -1,8 +1,7 @@
+ include $(PLATFORM_PATH)/invm-sai.mk
+ include $(PLATFORM_PATH)/platform-modules-cel.mk
+-include $(PLATFORM_PATH)/platform-modules-delta.mk
+ include $(PLATFORM_PATH)/platform-modules-wistron.mk
+-include $(PLATFORM_PATH)/platform-modules-netberg.mk
++include $(PLATFORM_PATH)/platform-modules-marvell.mk
+ include $(PLATFORM_PATH)/docker-syncd-invm.mk
+ include $(PLATFORM_PATH)/docker-syncd-invm-rpc.mk
+ include $(PLATFORM_PATH)/one-image.mk
+@@ -15,7 +14,7 @@ SONIC_ALL += $(SONIC_INVM_ONE_IMAGE) \
+              $(DOCKER_SYNCD_INVM_RPC)
+ 
+ # Inject invm sai into syncd
+-$(SYNCD)_DEPENDS += $(INVM_HSAI) $(INVM_LIBSAI) $(LIBSAITHRIFT_DEV_INVM)
++$(SYNCD)_DEPENDS += $(INVM_HSAI) $(INVM_LIBSAI) $(LIBSAITHRIFT_DEV_INVM) $(INVM_SHELL)
+ $(SYNCD)_UNINSTALLS += $(INVM_HSAI)
+ 
+ # Runtime dependency on invm sai is set only for syncd
+-- 
+2.25.1
+
