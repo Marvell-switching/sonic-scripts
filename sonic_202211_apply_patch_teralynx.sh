@@ -30,7 +30,8 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_
 SERIES="0001-marvell-x86-syncd-docker-TL10-and-SAI-inclusions.patch
         0002-marvell-Backport-of-master-PR-14589-to-202211-branch.patch
         0003-marvell-backport-master-PR-12653-innovium-platform-f.patch
-        0004-marvell-midstone-Compilation-Error-in-master-branch-.patch"
+        0004-marvell-midstone-Compilation-Error-in-master-branch-.patch
+        0005-marvell-platform-and-hwsku-files-for-wistron-and-cel.patch"
 
 PATCHES=""
 
