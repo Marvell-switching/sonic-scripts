@@ -1,0 +1,81 @@
+From deba1b91aa4d1e4cc49024d9a8351a2367002c89 Mon Sep 17 00:00:00 2001
+From: builder <ksridharan@marvell.com>
+Date: Thu, 30 Nov 2023 17:23:00 -0800
+Subject: [PATCH] marvell-backport-master-PR#12653-innovium-platform-files
+
+---
+ .../docker-syncd-invm/critical_processes      |  1 +
+ .../innovium/docker-syncd-invm/ivm_start.sh   | 39 +++++++++++++++++++
+ platform/innovium/docker-syncd-invm/start.sh  |  6 +++
+ 3 files changed, 46 insertions(+)
+ create mode 100644 platform/innovium/docker-syncd-invm/critical_processes
+ create mode 100755 platform/innovium/docker-syncd-invm/ivm_start.sh
+ create mode 100755 platform/innovium/docker-syncd-invm/start.sh
+
+diff --git a/platform/innovium/docker-syncd-invm/critical_processes b/platform/innovium/docker-syncd-invm/critical_processes
+new file mode 100644
+index 000000000..bdd6903c5
+--- /dev/null
++++ b/platform/innovium/docker-syncd-invm/critical_processes
+@@ -0,0 +1 @@
++program:syncd
+diff --git a/platform/innovium/docker-syncd-invm/ivm_start.sh b/platform/innovium/docker-syncd-invm/ivm_start.sh
+new file mode 100755
+index 000000000..896d20970
+--- /dev/null
++++ b/platform/innovium/docker-syncd-invm/ivm_start.sh
+@@ -0,0 +1,39 @@
++#!/usr/bin/env bash
++
++TOPO_CONF=/usr/share/sonic/platform/topo.conf
++if [ -f ${TOPO_CONF} ]; then
++ topo=`cat ${TOPO_CONF}`
++else
++ topo="none"
++fi
++
++if [ ${topo} != "none" ]; then
++    BUFFER_CONFIG=/usr/share/sonic/hwsku/buffers_defaults_${topo}.j2
++    QOS_CONFIG=/usr/share/sonic/hwsku/qos_defaults_${topo}.j2
++
++    if [ "$(/usr/local/bin/sonic-cfggen -d -v TC_TO_PRIORITY_GROUP_MAP)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v MAP_PFC_PRIORITY_TO_QUEUE)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v TC_TO_QUEUE_MAP)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v DSCP_TO_TC_MAP)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v SCHEDULER)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v PFC_PRIORITY_TO_PRIORITY_GROUP_MAP)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v PORT_QOS_MAP)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v WRED_PROFILE)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v QUEUE)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v CABLE_LENGTH)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v BUFFER_POOL)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v BUFFER_PROFILE)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v BUFFER_PG)" ] || \
++       [ "$(/usr/local/bin/sonic-cfggen -d -v BUFFER_QUEUE)" ]; then
++        echo "Database has QoS settings, skip loading defaults"
++    elif [ -f "$BUFFER_CONFIG" ] && [ -f "$QOS_CONFIG" ]; then
++        /usr/local/bin/sonic-cfggen -d -t $BUFFER_CONFIG >/tmp/buffers.json
++        /usr/local/bin/sonic-cfggen -d -t $QOS_CONFIG -y /etc/sonic/sonic_version.yml >/tmp/qos.json
++        /usr/local/bin/sonic-cfggen -j /tmp/buffers.json --write-to-db
++        /usr/local/bin/sonic-cfggen -j /tmp/qos.json --write-to-db
++    else
++        echo "File not found (${BUFFER_CONFIG} and/or ${QOS_CONFIG})"
++    fi
++else
++   echo "Skip QoS config"
++fi
+diff --git a/platform/innovium/docker-syncd-invm/start.sh b/platform/innovium/docker-syncd-invm/start.sh
+new file mode 100755
+index 000000000..32bdb12eb
+--- /dev/null
++++ b/platform/innovium/docker-syncd-invm/start.sh
+@@ -0,0 +1,6 @@
++#!/usr/bin/env bash
++
++if [ -f /usr/bin/ivm_start.sh ];
++then
++   /usr/bin/ivm_start.sh
++fi
+-- 
+2.25.1
+
