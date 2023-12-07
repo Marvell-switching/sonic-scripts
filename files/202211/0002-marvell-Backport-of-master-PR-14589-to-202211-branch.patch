@@ -1,7 +1,7 @@
-From fdce8aa7b5c3c6f05e9239a935a0e5ac1d5e4c49 Mon Sep 17 00:00:00 2001
+From 13b5baa6ef3516a82bd1ab6a060bc80a1a7b7338 Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 05:19:01 -0800
-Subject: [PATCH 2/2] marvell-Backport-of-master-PR-#14589-to-202211-branch
+Subject: [PATCH 2/5] marvell-Backport-of-master-PR-#14589-to-202211-branch
 
 ---
  installer/default_platform.conf | 30 ++++++++++++++----------------

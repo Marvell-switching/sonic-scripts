@@ -1,4 +1,4 @@
-From c55aa52900b741e5ecc60f4492801c827a5c8a00 Mon Sep 17 00:00:00 2001
+From 11af4786528dabbab056371cfa14d3fbad8f350e Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 21:03:13 -0800
 Subject: [PATCH 5/5] marvell: platform and hwsku files for wistron and
@@ -149,9 +149,7 @@ Subject: [PATCH 5/5] marvell: platform and hwsku files for wistron and
  .../sw-to3200k/utils/sonic-psu-monitor        |   18 +-
  .../sw-to3200k/utils/sonic-qsfp-monitor       |  192 +-
  .../utils/wistron_sw_to3200k_util.py          |   18 +-
- src/sonic-frr/frr                             |    2 +-
- src/sonic-utilities                           |    2 +-
- 146 files changed, 7801 insertions(+), 6312 deletions(-)
+ 144 files changed, 7799 insertions(+), 6310 deletions(-)
 
 diff --git a/device/celestica/x86_64-cel_midstone-r0/Midstone-200i/buffers.json.j2 b/device/celestica/x86_64-cel_midstone-r0/Midstone-200i/buffers.json.j2
 index 477c7ce6b..020656fdb 100644
@@ -18574,3 +18572,6 @@ index 46121e6e7..c7b65e16e 100644
      return
  
  def do_uninstall():
+-- 
+2.25.1
+
