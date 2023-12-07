@@ -1,8 +1,17 @@
+From 200182facf9335b257b3a96f59e82b21b3742f65 Mon Sep 17 00:00:00 2001
+From: builder <ksridharan@marvell.com>
+Date: Thu, 30 Nov 2023 06:28:36 -0800
+Subject: [PATCH] Marvell-teralynx-generate_dump
+
+---
+ scripts/generate_dump | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
 diff --git a/scripts/generate_dump b/scripts/generate_dump
-index b8902fb2..2a5ea954 100755
+index 61549cd9..e44bde63 100755
 --- a/scripts/generate_dump
 +++ b/scripts/generate_dump
-@@ -1274,6 +1274,20 @@ collect_broadcom() {
+@@ -1297,6 +1297,20 @@ collect_broadcom() {
      copy_from_masic_docker "syncd" "/var/log/bcm_diag_post" "/var/log/bcm_diag_post"
  }
  
@@ -23,7 +32,7 @@ index b8902fb2..2a5ea954 100755
  ###############################################################################
  # Collect Barefoot specific information
  # Globals:
-@@ -1693,6 +1707,10 @@ main() {
+@@ -1726,6 +1740,10 @@ main() {
          collect_broadcom
      fi
  
@@ -34,3 +43,6 @@ index b8902fb2..2a5ea954 100755
      if [ "$asic" = "cisco-8000" ]; then
          collect_cisco_8000
      fi
+-- 
+2.25.1
+

@@ -18574,20 +18574,3 @@ index 46121e6e7..c7b65e16e 100644
      return
  
  def do_uninstall():
-diff --git a/src/sonic-frr/frr b/src/sonic-frr/frr
-index 79188bf71..3539968c3 160000
---- a/src/sonic-frr/frr
-+++ b/src/sonic-frr/frr
-@@ -1 +1 @@
--Subproject commit 79188bf710e92acf42fb5b9b0a2e9593a5ee9b05
-+Subproject commit 3539968c38ed8d46b9705014b5492b1a610888d5
-diff --git a/src/sonic-utilities b/src/sonic-utilities
-index 8cfc8347d..624521366 160000
---- a/src/sonic-utilities
-+++ b/src/sonic-utilities
-@@ -1 +1 @@
--Subproject commit 8cfc8347d1c6400bb3cac6a010bef515f305f304
-+Subproject commit 62452136673eb5e6909413b450845e00bd787161
--- 
-2.25.1
-
