@@ -1,7 +1,7 @@
-From a92665365ba5a0b10bc3d29d7b21eb0ea86e434d Mon Sep 17 00:00:00 2001
+From e231590abf24d0cfdfbe474a86e7a9615f7f88d3 Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 19:33:22 -0800
-Subject: [PATCH 4/5] marvell-midstone Compilation Error in master branch
+Subject: [PATCH 4/6] marvell-midstone Compilation Error in master branch
  #14826
 
 ---
