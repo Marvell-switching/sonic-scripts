@@ -24,14 +24,15 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202211 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_01/files/202211/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/202211/"
 
 # Patches
 SERIES="0001-marvell-x86-syncd-docker-TL10-and-SAI-inclusions.patch
         0002-marvell-Backport-of-master-PR-14589-to-202211-branch.patch
         0003-marvell-backport-master-PR-12653-innovium-platform-f.patch
         0004-marvell-midstone-Compilation-Error-in-master-branch-.patch
-        0005-marvell-platform-and-hwsku-files-for-wistron-and-cel.patch"
+        0005-marvell-platform-and-hwsku-files-for-wistron-and-cel.patch
+        0006-marvell-bullseye-migration-for-innovium.patch"
 
 PATCHES=""
 
@@ -116,8 +117,8 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_01/files/mrvl_sonic_hwsku_dbmvtx9180.tgz
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_01/files/mrvl_sonic_platform_dbmvtx9180.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/mrvl_sonic_hwsku_dbmvtx9180.tgz
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/mrvl_sonic_platform_dbmvtx9180.tgz
 
     rm -fr device/marvell/x86_64-marvell_dbmvtx9180-r0 || true
     rm -fr platform/innovium/sonic-platform-modules-marvell || true
