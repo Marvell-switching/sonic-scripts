@@ -1,0 +1,24 @@
+From f5e040288511445b9b2a540f9bb387b2176717d8 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 11 Jan 2024 11:59:27 +0000
+Subject: Enable all architecture build
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ debian/control | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/debian/control b/debian/control
+index fc83c3d..6ef879b 100644
+--- a/debian/control
++++ b/debian/control
+@@ -6,5 +6,5 @@ Build-Depends: debhelper (>= 9), bzip2
+ Standards-Version: 3.9.3
+ 
+ Package: sonic-platform-pde
+-Architecture: amd64
++Architecture: any
+ Description: PDE test suite
+-- 
+2.25.1
+

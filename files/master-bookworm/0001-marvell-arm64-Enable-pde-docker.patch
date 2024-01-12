@@ -1,0 +1,221 @@
+From 58930c48b3f6899dbb42a75acf7edf23fecd0515 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 11 Jan 2024 12:00:56 +0000
+Subject: [marvell-arm64] Enable pde docker
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/docker-pde.dep      | 12 +++++
+ platform/marvell-arm64/docker-pde.mk       | 51 ++++++++++++++++++++++
+ platform/marvell-arm64/one-image.mk        |  1 +
+ platform/marvell-arm64/rules.dep           |  4 ++
+ platform/marvell-arm64/rules.mk            |  4 ++
+ platform/marvell-arm64/sonic-pde-tests.dep | 10 +++++
+ platform/marvell-arm64/sonic-pde-tests.mk  |  7 +++
+ platform/pddf/i2c/debian/control           |  4 +-
+ platform/pddf/platform-modules-pddf.mk     |  4 +-
+ rules/config                               |  2 +-
+ 10 files changed, 94 insertions(+), 5 deletions(-)
+ create mode 100644 platform/marvell-arm64/docker-pde.dep
+ create mode 100644 platform/marvell-arm64/docker-pde.mk
+ create mode 100644 platform/marvell-arm64/sonic-pde-tests.dep
+ create mode 100644 platform/marvell-arm64/sonic-pde-tests.mk
+
+diff --git a/platform/marvell-arm64/docker-pde.dep b/platform/marvell-arm64/docker-pde.dep
+new file mode 100644
+index 000000000..15d993507
+--- /dev/null
++++ b/platform/marvell-arm64/docker-pde.dep
+@@ -0,0 +1,12 @@
++
++DPATH       := $($(DOCKER_PDE)_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) platform/marvell-arm64/docker-pde.mk platform/marvell-arm64/docker-pde.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(SONIC_COMMON_DOCKER_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(DPATH))
++
++$(DOCKER_PDE)_CACHE_MODE  := GIT_CONTENT_SHA
++$(DOCKER_PDE)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(DOCKER_PDE)_DEP_FILES   := $(DEP_FILES)
++
++$(eval $(call add_dbg_docker,$(DOCKER_PDE),$(DOCKER_PDE_DBG)))
+diff --git a/platform/marvell-arm64/docker-pde.mk b/platform/marvell-arm64/docker-pde.mk
+new file mode 100644
+index 000000000..6bf794160
+--- /dev/null
++++ b/platform/marvell-arm64/docker-pde.mk
+@@ -0,0 +1,51 @@
++# Docker image for SONiC Platform Development Environment (PDE)
++
++ifeq ($(INCLUDE_PDE), y)
++DOCKER_PDE_STEM = docker-pde
++DOCKER_PDE = $(DOCKER_PDE_STEM).gz
++DOCKER_PDE_DBG = $(DOCKER_PDE_STEM)-$(DBG_IMAGE_MARK).gz
++$(DOCKER_PDE)_PATH = $(DOCKERS_PATH)/$(DOCKER_PDE_STEM)
++$(DOCKER_PDE)_DEPENDS += $(PYTHON_NETIFACES)
++$(DOCKER_PDE)_DEPENDS += $(SONIC_PLATFORM_PDE) $(MRVL_SAI)
++
++$(DOCKER_PDE_RDEPENDS += $(PYTHON_NETIFACES)
++$(DOCKER_PDE)_PYTHON_DEBS += $(SONIC_UTILS)
++$(DOCKER_PDE)_PYTHON_WHEELS += $(SONIC_PLATFORM_COMMON_PY3)
++
++ifeq ($(PDDF_SUPPORT), y)
++$(DOCKER_PDE)_PYTHON_WHEELS += $(PDDF_PLATFORM_API_BASE_PY3)
++endif
++$(DOCKER_PDE)_PYTHON_WHEELS += $(SONIC_DAEMON_BASE_PY3)
++$(DOCKER_PDE)_DBG_DEPENDS = $($(DOCKER_CONFIG_ENGINE_BULLSEYE)_DBG_DEPENDS)
++$(DOCKER_PDE)_DBG_IMAGE_PACKAGES = $($(DOCKER_CONFIG_ENGINE_BULLSEYE)_DBG_IMAGE_PACKAGES)
++$(DOCKER_PDE)_LOAD_DOCKERS = $(DOCKER_CONFIG_ENGINE_BULLSEYE)
++
++SONIC_DOCKER_IMAGES += $(DOCKER_PDE)
++SONIC_BULLSEYE_DOCKERS += $(DOCKER_PDE)
++SONIC_INSTALL_DOCKER_IMAGES += $(DOCKER_PDE)
++SONIC_BULLSEYE_DBG_DOCKERS += $(DOCKER_PDE_DBG)
++SONIC_DOCKER_DBG_IMAGES += $(DOCKER_PDE_DBG)
++SONIC_INSTALL_DOCKER_DBG_IMAGES += $(DOCKER_PDE_DBG)
++
++$(DOCKER_PDE)_VERSION = 1.0.0
++$(DOCKER_PDE)_PACKAGE_NAME = pde
++
++$(DOCKER_PDE)_CONTAINER_NAME = pde
++$(DOCKER_PDE)_RUN_OPT += --privileged -t
++$(DOCKER_PDE)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
++$(DOCKER_PDE)_RUN_OPT += -v /host/machine.conf:/host/machine.conf:ro
++$(DOCKER_PDE)_RUN_OPT += -v /usr/lib/python2.7/dist-packages:/usr/share/sonic/classes:ro
++
++$(DOCKER_PDE)_RUN_OPT += -v /usr/local/lib/python3.9/dist-packages/utilities_common:/usr/local/lib/python3.9/dist-packages/utilities_common:ro
++$(DOCKER_PDE)_RUN_OPT += -v /var/log/syslog:/var/log/syslog:ro
++$(DOCKER_PDE)_RUN_OPT += -v /var/log/ramfs:/var/log/ramfs:ro
++$(DOCKER_PDE)_RUN_OPT += -v /lib/modules:/lib/modules:ro
++$(DOCKER_PDE)_RUN_OPT += -v /boot:/boot:ro
++$(DOCKER_PDE)_RUN_OPT += -v /var/log/ramfs:/var/log/ramfs:ro
++$(DOCKER_PDE)_RUN_OPT += -v /usr/share/sonic/device/pddf:/usr/share/sonic/device/pddf:ro
++$(DOCKER_PDE)_BASE_IMAGE_FILES += pde-test:/usr/local/bin/pde-test
++$(DOCKER_PDE)_BASE_IMAGE_FILES += pde-bench:/usr/local/bin/pde-bench
++$(DOCKER_PDE)_BASE_IMAGE_FILES += pde-stress:/usr/local/bin/pde-stress
++$(DOCKER_PDE)_BASE_IMAGE_FILES += pde-bench-knet:/usr/local/bin/pde-bench-knet
++
++endif
+diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
+index 1aa36f2b1..3c0c29271 100644
+--- a/platform/marvell-arm64/one-image.mk
++++ b/platform/marvell-arm64/one-image.mk
+@@ -3,6 +3,7 @@
+ SONIC_ONE_IMAGE = sonic-marvell-arm64.bin
+ $(SONIC_ONE_IMAGE)_MACHINE = marvell-arm64
+ $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
++$(SONIC_ONE_IMAGE)_INSTALLS += $(PDDF_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+diff --git a/platform/marvell-arm64/rules.dep b/platform/marvell-arm64/rules.dep
+index b14b76ef0..e459354d0 100644
+--- a/platform/marvell-arm64/rules.dep
++++ b/platform/marvell-arm64/rules.dep
+@@ -4,6 +4,10 @@ include $(PLATFORM_PATH)/docker-syncd-mrvl.dep
+ include $(PLATFORM_PATH)/libsaithrift-dev.dep
+ include $(PLATFORM_PATH)/mrvl-prestera.dep
+ include $(PLATFORM_PATH)/one-image.dep
++ifeq ($(INCLUDE_PDE), y)
++include $(PLATFORM_PATH)/docker-pde.dep
++include $(PLATFORM_PATH)/sonic-pde-tests.dep
++endif
+ include $(PLATFORM_PATH)/platform-marvell.dep
+ include $(PLATFORM_PATH)/platform-nokia.dep
+ include $(PLATFORM_PATH)/sai.dep
+diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
+index 882a9451e..4e56a3c90 100644
+--- a/platform/marvell-arm64/rules.mk
++++ b/platform/marvell-arm64/rules.mk
+@@ -6,6 +6,10 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/one-image.mk
+ include $(PLATFORM_PATH)/mrvl-prestera.mk
++ifeq ($(INCLUDE_PDE), y)
++include $(PLATFORM_PATH)/docker-pde.mk
++include $(PLATFORM_PATH)/sonic-pde-tests.mk
++endif
+ include $(PLATFORM_PATH)/platform-nokia.mk
+ include $(PLATFORM_PATH)/platform-marvell.mk
+ 
+diff --git a/platform/marvell-arm64/sonic-pde-tests.dep b/platform/marvell-arm64/sonic-pde-tests.dep
+new file mode 100644
+index 000000000..11752c11b
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-pde-tests.dep
+@@ -0,0 +1,10 @@
++SPATH       := $($(SONIC_PLATFORM_PDE)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) platform/marvell-arm64/sonic-pde-tests.mk platform/marvell-arm64/sonic-pde-tests.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++SMDEP_FILES := $(addprefix $(SPATH)/,$(shell cd $(SPATH) && git ls-files))
++
++$(SONIC_PLATFORM_PDE)_CACHE_MODE  := GIT_CONTENT_SHA
++$(SONIC_PLATFORM_PDE)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(SONIC_PLATFORM_PDE)_DEP_FILES   := $(DEP_FILES)
++$(SONIC_PLATFORM_PDE)_SMDEP_FILES := $(SMDEP_FILES)
++$(SONIC_PLATFORM_PDE)_SMDEP_PATHS := $(SPATH)
+diff --git a/platform/marvell-arm64/sonic-pde-tests.mk b/platform/marvell-arm64/sonic-pde-tests.mk
+new file mode 100644
+index 000000000..97ddc64f4
+--- /dev/null
++++ b/platform/marvell-arm64/sonic-pde-tests.mk
+@@ -0,0 +1,7 @@
++# sonic pde package
++
++SONIC_PLATFORM_PDE = sonic-platform-pde_1.0_arm64.deb
++$(SONIC_PLATFORM_PDE)_SRC_PATH = $(SRC_PATH)/sonic-platform-pde
++$(SONIC_PLATFORM_PDE)_DEPENDS += $(MRVL_SAI) $(SWIG)
++
++SONIC_DPKG_DEBS += $(SONIC_PLATFORM_PDE)
+diff --git a/platform/pddf/i2c/debian/control b/platform/pddf/i2c/debian/control
+index a6056598d..a6cdc7fa6 100755
+--- a/platform/pddf/i2c/debian/control
++++ b/platform/pddf/i2c/debian/control
+@@ -6,10 +6,10 @@ Build-Depends: debhelper (>= 9), bzip2
+ Standards-Version: 3.9.3
+ 
+ Package: sonic-platform-pddf
+-Architecture: amd64
++Architecture: any
+ Description: kernel modules for platform devices such as psu, fan, sfp, led
+ 
+ Package: sonic-platform-pddf-sym
+-Architecture: amd64
++Architecture: any
+ Description: PDDF kernel modules symbols which could be used for other platform modules build
+ 
+diff --git a/platform/pddf/platform-modules-pddf.mk b/platform/pddf/platform-modules-pddf.mk
+index a772f3a13..a6b6a0d47 100644
+--- a/platform/pddf/platform-modules-pddf.mk
++++ b/platform/pddf/platform-modules-pddf.mk
+@@ -4,12 +4,12 @@ PDDF_PLATFORM_MODULE_VERSION = 1.1
+ 
+ export PDDF_PLATFORM_MODULE_VERSION
+ 
+-PDDF_PLATFORM_MODULE = sonic-platform-pddf_$(PDDF_PLATFORM_MODULE_VERSION)_amd64.deb
++PDDF_PLATFORM_MODULE = sonic-platform-pddf_$(PDDF_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
+ $(PDDF_PLATFORM_MODULE)_SRC_PATH = $(PLATFORM_PDDF_PATH)/i2c
+ $(PDDF_PLATFORM_MODULE)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
+ SONIC_DPKG_DEBS += $(PDDF_PLATFORM_MODULE)
+ 
+-PDDF_PLATFORM_MODULE_SYM = sonic-platform-pddf-sym_$(PDDF_PLATFORM_MODULE_VERSION)_amd64.deb
++PDDF_PLATFORM_MODULE_SYM = sonic-platform-pddf-sym_$(PDDF_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
+ $(eval $(call add_derived_package,$(PDDF_PLATFORM_MODULE),$(PDDF_PLATFORM_MODULE_SYM)))
+ 
+ SONIC_STRETCH_DEBS += $(PDDF_PLATFORM_MODULE)
+diff --git a/rules/config b/rules/config
+index 70110469e..8f0a87267 100644
+--- a/rules/config
++++ b/rules/config
+@@ -58,7 +58,7 @@ DEFAULT_PASSWORD = YourPaSsWoRd
+ # ENABLE_ZTP = y
+ 
+ # INCLUDE_PDE - Enable platform development enviroment
+-# INCLUDE_PDE = y
++INCLUDE_PDE = y
+ # SHUTDOWN_BGP_ON_START - if set to y all bgp sessions will be in admin down state when
+ # bgp service starts.
+ # SHUTDOWN_BGP_ON_START = y
+-- 
+2.25.1
+

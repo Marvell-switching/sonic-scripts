@@ -1,0 +1,26 @@
+From abc258d69de3824d7b8f74efafb52fb1ff804060 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 14 Jun 2023 11:38:27 +0000
+Subject: SAI switch create timeout WA
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ lib/sairedis.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/sairedis.h b/lib/sairedis.h
+index c0bdb16..f92383e 100644
+--- a/lib/sairedis.h
++++ b/lib/sairedis.h
+@@ -43,7 +43,7 @@ extern "C" {
+ /**
+  * @brief Default synchronous operation response timeout in milliseconds.
+  */
+-#define SAI_REDIS_DEFAULT_SYNC_OPERATION_RESPONSE_TIMEOUT (60*1000)
++#define SAI_REDIS_DEFAULT_SYNC_OPERATION_RESPONSE_TIMEOUT (1999999)
+ 
+ typedef enum _sai_redis_notify_syncd_t
+ {
+-- 
+2.25.1
+

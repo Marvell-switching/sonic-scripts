@@ -1,0 +1,37 @@
+From 06282af2474fd5b1deebc290a52372e1b366c6e0 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 23 Nov 2023 10:09:10 +0530
+Subject: [PATCH] [Marvell-arm64] Fix boot issue on rd98DX35xx_cn9131
+
+Change-Id: I411f12963fb8dc0eb3569faf4df68082b852e3a8
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/sonic_fit.its | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
+index e0d1e7b5d33..99a634ba8c7 100644
+--- a/platform/marvell-arm64/sonic_fit.its
++++ b/platform/marvell-arm64/sonic_fit.its
+@@ -60,8 +60,8 @@
+             arch = "arm64";
+             os = "linux";
+             compression = "none";
+-            load = <0x2000000>;
+-            entry = <0x2000000>;
++            load = <0x1000000>;
++            entry = <0x1000000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+@@ -85,8 +85,8 @@
+             type = "flat_dt";
+             arch = "arm64";
+             compression = "none";
+-            load = <0x1000000>;
+-            entry = <0x1000000>;
++            load = <0x0a00000>;
++            entry = <0x0a00000>;
+             hash@1 {
+                 algo = "sha1";
+             };

@@ -1,0 +1,25 @@
+From 224ab3c6304af68fa3876b340ef55fb6dd9802d2 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 16 Oct 2023 09:28:40 +0000
+Subject: Redis timeout WA
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ dockers/docker-database/Dockerfile.j2 | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dockers/docker-database/Dockerfile.j2 b/dockers/docker-database/Dockerfile.j2
+index 22e88275e..c49706243 100644
+--- a/dockers/docker-database/Dockerfile.j2
++++ b/dockers/docker-database/Dockerfile.j2
+@@ -31,6 +31,7 @@ RUN apt-get clean -y                                  && \
+              s/^# syslog-enabled no$/syslog-enabled no/; \
+              s/^# unixsocket/unixsocket/;                \
+              s/redis-server.sock/redis.sock/g;           \
++             s/lua-time-limit 5000/lua-time-limit 20000/g;  \
+              s/^client-output-buffer-limit pubsub [0-9]+mb [0-9]+mb [0-9]+/client-output-buffer-limit pubsub 0 0 0/; \
+              s/^notify-keyspace-events ""$/notify-keyspace-events AKE/; \
+              s/^databases [0-9]+$/databases 100/ \
+-- 
+2.25.1
+
