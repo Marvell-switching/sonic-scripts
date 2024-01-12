@@ -1,7 +1,7 @@
-From 11af4786528dabbab056371cfa14d3fbad8f350e Mon Sep 17 00:00:00 2001
+From 61b670ebc69a3ef05761b3eda322e68b472b0518 Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 21:03:13 -0800
-Subject: [PATCH 5/5] marvell: platform and hwsku files for wistron and
+Subject: [PATCH 5/6] marvell: platform and hwsku files for wistron and
  celestica
 
 ---
