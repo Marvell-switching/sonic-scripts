@@ -1,4 +1,4 @@
-From 7de86dabb53d7329ecd66c98eea8bdeb1e59065f Mon Sep 17 00:00:00 2001
+From 62ec09975376e2f4f32b5bc11097ffa015d5faec Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Tue, 19 Dec 2023 03:37:52 +0000
 Subject: marvell: ac5: Support boards with more that 4G DDR
@@ -20,7 +20,7 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 
 diff --git a/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch b/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
 new file mode 100644
-index 0000000..b6bd3f4
+index 0000000..da79d18
 --- /dev/null
 +++ b/patch/0021-dts-ac5-Support-boards-with-more-than-4G-DDR.patch
 @@ -0,0 +1,100 @@
@@ -116,7 +116,7 @@ index 0000000..b6bd3f4
 + 
 + 	memory@0 {
 + 		device_type = "memory";
-+-		reg = <0x2 0x00000000 0x0 0x40000000>;
++-		reg = <0x2 0x00000000 0x1 0x00000000>;
 ++		reg = <0x2 0x00000000 0x2 0x00000000>;
 + 	};
 + 
