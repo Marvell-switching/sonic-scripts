@@ -1,0 +1,17 @@
+From 3af92bd88cb32c4ec6dc3e262f0b1ab97ee959be Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 9 Jan 2024 11:26:12 +0000
+Subject: [PATCH] [Marvell-arm64] Update sonic-platform submodule
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/sonic-platform-marvell | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-arm64/sonic-platform-marvell b/platform/marvell-arm64/sonic-platform-marvell
+index c108e5e38e6..f6b5e6cc8f3 160000
+--- a/platform/marvell-arm64/sonic-platform-marvell
++++ b/platform/marvell-arm64/sonic-platform-marvell
+@@ -1 +1 @@
+-Subproject commit c108e5e38e65d4d44520c52079a95a0a9262d6cc
++Subproject commit f6b5e6cc8f382275e9d1647321ecd27e87038b90
