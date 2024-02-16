@@ -1,0 +1,158 @@
+From e342fc1f63f25c5870c7a7ea58a1e987e00b177b Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 20 Feb 2024 03:52:17 +0000
+Subject: Enable docker saiserver
+
+Saiserver v2 docker for SAI PTF:
+make target/docker-saiserverv2-mrvl.gz
+
+Steps to start SAI Server in Sonic DUT:
+Execute all these command in sonic switch bash terminal,
+NOTE: Stop and disable all dockers except database dockers in sonic.
+docker load -i ./docker-saiserverv2-mrvl.gz
+SONIC_CFGGEN="sonic-cfggen"
+SONIC_DB_CLI="sonic-db-cli"
+PLATFORM=${PLATFORM:-`$SONIC_CFGGEN -H -v DEVICE_METADATA.localhost.platform`}
+HWSKU=${HWSKU:-`$SONIC_CFGGEN -d -v 'DEVICE_METADATA["localhost"]["hwsku"]'`}
+DOCKERNAME=saiserver
+DOCKERIMG=docker-saiserverv2-mrvl
+docker create --privileged --net=host -v /usr/share/sonic/device/$PLATFORM/$HWSKU:/usr/share/sonic/hwsku:ro --name=$DOCKERNAME $DOCKERIMG
+docker start $DOCKERNAME
+docker exec -ti saiserver bash
+verify saiserver is running.
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/docker-saiserver-mrvl.mk     |  7 ++--
+ .../docker-saiserver-mrvl/Dockerfile.j2       | 32 +++++++++++++++++++
+ .../marvell/docker-saiserver-mrvl/start.sh    |  7 ++++
+ .../docker-saiserver-mrvl/supervisord.conf    | 28 ++++++++++++++++
+ platform/marvell/libsaithrift-dev.mk          |  2 +-
+ 5 files changed, 72 insertions(+), 4 deletions(-)
+ create mode 100644 platform/marvell/docker-saiserver-mrvl/Dockerfile.j2
+ create mode 100755 platform/marvell/docker-saiserver-mrvl/start.sh
+ create mode 100644 platform/marvell/docker-saiserver-mrvl/supervisord.conf
+
+diff --git a/platform/marvell/docker-saiserver-mrvl.mk b/platform/marvell/docker-saiserver-mrvl.mk
+index dc8ea722c..2cd0d4dca 100644
+--- a/platform/marvell/docker-saiserver-mrvl.mk
++++ b/platform/marvell/docker-saiserver-mrvl.mk
+@@ -1,13 +1,14 @@
+ # docker image for mrvl saiserver
+ 
+-DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
++SAITHRIFT_VER = v2
++DOCKER_SAISERVER_MRVL = docker-saiserver$(SAITHRIFT_VER)-mrvl.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
+-$(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
++$(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER) $(LIBTHRIFT_MRVL)
+ $(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BOOKWORM)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
+ SONIC_BOOKWORM_DOCKERS += $(DOCKER_SAISERVER_MRVL)
+ 
+-$(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
++$(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver$(SAITHRIFT_VER)
+ $(DOCKER_SAISERVER_MRVL)_RUN_OPT += --privileged -t
+ $(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
+ $(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /var/run/docker-saiserver:/var/run/sswsyncd
+diff --git a/platform/marvell/docker-saiserver-mrvl/Dockerfile.j2 b/platform/marvell/docker-saiserver-mrvl/Dockerfile.j2
+new file mode 100644
+index 000000000..732781871
+--- /dev/null
++++ b/platform/marvell/docker-saiserver-mrvl/Dockerfile.j2
+@@ -0,0 +1,32 @@
++FROM docker-config-engine-bookworm-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++
++ARG docker_container_name
++
++## Make apt-get non-interactive
++ENV DEBIAN_FRONTEND=noninteractive
++
++RUN apt-get update              \
++ && apt-get -y install          \
++      libboost-atomic1.74.0     \
++      libqt5core5a              \
++      libqt5network5
++
++COPY \
++{% for deb in docker_saiserver_mrvl_debs.split(' ') -%}
++debs/{{ deb }}{{' '}}
++{%- endfor -%}
++debs/
++
++RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
++{% for deb in docker_saiserver_mrvl_debs.split(' ') -%}
++dpkg_apt debs/{{ deb }}{{'; '}}
++{%- endfor %}
++
++COPY ["start.sh", "/usr/bin/"]
++COPY ["supervisord.conf", "/etc/supervisor/conf.d/"]
++
++## Clean up
++RUN apt-get clean -y; apt-get autoclean -y; apt-get autoremove -y
++RUN rm -rf /debs
++
++ENTRYPOINT ["/usr/local/bin/supervisord"]
+diff --git a/platform/marvell/docker-saiserver-mrvl/start.sh b/platform/marvell/docker-saiserver-mrvl/start.sh
+new file mode 100755
+index 000000000..09cc0ddb5
+--- /dev/null
++++ b/platform/marvell/docker-saiserver-mrvl/start.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++
++rm -f /var/run/rsyslogd.pid
++
++supervisorctl start rsyslogd
++
++supervisorctl start saiserver
+diff --git a/platform/marvell/docker-saiserver-mrvl/supervisord.conf b/platform/marvell/docker-saiserver-mrvl/supervisord.conf
+new file mode 100644
+index 000000000..ccb107b3d
+--- /dev/null
++++ b/platform/marvell/docker-saiserver-mrvl/supervisord.conf
+@@ -0,0 +1,28 @@
++[supervisord]
++logfile_maxbytes=1MB
++logfile_backups=2
++nodaemon=true
++
++[program:start.sh]
++command=/usr/bin/start.sh
++priority=1
++autostart=true
++autorestart=false
++stdout_logfile=syslog
++stderr_logfile=syslog
++
++[program:rsyslogd]
++command=/usr/sbin/rsyslogd -n
++priority=2
++autostart=false
++autorestart=false
++stdout_logfile=syslog
++stderr_logfile=syslog
++
++[program:saiserver]
++command=/usr/sbin/saiserver -p /usr/share/sonic/hwsku/sai.profile -f /usr/share/sonic/hwsku/port_config.ini
++priority=3
++autostart=false
++autorestart=false
++stdout_logfile=syslog
++stderr_logfile=syslog
+diff --git a/platform/marvell/libsaithrift-dev.mk b/platform/marvell/libsaithrift-dev.mk
+index ab37b490c..a4b96a1d1 100644
+--- a/platform/marvell/libsaithrift-dev.mk
++++ b/platform/marvell/libsaithrift-dev.mk
+@@ -32,7 +32,7 @@ PYTHON_SAITHRIFT = python-saithrift$(SAITHRIFT_VER)_$(SAI_VER)_$(CONFIGURED_ARCH
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(PYTHON_SAITHRIFT)))
+ 
+ SAISERVER = saiserver$(SAITHRIFT_VER)_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+-$(SAISERVER)_RDEPENDS += $(MRVL_SAI)
++$(SAISERVER)_RDEPENDS += $(LIBSAITHRIFT_DEV)
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER)))
+ 
+ SAISERVER_DBG = saiserver$(SAITHRIFT_VER)-dbg_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+-- 
+2.25.1
+
