@@ -1,0 +1,206 @@
+From ac2e99d568d211b555429ea1e8660c84616540f4 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Fri, 16 Feb 2024 14:07:20 +0000
+Subject: Migration to bookworm
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/docker-saiserver-mrvl.mk     |  4 +--
+ platform/marvell/docker-syncd-mrvl-rpc.mk     |  4 +--
+ .../docker-syncd-mrvl-rpc/Dockerfile.j2       |  2 +-
+ platform/marvell/docker-syncd-mrvl.mk         |  2 +-
+ .../marvell/docker-syncd-mrvl/Dockerfile.j2   |  4 +--
+ platform/marvell/libsaithrift-dev.mk          | 34 +++++++++++++++----
+ platform/template/docker-syncd-bookworm.mk    | 33 ++++++++++++++++++
+ rules/syncd.mk                                |  3 +-
+ 8 files changed, 69 insertions(+), 17 deletions(-)
+ create mode 100644 platform/template/docker-syncd-bookworm.mk
+
+diff --git a/platform/marvell/docker-saiserver-mrvl.mk b/platform/marvell/docker-saiserver-mrvl.mk
+index 7e5c83ffc..dc8ea722c 100644
+--- a/platform/marvell/docker-saiserver-mrvl.mk
++++ b/platform/marvell/docker-saiserver-mrvl.mk
+@@ -3,9 +3,9 @@
+ DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
+ $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
+-$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BOOKWORM)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
+-SONIC_BULLSEYE_DOCKERS += $(DOCKER_SAISERVER_MRVL)
++SONIC_BOOKWORM_DOCKERS += $(DOCKER_SAISERVER_MRVL)
+ 
+ $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
+ $(DOCKER_SAISERVER_MRVL)_RUN_OPT += --privileged -t
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc.mk b/platform/marvell/docker-syncd-mrvl-rpc.mk
+index d642f4da4..005da3a7d 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc.mk
++++ b/platform/marvell/docker-syncd-mrvl-rpc.mk
+@@ -2,7 +2,7 @@
+ 
+ DOCKER_SYNCD_MRVL_RPC = docker-syncd-mrvl-rpc.gz
+ $(DOCKER_SYNCD_MRVL_RPC)_PATH = $(PLATFORM_PATH)/docker-syncd-mrvl-rpc
+-$(DOCKER_SYNCD_MRVL_RPC)_DEPENDS += $(SYNCD_RPC) $(LIBTHRIFT) $(PTF)
++$(DOCKER_SYNCD_MRVL_RPC)_DEPENDS += $(SYNCD_RPC) $(LIBTHRIFT_MRVL) $(PTF)
+ $(DOCKER_SYNCD_MRVL_RPC)_FILES += $(SUPERVISOR_PROC_EXIT_LISTENER_SCRIPT)
+ ifeq ($(INSTALL_DEBUG_TOOLS), y)
+ $(DOCKER_SYNCD_MRVL_RPC)_DEPENDS += $(SYNCD_RPC_DBG) \
+@@ -25,4 +25,4 @@ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/warmboot:/var/warmboot
+ 
+-SONIC_BULLSEYE_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
++SONIC_BOOKWORM_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 6bd7fb9c7..1f1b8c93a 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -20,7 +20,7 @@ RUN apt-get update \
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+-    python-dev          \
++    python3-dev          \
+     wget                \
+     cmake               \
+     libqt5core5a        \
+diff --git a/platform/marvell/docker-syncd-mrvl.mk b/platform/marvell/docker-syncd-mrvl.mk
+index 566de773b..d4c990cfe 100644
+--- a/platform/marvell/docker-syncd-mrvl.mk
++++ b/platform/marvell/docker-syncd-mrvl.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bookworm.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
+diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+index 84e3d5bde..92e148204 100755
+--- a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bookworm-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
+@@ -19,7 +19,7 @@ RUN apt-get update \
+     net-tools           \
+     iputils-ping
+ 
+-RUN apt-get -y install libpcap-dev libxml2-dev python-dev swig libsensors4-dev nfs-common
++RUN apt-get -y install libpcap-dev libxml2-dev python3-dev swig libsensors4-dev nfs-common
+ 
+ RUN dpkg -i \
+ {% for deb in docker_syncd_mrvl_debs.split(' ') -%}
+diff --git a/platform/marvell/libsaithrift-dev.mk b/platform/marvell/libsaithrift-dev.mk
+index e1c3da156..ab37b490c 100644
+--- a/platform/marvell/libsaithrift-dev.mk
++++ b/platform/marvell/libsaithrift-dev.mk
+@@ -2,19 +2,39 @@
+ 
+ SAI_VER = 0.9.4
+ 
+-LIBSAITHRIFT_DEV = libsaithrift-dev_$(SAI_VER)_$(CONFIGURED_ARCH).deb
++THRIFT_URL_PREFIX = http://deb.debian.org/debian/pool/main/t/thrift
++THRIFT_VER = 0.17.0-2+b2
++LIBTHRIFT_MRVL = libthrift-0.17.0_$(THRIFT_VER)_$(CONFIGURED_ARCH).deb
++$(LIBTHRIFT_MRVL)_URL = $(THRIFT_URL_PREFIX)/$(LIBTHRIFT_MRVL)
++SONIC_ONLINE_DEBS += $(LIBTHRIFT_MRVL)
++
++LIBTHRIFT_DEV_MRVL = libthrift-dev_$(THRIFT_VER)_$(CONFIGURED_ARCH).deb
++$(LIBTHRIFT_DEV_MRVL)_URL = $(THRIFT_URL_PREFIX)/$(LIBTHRIFT_DEV_MRVL)
++SONIC_ONLINE_DEBS += $(LIBTHRIFT_DEV_MRVL)
++
++THRIFT_COMPILER_MRVL = thrift-compiler_$(THRIFT_VER)_$(CONFIGURED_ARCH).deb
++$(THRIFT_COMPILER_MRVL)_URL = $(THRIFT_URL_PREFIX)/$(THRIFT_COMPILER_MRVL)
++SONIC_ONLINE_DEBS += $(THRIFT_COMPILER_MRVL)
++
++PYTHON3_THRIFT_MRVL = python3-thrift_$(THRIFT_VER)_$(CONFIGURED_ARCH).deb
++$(PYTHON3_THRIFT_MRVL)_URL = $(THRIFT_URL_PREFIX)/$(PYTHON3_THRIFT_MRVL)
++SONIC_ONLINE_DEBS += $(PYTHON3_THRIFT_MRVL)
++
++export SAITHRIFT_VER = v2
++LIBSAITHRIFT_DEV = libsaithrift$(SAITHRIFT_VER)-dev_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(LIBSAITHRIFT_DEV)_SRC_PATH = $(SRC_PATH)/sonic-sairedis/SAI
+-$(LIBSAITHRIFT_DEV)_DEPENDS += $(LIBTHRIFT) $(LIBTHRIFT_DEV) $(PYTHON_THRIFT) $(THRIFT_COMPILER) $(MRVL_FPA) $(MRVL_SAI)
+-$(LIBSAITHRIFT_DEV)_RDEPENDS += $(LIBTHRIFT) $(MRVL_SAI)
++$(LIBSAITHRIFT_DEV)_BUILD_ENV = SAITHRIFTV2=true SAITHRIFT_VER=v2
++$(LIBSAITHRIFT_DEV)_DEPENDS += $(LIBTHRIFT_MRVL) $(LIBTHRIFT_DEV_MRVL) $(PYTHON3_THRIFT_MRVL) $(THRIFT_COMPILER_MRVL) $(MRVL_SAI) $(LIBSAIMETADATA) $(LIBSAIMETADATA_DEV)
++$(LIBSAITHRIFT_DEV)_RDEPENDS += $(MRVL_SAI) $(LIBSAIMETADATA)
+ SONIC_DPKG_DEBS += $(LIBSAITHRIFT_DEV)
+ 
+-PYTHON_SAITHRIFT = python-saithrift_$(SAI_VER)_$(CONFIGURED_ARCH).deb
++PYTHON_SAITHRIFT = python-saithrift$(SAITHRIFT_VER)_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(PYTHON_SAITHRIFT)))
+ 
+-SAISERVER = saiserver_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+-$(SAISERVER)_RDEPENDS += $(LIBTHRIFT) $(MRVL_SAI)
++SAISERVER = saiserver$(SAITHRIFT_VER)_$(SAI_VER)_$(CONFIGURED_ARCH).deb
++$(SAISERVER)_RDEPENDS += $(MRVL_SAI)
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER)))
+ 
+-SAISERVER_DBG = saiserver-dbg_$(SAI_VER)_$(CONFIGURED_ARCH).deb
++SAISERVER_DBG = saiserver$(SAITHRIFT_VER)-dbg_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(SAISERVER_DBG)_RDEPENDS += $(SAISERVER)
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER_DBG)))
+diff --git a/platform/template/docker-syncd-bookworm.mk b/platform/template/docker-syncd-bookworm.mk
+new file mode 100644
+index 000000000..2a9e82845
+--- /dev/null
++++ b/platform/template/docker-syncd-bookworm.mk
+@@ -0,0 +1,33 @@
++# docker image for syncd
++
++
++DOCKER_SYNCD_BASE_STEM = docker-syncd-$(DOCKER_SYNCD_PLATFORM_CODE)
++DOCKER_SYNCD_BASE = $(DOCKER_SYNCD_BASE_STEM).gz
++DOCKER_SYNCD_BASE_DBG = $(DOCKER_SYNCD_BASE_STEM)-$(DBG_IMAGE_MARK).gz
++
++$(DOCKER_SYNCD_BASE)_PATH = $(PLATFORM_PATH)/docker-syncd-$(DOCKER_SYNCD_PLATFORM_CODE)
++
++$(DOCKER_SYNCD_BASE)_FILES += $(SUPERVISOR_PROC_EXIT_LISTENER_SCRIPT)
++
++$(DOCKER_SYNCD_BASE)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BOOKWORM)
++$(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $($(DOCKER_CONFIG_ENGINE_BOOKWORM)_DBG_DEPENDS)
++$(DOCKER_SYNCD_BASE)_DBG_IMAGE_PACKAGES = $($(DOCKER_CONFIG_ENGINE_BOOKWORM)_DBG_IMAGE_PACKAGES)
++
++SONIC_DOCKER_IMAGES += $(DOCKER_SYNCD_BASE)
++ifneq ($(ENABLE_SYNCD_RPC),y)
++SONIC_INSTALL_DOCKER_IMAGES += $(DOCKER_SYNCD_BASE)
++endif
++
++SONIC_DOCKER_DBG_IMAGES += $(DOCKER_SYNCD_BASE_DBG)
++ifneq ($(ENABLE_SYNCD_RPC),y)
++SONIC_INSTALL_DOCKER_DBG_IMAGES += $(DOCKER_SYNCD_BASE_DBG)
++endif
++
++$(DOCKER_SYNCD_BASE)_CONTAINER_NAME = syncd
++$(DOCKER_SYNCD_BASE)_RUN_OPT += --privileged -t
++$(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
++$(DOCKER_SYNCD_BASE)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
++
++SONIC_BOOKWORM_DOCKERS += $(DOCKER_SYNCD_BASE)
++SONIC_BOOKWORM_DBG_DOCKERS += $(DOCKER_SYNCD_BASE_DBG)
++
+diff --git a/rules/syncd.mk b/rules/syncd.mk
+index 2f5cce6ce..e42ce81a7 100644
+--- a/rules/syncd.mk
++++ b/rules/syncd.mk
+@@ -16,8 +16,7 @@ SYNCD_RPC = syncd-rpc_1.0.0_$(CONFIGURED_ARCH).deb
+ $(SYNCD_RPC)_RDEPENDS += $(LIBSAIREDIS) $(LIBSAIMETADATA)
+ $(eval $(call add_derived_package,$(SYNCD),$(SYNCD_RPC)))
+ 
+-# Inject libthrift build dependency for RPC build
+-$(SYNCD)_DEPENDS += $(LIBSWSSCOMMON_DEV) $(LIBTHRIFT_DEV)
++$(SYNCD)_DEPENDS += $(LIBSWSSCOMMON_DEV)
+ $(SYNCD)_DEB_BUILD_PROFILES += rpc
+ endif
+ 
+-- 
+2.25.1
+
