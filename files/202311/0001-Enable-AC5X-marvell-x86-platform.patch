@@ -1,0 +1,1768 @@
+From 9cb66b376dd9e5f17e287f431a65c818b9144b5b Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 26 Feb 2024 03:19:33 +0000
+Subject: Enable AC5X marvell x86 platform
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ .gitmodules                                   |   6 +
+ .../ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.md5 |   2 +-
+ .../ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml | 202 ++++++------------
+ .../ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.md5    |   2 +-
+ .../ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.xml    |   2 +-
+ .../rd98DX35xx_cn9131/ASK-PP-AC5X-RD.md5      |   2 +-
+ .../rd98DX35xx_cn9131/ASK-PP-AC5X-RD.xml      |  46 ++--
+ .../SAI-AC5X-RD-32x1G-16x2_5G-6x25G.md5       |   2 +-
+ .../SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml       | 148 +++++++++++--
+ .../x86_64-marvell_rd98DX35xx-r0/default_sku  |   1 +
+ .../installer.conf                            |   1 +
+ .../platform_asic                             |   1 +
+ .../plugins/eeprom.py                         |  13 ++
+ .../pmon_daemon_control.json                  |   8 +
+ .../x86_64-marvell_rd98DX35xx-r0/rd98DX35xx   |   1 +
+ .../system_health_monitoring_config.json      |  10 +
+ platform/marvell/docker-saiserver-mrvl.dep    |   8 +
+ platform/marvell/docker-saiserver-mrvl.mk     |  15 ++
+ platform/marvell/docker-syncd-mrvl-rpc.dep    |   8 +
+ platform/marvell/docker-syncd-mrvl-rpc.mk     |   3 +
+ .../docker-syncd-mrvl-rpc/99-syncd.conf       |   1 -
+ .../docker-syncd-mrvl-rpc/Dockerfile.cleanup  |  11 +
+ .../docker-syncd-mrvl-rpc/Dockerfile.j2       |  11 +-
+ platform/marvell/docker-syncd-mrvl.dep        |  10 +
+ platform/marvell/docker-syncd-mrvl.mk         |   5 +-
+ .../docker-syncd-mrvl/Dockerfile.cleanup      |  11 +
+ .../marvell/docker-syncd-mrvl/Dockerfile.j2   |  12 +-
+ .../docker-syncd-mrvl/supervisord.conf        |   2 +-
+ platform/marvell/libsaithrift-dev.dep         |  11 +
+ platform/marvell/libsaithrift-dev.mk          |  10 +-
+ platform/marvell/mrvl-prestera                |   1 +
+ platform/marvell/one-image.dep                |   1 +
+ platform/marvell/one-image.mk                 |   2 +
+ platform/marvell/platform-marvell.dep         |   9 +
+ platform/marvell/platform-marvell.mk          |  30 +++
+ platform/marvell/rules.dep                    |   7 +
+ platform/marvell/rules.mk                     |   6 +-
+ platform/marvell/sai.dep                      |   8 +
+ platform/marvell/sai.mk                       |  12 +-
+ platform/marvell/sai/Makefile                 |   9 -
+ platform/marvell/sonic-platform-marvell       |   1 +
+ 41 files changed, 446 insertions(+), 205 deletions(-)
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json
+ create mode 120000 device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
+ create mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json
+ create mode 100644 platform/marvell/docker-saiserver-mrvl.dep
+ create mode 100644 platform/marvell/docker-saiserver-mrvl.mk
+ create mode 100644 platform/marvell/docker-syncd-mrvl-rpc.dep
+ create mode 100644 platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.cleanup
+ create mode 100644 platform/marvell/docker-syncd-mrvl.dep
+ create mode 100644 platform/marvell/docker-syncd-mrvl/Dockerfile.cleanup
+ create mode 100644 platform/marvell/libsaithrift-dev.dep
+ create mode 160000 platform/marvell/mrvl-prestera
+ create mode 100644 platform/marvell/one-image.dep
+ create mode 100644 platform/marvell/platform-marvell.dep
+ create mode 100644 platform/marvell/platform-marvell.mk
+ create mode 100644 platform/marvell/rules.dep
+ create mode 100644 platform/marvell/sai.dep
+ delete mode 100644 platform/marvell/sai/Makefile
+ create mode 160000 platform/marvell/sonic-platform-marvell
+
+diff --git a/.gitmodules b/.gitmodules
+index e68976c43..914c94743 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -137,3 +137,9 @@
+ [submodule "platform/marvell-arm64/sonic-platform-marvell"]
+ 	path = platform/marvell-arm64/sonic-platform-marvell
+ 	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
++[submodule "platform/marvell/sonic-platform-marvell"]
++	path = platform/marvell/sonic-platform-marvell
++	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
++[submodule "platform/marvell/mrvl-prestera"]
++	path = platform/marvell/mrvl-prestera
++	url = https://github.com/Marvell-switching/mrvl-prestera.git
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.md5 b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.md5
+index 433753d8f..7b8c7b490 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.md5
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.md5
+@@ -1 +1 @@
+-95f963f02f1cb808656fcb1f008aa36a
+\ No newline at end of file
++69af36a9007f8c9e4d33ea6465cc6b89
+\ No newline at end of file
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml
+index 2c1bb27fb..7fd11122c 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2023-05-05-1.04" profile="Askboard" dsig="md5">
++<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2024-02-19-1.06" profile="Askboard" sid="eb53f80b-5892-4f8b-9197-a6f626effaba">
+   <askboardplt:ASK-Board xmlns:askboardplt="urn:marvell:askboard:yang">
+     <askboardplt:typedefs>
+       <askboardplt:typedef>
+@@ -52,7 +52,7 @@
+       <askboardplt:typedef>
+         <askboardplt:name>board-pp-interface-channel-type</askboardplt:name>
+         <askboardplt:type>enumeration</askboardplt:type>
+-        <askboardplt:description>Specifies interface tunnel.</askboardplt:description>
++        <askboardplt:description>Specifies channel interface type.</askboardplt:description>
+         <askboardplt:enum>
+           <askboardplt:name>pci</askboardplt:name>
+           <askboardplt:description>PCI</askboardplt:description>
+@@ -64,27 +64,37 @@
+           <askboardplt:value>1</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+-          <askboardplt:name>pex</askboardplt:name>
+-          <askboardplt:description>PEX</askboardplt:description>
+-          <askboardplt:value>3</askboardplt:value>
++          <askboardplt:name>twsi</askboardplt:name>
++          <askboardplt:description>TWSI</askboardplt:description>
++          <askboardplt:value>2</askboardplt:value>
+         </askboardplt:enum>
++      </askboardplt:typedef>
++      <askboardplt:typedef>
++        <askboardplt:name>board-pp-as-type</askboardplt:name>
++        <askboardplt:type>enumeration</askboardplt:type>
++        <askboardplt:description>Specifies Address space type.</askboardplt:description>
+         <askboardplt:enum>
+-          <askboardplt:name>pex_eagle</askboardplt:name>
+-          <askboardplt:description>PEX EAGLE</askboardplt:description>
+-          <askboardplt:value>5</askboardplt:value>
++          <askboardplt:name>4_regions</askboardplt:name>
++          <askboardplt:description>address-space 4 regions</askboardplt:description>
++          <askboardplt:value>0</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+-          <askboardplt:name>pex_falcon_z</askboardplt:name>
+-          <askboardplt:description>PEX FALCON Z</askboardplt:description>
+-          <askboardplt:value>6</askboardplt:value>
++          <askboardplt:name>8_regions</askboardplt:name>
++          <askboardplt:description>address-space 8 regions</askboardplt:description>
++          <askboardplt:value>1</askboardplt:value>
++        </askboardplt:enum>
++        <askboardplt:enum>
++          <askboardplt:name>atu</askboardplt:name>
++          <askboardplt:description>address translation unit</askboardplt:description>
++          <askboardplt:value>2</askboardplt:value>
+         </askboardplt:enum>
+       </askboardplt:typedef>
+       <askboardplt:typedef>
+         <askboardplt:name>device-id-type</askboardplt:name>
+         <askboardplt:type>uint32</askboardplt:type>
+-        <askboardplt:description>Device ID 0..1023</askboardplt:description>
++        <askboardplt:description>Device ID 0..1</askboardplt:description>
+         <askboardplt:min>0</askboardplt:min>
+-        <askboardplt:max>1023</askboardplt:max>
++        <askboardplt:max>1</askboardplt:max>
+       </askboardplt:typedef>
+       <askboardplt:typedef>
+         <askboardplt:name>port-mapping-type</askboardplt:name>
+@@ -111,11 +121,9 @@
+       <askboardplt:typedef>
+         <askboardplt:name>txq-port-number-type</askboardplt:name>
+         <askboardplt:type>uint32</askboardplt:type>
+-        <askboardplt:description>0 - 8 queues are configured per port (legacy mode),
+-1...16 - the number of queues configured per port
+-   	SIP 5 : Bobcat2,BobK:0..71 ;Bobcat3: 0..576 ;Aldrin2:0..99</askboardplt:description>
++        <askboardplt:description>TXq port number </askboardplt:description>
+         <askboardplt:min>0</askboardplt:min>
+-        <askboardplt:max>576</askboardplt:max>
++        <askboardplt:max>99</askboardplt:max>
+       </askboardplt:typedef>
+       <askboardplt:typedef>
+         <askboardplt:name>phy-smi-interface-type</askboardplt:name>
+@@ -162,12 +170,14 @@
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E3140</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E3140, used for Copper with speeds of 100M/1G/10G. Uses with FW SolarFlare next generation.</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E3140, used for Copper with speeds of 100M/1G/10G.
++Uses with FW SolarFlare next generation.</askboardplt:description>
+           <askboardplt:value>5</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E3240</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E3240, used for Copper with speeds of 100M/1G/10G. Uses with FW, SolarFlare next generation.</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E3240, used for Copper with speeds of 100M/1G/10G.
++Uses with FW, SolarFlare next generation.</askboardplt:description>
+           <askboardplt:value>6</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+@@ -177,7 +187,8 @@
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E3220</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E3220, used for Combo port with speeds of 100M/1G/10G. Uses FW, SolarFlare next generation.</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E3220, used for Combo port with speeds of 100M/1G/10G.
++Uses FW, SolarFlare next generation.</askboardplt:description>
+           <askboardplt:value>8</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+@@ -212,17 +223,20 @@
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E1780</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E1780, Integrated Octal 10/100/1000 Mbps Energy Efficient Ethernet Transceiver</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E1780, Integrated Octal 10/100/1000 Mbps Energy
++Efficient Ethernet Transceiver</askboardplt:description>
+           <askboardplt:value>15</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E2540</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E2540, 4 ports 10/100/1000/2.5G/5GBASE-T Ethernet Transceiver with IEEE 1588v2 PTP Support</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E2540, 4 ports 10/100/1000/2.5G/5GBASE-T Ethernet
++Transceiver with IEEE 1588v2 PTP Support</askboardplt:description>
+           <askboardplt:value>16</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>alaska-88E2580</askboardplt:name>
+-          <askboardplt:description>Specifies PHY identifier 88E12580, Octal 10/100/1000/2.5G/5GBASE-T Ethernet Transceiver with IEEE 1588v2 PTP Support</askboardplt:description>
++          <askboardplt:description>Specifies PHY identifier 88E12580, Octal 10/100/1000/2.5G/5GBASE-T Ethernet Transceiver
++with IEEE 1588v2 PTP Support</askboardplt:description>
+           <askboardplt:value>17</askboardplt:value>
+         </askboardplt:enum>
+       </askboardplt:typedef>
+@@ -510,7 +524,7 @@
+         <askboardplt:type>uint32</askboardplt:type>
+         <askboardplt:description>serdes lane</askboardplt:description>
+         <askboardplt:min>0</askboardplt:min>
+-        <askboardplt:max>255</askboardplt:max>
++        <askboardplt:max>7</askboardplt:max>
+       </askboardplt:typedef>
+       <askboardplt:typedef>
+         <askboardplt:name>cpu-type</askboardplt:name>
+@@ -589,12 +603,12 @@ lowercase characters.</askboardplt:description>
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>sip5</askboardplt:name>
+-          <askboardplt:description>SIP5: AC5, AC3x</askboardplt:description>
++          <askboardplt:description>SIP5: AC3x</askboardplt:description>
+           <askboardplt:value>5</askboardplt:value>
+         </askboardplt:enum>
+         <askboardplt:enum>
+           <askboardplt:name>sip6</askboardplt:name>
+-          <askboardplt:description>SIP6: Falcon, AC5x, AC5P</askboardplt:description>
++          <askboardplt:description>SIP6: Falcon, AC5x</askboardplt:description>
+           <askboardplt:value>6</askboardplt:value>
+         </askboardplt:enum>
+       </askboardplt:typedef>
+@@ -665,13 +679,35 @@ lowercase characters.</askboardplt:description>
+           <askboardplt:value>1</askboardplt:value>
+         </askboardplt:enum>
+       </askboardplt:typedef>
++      <askboardplt:typedef>
++        <askboardplt:name>asic-type</askboardplt:name>
++        <askboardplt:type>enumeration</askboardplt:type>
++        <askboardplt:description>ASIC Type</askboardplt:description>
++        <askboardplt:enum>
++          <askboardplt:name>ASIC_AC3X</askboardplt:name>
++          <askboardplt:description>AC3X</askboardplt:description>
++          <askboardplt:value>0</askboardplt:value>
++        </askboardplt:enum>
++        <askboardplt:enum>
++          <askboardplt:name>ASIC_AC5X</askboardplt:name>
++          <askboardplt:description>AC5X</askboardplt:description>
++          <askboardplt:value>1</askboardplt:value>
++        </askboardplt:enum>
++        <askboardplt:enum>
++          <askboardplt:name>ASIC_Falcon</askboardplt:name>
++          <askboardplt:description>FALCON</askboardplt:description>
++          <askboardplt:value>2</askboardplt:value>
++        </askboardplt:enum>
++      </askboardplt:typedef>
+     </askboardplt:typedefs>
++    <askboardplt:ASIC_Type askboardplt:type="asic-type">ASIC_AC5X</askboardplt:ASIC_Type>
+     <askboardplt:boardName askboardplt:type="std-string">AC5X-RD-32x1G-16x2.5G-6x25G</askboardplt:boardName>
+     <askboardplt:osCallType askboardplt:type="board-callback-type">linux-static</askboardplt:osCallType>
+     <askboardplt:extDrvCallType askboardplt:type="board-callback-type">linux-static</askboardplt:extDrvCallType>
+     <askboardplt:mapType askboardplt:type="board-pp-map-type">autoscan</askboardplt:mapType>
+     <askboardplt:cpuType askboardplt:type="cpu-type">external</askboardplt:cpuType>
+-    <askboardplt:mngInterfaceType askboardplt:type="board-pp-interface-channel-type">pex_eagle</askboardplt:mngInterfaceType>
++    <askboardplt:mngInterfaceType askboardplt:type="board-pp-interface-channel-type">pci</askboardplt:mngInterfaceType>
++    <askboardplt:adressSpaceType askboardplt:type="board-pp-as-type">atu</askboardplt:adressSpaceType>
+     <askboardplt:device-list>
+       <askboardplt:devNum askboardplt:type="device-id-type">0</askboardplt:devNum>
+       <askboardplt:deviceId askboardplt:type="device-id-type">0</askboardplt:deviceId>
+@@ -683,10 +719,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">1</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -704,10 +738,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">0</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -725,10 +757,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">3</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -746,10 +776,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">2</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -767,10 +795,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">5</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -788,10 +814,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">4</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -809,10 +833,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">7</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -830,10 +852,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">6</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">0</askboardplt:phyNumber>
+@@ -851,10 +871,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">9</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -872,10 +890,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">8</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -893,10 +909,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">11</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -914,10 +928,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">10</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -935,10 +947,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">13</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -956,10 +966,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">12</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -977,10 +985,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">15</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -998,10 +1004,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">14</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">1</askboardplt:phyNumber>
+@@ -1019,10 +1023,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">17</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1040,10 +1042,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">16</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1061,10 +1061,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">19</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1082,10 +1080,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">18</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1103,10 +1099,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">21</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1124,10 +1118,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">20</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1145,10 +1137,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">23</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1166,10 +1156,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">22</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">2</askboardplt:phyNumber>
+@@ -1187,10 +1175,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">25</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1208,10 +1194,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">24</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1229,10 +1213,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">27</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1250,10 +1232,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">26</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1271,10 +1251,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">29</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1292,10 +1270,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">28</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1313,10 +1289,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">31</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1334,10 +1308,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">30</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E1780</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">3</askboardplt:phyNumber>
+@@ -1355,10 +1327,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">33</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1376,10 +1346,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">46</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">6</askboardplt:phyNumber>
+@@ -1397,10 +1365,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">47</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">6</askboardplt:phyNumber>
+@@ -1418,10 +1384,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">44</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">6</askboardplt:phyNumber>
+@@ -1439,10 +1403,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">45</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">6</askboardplt:phyNumber>
+@@ -1460,10 +1422,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">42</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">5</askboardplt:phyNumber>
+@@ -1481,10 +1441,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">43</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">5</askboardplt:phyNumber>
+@@ -1502,10 +1460,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">40</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">5</askboardplt:phyNumber>
+@@ -1523,10 +1479,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">41</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2540</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">5</askboardplt:phyNumber>
+@@ -1544,10 +1498,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">38</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1565,10 +1517,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">39</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1586,10 +1536,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">36</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1607,10 +1555,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">37</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1628,10 +1574,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">34</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1649,10 +1593,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">35</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1670,10 +1612,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">32</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">alaska-88E2580</askboardplt:phyType>
+           <askboardplt:phyNumber askboardplt:type="uint32">4</askboardplt:phyNumber>
+@@ -1691,10 +1631,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">48</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1713,10 +1651,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">49</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1735,10 +1671,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">50</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1757,10 +1691,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">51</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1779,10 +1711,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">52</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1801,10 +1731,8 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">ethernet_mac</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">53</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+         <askboardplt:phy>
+           <askboardplt:phyType askboardplt:type="phy-type">NA</askboardplt:phyType>
+         </askboardplt:phy>
+@@ -1823,20 +1751,16 @@ lowercase characters.</askboardplt:description>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">cpu_sdma</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">54</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+       </askboardplt:portMap-list>
+       <askboardplt:portMap-list>
+         <askboardplt:portNumber askboardplt:type="physical-port-num-type">60</askboardplt:portNumber>
+         <askboardplt:TXQueue>
+           <askboardplt:mappingType askboardplt:type="port-mapping-type">cpu_sdma</askboardplt:mappingType>
+           <askboardplt:interfaceNum askboardplt:type="interface-num-type">55</askboardplt:interfaceNum>
+-          <askboardplt:txqPortNumber askboardplt:type="txq-port-number-type">0</askboardplt:txqPortNumber>
+           <askboardplt:reservePreemptiveChannel askboardplt:type="boolean-type">false</askboardplt:reservePreemptiveChannel>
+         </askboardplt:TXQueue>
+-        <askboardplt:portCscd askboardplt:type="port-cscd-type">NETWORK</askboardplt:portCscd>
+       </askboardplt:portMap-list>
+       <askboardplt:Ledstream-interface-list>
+         <askboardplt:ledstream-interface-number askboardplt:type="led-interface-type">0</askboardplt:ledstream-interface-number>
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.md5 b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.md5
+index 3a08897bf..f2cf3d5b6 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.md5
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.md5
+@@ -1 +1 @@
+-2876aaa02a47b5842e152ce794c50110
+\ No newline at end of file
++85b49bcb9d399bcd1b8128a42caba2d2
+\ No newline at end of file
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.xml b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.xml
+index 1d07f5994..980d4267b 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.xml
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-L1-AC5X-RD-32x1G-16x2_5G-6x25G.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2023-05-05-1.04" profile="Askl1" dsig="md5">
++<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2024-02-19-1.06" profile="Askl1" sid="71d3ab0f-3ac2-452a-a5c9-2dfdc969734a">
+   <ASKL1plt:ASK-L1 xmlns:ASKL1plt="urn:marvell:ASKL1:yang">
+     <ASKL1plt:typedefs>
+       <ASKL1plt:typedef>
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.md5 b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.md5
+index de23afe95..c043a0d72 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.md5
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.md5
+@@ -1 +1 @@
+-b42f2a2be9da6c7752c0807f9dee48bf
+\ No newline at end of file
++209426f8b550ddf85db19925f9f202a1
+\ No newline at end of file
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.xml b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.xml
+index ad457fe7d..9e40492cf 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.xml
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/ASK-PP-AC5X-RD.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2023-05-05-1.04" profile="Askpp" dsig="md5">
++<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2024-02-19-1.06" profile="Askpp" sid="34f1c14a-b581-422d-bd10-426dfac013dd">
+   <askppplt:ASK-PP xmlns:askppplt="urn:marvell:askpp:yang">
+     <askppplt:typedefs>
+       <askppplt:typedef>
+@@ -357,28 +357,28 @@
+         <askppplt:enum>
+           <askppplt:name>NATIVE</askppplt:name>
+           <askppplt:description>NATIVE
+-   	 *  the trunk members are filled
+-   	 *  according to the order given by application.
+-   	 *  Regular trunk may hold max of 8 members.
+-   	 *  Cascade trunk may hold :
+-   	 *  max of 64 members</askppplt:description>
++*  the trunk members are filled
++*  according to the order given by application.
++*  Regular trunk may hold max of 8 members.
++*  Cascade trunk may hold :
++*  max of 64 members</askppplt:description>
+           <askppplt:value>0</askppplt:value>
+         </askppplt:enum>
+         <askppplt:enum>
+           <askppplt:name>FLEX</askppplt:name>
+           <askppplt:description>FLEX
+-   	 *  A mode to allows flexibility for
+-   	 *  each Regular trunk to state it's max number of members (before starting to add members).
+-   	 *  (this mode not effect 'cascade trunk' members)
+-   	 *  Regular trunk may hold : max of 4K members. (each trunk set it's own limit)
+-   	 *  Cascade trunk may hold : max of 64 members.</askppplt:description>
++*  A mode to allows flexibility for
++*  each Regular trunk to state it's max number of members (before starting to add members).
++*  (this mode not effect 'cascade trunk' members)
++*  Regular trunk may hold : max of 4K members. (each trunk set it's own limit)
++*  Cascade trunk may hold : max of 64 members.</askppplt:description>
+           <askppplt:value>2</askppplt:value>
+         </askppplt:enum>
+       </askppplt:typedef>
+       <askppplt:typedef>
+         <askppplt:name>number-physical-port-type</askppplt:name>
+         <askppplt:type>enumeration</askppplt:type>
+-        <askppplt:description>ac5x 128, falcon 64,128,256, 512, 1024</askppplt:description>
++        <askppplt:description>AC3X/AC5X 128, falcon 64, 128, 256, 512, 1024</askppplt:description>
+         <askppplt:enum>
+           <askppplt:name>no-ports</askppplt:name>
+           <askppplt:description>no-ports</askppplt:description>
+@@ -519,7 +519,28 @@
+           <askppplt:value>1</askppplt:value>
+         </askppplt:enum>
+       </askppplt:typedef>
++      <askppplt:typedef>
++        <askppplt:name>asic-type</askppplt:name>
++        <askppplt:type>enumeration</askppplt:type>
++        <askppplt:description>ASIC Type</askppplt:description>
++        <askppplt:enum>
++          <askppplt:name>ASIC_AC3X</askppplt:name>
++          <askppplt:description>AC3X</askppplt:description>
++          <askppplt:value>0</askppplt:value>
++        </askppplt:enum>
++        <askppplt:enum>
++          <askppplt:name>ASIC_AC5X</askppplt:name>
++          <askppplt:description>AC5X</askppplt:description>
++          <askppplt:value>1</askppplt:value>
++        </askppplt:enum>
++        <askppplt:enum>
++          <askppplt:name>ASIC_Falcon</askppplt:name>
++          <askppplt:description>FALCON</askppplt:description>
++          <askppplt:value>2</askppplt:value>
++        </askppplt:enum>
++      </askppplt:typedef>
+     </askppplt:typedefs>
++    <askppplt:ASIC_Type askppplt:type="asic-type">ASIC_AC5X</askppplt:ASIC_Type>
+     <askppplt:PPInit>
+       <askppplt:PP-name askppplt:type="std-string">AC5X-RD</askppplt:PP-name>
+       <askppplt:Phase1>
+@@ -842,7 +863,6 @@
+       <askppplt:LogicalInit>
+         <askppplt:routingMode askppplt:type="routing-mode-type">TCAM_ROUTER_BASED</askppplt:routingMode>
+         <askppplt:maxNumOfPbrEntries askppplt:type="uint32">0</askppplt:maxNumOfPbrEntries>
+-        <askppplt:sharedTableMode askppplt:type="shared-table-mode-type">MID_L3_MID_L2_NO_EM</askppplt:sharedTableMode>
+         <askppplt:ingressDropEnable askppplt:type="boolean-type">true</askppplt:ingressDropEnable>
+       </askppplt:LogicalInit>
+       <askppplt:LibInit>
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.md5 b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.md5
+index bd88f03a2..e043a3966 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.md5
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.md5
+@@ -1 +1 @@
+-079a2fcdb8fe1d1f0cf39e3c40e6dd36
+\ No newline at end of file
++09e79a16029c17e6529015f9fa90be0b
+\ No newline at end of file
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml
+index f71d485bb..d92cc0065 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml
+@@ -1,13 +1,13 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2023-05-05-1.04" profile="SAI" dsig="md5">
++<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" version="2024-02-19-1.06" profile="SAI" sid="c310bbb1-ffca-4c99-9bae-f7d4caff5941">
+   <SAIplt:SAI xmlns:SAIplt="urn:marvell:SAI:yang">
+     <SAIplt:typedefs>
+       <SAIplt:typedef>
+         <SAIplt:name>device-id-type</SAIplt:name>
+         <SAIplt:type>uint32</SAIplt:type>
+-        <SAIplt:description>Device ID 0..1023</SAIplt:description>
++        <SAIplt:description>Device ID 0..1</SAIplt:description>
+         <SAIplt:min>0</SAIplt:min>
+-        <SAIplt:max>1023</SAIplt:max>
++        <SAIplt:max>1</SAIplt:max>
+       </SAIplt:typedef>
+       <SAIplt:typedef>
+         <SAIplt:name>port-id-type</SAIplt:name>
+@@ -22,7 +22,7 @@
+         <SAIplt:description>Logging Feature Options</SAIplt:description>
+         <SAIplt:enum>
+           <SAIplt:name>SAI_LOG_SYSLOG</SAIplt:name>
+-          <SAIplt:description>SYSLOG               {Syslog service should be running to use this option}</SAIplt:description>
++          <SAIplt:description>SYSLOG  {Syslog service should be running to use this option}</SAIplt:description>
+           <SAIplt:value>0</SAIplt:value>
+         </SAIplt:enum>
+         <SAIplt:enum>
+@@ -32,7 +32,7 @@
+         </SAIplt:enum>
+         <SAIplt:enum>
+           <SAIplt:name>SAI_LOG_FILE</SAIplt:name>
+-          <SAIplt:description>FILE                       {Warning !!! Use with caution. Can cause disk full issues}</SAIplt:description>
++          <SAIplt:description>FILE  {Warning !!! Use with caution. Can cause disk full issues}</SAIplt:description>
+           <SAIplt:value>2</SAIplt:value>
+         </SAIplt:enum>
+       </SAIplt:typedef>
+@@ -43,11 +43,98 @@
+         <SAIplt:min>2</SAIplt:min>
+         <SAIplt:max>30</SAIplt:max>
+       </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>acl-feature-name-type</SAIplt:name>
++        <SAIplt:type>enumeration</SAIplt:type>
++        <SAIplt:description/>
++        <SAIplt:enum>
++          <SAIplt:name>port-sFlow</SAIplt:name>
++          <SAIplt:description>SFlow over Port</SAIplt:description>
++          <SAIplt:value>0</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>port-counters-ipv4-ipv6</SAIplt:name>
++          <SAIplt:description>Port ipv4/ipv6 counters</SAIplt:description>
++          <SAIplt:value>1</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>control-acl</SAIplt:name>
++          <SAIplt:description>ACLs for control packet handling</SAIplt:description>
++          <SAIplt:value>2</SAIplt:value>
++        </SAIplt:enum>
++      </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>ingress-acl-stage-type</SAIplt:name>
++        <SAIplt:type>enumeration</SAIplt:type>
++        <SAIplt:description/>
++        <SAIplt:enum>
++          <SAIplt:name>disabled</SAIplt:name>
++          <SAIplt:description>Feature not enabled</SAIplt:description>
++          <SAIplt:value>0</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>IPCL0</SAIplt:name>
++          <SAIplt:description>Stage IPCL0</SAIplt:description>
++          <SAIplt:value>1</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>IPCL1</SAIplt:name>
++          <SAIplt:description>Stage IPCL1</SAIplt:description>
++          <SAIplt:value>2</SAIplt:value>
++        </SAIplt:enum>
++      </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>egress-acl-stage-type</SAIplt:name>
++        <SAIplt:type>enumeration</SAIplt:type>
++        <SAIplt:description/>
++        <SAIplt:enum>
++          <SAIplt:name>disabled</SAIplt:name>
++          <SAIplt:description>Feature not enabled</SAIplt:description>
++          <SAIplt:value>0</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>EPCL0</SAIplt:name>
++          <SAIplt:description>Stage EPCL0</SAIplt:description>
++          <SAIplt:value>2</SAIplt:value>
++        </SAIplt:enum>
++      </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>feature-priority-type</SAIplt:name>
++        <SAIplt:type>uint32</SAIplt:type>
++        <SAIplt:description>Feature priority</SAIplt:description>
++        <SAIplt:min>2</SAIplt:min>
++        <SAIplt:max>15</SAIplt:max>
++      </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>hit-number-type</SAIplt:name>
++        <SAIplt:type>uint32</SAIplt:type>
++        <SAIplt:description>Hit/lookup number</SAIplt:description>
++        <SAIplt:min>0</SAIplt:min>
++        <SAIplt:max>3</SAIplt:max>
++      </SAIplt:typedef>
++      <SAIplt:typedef>
++        <SAIplt:name>asic-type</SAIplt:name>
++        <SAIplt:type>enumeration</SAIplt:type>
++        <SAIplt:description>ASIC Type</SAIplt:description>
++        <SAIplt:enum>
++          <SAIplt:name>ASIC_AC3X</SAIplt:name>
++          <SAIplt:description>AC3X</SAIplt:description>
++          <SAIplt:value>0</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>ASIC_AC5X</SAIplt:name>
++          <SAIplt:description>AC5X</SAIplt:description>
++          <SAIplt:value>1</SAIplt:value>
++        </SAIplt:enum>
++        <SAIplt:enum>
++          <SAIplt:name>ASIC_Falcon</SAIplt:name>
++          <SAIplt:description>FALCON</SAIplt:description>
++          <SAIplt:value>2</SAIplt:value>
++        </SAIplt:enum>
++      </SAIplt:typedef>
+     </SAIplt:typedefs>
++    <SAIplt:ASIC_Type SAIplt:type="asic-type">ASIC_AC5X</SAIplt:ASIC_Type>
+     <SAIplt:ASK-BOARD-Profile-Name SAIplt:type="string">ASK-Board-ac5x-rd-32x1G-16x2_5G-6x25G.xml</SAIplt:ASK-BOARD-Profile-Name>
+-    <SAIplt:Features>
+-      <SAIplt:RoCE SAIplt:type="boolean">false</SAIplt:RoCE>
+-    </SAIplt:Features>
+     <SAIplt:Ports>
+       <SAIplt:port-list>
+         <SAIplt:sai_port_id SAIplt:type="port-id-type">0</SAIplt:sai_port_id>
+@@ -320,7 +407,7 @@
+         <SAIplt:sdk_port_id SAIplt:type="port-id-type">53</SAIplt:sdk_port_id>
+       </SAIplt:port-list>
+     </SAIplt:Ports>
+-    <SAIplt:Scaling>
++    <SAIplt:scalingAC5>
+       <SAIplt:max_lag_members SAIplt:type="uint32">8</SAIplt:max_lag_members>
+       <SAIplt:max_route_ipv4 SAIplt:type="uint32">0</SAIplt:max_route_ipv4>
+       <SAIplt:max_route_ipv6 SAIplt:type="uint32">0</SAIplt:max_route_ipv6>
+@@ -328,19 +415,50 @@
+       <SAIplt:max_ipv4_tunnel SAIplt:type="uint32">8</SAIplt:max_ipv4_tunnel>
+       <SAIplt:max_ipv6_tunnel SAIplt:type="uint32">8</SAIplt:max_ipv6_tunnel>
+       <SAIplt:max_tti SAIplt:type="uint32">1024</SAIplt:max_tti>
+-      <SAIplt:wred_size SAIplt:type="uint32">0</SAIplt:wred_size>
+-      <SAIplt:max_nat SAIplt:type="uint32">0</SAIplt:max_nat>
+-    </SAIplt:Scaling>
++    </SAIplt:scalingAC5>
+     <SAIplt:Counters>
+       <SAIplt:cnc-base-list>
+         <SAIplt:counter-base SAIplt:type="uint32">0</SAIplt:counter-base>
+       </SAIplt:cnc-base-list>
+-      <SAIplt:cnc-base-list>
+-        <SAIplt:counter-base SAIplt:type="uint32">2048</SAIplt:counter-base>
+-      </SAIplt:cnc-base-list>
+     </SAIplt:Counters>
+     <SAIplt:Logging>
+       <SAIplt:log_dest SAIplt:type="logDest-type">SAI_LOG_SYSLOG</SAIplt:log_dest>
+     </SAIplt:Logging>
++    <SAIplt:Features-using-acl>
++      <SAIplt:feature SAIplt:type="acl-feature-name-type">control-acl</SAIplt:feature>
++      <SAIplt:feature-priority SAIplt:type="feature-priority-type">2</SAIplt:feature-priority>
++      <SAIplt:Ingress>
++        <SAIplt:ingress-stage SAIplt:type="ingress-acl-stage-type">IPCL0</SAIplt:ingress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">1</SAIplt:hit-number>
++      </SAIplt:Ingress>
++      <SAIplt:Egress>
++        <SAIplt:egress-stage SAIplt:type="egress-acl-stage-type">EPCL0</SAIplt:egress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">0</SAIplt:hit-number>
++      </SAIplt:Egress>
++    </SAIplt:Features-using-acl>
++    <SAIplt:Features-using-acl>
++      <SAIplt:feature SAIplt:type="acl-feature-name-type">port-sFlow</SAIplt:feature>
++      <SAIplt:feature-priority SAIplt:type="feature-priority-type">3</SAIplt:feature-priority>
++      <SAIplt:Ingress>
++        <SAIplt:ingress-stage SAIplt:type="ingress-acl-stage-type">IPCL0</SAIplt:ingress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">0</SAIplt:hit-number>
++      </SAIplt:Ingress>
++      <SAIplt:Egress>
++        <SAIplt:egress-stage SAIplt:type="egress-acl-stage-type">EPCL0</SAIplt:egress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">0</SAIplt:hit-number>
++      </SAIplt:Egress>
++    </SAIplt:Features-using-acl>
++    <SAIplt:Features-using-acl>
++      <SAIplt:feature SAIplt:type="acl-feature-name-type">port-counters-ipv4-ipv6</SAIplt:feature>
++      <SAIplt:feature-priority SAIplt:type="feature-priority-type">4</SAIplt:feature-priority>
++      <SAIplt:Ingress>
++        <SAIplt:ingress-stage SAIplt:type="ingress-acl-stage-type">IPCL0</SAIplt:ingress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">3</SAIplt:hit-number>
++      </SAIplt:Ingress>
++      <SAIplt:Egress>
++        <SAIplt:egress-stage SAIplt:type="egress-acl-stage-type">EPCL0</SAIplt:egress-stage>
++        <SAIplt:hit-number SAIplt:type="hit-number-type">0</SAIplt:hit-number>
++      </SAIplt:Egress>
++    </SAIplt:Features-using-acl>
+   </SAIplt:SAI>
+ </data>
+\ No newline at end of file
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku b/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
+new file mode 100644
+index 000000000..ce1567b48
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
+@@ -0,0 +1 @@
++rd98DX35xx t1
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf b/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
+new file mode 100644
+index 000000000..c3c465bb9
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
+@@ -0,0 +1 @@
++ONIE_PLATFORM_EXTRA_CMDLINE_LINUX=""
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+new file mode 100644
+index 000000000..a55475287
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+@@ -0,0 +1 @@
++marvell
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py b/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
+new file mode 100644
+index 000000000..c99cf62da
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
+@@ -0,0 +1,13 @@
++#!/usr/bin/env python
++
++try:
++    from sonic_eeprom import eeprom_tlvinfo
++except ImportError as e:
++    raise ImportError (str(e) + "- required module not found")
++
++
++class board(eeprom_tlvinfo.TlvInfoDecoder):
++
++    def __init__(self, name, path, cpld_root, ro):
++        self.eeprom_path = "/sys/bus/i2c/devices/2-0050/eeprom"
++        super(board, self).__init__(self.eeprom_path, 0, '', True)
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json b/device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json
+new file mode 100644
+index 000000000..39deb88be
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json
+@@ -0,0 +1,8 @@
++{
++    "skip_ledd": true,
++    "skip_pcied": true,
++    "skip_thermalctld": true,
++    "skip_psud": true,
++    "skip_xcvrd": true,
++    "skip_syseepromd": true
++}
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx b/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
+new file mode 120000
+index 000000000..aa1e1cab7
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
+@@ -0,0 +1 @@
++../arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131
+\ No newline at end of file
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json b/device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json
+new file mode 100644
+index 000000000..79c17103b
+--- /dev/null
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json
+@@ -0,0 +1,10 @@
++{
++    "services_to_ignore": [],
++    "devices_to_ignore": [
++        "asic",
++        "psu.temperature",
++        "fan",
++        "psu"
++    ],
++    "user_defined_checkers": []
++}
+diff --git a/platform/marvell/docker-saiserver-mrvl.dep b/platform/marvell/docker-saiserver-mrvl.dep
+new file mode 100644
+index 000000000..3ded7bc91
+--- /dev/null
++++ b/platform/marvell/docker-saiserver-mrvl.dep
+@@ -0,0 +1,8 @@
++DPATH       := $($(DOCKER_SAISERVER_MRVL)_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/docker-saiserver-mrvl.mk $(PLATFORM_PATH)/docker-saiserver-mrvl.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(DPATH))
++
++$(DOCKER_SAISERVER_MRVL)_CACHE_MODE  := GIT_CONTENT_SHA
++$(DOCKER_SAISERVER_MRVL)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(DOCKER_SAISERVER_MRVL)_DEP_FILES   := $(DEP_FILES)
+diff --git a/platform/marvell/docker-saiserver-mrvl.mk b/platform/marvell/docker-saiserver-mrvl.mk
+new file mode 100644
+index 000000000..7e5c83ffc
+--- /dev/null
++++ b/platform/marvell/docker-saiserver-mrvl.mk
+@@ -0,0 +1,15 @@
++# docker image for mrvl saiserver
++
++DOCKER_SAISERVER_MRVL = docker-saiserver-mrvl.gz
++$(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl
++$(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BULLSEYE)
++SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
++SONIC_BULLSEYE_DOCKERS += $(DOCKER_SAISERVER_MRVL)
++
++$(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver
++$(DOCKER_SAISERVER_MRVL)_RUN_OPT += --privileged -t
++$(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
++$(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /var/run/docker-saiserver:/var/run/sswsyncd
++$(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
++$(DOCKER_SAISERVER_MRVL)_RUN_OPT += -v /host/warmboot:/var/warmboot
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc.dep b/platform/marvell/docker-syncd-mrvl-rpc.dep
+new file mode 100644
+index 000000000..3ab0dec8e
+--- /dev/null
++++ b/platform/marvell/docker-syncd-mrvl-rpc.dep
+@@ -0,0 +1,8 @@
++DPATH       := $($(DOCKER_SYNCD_MRVL_RPC)_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(DPATH))
++
++$(DOCKER_SYNCD_MRVL_RPC)_CACHE_MODE  := GIT_CONTENT_SHA
++$(DOCKER_SYNCD_MRVL_RPC)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(DOCKER_SYNCD_MRVL_RPC)_DEP_FILES   := $(DEP_FILES)
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc.mk b/platform/marvell/docker-syncd-mrvl-rpc.mk
+index 20698efdf..d642f4da4 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc.mk
++++ b/platform/marvell/docker-syncd-mrvl-rpc.mk
+@@ -19,7 +19,10 @@ endif
+ $(DOCKER_SYNCD_MRVL_RPC)_CONTAINER_NAME = syncd
+ $(DOCKER_SYNCD_MRVL_RPC)_VERSION = 1.0.0+rpc
+ $(DOCKER_SYNCD_MRVL_RPC)_PACKAGE_NAME = syncd
++$(DOCKER_SYNCD_MRVL_RPC)_MACHINE = marvell
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += --privileged -t
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/warmboot:/var/warmboot
++
++SONIC_BULLSEYE_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc/99-syncd.conf b/platform/marvell/docker-syncd-mrvl-rpc/99-syncd.conf
+index f3b57e3b1..3fabe208d 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc/99-syncd.conf
++++ b/platform/marvell/docker-syncd-mrvl-rpc/99-syncd.conf
+@@ -1,2 +1 @@
+ sysctl -w net.core.rmem_max=509430500
+-
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.cleanup b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.cleanup
+new file mode 100644
+index 000000000..631b0448b
+--- /dev/null
++++ b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.cleanup
+@@ -0,0 +1,11 @@
++# Base docker build
++FROM docker-syncd-mrvl-rpc-sonic:latest
++
++# Copy the cache data to host
++From scratch as output
++COPY --from=docker-syncd-mrvl-rpc-sonic:latest /cache.tgz cache.tgz
++
++# Clean up the cache data
++FROM docker-syncd-mrvl-rpc-sonic:latest as final
++RUN rm /cache.tgz
++
+diff --git a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+index 68670343b..6bd7fb9c7 100644
+--- a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
+@@ -15,7 +15,8 @@ RUN apt-get purge -y syncd
+ RUN apt-get update \
+  && apt-get -y install  \
+     net-tools           \
+-    python-pip          \
++    python3-pip		\
++    python3-setuptools	\
+     build-essential     \
+     libssl-dev          \
+     libffi-dev          \
+@@ -24,7 +25,7 @@ RUN apt-get update \
+     cmake               \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.71.0
++    libboost-atomic1.74.0
+ 
+ RUN dpkg_apt() { [ -f $1 ] && { dpkg -i $1 || apt-get -y install -f; } || return 1; } ; \
+ {% for deb in docker_syncd_mrvl_rpc_debs.split(' ') -%}
+@@ -41,9 +42,9 @@ RUN wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz \
+  && cd ..               \
+  && rm -fr nanomsg-1.0.0 \
+  && rm -f 1.0.0.tar.gz  \
+- && pip install cffi==1.7.0    \
+- && pip install --upgrade cffi==1.7.0 \
+- && pip install nnpy    \
++ && pip3 install cffi==1.7.0    \
++ && pip3 install --upgrade cffi==1.7.0 \
++ && pip3 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+  && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py \
+diff --git a/platform/marvell/docker-syncd-mrvl.dep b/platform/marvell/docker-syncd-mrvl.dep
+new file mode 100644
+index 000000000..d3f213a2d
+--- /dev/null
++++ b/platform/marvell/docker-syncd-mrvl.dep
+@@ -0,0 +1,10 @@
++DPATH       := $($(DOCKER_SYNCD_BASE)_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/docker-syncd-mrvl.mk $(PLATFORM_PATH)/docker-syncd-mrvl.dep $(PLATFORM_PATH)/sai.mk
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(DPATH))
++
++$(DOCKER_SYNCD_BASE)_CACHE_MODE  := GIT_CONTENT_SHA
++$(DOCKER_SYNCD_BASE)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(DOCKER_SYNCD_BASE)_DEP_FILES   := $(DEP_FILES)
++
++$(eval $(call add_dbg_docker,$(DOCKER_SYNCD_BASE),$(DOCKER_SYNCD_BASE_DBG)))
+diff --git a/platform/marvell/docker-syncd-mrvl.mk b/platform/marvell/docker-syncd-mrvl.mk
+index d8a205090..566de773b 100644
+--- a/platform/marvell/docker-syncd-mrvl.mk
++++ b/platform/marvell/docker-syncd-mrvl.mk
+@@ -1,9 +1,10 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl
+-include $(PLATFORM_PATH)/../template/docker-syncd-base.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
++$(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
+ 
+ $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
+                                 $(LIBSWSSCOMMON_DBG) \
+@@ -12,6 +13,6 @@ $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
+ 
+ $(DOCKER_SYNCD_BASE)_VERSION = 1.0.0
+ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
++$(DOCKER_SYNCD_BASE)_MACHINE = marvell
+ 
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/warmboot:/var/warmboot
+-$(DOCKER_SYNCD_BASE)_RUN_OPT += -v /var/run/docker-syncd:/var/run/sswsyncd
+diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.cleanup b/platform/marvell/docker-syncd-mrvl/Dockerfile.cleanup
+new file mode 100644
+index 000000000..0b9208128
+--- /dev/null
++++ b/platform/marvell/docker-syncd-mrvl/Dockerfile.cleanup
+@@ -0,0 +1,11 @@
++# Base docker build
++FROM docker-syncd-mrvl-sonic:latest
++
++# Copy the cache data to host
++From scratch as output
++COPY --from=docker-syncd-mrvl-sonic:latest /cache.tgz cache.tgz
++
++# Clean up the cache data
++FROM docker-syncd-mrvl-sonic:latest as final
++RUN rm /cache.tgz
++
+diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+index 4de6df313..84e3d5bde 100755
+--- a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
++++ b/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-FROM docker-config-engine-buster-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++FROM docker-config-engine-bullseye-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ ARG docker_container_name
+ 
+@@ -14,16 +14,20 @@ debs/{{ deb }}{{' '}}
+ {%- endfor -%}
+ debs/
+ 
+-RUN apt-get -y install libpcap-dev libxml2-dev python-dev swig libsensors4-dev libatomic1 liblua5.1-0 lua-bitop lua-cjson nfs-common
++RUN apt-get update \
++ && apt-get -y install  \
++    net-tools           \
++    iputils-ping
++
++RUN apt-get -y install libpcap-dev libxml2-dev python-dev swig libsensors4-dev nfs-common
+ 
+ RUN dpkg -i \
+ {% for deb in docker_syncd_mrvl_debs.split(' ') -%}
+ debs/{{ deb }}{{' '}}
+ {%- endfor %}
+ 
+-COPY ["syncd.sh", "/usr/bin/"]
+ COPY ["supervisord.conf", "/etc/supervisor/conf.d/"]
+-COPY ["files/supervisor-proc-exit-listener", "/usr/bin"]
++COPY ["files/supervisor-proc-exit-listener", "/usr/bin/"]
+ COPY ["critical_processes", "/etc/supervisor/"]
+ 
+ ## Clean up
+diff --git a/platform/marvell/docker-syncd-mrvl/supervisord.conf b/platform/marvell/docker-syncd-mrvl/supervisord.conf
+index 3829f6a81..62a283872 100644
+--- a/platform/marvell/docker-syncd-mrvl/supervisord.conf
++++ b/platform/marvell/docker-syncd-mrvl/supervisord.conf
+@@ -23,7 +23,7 @@ buffer_size=1024
+ command=/usr/sbin/rsyslogd -n -iNONE
+ priority=1
+ autostart=false
+-autorestart=unexpected
++autorestart=false
+ stdout_logfile=syslog
+ stderr_logfile=syslog
+ dependent_startup=true
+diff --git a/platform/marvell/libsaithrift-dev.dep b/platform/marvell/libsaithrift-dev.dep
+new file mode 100644
+index 000000000..d7d08f14a
+--- /dev/null
++++ b/platform/marvell/libsaithrift-dev.dep
+@@ -0,0 +1,11 @@
++SPATH       := $($(LIBSAITHRIFT_DEV)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/libsaithrift-dev.mk $(PLATFORM_PATH)/libsaithrift-dev.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++SMDEP_PATHS := $(SPATH)  $(SPATH)/bm/behavioral-model  $(SPATH)/test/ptf  $(SPATH)/test/saithrift/ctypesgen
++$(foreach path, $(SMDEP_PATHS), $(eval $(path) :=$(filter-out $(SMDEP_PATHS),$(addprefix $(path)/, $(shell cd $(path) &&  git ls-files | grep -Ev " " )))))
++
++$(LIBSAITHRIFT_DEV)_CACHE_MODE  := GIT_CONTENT_SHA
++$(LIBSAITHRIFT_DEV)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(LIBSAITHRIFT_DEV)_DEP_FILES   := $(DEP_FILES)
++$(LIBSAITHRIFT_DEV)_SMDEP_FILES := $(foreach path, $(SMDEP_PATHS), $($(path)))
++$(LIBSAITHRIFT_DEV)_SMDEP_PATHS := $(SMDEP_PATHS)
+diff --git a/platform/marvell/libsaithrift-dev.mk b/platform/marvell/libsaithrift-dev.mk
+index dd178c0b1..e1c3da156 100644
+--- a/platform/marvell/libsaithrift-dev.mk
++++ b/platform/marvell/libsaithrift-dev.mk
+@@ -2,19 +2,19 @@
+ 
+ SAI_VER = 0.9.4
+ 
+-LIBSAITHRIFT_DEV = libsaithrift-dev_$(SAI_VER)_amd64.deb
++LIBSAITHRIFT_DEV = libsaithrift-dev_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(LIBSAITHRIFT_DEV)_SRC_PATH = $(SRC_PATH)/sonic-sairedis/SAI
+ $(LIBSAITHRIFT_DEV)_DEPENDS += $(LIBTHRIFT) $(LIBTHRIFT_DEV) $(PYTHON_THRIFT) $(THRIFT_COMPILER) $(MRVL_FPA) $(MRVL_SAI)
+ $(LIBSAITHRIFT_DEV)_RDEPENDS += $(LIBTHRIFT) $(MRVL_SAI)
+ SONIC_DPKG_DEBS += $(LIBSAITHRIFT_DEV)
+ 
+-PYTHON_SAITHRIFT = python-saithrift_$(SAI_VER)_amd64.deb
++PYTHON_SAITHRIFT = python-saithrift_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(PYTHON_SAITHRIFT)))
+ 
+-SAISERVER = saiserver_$(SAI_VER)_amd64.deb
+-$(SAISERVER)_RDEPENDS += $(LIBTHRIFT) $(BRCM_XGS_SAI)
++SAISERVER = saiserver_$(SAI_VER)_$(CONFIGURED_ARCH).deb
++$(SAISERVER)_RDEPENDS += $(LIBTHRIFT) $(MRVL_SAI)
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER)))
+ 
+-SAISERVER_DBG = saiserver-dbg_$(SAI_VER)_amd64.deb
++SAISERVER_DBG = saiserver-dbg_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+ $(SAISERVER_DBG)_RDEPENDS += $(SAISERVER)
+ $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER_DBG)))
+diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
+new file mode 160000
+index 000000000..4ef696960
+--- /dev/null
++++ b/platform/marvell/mrvl-prestera
+@@ -0,0 +1 @@
++Subproject commit 4ef696960b01af8601ac41dc4091293b83dae81a
+diff --git a/platform/marvell/one-image.dep b/platform/marvell/one-image.dep
+new file mode 100644
+index 000000000..154112a82
+--- /dev/null
++++ b/platform/marvell/one-image.dep
+@@ -0,0 +1 @@
++$(SONIC_ONE_IMAGE)_CACHE_MODE  := none
+diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
+index fcac03854..2c763ecd5 100644
+--- a/platform/marvell/one-image.mk
++++ b/platform/marvell/one-image.mk
+@@ -4,6 +4,8 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
+ $(SONIC_ONE_IMAGE)_MACHINE = marvell
+ $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
+ ifeq ($(INSTALL_DEBUG_TOOLS),y)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
+diff --git a/platform/marvell/platform-marvell.dep b/platform/marvell/platform-marvell.dep
+new file mode 100644
+index 000000000..f906215e3
+--- /dev/null
++++ b/platform/marvell/platform-marvell.dep
+@@ -0,0 +1,9 @@
++MPATH       := $($(AC5X_RD98DX35xx_PLATFORM)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/platform-marvell.dep $(PLATFORM_PATH)/platform-marvell.mk
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++SMDEP_FILES := $(addprefix $(MPATH)/,$(shell cd $(MPATH) && git ls-files))
++
++$(AC5X_RD98DX35xx_PLATFORM)_CACHE_MODE  := GIT_CONTENT_SHA
++$(AC5X_RD98DX35xx_PLATFORM)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(AC5X_RD98DX35xx_PLATFORM)_DEP_FILES   := $(DEP_FILES)
++$(AC5X_RD98DX35xx_PLATFORM)_SMDEP_FILES := $(SMDEP_FILES)
+diff --git a/platform/marvell/platform-marvell.mk b/platform/marvell/platform-marvell.mk
+new file mode 100644
+index 000000000..90bc61ef5
+--- /dev/null
++++ b/platform/marvell/platform-marvell.mk
+@@ -0,0 +1,30 @@
++# Marvell Platform modules
++
++AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION = 1.0
++AC5X_RD98DX35xxCN9131_PLATFORM_MODULE_VERSION = 1.0
++FALCON_PLATFORM_MODULE_VERSION = 1.0
++
++ifeq ($(CONFIGURED_ARCH),arm64)
++
++AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xx_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-marvell
++$(AC5X_RD98DX35xx_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++$(AC5X_RD98DX35xx_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx-r0
++SONIC_DPKG_DEBS += $(AC5X_RD98DX35xx_PLATFORM)
++
++AC5X_RD98DX35xxCN9131_PLATFORM = sonic-platform-rd98dx35xx-cn9131_$(AC5X_RD98DX35xxCN9131_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xxCN9131_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_cn9131-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(AC5X_RD98DX35xxCN9131_PLATFORM)))
++else ifeq ($(CONFIGURED_ARCH),amd64)
++
++AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx-x86_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xx_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-marvell
++$(AC5X_RD98DX35xx_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++$(AC5X_RD98DX35xx_PLATFORM)_PLATFORM = x86_64-marvell_rd98DX35xx-r0
++SONIC_DPKG_DEBS += $(AC5X_RD98DX35xx_PLATFORM)
++
++FALCON_DB98CX8580_32CD_PLATFORM = sonic-platform-db98cx8580-32cd_$(FALCON_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(FALCON_DB98CX8580_32CD_PLATFORM)_PLATFORM = x86_64-marvell_db98cx8580_32cd-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(FALCON_DB98CX8580_32CD_PLATFORM)))
++
++endif
+diff --git a/platform/marvell/rules.dep b/platform/marvell/rules.dep
+new file mode 100644
+index 000000000..a8570e755
+--- /dev/null
++++ b/platform/marvell/rules.dep
+@@ -0,0 +1,7 @@
++include $(PLATFORM_PATH)/docker-saiserver-mrvl.dep
++include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.dep
++include $(PLATFORM_PATH)/docker-syncd-mrvl.dep
++include $(PLATFORM_PATH)/libsaithrift-dev.dep
++include $(PLATFORM_PATH)/one-image.dep
++include $(PLATFORM_PATH)/platform-marvell.dep
++include $(PLATFORM_PATH)/sai.dep
+diff --git a/platform/marvell/rules.mk b/platform/marvell/rules.mk
+index da23e53f2..e97f7b987 100644
+--- a/platform/marvell/rules.mk
++++ b/platform/marvell/rules.mk
+@@ -1,15 +1,17 @@
+ include $(PLATFORM_PATH)/sai.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
++include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/one-image.mk
++include $(PLATFORM_PATH)/platform-marvell.mk
+ 
+ SONIC_ALL += $(SONIC_ONE_IMAGE) \
+-             $(DOCKER_FPM) \
++             $(DOCKER_FPM) 	\
+              $(DOCKER_SYNCD_MRVL_RPC)
+ 
+ # Inject mrvl sai into syncd
+-$(SYNCD)_DEPENDS += $(MRVL_FPA) $(MRVL_SAI)
++$(SYNCD)_DEPENDS += $(MRVL_SAI)
+ $(SYNCD)_UNINSTALLS += $(MRVL_SAI)
+ 
+ ifeq ($(ENABLE_SYNCD_RPC),y)
+diff --git a/platform/marvell/sai.dep b/platform/marvell/sai.dep
+new file mode 100644
+index 000000000..618babe65
+--- /dev/null
++++ b/platform/marvell/sai.dep
+@@ -0,0 +1,8 @@
++SPATH       := $($(MRVL_SAI)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/sai.mk $(PLATFORM_PATH)/sai.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(SPATH))
++
++$(MRVL_SAI)_CACHE_MODE  := GIT_CONTENT_SHA
++$(MRVL_SAI)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(MRVL_SAI)_DEP_FILES   := $(DEP_FILES)
+diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
+index 231bdfc81..29ad19d78 100644
+--- a/platform/marvell/sai.mk
++++ b/platform/marvell/sai.mk
+@@ -1,9 +1,13 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.13.0-1
+-export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
++BRANCH = 202311
++MRVL_SAI_VERSION = 1.13.3-1
+ 
+-$(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
++MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
++MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
++$(MRVL_SAI)_URL = $(MRVL_SAI_URL_PREFIX)/$(MRVL_SAI)
++
++SONIC_ONLINE_DEBS += $(MRVL_SAI)
++$(MRVL_SAI)_SKIP_VERSION=y
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
+ 
+-SONIC_MAKE_DEBS += $(MRVL_SAI)
+diff --git a/platform/marvell/sai/Makefile b/platform/marvell/sai/Makefile
+deleted file mode 100644
+index 1cd6d0267..000000000
+--- a/platform/marvell/sai/Makefile
++++ /dev/null
+@@ -1,9 +0,0 @@
+-.ONESHELL:
+-SHELL = /bin/bash
+-.SHELLFLAGS += -e
+-
+-MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/sai-plugin/$(MRVL_SAI)
+-
+-$(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
+-	# get deb package
+-	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL)
+diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
+new file mode 160000
+index 000000000..ab1a1de5e
+--- /dev/null
++++ b/platform/marvell/sonic-platform-marvell
+@@ -0,0 +1 @@
++Subproject commit ab1a1de5e24e6ea596a8eae58a881d4c37442f9d
+-- 
+2.25.1
+
