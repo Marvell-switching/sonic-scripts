@@ -5,14 +5,14 @@
 
 
 #
-# patch script for ARM64 Falcon and AC5X board
+# patch script for AC5X board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="6b8549c3bb4efa2fdf59c217c863223694ba377b"
+SONIC_COMMIT="d658e7847db0bc07fe7abc2942b85a4ecc045e95"
 
 #
 # END of CONFIGURATIONS
@@ -24,10 +24,11 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202311 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202311_01/files/202311/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/202311/"
 
 # Patches
-SERIES="0001-Redis-timeout-WA.patch"
+SERIES="0001-Redis-timeout-WA.patch
+		0001-Enable-AC5X-marvell-x86-platform.patch"
 
 PATCHES=""
 
@@ -117,7 +118,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202311_01/files/mrvl_sonic_hwsku_ezb.tgz
+    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
 
     tar -C device/marvell/ -xzf mrvl_sonic_hwsku_ezb.tgz
     echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
@@ -145,6 +146,8 @@ main()
 
     # Apply patch series
     apply_patch_series
+	# update submodule
+	git submodule update
     # Apply patches
     apply_patches
     # Apply submodule patches
