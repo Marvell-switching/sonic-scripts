@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="d658e7847db0bc07fe7abc2942b85a4ecc045e95"
+SONIC_COMMIT="25b24485e9d8989ebc393b32df4d92ee49a23b3a"
 
 #
 # END of CONFIGURATIONS
@@ -28,16 +28,20 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 
 # Patches
 SERIES="0001-Redis-timeout-WA.patch
-		0001-Enable-AC5X-marvell-x86-platform.patch"
+        0001-Enable-AC5X-marvell-x86-platform.patch
+        0001-Update-marvell-arm64-submodules.patch
+        0001-Fix-config_db-save-restore.patch
+        0001-Update-sai-deb-to-1.13.3-1.patch"
 
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5)
 declare -A SP1=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
 declare -A SP2=([NAME]="0001-marvell-ac5-Support-boards-with-more-that-4G-DDR.patch" [DIR]="src/sonic-linux-kernel")
 declare -A SP3=([NAME]="0002-Marvell-arm64-Enable-CONFIG_ARM_SMC_WATCHDOG.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP4=([NAME]="0003-mvpp2-clear-BM-pool-before-initialization.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP4=([NAME]="0001-Fixes-for-AC5X-platform.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP5=([NAME]="3192.patch" [DIR]="src/sonic-utilities")
 
 log()
 {
@@ -147,7 +151,7 @@ main()
     # Apply patch series
     apply_patch_series
 	# update submodule
-	git submodule update
+	git submodule update --init
     # Apply patches
     apply_patches
     # Apply submodule patches

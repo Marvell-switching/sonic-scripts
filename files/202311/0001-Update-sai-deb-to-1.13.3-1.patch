@@ -1,0 +1,25 @@
+From f71239d1792e92b09d7f60c3e6646e81c01e0a5a Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 7 Mar 2024 06:08:37 +0000
+Subject: Update sai deb to 1.13.3-1
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/sai.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
+index f7d8782ac..23be2753a 100644
+--- a/platform/marvell-arm64/sai.mk
++++ b/platform/marvell-arm64/sai.mk
+@@ -1,6 +1,6 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.13.0-1
++export MRVL_SAI_VERSION = 1.13.3-1
+ export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ 
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
+-- 
+2.25.1
+

@@ -1,0 +1,28 @@
+From 92f14bd0521e6b83f1f16a5552c13892ba1ee679 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 7 Mar 2024 05:40:07 +0000
+Subject: Update marvell-arm64 submodules
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-arm64/mrvl-prestera          | 2 +-
+ platform/marvell-arm64/sonic-platform-marvell | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-arm64/mrvl-prestera b/platform/marvell-arm64/mrvl-prestera
+index a5e93cbd8..4ef696960 160000
+--- a/platform/marvell-arm64/mrvl-prestera
++++ b/platform/marvell-arm64/mrvl-prestera
+@@ -1 +1 @@
+-Subproject commit a5e93cbd8d90c767891e9ad56447b1047cfa558a
++Subproject commit 4ef696960b01af8601ac41dc4091293b83dae81a
+diff --git a/platform/marvell-arm64/sonic-platform-marvell b/platform/marvell-arm64/sonic-platform-marvell
+index c108e5e38..ab1a1de5e 160000
+--- a/platform/marvell-arm64/sonic-platform-marvell
++++ b/platform/marvell-arm64/sonic-platform-marvell
+@@ -1 +1 @@
+-Subproject commit c108e5e38e65d4d44520c52079a95a0a9262d6cc
++Subproject commit ab1a1de5e24e6ea596a8eae58a881d4c37442f9d
+-- 
+2.25.1
+
