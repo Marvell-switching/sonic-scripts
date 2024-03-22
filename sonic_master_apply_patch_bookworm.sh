@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="7f3fd1377de9be1d243fadf1b49930170e609389"
+SONIC_COMMIT="29cf8032aff6843919708334f2e95aa373d961b4"
 
 #
 # END of CONFIGURATIONS
@@ -28,18 +28,18 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/mas
 
 # Patches
 SERIES="0001-Redis-timeout-WA.patch
-        17266.patch
-        17277.patch
-        17717.patch
-        18072.patch"
+        18072.patch
+		0001-Fix-sonic-installer-error.patch
+		0001-Add-x86-platforms.patch
+		0001-Falcon-usb-disk-hung_task-WA.patch"
 
 PATCHES=""
 
 # Sub module patches
 declare -a SUB_PATCHES=(SP1 SP2 SP3)
 declare -A SP1=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
-declare -A SP2=([NAME]="377.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP3=([NAME]="0001-marvell-ac5-Support-boards-with-more-that-4G-DDR.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP2=([NAME]="0001-marvell-ac5-Support-boards-with-more-that-4G-DDR.patch" [DIR]="src/sonic-linux-kernel")
+declare -A SP3=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
 
 log()
 {
@@ -121,9 +121,31 @@ apply_hwsku_changes()
     # Download hwsku
     wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
 
+    rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
+    rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
+    rm -fr device/marvell/arm64-marvell_db98cx8580_32cd-r0  || true
+    rm -fr device/marvell/x86_64-marvell_db98cx8540_16cd-r0 || true
+    rm -fr device/marvell/arm64-marvell_db98cx8540_16cd-r0  || true
+    rm -fr device/marvell/armhf-marvell_et6448m_52x-r0      || true
     tar -C device/marvell/ -xzf mrvl_sonic_hwsku_ezb.tgz
-    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
-    echo "marvell-arm64" > device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
+    cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
+    cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
+    cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
+    rm device/marvell/arm64-marvell_db98cx8580_32cd-r0/plugins/x86_64_sfputil.py
+    rm device/marvell/arm64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py
+    rm device/marvell/arm64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py
+    mv device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/sfputil.py
+    mv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/sfputil.py
+    mv device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/sfputil.py
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
+    echo "marvell" > device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_db98cx8514_10cc-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_db98cx8540_16cd-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
+    echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
+    echo "marvell" > device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
 }
 
 main()
@@ -153,7 +175,7 @@ main()
     # Apply submodule patches
     apply_submodule_patches
     # Apply hwsku changes
-    #apply_hwsku_changes
+    apply_hwsku_changes
 }
 
 main $@

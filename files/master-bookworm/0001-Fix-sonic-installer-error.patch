@@ -1,0 +1,46 @@
+From 4db844d541483d94607e4fc26c86a287acf96882 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 18 Mar 2024 10:52:09 +0000
+Subject: Fix sonic-installer error
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/platform_arm64.conf | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/platform/marvell/platform_arm64.conf b/platform/marvell/platform_arm64.conf
+index 6332c9178..a2aa77f0b 100644
+--- a/platform/marvell/platform_arm64.conf
++++ b/platform/marvell/platform_arm64.conf
+@@ -216,8 +216,8 @@ prepare_boot_menu() {
+ 
+     fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+     fw_setenv ${FW_ARG} linuxargs_old "net.ifnames=0 loopfstype=squashfs loop=$image_dir_old/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+-    sonic_bootargs_old='setenv bootargs root='$demo_dev' rw rootwait rootfstype=ext4 panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs_old}'
+-    fw_setenv ${FW_ARG} sonic_bootargs_old $sonic_bootargs_old > /dev/null || true
++    sonic_bootargs_old='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs_old}'
++    fw_setenv ${FW_ARG} sonic_bootargs_old "$sonic_bootargs_old" > /dev/null || true
+     sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
+     old_str="_old"
+     fw_setenv ${FW_ARG} sonic_boot_load_old "$sonic_boot_load_old$old_str" > /dev/null || true
+@@ -231,14 +231,15 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} sonic_boot_load "$MMC_LOAD" > /dev/null
+     SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+     SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
+-    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait rootfstype=ext4 panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs}'
+-    fw_setenv ${FW_ARG} sonic_bootargs $BOOTARGS > /dev/null
++    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs}'
++    fw_setenv ${FW_ARG} sonic_bootargs "$BOOTARGS" > /dev/null
+     fw_setenv ${FW_ARG} sonic_bootcmd $SONIC_BOOT_CMD > /dev/null
+     fw_setenv ${FW_ARG} sonic_image_2 $SONIC_BOOT_CMD_OLD > /dev/null
+     fw_setenv ${FW_ARG} sonic_image_1 "$SONIC_BOOT_CMD" > /dev/null
+     fw_setenv ${FW_ARG} boot_next  'run sonic_image_1'> /dev/null
+     fw_setenv ${FW_ARG} bootcmd 'run print_menu; usb start; test -n "$boot_once" && run boot_once; run boot_next' > /dev/null
+ 
++	echo "Installed SONiC base image SONiC-OS successfully"
+ }
+ 
+ bootloader_menu_config() {
+-- 
+2.25.1
+
