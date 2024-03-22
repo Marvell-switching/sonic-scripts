@@ -1,0 +1,83 @@
+From e6d4fb61599543028bf1162e7b3a8c644e1779d9 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 18 Mar 2024 11:04:34 +0000
+Subject: Add x86 platforms
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/mrvl-prestera          |  2 +-
+ platform/marvell/one-image.mk           |  5 +++++
+ platform/marvell/platform-marvell.mk    | 21 +++++++++++++++++++++
+ platform/marvell/sonic-platform-marvell |  2 +-
+ 4 files changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
+index b7a14a93b..a4651944a 160000
+--- a/platform/marvell/mrvl-prestera
++++ b/platform/marvell/mrvl-prestera
+@@ -1 +1 @@
+-Subproject commit b7a14a93b21c099fab6b53f5fc4917ca0eb9b6c9
++Subproject commit a4651944ad2b1e301a0655cc64d65262716e7198
+diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
+index 155662aa6..b58a6179c 100644
+--- a/platform/marvell/one-image.mk
++++ b/platform/marvell/one-image.mk
+@@ -16,6 +16,11 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM)
++else ifeq ($(CONFIGURED_ARCH),amd64)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(AC5X_RD98DX35xx_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8580_32CD_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8540_16CD_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(FALCON_DB98CX8514_10CC_PLATFORM)
+ endif
+ ifeq ($(INSTALL_DEBUG_TOOLS),y)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
+diff --git a/platform/marvell/platform-marvell.mk b/platform/marvell/platform-marvell.mk
+index 9dffbf5e5..c4f237757 100644
+--- a/platform/marvell/platform-marvell.mk
++++ b/platform/marvell/platform-marvell.mk
+@@ -2,6 +2,7 @@
+ 
+ AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION = 1.0
+ AC5X_RD98DX35xxCN9131_PLATFORM_MODULE_VERSION = 1.0
++FALCON_PLATFORM_MODULE_VERSION = 1.0
+ 
+ ifeq ($(CONFIGURED_ARCH),arm64)
+ 
+@@ -15,4 +16,24 @@ AC5X_RD98DX35xxCN9131_PLATFORM = sonic-platform-rd98dx35xx-cn9131_$(AC5X_RD98DX3
+ $(AC5X_RD98DX35xxCN9131_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_cn9131-r0
+ $(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(AC5X_RD98DX35xxCN9131_PLATFORM)))
+ 
++else ifeq ($(CONFIGURED_ARCH),amd64)
++
++AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx-x86_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5X_RD98DX35xx_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-marvell
++$(AC5X_RD98DX35xx_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++$(AC5X_RD98DX35xx_PLATFORM)_PLATFORM = x86_64-marvell_rd98DX35xx-r0
++SONIC_DPKG_DEBS += $(AC5X_RD98DX35xx_PLATFORM)
++
++FALCON_DB98CX8580_32CD_PLATFORM = sonic-platform-db98cx8580-32cd_$(FALCON_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(FALCON_DB98CX8580_32CD_PLATFORM)_PLATFORM = x86_64-marvell_db98cx8580_32cd-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(FALCON_DB98CX8580_32CD_PLATFORM)))
++
++FALCON_DB98CX8540_16CD_PLATFORM = sonic-platform-db98cx8540-16cd_$(FALCON_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(FALCON_DB98CX8540_16CD_PLATFORM)_PLATFORM = x86_64-marvell_db98cx8540_16cd-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(FALCON_DB98CX8540_16CD_PLATFORM)))
++
++FALCON_DB98CX8514_10CC_PLATFORM = sonic-platform-db98cx8514-10cc_$(FALCON_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(FALCON_DB98CX8514_10CC_PLATFORM)_PLATFORM = x86_64-marvell_db98cx8514_10cc-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(FALCON_DB98CX8514_10CC_PLATFORM)))
++
+ endif
+diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
+index 078a6fff3..7118035f0 160000
+--- a/platform/marvell/sonic-platform-marvell
++++ b/platform/marvell/sonic-platform-marvell
+@@ -1 +1 @@
+-Subproject commit 078a6fff30f3af786aae1208588030a3fcfe0876
++Subproject commit 7118035f0562bc965fa734facabe81b9c0b44be1
+-- 
+2.25.1
+
