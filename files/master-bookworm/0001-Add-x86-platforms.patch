@@ -1,4 +1,4 @@
-From e6d4fb61599543028bf1162e7b3a8c644e1779d9 Mon Sep 17 00:00:00 2001
+From f780424542d8b8e8eabf242458ed163d29155890 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 18 Mar 2024 11:04:34 +0000
 Subject: Add x86 platforms
@@ -12,12 +12,12 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  4 files changed, 28 insertions(+), 2 deletions(-)
 
 diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
-index b7a14a93b..a4651944a 160000
+index b7a14a93b..d52429210 160000
 --- a/platform/marvell/mrvl-prestera
 +++ b/platform/marvell/mrvl-prestera
 @@ -1 +1 @@
 -Subproject commit b7a14a93b21c099fab6b53f5fc4917ca0eb9b6c9
-+Subproject commit a4651944ad2b1e301a0655cc64d65262716e7198
++Subproject commit d524292106abbef63df6d0853d4557a5097546f0
 diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
 index 155662aa6..b58a6179c 100644
 --- a/platform/marvell/one-image.mk
@@ -72,12 +72,12 @@ index 9dffbf5e5..c4f237757 100644
 +
  endif
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
-index 078a6fff3..7118035f0 160000
+index 078a6fff3..934e0198f 160000
 --- a/platform/marvell/sonic-platform-marvell
 +++ b/platform/marvell/sonic-platform-marvell
 @@ -1 +1 @@
 -Subproject commit 078a6fff30f3af786aae1208588030a3fcfe0876
-+Subproject commit 7118035f0562bc965fa734facabe81b9c0b44be1
++Subproject commit 934e0198f9670e07cea59781c8a423e1738cdd34
 -- 
 2.25.1
 
