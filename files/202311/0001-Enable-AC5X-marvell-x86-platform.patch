@@ -1,4 +1,4 @@
-From 9cb66b376dd9e5f17e287f431a65c818b9144b5b Mon Sep 17 00:00:00 2001
+From ab136c92a2d74ed11e06e6b130777d1f3421793a Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 26 Feb 2024 03:19:33 +0000
 Subject: Enable AC5X marvell x86 platform
@@ -1592,11 +1592,11 @@ index dd178c0b1..e1c3da156 100644
  $(eval $(call add_extra_package,$(LIBSAITHRIFT_DEV),$(SAISERVER_DBG)))
 diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
 new file mode 160000
-index 000000000..4ef696960
+index 000000000..d52429210
 --- /dev/null
 +++ b/platform/marvell/mrvl-prestera
 @@ -0,0 +1 @@
-+Subproject commit 4ef696960b01af8601ac41dc4091293b83dae81a
++Subproject commit d524292106abbef63df6d0853d4557a5097546f0
 diff --git a/platform/marvell/one-image.dep b/platform/marvell/one-image.dep
 new file mode 100644
 index 000000000..154112a82
@@ -1758,11 +1758,11 @@ index 1cd6d0267..000000000
 -	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL)
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
 new file mode 160000
-index 000000000..ab1a1de5e
+index 000000000..934e0198f
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-marvell
 @@ -0,0 +1 @@
-+Subproject commit ab1a1de5e24e6ea596a8eae58a881d4c37442f9d
++Subproject commit 934e0198f9670e07cea59781c8a423e1738cdd34
 -- 
 2.25.1
 
