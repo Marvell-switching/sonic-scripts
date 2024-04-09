@@ -1,4 +1,4 @@
-From ab136c92a2d74ed11e06e6b130777d1f3421793a Mon Sep 17 00:00:00 2001
+From d4c7241015ac0ad0605d1a8870a3fe2b25eeb208 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 26 Feb 2024 03:19:33 +0000
 Subject: Enable AC5X marvell x86 platform
@@ -1758,11 +1758,11 @@ index 1cd6d0267..000000000
 -	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL)
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
 new file mode 160000
-index 000000000..934e0198f
+index 000000000..be63e9c4b
 --- /dev/null
 +++ b/platform/marvell/sonic-platform-marvell
 @@ -0,0 +1 @@
-+Subproject commit 934e0198f9670e07cea59781c8a423e1738cdd34
++Subproject commit be63e9c4b330fd5eabfc5c694fe0231cf25b4425
 -- 
 2.25.1
 

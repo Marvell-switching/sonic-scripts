@@ -1,4 +1,4 @@
-From f780424542d8b8e8eabf242458ed163d29155890 Mon Sep 17 00:00:00 2001
+From cc921ef60f69b86b400b95cc3c16111c72143ce5 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 18 Mar 2024 11:04:34 +0000
 Subject: Add x86 platforms
@@ -72,12 +72,12 @@ index 9dffbf5e5..c4f237757 100644
 +
  endif
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
-index 078a6fff3..934e0198f 160000
+index 078a6fff3..be63e9c4b 160000
 --- a/platform/marvell/sonic-platform-marvell
 +++ b/platform/marvell/sonic-platform-marvell
 @@ -1 +1 @@
 -Subproject commit 078a6fff30f3af786aae1208588030a3fcfe0876
-+Subproject commit 934e0198f9670e07cea59781c8a423e1738cdd34
++Subproject commit be63e9c4b330fd5eabfc5c694fe0231cf25b4425
 -- 
 2.25.1
 
