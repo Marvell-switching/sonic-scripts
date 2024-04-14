@@ -30,7 +30,7 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202
 SERIES="0001-Redis-timeout-WA.patch
         0001-Enable-AC5X-marvell-x86-platform.patch
         0001-Update-marvell-arm64-submodules.patch
-        0001-Fix-config_db-save-restore.patch
+        0001-sonic-installer-fixes.patch
         0001-Update-sai-deb-to-1.13.3-1.patch"
 
 PATCHES=""
