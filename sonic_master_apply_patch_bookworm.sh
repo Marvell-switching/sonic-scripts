@@ -5,14 +5,14 @@
 
 
 #
-# patch script for ARM64 Falcon and AC5X board
+# patch script for Intel Falcon board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="29cf8032aff6843919708334f2e95aa373d961b4"
+SONIC_COMMIT="006f4b209c919b41a7c1ebd0afdfe07885ef4cad"
 
 #
 # END of CONFIGURATIONS
@@ -24,22 +24,20 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for master patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bullseye/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_04/files/master-bookworm/"
 
 # Patches
 SERIES="0001-Redis-timeout-WA.patch
-        18072.patch
-		0001-Fix-sonic-installer-error.patch
-		0001-Add-x86-platforms.patch
-		0001-Falcon-usb-disk-hung_task-WA.patch"
+	0001-Add-x86-platforms.patch
+	0001-Falcon-usb-disk-hung_task-WA.patch
+	18678.patch"
 
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3)
+declare -a SUB_PATCHES=(SP1 SP2)
 declare -A SP1=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
-declare -A SP2=([NAME]="0001-marvell-ac5-Support-boards-with-more-that-4G-DDR.patch" [DIR]="src/sonic-linux-kernel")
-declare -A SP3=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
+declare -A SP2=([NAME]="0001-Marvell-pfc-detect-change.patch" [DIR]="src/sonic-swss")
 
 log()
 {
@@ -58,9 +56,10 @@ pre_patch_help()
     log "<<Apply patches using patch script>>"
     log "bash $0"
 
-    log "<<FOR ARM64>> make configure PLATFORM=marvell-arm64 PLATFORM_ARCH=arm64"
+    log "<<FOR ARM64>> make configure PLATFORM=marvell PLATFORM_ARCH=arm64"
+    log "<<FOR ARM64>> make target/sonic-marvell-arm64.bin"
     log "<<FOR INTEL>> make configure PLATFORM=marvell"
-    log "make all"
+    log "<<FOR INTEL>> make target/sonic-marvell.bin"
 }
 
 apply_patch_series()
@@ -119,7 +118,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/mrvl_sonic_hwsku_ezb.tgz
+    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_04/files/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
