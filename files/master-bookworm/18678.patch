@@ -1,0 +1,31 @@
+From 1d90c6c90545816eb1b182dbd46441ddbaef3fbb Mon Sep 17 00:00:00 2001
+From: Saikrishna Arcot <sarcot@microsoft.com>
+Date: Sun, 14 Apr 2024 23:38:08 -0700
+Subject: [PATCH] Use the archive repo for Buster
+
+Buster is EOL, and the backports section has been removed from the main
+Debian repos. This also means that our default mirror (for non-snapshot
+builds) is also affected.
+
+Change to using archive.debian.org directly for Buster.
+
+Signed-off-by: Saikrishna Arcot <sarcot@microsoft.com>
+---
+ scripts/build_mirror_config.sh | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/scripts/build_mirror_config.sh b/scripts/build_mirror_config.sh
+index d6042da13c1..971390d0045 100755
+--- a/scripts/build_mirror_config.sh
++++ b/scripts/build_mirror_config.sh
+@@ -25,6 +25,10 @@ if [ "$ARCHITECTURE" == "armhf" ]; then
+     DEFAULT_MIRROR_SECURITY_URLS=http://deb.debian.org/debian-security/
+ fi
+ 
++if [ "$DISTRIBUTION" == "buster" ]; then
++    DEFAULT_MIRROR_URLS=http://archive.debian.org/debian/
++fi
++
+ if [ "$MIRROR_SNAPSHOT" == y ]; then
+     if [ -f "$MIRROR_VERSION_FILE" ]; then
+         DEBIAN_TIMESTAMP=$(grep "^debian==" $MIRROR_VERSION_FILE | tail -n 1 | sed 's/.*==//')
