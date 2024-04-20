@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="795ac1a751ac8a8b29cd35b4228c039beec3e771"
+SONIC_COMMIT="5500dc47d1178555a4807b566b0ff29bc3844f28"
 
 #
 # END of CONFIGURATIONS
@@ -24,7 +24,7 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202211 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/202211/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_03/files/202211/"
 
 # Patches
 SERIES="0001-marvell-x86-syncd-docker-TL10-and-SAI-inclusions.patch
@@ -32,7 +32,9 @@ SERIES="0001-marvell-x86-syncd-docker-TL10-and-SAI-inclusions.patch
         0003-marvell-backport-master-PR-12653-innovium-platform-f.patch
         0004-marvell-midstone-Compilation-Error-in-master-branch-.patch
         0005-marvell-platform-and-hwsku-files-for-wistron-and-cel.patch
-        0006-marvell-bullseye-migration-for-innovium.patch"
+        0006-marvell-bullseye-migration-for-innovium.patch
+	0007-marvell-teralynx-Use-the-archive-repo-for-Buster-186.patch
+	0008-marvell-teralynx-Add-SDK-dependent-python-packages-1.patch"
 
 PATCHES=""
 
@@ -67,7 +69,7 @@ apply_patch_series()
     do
         echo $patch
         pushd patches
-        wget -c $WGET_PATH/$patch
+        wget -c --timeout=2 $WGET_PATH/$patch
         popd
         git am patches/$patch
         if [ $? -ne 0 ]; then
@@ -83,7 +85,7 @@ apply_patches()
     do
 	echo $patch
     	pushd patches
-    	wget -c $WGET_PATH/$patch
+        wget -c --timeout=2 $WGET_PATH/$patch
         popd
 	    patch -p1 < patches/$patch
         if [ $? -ne 0 ]; then
@@ -102,7 +104,7 @@ apply_submodule_patches()
 	dir=${SP}[DIR]
 	echo "${!patch}"
     	pushd patches
-    	wget -c $WGET_PATH/${!patch}
+        wget -c --timeout=2 $WGET_PATH/${!patch}
         popd
 	    pushd ${!dir}
         git am $CWD/patches/${!patch}
@@ -117,8 +119,8 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/mrvl_sonic_hwsku_dbmvtx9180.tgz
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_02/files/mrvl_sonic_platform_dbmvtx9180.tgz
+    wget -c --timeout=2 https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_03/files/mrvl_sonic_hwsku_dbmvtx9180.tgz
+    wget -c --timeout=2 https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/tl_03/files/mrvl_sonic_platform_dbmvtx9180.tgz
 
     rm -fr device/marvell/x86_64-marvell_dbmvtx9180-r0 || true
     rm -fr platform/innovium/sonic-platform-modules-marvell || true

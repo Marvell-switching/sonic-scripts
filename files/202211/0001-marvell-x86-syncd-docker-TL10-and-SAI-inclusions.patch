@@ -1,7 +1,7 @@
-From 5a2f9b27cf47737bb5a3fb4bde37e706b37cf67b Mon Sep 17 00:00:00 2001
+From 99ee15e12fdb75b337aedd7e545b46fc7ac3bbd5 Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 05:18:18 -0800
-Subject: [PATCH 1/6] marvell-x86-syncd-docker-TL10-and-SAI-inclusions
+Subject: [PATCH 1/8] marvell-x86-syncd-docker-TL10-and-SAI-inclusions
 
 Signed-off-by: builder <ksridharan@marvell.com>
 ---
@@ -197,5 +197,5 @@ index 39e695575..57770300f 100755
  
  # Runtime dependency on invm sai is set only for syncd
 -- 
-2.25.1
+2.17.1
 

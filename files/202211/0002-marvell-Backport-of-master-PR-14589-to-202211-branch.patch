@@ -1,14 +1,14 @@
-From d1dae55fad61a07c7e9a91fb0afbd71560bfc748 Mon Sep 17 00:00:00 2001
+From 9cdaa3d43934b98582d088507b4cd1aab5f231db Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 05:19:01 -0800
-Subject: [PATCH 2/6] marvell-Backport-of-master-PR-#14589-to-202211-branch
+Subject: [PATCH 2/8] marvell-Backport-of-master-PR-#14589-to-202211-branch
 
 ---
  installer/default_platform.conf | 30 ++++++++++++++----------------
  1 file changed, 14 insertions(+), 16 deletions(-)
 
 diff --git a/installer/default_platform.conf b/installer/default_platform.conf
-index b0fbff2e1..f744eccd8 100755
+index 4f356cf0f..d14025cc0 100755
 --- a/installer/default_platform.conf
 +++ b/installer/default_platform.conf
 @@ -434,14 +434,23 @@ bootloader_menu_config()
@@ -67,5 +67,5 @@ index b0fbff2e1..f744eccd8 100755
  
      echo "Installed SONiC base image $demo_volume_label successfully"
 -- 
-2.25.1
+2.17.1
 

@@ -1,7 +1,7 @@
-From 18294bd40daa78a5fd362b91c4c624b62ac9cb66 Mon Sep 17 00:00:00 2001
+From b9ee43b7a6e32a01598b1bb76cdff0c604cf6186 Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Wed, 10 Jan 2024 03:53:59 -0800
-Subject: [PATCH 6/6] marvell: bullseye migration for innovium
+Subject: [PATCH 6/8] marvell: bullseye migration for innovium
 
 ---
  platform/innovium/docker-syncd-invm-rpc.mk            |  1 +
@@ -93,5 +93,5 @@ index a19109be4..aa608b1de 100755
  ARG docker_container_name
  
 -- 
-2.25.1
+2.17.1
 
