@@ -1,7 +1,7 @@
-From e231590abf24d0cfdfbe474a86e7a9615f7f88d3 Mon Sep 17 00:00:00 2001
+From aec69554ce00603f6c6d5b2fdb54c738c714f0fe Mon Sep 17 00:00:00 2001
 From: builder <ksridharan@marvell.com>
 Date: Thu, 30 Nov 2023 19:33:22 -0800
-Subject: [PATCH 4/6] marvell-midstone Compilation Error in master branch
+Subject: [PATCH 4/8] marvell-midstone Compilation Error in master branch
  #14826
 
 ---
@@ -22,5 +22,5 @@ index a391056d0..002172f58 100755
                  return -ENOMEM;
  
 -- 
-2.25.1
+2.17.1
 
