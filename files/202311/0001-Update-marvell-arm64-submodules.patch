@@ -1,4 +1,4 @@
-From d44b7a7697452068d1eb1c1d6d2db5d20abdc48b Mon Sep 17 00:00:00 2001
+From 793c74733a46bfd8fa1147c88583c6a0453cba6a Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Thu, 7 Mar 2024 05:40:07 +0000
 Subject: Update marvell-arm64 submodules
@@ -17,12 +17,12 @@ index a5e93cbd8..d52429210 160000
 -Subproject commit a5e93cbd8d90c767891e9ad56447b1047cfa558a
 +Subproject commit d524292106abbef63df6d0853d4557a5097546f0
 diff --git a/platform/marvell-arm64/sonic-platform-marvell b/platform/marvell-arm64/sonic-platform-marvell
-index c108e5e38..934e0198f 160000
+index c108e5e38..be63e9c4b 160000
 --- a/platform/marvell-arm64/sonic-platform-marvell
 +++ b/platform/marvell-arm64/sonic-platform-marvell
 @@ -1 +1 @@
 -Subproject commit c108e5e38e65d4d44520c52079a95a0a9262d6cc
-+Subproject commit 934e0198f9670e07cea59781c8a423e1738cdd34
++Subproject commit be63e9c4b330fd5eabfc5c694fe0231cf25b4425
 -- 
 2.25.1
 

@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="2476b154df9925fc303da25a21d13c8fa9762df1"
+SONIC_COMMIT="62443b09f2ea49e76a307a61f3140f959bb811ec"
 
 #
 # END of CONFIGURATIONS
@@ -24,24 +24,26 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202311 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202311_02/files/202311/"
+TAG="master"
+BRANCH="202311"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/$TAG/files/"
 
 # Patches
 SERIES="0001-Redis-timeout-WA.patch
         0001-Enable-AC5X-marvell-x86-platform.patch
         0001-Update-marvell-arm64-submodules.patch
-        0001-sonic-installer-fixes.patch
-        0001-Update-sai-deb-to-1.13.3-1.patch"
+		0001-Update-sai-deb-to-1.13.3-3.patch"
 
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5)
+declare -a SUB_PATCHES=(SP1 SP2 SP3 SP4 SP5 SP6)
 declare -A SP1=([NAME]="0001-SAI-switch-create-timeout-WA.patch" [DIR]="src/sonic-sairedis")
 declare -A SP2=([NAME]="0001-marvell-ac5-Support-boards-with-more-that-4G-DDR.patch" [DIR]="src/sonic-linux-kernel")
 declare -A SP3=([NAME]="0002-Marvell-arm64-Enable-CONFIG_ARM_SMC_WATCHDOG.patch" [DIR]="src/sonic-linux-kernel")
 declare -A SP4=([NAME]="0001-Fixes-for-AC5X-platform.patch" [DIR]="src/sonic-linux-kernel")
 declare -A SP5=([NAME]="3192.patch" [DIR]="src/sonic-utilities")
+declare -A SP6=([NAME]="3135.patch" [DIR]="src/sonic-swss")
 
 log()
 {
@@ -72,7 +74,7 @@ apply_patch_series()
     do
         echo $patch
         pushd patches
-        wget --timeout=2 -c $WGET_PATH/$patch
+        wget --timeout=2 -c $WGET_PATH/$BRANCH/$patch
         popd
         git am patches/$patch
         if [ $? -ne 0 ]; then
@@ -88,7 +90,7 @@ apply_patches()
     do
         echo $patch	
     	pushd patches
-    	wget -timeout=2 -c $WGET_PATH/$patch
+        wget --timeout=2 -c $WGET_PATH/$BRANCH/$patch
         popd
 	    patch -p1 < patches/$patch
         if [ $? -ne 0 ]; then
@@ -107,7 +109,7 @@ apply_submodule_patches()
         dir=${SP}[DIR]
         echo "${!patch}"
     	pushd patches
-    	wget --timeout=2 -c $WGET_PATH/${!patch}
+    	wget --timeout=2 -c $WGET_PATH/$BRANCH/${!patch}
         popd
 	    pushd ${!dir}
         git am $CWD/patches/${!patch}
@@ -122,7 +124,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/202311_02/files/mrvl_sonic_hwsku_ezb.tgz
+    wget --timeout=2 -c $WGET_PATH/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
