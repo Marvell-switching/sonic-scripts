@@ -1,0 +1,22 @@
+From 6870cdfc98a08b62f166449ad770909078616084 Mon Sep 17 00:00:00 2001
+From: Rajkumar P R <rpennadamram@marvell.com>
+Date: Tue, 14 May 2024 04:06:06 +0000
+Subject: [PATCH] [Marvell] Update arm64 sai debian
+
+Signed-off-by: Rajkumar P R <rpennadamram@marvell.com>
+---
+ platform/marvell-arm64/sai.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-arm64/sai.mk b/platform/marvell-arm64/sai.mk
+index 23be2753a5d..85609e63b28 100644
+--- a/platform/marvell-arm64/sai.mk
++++ b/platform/marvell-arm64/sai.mk
+@@ -1,6 +1,6 @@
+ # Marvell SAI
+ 
+-export MRVL_SAI_VERSION = 1.13.3-2
++export MRVL_SAI_VERSION = 1.13.3-3
+ export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ 
+ $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
