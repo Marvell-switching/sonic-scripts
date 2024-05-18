@@ -1,4 +1,4 @@
-From f75eb09c4fcef72e707e4d3278ce41270e0e1cd0 Mon Sep 17 00:00:00 2001
+From a07644702ef15d765fba8c1820b3c8a6932d72ed Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Mon, 26 Feb 2024 03:19:33 +0000
 Subject: Enable AC5X marvell x86 platform
@@ -29,9 +29,8 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  platform/marvell/rules.mk                     |  6 ++--
  platform/marvell/sai.dep                      |  8 +++++
  platform/marvell/sai.mk                       | 12 +++++---
- platform/marvell/sai/Makefile                 |  9 ------
  platform/marvell/sonic-platform-marvell       |  1 +
- 26 files changed, 177 insertions(+), 33 deletions(-)
+ 25 files changed, 177 insertions(+), 24 deletions(-)
  create mode 100644 platform/marvell/docker-saiserver-mrvl.dep
  create mode 100644 platform/marvell/docker-saiserver-mrvl.mk
  create mode 100644 platform/marvell/docker-syncd-mrvl-rpc.dep
@@ -45,7 +44,6 @@ Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
  create mode 100644 platform/marvell/platform-marvell.mk
  create mode 100644 platform/marvell/rules.dep
  create mode 100644 platform/marvell/sai.dep
- delete mode 100644 platform/marvell/sai/Makefile
  create mode 160000 platform/marvell/sonic-platform-marvell
 
 diff --git a/.gitmodules b/.gitmodules
@@ -467,16 +465,16 @@ index 000000000..618babe65
 +$(MRVL_SAI)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
 +$(MRVL_SAI)_DEP_FILES   := $(DEP_FILES)
 diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
-index 231bdfc81..29ad19d78 100644
+index 0bf366af4..528b6544a 100644
 --- a/platform/marvell/sai.mk
 +++ b/platform/marvell/sai.mk
 @@ -1,9 +1,13 @@
  # Marvell SAI
  
--export MRVL_SAI_VERSION = 1.13.0-1
+-export MRVL_SAI_VERSION = 1.13.3-1
 -export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
 +BRANCH = 202311
-+MRVL_SAI_VERSION = 1.13.3-1
++MRVL_SAI_VERSION = 1.13.3-2
  
 -$(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
 +MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
@@ -488,21 +486,6 @@ index 231bdfc81..29ad19d78 100644
  $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
  
 -SONIC_MAKE_DEBS += $(MRVL_SAI)
-diff --git a/platform/marvell/sai/Makefile b/platform/marvell/sai/Makefile
-deleted file mode 100644
-index 1cd6d0267..000000000
---- a/platform/marvell/sai/Makefile
-+++ /dev/null
-@@ -1,9 +0,0 @@
--.ONESHELL:
--SHELL = /bin/bash
--.SHELLFLAGS += -e
--
--MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/sai-plugin/$(MRVL_SAI)
--
--$(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
--	# get deb package
--	wget -O $(DEST)/$(MRVL_SAI) $(MRVL_SAI_URL)
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
 new file mode 160000
 index 000000000..be63e9c4b
