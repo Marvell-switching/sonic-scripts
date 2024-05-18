@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="006f4b209c919b41a7c1ebd0afdfe07885ef4cad"
+SONIC_COMMIT="f2418ab2eccbd0c2822326dd359246ca0af05adc"
 
 #
 # END of CONFIGURATIONS
@@ -24,13 +24,13 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for master patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_04/files/master-bookworm/"
+TAG="master"
+BRANCH="master-bookworm"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/$TAG/files/"
 
 # Patches
 SERIES="0001-Redis-timeout-WA.patch
-	0001-Add-x86-platforms.patch
-	0001-Falcon-usb-disk-hung_task-WA.patch
-	18678.patch"
+	0001-Falcon-usb-disk-hung_task-WA.patch"
 
 PATCHES=""
 
@@ -68,7 +68,7 @@ apply_patch_series()
     do
         echo $patch
         pushd patches
-        wget --timeout=2 -c $WGET_PATH/$patch
+        wget --timeout=2 -c $WGET_PATH/$BRANCH/$patch
         popd
         git am patches/$patch
         if [ $? -ne 0 ]; then
@@ -84,7 +84,7 @@ apply_patches()
     do
 	echo $patch	
     	pushd patches
-    	wget --timeout=2 -c $WGET_PATH/$patch
+        wget --timeout=2 -c $WGET_PATH/$BRANCH/$patch
         popd
 	    patch -p1 < patches/$patch
         if [ $? -ne 0 ]; then
@@ -103,7 +103,7 @@ apply_submodule_patches()
 	dir=${SP}[DIR]
 	echo "${!patch}"
     	pushd patches
-    	wget --timeout=2 -c $WGET_PATH/${!patch}
+        wget --timeout=2 -c $WGET_PATH/$BRANCH/${!patch}
         popd
 	    pushd ${!dir}
         git am $CWD/patches/${!patch}
@@ -118,7 +118,7 @@ apply_submodule_patches()
 apply_hwsku_changes()
 {
     # Download hwsku
-    wget --timeout=2 -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master_04/files/mrvl_sonic_hwsku_ezb.tgz
+    wget --timeout=2 -c $WGET_PATH/mrvl_sonic_hwsku_ezb.tgz
 
     rm -fr device/marvell/x86_64-marvell_db98cx8580_32cd-r0 || true
     rm -rf device/marvell/x86_64-marvell_slm5401_54x-r0     || true
@@ -130,12 +130,6 @@ apply_hwsku_changes()
     cp -dr device/marvell/arm64-marvell_db98cx8580_32cd-r0 device/marvell/x86_64-marvell_db98cx8580_32cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8540_16cd-r0 device/marvell/x86_64-marvell_db98cx8540_16cd-r0
     cp -dr device/marvell/arm64-marvell_db98cx8514_10cc-r0 device/marvell/x86_64-marvell_db98cx8514_10cc-r0
-    rm device/marvell/arm64-marvell_db98cx8580_32cd-r0/plugins/x86_64_sfputil.py
-    rm device/marvell/arm64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py
-    rm device/marvell/arm64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py
-    mv device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8580_32cd-r0/plugins/sfputil.py
-    mv device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8540_16cd-r0/plugins/sfputil.py
-    mv device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/sfputil.py
     echo "marvell" > device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
     echo "marvell" > device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
     echo "marvell" > device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
@@ -144,7 +138,6 @@ apply_hwsku_changes()
     echo "marvell" > device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
     echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
     echo "marvell" > device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
-    echo "marvell" > device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
 }
 
 main()
@@ -168,7 +161,7 @@ main()
 
     # Apply patch series
     apply_patch_series
-    git submodule update
+    #git submodule update
     # Apply patches
     #apply_patches
     # Apply submodule patches
