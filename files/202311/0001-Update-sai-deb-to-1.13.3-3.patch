@@ -15,7 +15,7 @@ index 23be2753a5d..85609e63b28 100644
 @@ -1,6 +1,6 @@
  # Marvell SAI
  
--export MRVL_SAI_VERSION = 1.13.3-1
+-export MRVL_SAI_VERSION = 1.13.3-2
 +export MRVL_SAI_VERSION = 1.13.3-3
  export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
  
