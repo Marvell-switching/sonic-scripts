@@ -474,7 +474,7 @@ index 0bf366af4..528b6544a 100644
 -export MRVL_SAI_VERSION = 1.13.3-1
 -export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
 +BRANCH = 202311
-+MRVL_SAI_VERSION = 1.13.3-2
++MRVL_SAI_VERSION = 1.13.3-3
  
 -$(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
 +MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
