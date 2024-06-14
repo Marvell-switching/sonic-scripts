@@ -24,7 +24,7 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202311 patches
-TAG="202311_03"
+TAG="202311_04"
 BRANCH="202311"
 WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/$TAG/files/"
 
@@ -32,7 +32,7 @@ WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/$TA
 SERIES="0001-Redis-timeout-WA.patch
         0001-Enable-AC5X-marvell-x86-platform.patch
         0001-Update-marvell-arm64-submodules.patch
-		0001-Update-sai-deb-to-1.13.3-3.patch"
+		0001-Update-sai-deb-to-1.13.3-4.patch"
 
 PATCHES=""
 
