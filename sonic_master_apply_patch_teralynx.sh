@@ -12,7 +12,7 @@
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="05e51f4b8a04e7457397aa1d066237062cad10f9"
+SONIC_COMMIT="a2b3ca87a34e2908177e25a2f5abe7b6cdc5d53c"
 
 #
 # END of CONFIGURATIONS
@@ -27,15 +27,12 @@ FULL_PATH=`pwd`
 WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bookworm/"
 
 # Patches
-SERIES="0001-Add-SDK-dependent-python-packages.patch
-	0002-Add-Marvell-platform-support-for-dbmvt9180.patch
-        0003-marvell-teralynx-master-cel-wistron-platform-files.patch"
+SERIES=""
 
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1)
-declare -A SP1=([NAME]="0001-Marvell-teralynx-generate_dump.patch" [DIR]="src/sonic-utilities")
+declare -a SUB_PATCHES=()
 
 log()
 {
