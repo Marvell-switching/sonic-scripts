@@ -5,14 +5,14 @@
 
 
 #
-# patch script for Intel Falcon board
+# patch script for Marvell board
 #
 
 #
 # CONFIGURATIONS:-
 #
 
-SONIC_COMMIT="f2418ab2eccbd0c2822326dd359246ca0af05adc"
+SONIC_COMMIT="7874027099156ff497d4b97465851342c550ffb7"
 
 #
 # END of CONFIGURATIONS
@@ -25,12 +25,11 @@ FULL_PATH=`pwd`
 
 # Path for master patches
 TAG="master"
-BRANCH="master-bookworm"
+BRANCH="202405"
 WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/$TAG/files/"
 
 # Patches
-SERIES="0001-Redis-timeout-WA.patch
-	0001-Falcon-usb-disk-hung_task-WA.patch"
+SERIES="0001-Falcon-usb-disk-hung_task-WA.patch"
 
 PATCHES=""
 
@@ -47,7 +46,7 @@ log()
 pre_patch_help()
 {
     log "STEPS TO BUILD:"
-    log "git clone https://github.com/sonic-net/sonic-buildimage.git"
+    log "git clone https://github.com/sonic-net/sonic-buildimage.git -b 202405"
     log "cd sonic-buildimage"
     log "git checkout $SONIC_COMMIT"
     log "make init"

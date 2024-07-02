@@ -1,0 +1,27 @@
+From 29cf8032aff6843919708334f2e95aa373d961b4 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 21 Mar 2024 09:21:39 +0000
+Subject: Falcon usb disk hung_task WA
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ installer/install.sh | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/installer/install.sh b/installer/install.sh
+index 557358fd5..13d2fc3a8 100755
+--- a/installer/install.sh
++++ b/installer/install.sh
+@@ -44,6 +44,9 @@ read_conf_file() {
+ }
+ 
+ set -e
++echo 0 > /proc/sys/kernel/hung_task_timeout_secs
++sync
++echo 3 > /proc/sys/vm/drop_caches
+ 
+ if [ -d "/etc/sonic" ]; then
+     echo "Installing SONiC in SONiC"
+-- 
+2.25.1
+
