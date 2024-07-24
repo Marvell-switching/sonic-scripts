@@ -1,0 +1,3 @@
+0001-SAI-switch-create-timeout-WA.patch|src/sonic-sairedis
+3192.patch|src/sonic-utilities
+3135.patch|src/sonic-swss
