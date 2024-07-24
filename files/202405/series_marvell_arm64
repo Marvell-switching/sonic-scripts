@@ -1,0 +1,6 @@
+0001-Update-SDK-deb-version-to-1.14.0-1.patch|sonic-buildimage
+19710.patch|sonic-buildimage
+19510.patch|sonic-buildimage
+0001-SAI-switch-create-timeout-WA.patch|src/sonic-sairedis
+3192.patch|src/sonic-utilities
+3135.patch|src/sonic-swss
