@@ -54,18 +54,18 @@ pre_patch_help()
 enable_sdk_shell()
 {
     #PR 5519
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_buildimage.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_buildimage.patch
     patch -p1 < shell_buildimage.patch
 
     #PR 1454
     pushd src/sonic-swss
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_swss.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_swss.patch
     patch -p1 < shell_swss.patch
     popd
 
     #PR 1146
     pushd src/sonic-utilities
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_utilities.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_utilities.patch
     patch -p1 < shell_utilities.patch
     popd
 }
@@ -137,16 +137,16 @@ EOF
 bug_fixes()
 {
     pushd src/sonic-linux-kernel
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/linux-ARM64-and-ARMHF-build-changes.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/linux-ARM64-and-ARMHF-build-changes.patch
     patch -p1 --dry-run < ./linux-ARM64-and-ARMHF-build-changes.patch
     patch -p1 < ./linux-ARM64-and-ARMHF-build-changes.patch
     popd
 
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/build_fix.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/build_fix.patch
     patch -p1 --dry-run < ./build_fix.patch
     patch -p1 < ./build_fix.patch
 
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/syncd_buster.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/syncd_buster.patch
     patch -p1 --dry-run < ./syncd_buster.patch
     patch -p1 < ./syncd_buster.patch
 
@@ -205,7 +205,7 @@ bug_fixes()
     mv device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/x86_64_sfputil.py device/marvell/x86_64-marvell_db98cx8514_10cc-r0/plugins/sfputil.py
 
     #8 Add Falcon module  
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/falcon_modules.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/falcon_modules.patch
     patch -p1 < falcon_modules.patch
 
     #9 TODO: Intel USB access

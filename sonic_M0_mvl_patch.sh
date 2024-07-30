@@ -196,18 +196,18 @@ python /etc/ent.py &' files/image_config/platform/rc.local
 enable_sdk_shell()
 {
     #PR 5519
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_buildimage.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_buildimage.patch
     patch -p1 < shell_buildimage.patch
 
     #PR 1454
     pushd src/sonic-swss
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_swss.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_swss.patch
     patch -p1 < shell_swss.patch
     popd
 
     #PR 1146
     pushd src/sonic-utilities
-    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/shell_utilities.patch
+    wget -c https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-buster/shell_utilities.patch
     patch -p1 < shell_utilities.patch
     popd
 }
