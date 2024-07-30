@@ -24,7 +24,7 @@ LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 
 # Path for 202211 patches
-WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master-bookworm/"
+WGET_PATH="https://raw.githubusercontent.com/Marvell-switching/sonic-scripts/master/files/master/"
 
 # Patches
 SERIES=""
