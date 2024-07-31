@@ -6,6 +6,16 @@
 
 Marvell patch script to do git patch/apply all open PRs required to build SONIC image
 
+### Teralynx-10 Platform
+
+* SONIC Device: 
+    * x86_64-marvell_dbmvtx9180-r0
+    	ARCH        | CPU
+    	------------|-----------
+    	x86_64      | Xeon D15xx
+
+Port: 6.4T
+
 ### AC5X-RD Platform
 * SONIC Device: 
     * x86_64-marvell_rd98DX35xx-r0

@@ -191,8 +191,19 @@ apply_hwsku_changes()
 	if [ "$PLATFORM" == "marvell" ]; then
 		# Download hwsku
 		wget --timeout=2 -c $WGET_PATH/prestera_hwsku.tgz
-		rm -fr device/marvell/x86_64-marvell_db* || true
-		tar -C device/marvell/ -xzf prestera_hwsku.tgz
+		if [ $? -eq 0 ]; then
+			rm -fr device/marvell/x86_64-marvell_db* || true
+			tar -C device/marvell/ -xzf prestera_hwsku.tgz
+		fi
+	fi
+	if [ "$PLATFORM" == "innovium" ]; then
+		# Download hwsku
+		wget -c --timeout=2 $WGET_PATH/teralynx_hwsku.tgz
+		if [ $? -eq 0 ]; then
+			rm -fr device/celestica/x86_64-cel_midstone-r0 || true
+			rm -fr device/wistron || true
+			tar -C device/ -xzf teralynx_hwsku.tgz
+		fi
 	fi
 }
 
