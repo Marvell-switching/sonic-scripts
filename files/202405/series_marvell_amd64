@@ -1,5 +1,3 @@
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
-0001-Update-SDK-deb-version-to-1.14.0-1.patch|sonic-buildimage
 19710.patch|sonic-buildimage
-19510.patch|sonic-buildimage
 3135.patch|src/sonic-swss
