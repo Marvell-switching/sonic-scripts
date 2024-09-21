@@ -1,0 +1,3957 @@
+From 41d6f03ffeb3aaeeb17048a9e4ff10cc4199f9a2 Mon Sep 17 00:00:00 2001
+From: ksridharan <ksridharan@marvell.com>
+Date: Tue, 17 Sep 2024 07:00:27 -0700
+Subject: [PATCH] kempld patches for 5.10
+
+---
+ patch/linux-5.10-kempld34.patch | 3923 +++++++++++++++++++++++++++++++
+ patch/series                    |    3 +
+ 2 files changed, 3926 insertions(+)
+ create mode 100644 patch/linux-5.10-kempld34.patch
+
+diff --git a/patch/linux-5.10-kempld34.patch b/patch/linux-5.10-kempld34.patch
+new file mode 100644
+index 0000000..5497d37
+--- /dev/null
++++ b/patch/linux-5.10-kempld34.patch
+@@ -0,0 +1,3923 @@
++From: Michael Brunner <michael.brunner@kontron.com>
++Subject: MFD: Add Kontron PLD drivers (kempld)
++
++This patch adds the Kontron PLD Linux kernel driver package
++
++The kempld driver package provides support for the on-board PLD found on
++some Kontron embedded modules. The driver is a multi function driver which
++consists of a core driver and different function drivers. The function
++drivers are only loaded on request if the functionality is available on
++the module used.
++
++** Available drivers **
++
++kempld-core driver:
++The core driver provides the driver framework for the available function
++and is necessary for all other kempld-drivers.
++The driver has an internal list of supported modules and shows
++information about the available PLD revision as kernel information
++output.
++There is additional KernelDoc API documentation available in the
++Documentation/DocBook/ directory of the patched kernel source.
++
++kempld-gpio driver:
++The GPIO driver allows to access the GPIO functionality that may be
++available through the PLD. Depending on the hardware none or not all
++GPIOs listed in the manual may be available through this driver.
++Furthermore some of the GPIOs may already be used internally and
++therefore are not available through the module connector.
++
++kempld-i2c driver:
++The I2C driver allows to access the I2C functionality that may be
++available through the PLD.
++For the I2C bus driver there is additional documentation available in
++the Documentation/i2c/busses/ directory of the patched kernel source.
++
++kempld-wdt driver:
++The watchdog driver allows to access the watchdog functionality that
++may be available through the PLD.
++
++Signed-off-by: Michael Brunner <michael.brunner@kontron.com>
++---
++ drivers/gpio/Kconfig               |   1 +
++ drivers/gpio/gpio-kempld.c         | 609 +++++++++++++++++++++++++++++++++-
++ drivers/i2c/busses/i2c-kempld.c    | 613 ++++++++++++++++++++++++----------
++ drivers/i2c/busses/i2c-kempld.h    |  74 +++++
++ drivers/i2c/muxes/Kconfig          |  12 +
++ drivers/i2c/muxes/Makefile         |   1 +
++ drivers/i2c/muxes/i2c-mux-kempld.c | 199 +++++++++++
++ drivers/mfd/Kconfig                |  30 +-
++ drivers/mfd/kempld-core.c          | 660 ++++++++++++++++++++++++++++++++-----
++ drivers/watchdog/kempld_wdt.c      | 394 ++++++++++++++++++----
++ include/linux/mfd/kempld.h         |  67 +++-
++ 11 files changed, 2309 insertions(+), 351 deletions(-)
++ create mode 100644 drivers/i2c/busses/i2c-kempld.h
++ create mode 100644 drivers/i2c/muxes/i2c-mux-kempld.c
++
++diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
++index 5d4de5c..052bfdb 100644
++--- a/drivers/gpio/Kconfig
+++++ b/drivers/gpio/Kconfig
++@@ -1167,6 +1167,7 @@ config GPIO_JANZ_TTL
++ config GPIO_KEMPLD
++ 	tristate "Kontron ETX / COMexpress GPIO"
++ 	depends on MFD_KEMPLD
+++	select GPIOLIB_IRQCHIP
++ 	help
++ 	  This enables support for the PLD GPIO interface on some Kontron ETX
++ 	  and COMexpress (ETXexpress) modules.
++diff --git a/drivers/gpio/gpio-kempld.c b/drivers/gpio/gpio-kempld.c
++index 4ea15f0..d330524 100644
++--- a/drivers/gpio/gpio-kempld.c
+++++ b/drivers/gpio/gpio-kempld.c
++@@ -2,7 +2,7 @@
++ /*
++  * Kontron PLD GPIO driver
++  *
++- * Copyright (c) 2010-2013 Kontron Europe GmbH
+++ * Copyright (c) 2010-2018 Kontron Europe GmbH
++  * Author: Michael Brunner <michael.brunner@kontron.com>
++  */
++ 
++@@ -10,23 +10,86 @@
++ #include <linux/kernel.h>
++ #include <linux/module.h>
++ #include <linux/bitops.h>
+++#include <linux/seq_file.h>
++ #include <linux/errno.h>
++ #include <linux/platform_device.h>
++ #include <linux/gpio/driver.h>
+++#include <linux/interrupt.h>
++ #include <linux/mfd/kempld.h>
++ 
+++#define CUSTOM_DBG_SHOW 1
+++
++ #define KEMPLD_GPIO_MAX_NUM		16
++ #define KEMPLD_GPIO_MASK(x)		(BIT((x) % 8))
++ #define KEMPLD_GPIO_DIR_NUM(x)		(0x40 + (x) / 8)
++ #define KEMPLD_GPIO_LVL_NUM(x)		(0x42 + (x) / 8)
+++#define KEMPLD_GPIO_STS_NUM(x)		(0x44 + (x) / 8)
+++#define KEMPLD_GPIO_EVT_LVL_EDGE_NUM(x)	(0x46 + (x) / 8)
+++#define KEMPLD_GPIO_EVT_LOW_HIGH_NUM(x)	(0x48 + (x) / 8)
+++#define KEMPLD_GPIO_IEN_NUM(x)		(0x4A + (x) / 8)
+++#define KEMPLD_GPIO_NMIEN_NUM(x)	(0x4C + (x) / 8)
+++#define KEMPLD_GPIO_OUT_LVL_NUM(x)	(0x4E + (x) / 8)
+++#define KEMPLD_GPIO_DIR			0x40
+++#define KEMPLD_GPIO_LVL			0x42
+++#define KEMPLD_GPIO_STS			0x44
++ #define KEMPLD_GPIO_EVT_LVL_EDGE	0x46
+++#define KEMPLD_GPIO_EVT_LOW_HIGH	0x48
++ #define KEMPLD_GPIO_IEN			0x4A
+++#define KEMPLD_GPIO_NMIEN		0x4C
+++#define KEMPLD_GPIO_OUT_LVL		0x4E
++ 
++ struct kempld_gpio_data {
++ 	struct gpio_chip		chip;
+++	int				irq;
++ 	struct kempld_device_data	*pld;
+++	uint16_t			nmi_mask;
+++	uint16_t			nmien;
+++	uint16_t			ien;
+++	uint16_t			evt_lvl_edge;
+++	uint16_t			evt_low_high;
+++	uint16_t			dir_save;
+++	uint16_t			lvl_save;
+++	int				has_out_lvl_reg;
++ };
++ 
+++static int modparam_gpiobase = -1; /* dynamic */
+++module_param_named(gpiobase, modparam_gpiobase, int, 0444);
+++MODULE_PARM_DESC(gpiobase, "The GPIO number base. -1 means dynamic, which is the default.");
+++
+++static int gpionmien; /* = 0x0000; */
+++module_param(gpionmien, int, 0444);
+++MODULE_PARM_DESC(gpionmien, "Set GPIO NMIEN register (default 0x00)");
+++
+++static int gpio_irq = -1;
+++module_param(gpio_irq, int, 0444);
+++MODULE_PARM_DESC(gpio_irq, "Set legacy GPIO IRQ (1-15)");
+++
+++static bool restore_state;
+++module_param(restore_state, bool, 0444);
+++MODULE_PARM_DESC(restore_state,
+++		 "Restore GPIO state after resume [default 0=no]");
+++
+++static bool use_shadow_registers = true;
+++module_param(use_shadow_registers, bool, 0664);
+++MODULE_PARM_DESC(use_shadow_registers,
+++		 "Use shadow registers [default 1=yes]");
+++
+++static bool assign_names = true;
+++module_param(assign_names, bool, 0664);
+++MODULE_PARM_DESC(assign_names, "Assign pin names [default 1=yes]");
+++
+++/*
+++ * Decide if to use the out_lvl or the lvl register based on the
+++ * availability of the register
+++ */
+++static u8 kempld_get_out_lvl_reg(struct kempld_gpio_data *gpio, int io)
+++{
+++	if (gpio->has_out_lvl_reg)
+++		return KEMPLD_GPIO_OUT_LVL_NUM(io);
+++	else
+++		return KEMPLD_GPIO_LVL_NUM(io);
+++}
+++
++ /*
++  * Set or clear GPIO bit
++  * kempld_get_mutex must be called prior to calling this function.
++@@ -36,7 +99,10 @@ static void kempld_gpio_bitop(struct kempld_device_data *pld,
++ {
++ 	u8 status;
++ 
++-	status = kempld_read8(pld, reg);
+++	if (use_shadow_registers)
+++		status = kempld_read8_shadow(pld, reg);
+++	else
+++		status = kempld_read8(pld, reg);
++ 	if (val)
++ 		status |= KEMPLD_GPIO_MASK(bit);
++ 	else
++@@ -63,13 +129,65 @@ static int kempld_gpio_get(struct gpio_chip *chip, unsigned offset)
++ 	return !!kempld_gpio_get_bit(pld, KEMPLD_GPIO_LVL_NUM(offset), offset);
++ }
++ 
+++static int kempld_gpio_get_multiple(struct gpio_chip *chip, unsigned long *mask,
+++				    unsigned long *bits)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	kempld_get_mutex(pld);
+++
+++	/* 8 bit access is faster here, so try to save some time */
+++	if (*mask & ~0xff)
+++		*bits = kempld_read16(pld, KEMPLD_GPIO_LVL) & *mask;
+++	else
+++		*bits = kempld_read8(pld, KEMPLD_GPIO_LVL) & *mask;
+++
+++	kempld_release_mutex(pld);
+++
+++	return 0;
+++}
+++
++ static void kempld_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
++ {
++ 	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
++ 	struct kempld_device_data *pld = gpio->pld;
+++	u8 reg;
+++
+++	reg = kempld_get_out_lvl_reg(gpio, offset);
+++	kempld_get_mutex(pld);
+++	kempld_gpio_bitop(pld, reg, offset, value);
+++	kempld_release_mutex(pld);
+++}
+++
+++static void kempld_gpio_set_multiple(struct gpio_chip *chip,
+++				     unsigned long *mask, unsigned long *bits)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	u16 reg;
++ 
++ 	kempld_get_mutex(pld);
++-	kempld_gpio_bitop(pld, KEMPLD_GPIO_LVL_NUM(offset), offset, value);
+++
+++	/* 8 bit access is faster here, so try to save some time */
+++	if (*mask & ~0xff) {
+++		if (use_shadow_registers)
+++			reg = kempld_read16_shadow(pld, KEMPLD_GPIO_LVL);
+++		else
+++			reg = kempld_read16(pld, KEMPLD_GPIO_LVL);
+++		reg &= ~*mask;
+++		reg |= *bits;
+++		kempld_write16(pld, KEMPLD_GPIO_LVL, reg);
+++	} else {
+++		if (use_shadow_registers)
+++			reg = kempld_read8_shadow(pld, KEMPLD_GPIO_LVL);
+++		else
+++			reg = kempld_read8(pld, KEMPLD_GPIO_LVL);
+++		reg &= ~*mask;
+++		reg |= *bits;
+++		kempld_write8(pld, KEMPLD_GPIO_LVL, reg);
+++	}
+++
++ 	kempld_release_mutex(pld);
++ }
++ 
++@@ -90,9 +208,11 @@ static int kempld_gpio_direction_output(struct gpio_chip *chip, unsigned offset,
++ {
++ 	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
++ 	struct kempld_device_data *pld = gpio->pld;
+++	u8 reg;
++ 
+++	reg = kempld_get_out_lvl_reg(gpio, offset);
++ 	kempld_get_mutex(pld);
++-	kempld_gpio_bitop(pld, KEMPLD_GPIO_LVL_NUM(offset), offset, value);
+++	kempld_gpio_bitop(pld, reg, offset, value);
++ 	kempld_gpio_bitop(pld, KEMPLD_GPIO_DIR_NUM(offset), offset, 1);
++ 	kempld_release_mutex(pld);
++ 
++@@ -130,6 +250,364 @@ static int kempld_gpio_pincount(struct kempld_device_data *pld)
++ 	return evt ? __ffs(evt) : 16;
++ }
++ 
+++static int kempld_gpio_to_irq(struct gpio_chip *chip, unsigned int offset)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++
+++	return gpio->irq;
+++}
+++
+++#ifdef CONFIG_DEBUG_FS
+++static int kempld_gpio_get_ien(struct gpio_chip *chip, unsigned int offset)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	int status;
+++
+++	kempld_get_mutex(pld);
+++
+++	status = kempld_read8(pld, KEMPLD_GPIO_IEN_NUM(offset));
+++	status &= KEMPLD_GPIO_MASK(offset);
+++
+++	kempld_release_mutex(pld);
+++
+++	return status ? 1 : 0;
+++}
+++
+++static int kempld_gpio_get_evt_lvl_edge(struct gpio_chip *chip,
+++					unsigned int offset)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	int status;
+++
+++	kempld_get_mutex(pld);
+++
+++	status = kempld_read8(pld, KEMPLD_GPIO_EVT_LVL_EDGE_NUM(offset));
+++	status &= KEMPLD_GPIO_MASK(offset);
+++
+++	kempld_release_mutex(pld);
+++
+++	return status ? 1 : 0;
+++}
+++
+++static int kempld_gpio_get_evt_high_low(struct gpio_chip *chip,
+++					unsigned int offset)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	int status;
+++
+++	gpio = dev_get_drvdata(chip->parent);
+++	pld = gpio->pld;
+++
+++	kempld_get_mutex(pld);
+++
+++	status = kempld_read8(pld, KEMPLD_GPIO_EVT_LOW_HIGH_NUM(offset));
+++	status &= KEMPLD_GPIO_MASK(offset);
+++
+++	kempld_release_mutex(pld);
+++
+++	return status ? 1 : 0;
+++}
+++
+++static int kempld_gpio_get_nmien(struct gpio_chip *chip, unsigned int offset)
+++{
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	int status;
+++
+++	gpio = dev_get_drvdata(chip->parent);
+++	pld = gpio->pld;
+++
+++	kempld_get_mutex(pld);
+++
+++	status = kempld_read8(pld, KEMPLD_GPIO_NMIEN_NUM(offset));
+++	status &= KEMPLD_GPIO_MASK(offset);
+++
+++	kempld_release_mutex(pld);
+++
+++	return status ? 1 : 0;
+++}
+++
+++static void kempld_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
+++{
+++	int i;
+++
+++	for (i = 0; i < chip->ngpio; i++) {
+++		int gpio = i + chip->base;
+++
+++		seq_printf(s, " gpio-%-3d %s %s", gpio,
+++			   kempld_gpio_get_direction(chip, i) ? "in" : "out",
+++			   kempld_gpio_get(chip, i) ? "hi" : "lo");
+++		seq_printf(s, ", event on %s (irq %s, nmi %s)",
+++			   (kempld_gpio_get_evt_lvl_edge(chip, i)
+++			    ? (kempld_gpio_get_evt_high_low(chip, i)
+++			       ? "rising edge" : "falling edge") :
+++			    (kempld_gpio_get_evt_high_low(chip, i)
+++			     ? "high level" : "low level")),
+++			   kempld_gpio_get_ien(chip, i)
+++			   ? "enabled" : "disabled",
+++			   kempld_gpio_get_nmien(chip, i)
+++			   ? "enabled" : "disabled");
+++		if (chip->names)
+++			seq_printf(s, " - %s\n", chip->names[i]);
+++		else
+++			seq_puts(s, "\n");
+++	}
+++}
+++#else
+++#define kempld_gpio_dbg_show NULL
+++#endif
+++
+++static void kempld_gpio_setup_event(struct kempld_gpio_data *gpio)
+++{
+++	struct kempld_device_data *pld = gpio->pld;
+++	struct gpio_chip *chip = &gpio->chip;
+++	struct device *dev = chip->parent;
+++	u8 irq;
+++	int irq_tmp;
+++
+++	if (gpio->irq < 0)
+++		return;
+++
+++	irq_tmp = gpio->irq;
+++
+++	kempld_get_mutex(pld);
+++
+++	irq = kempld_read8(pld, KEMPLD_IRQ_GPIO);
+++
+++	if (irq == 0xff) {
+++		kempld_release_mutex(pld);
+++		dev_info(pld->dev, "GPIO controller has no IRQ support\n");
+++		gpio->irq = -1;
+++		return;
+++	}
+++
+++	/* This only has to be done once */
+++	if (gpio->irq == 0) {
+++		irq_tmp = kempld_request_irq_num(pld,
+++						   irq & KEMPLD_IRQ_GPIO_MASK);
+++		if (irq_tmp < 0) {
+++			dev_notice(dev, "Automatic IRQ configuration failed");
+++			irq_tmp = 0;
+++		}
+++	}
+++
+++	irq &= ~KEMPLD_IRQ_GPIO_MASK;
+++
+++	if ((gpio_irq > 0) && (gpio_irq <= 15))
+++		irq |= gpio_irq;
+++	else {
+++		if (gpio_irq != -1) {
+++			dev_warn(dev, "gpio_irq option out of range - ignored\n");
+++			gpio_irq = -1;
+++		}
+++		irq |= irq_tmp;
+++	}
+++
+++	kempld_write8(pld, KEMPLD_IRQ_GPIO, irq);
+++
+++	kempld_write16(pld, KEMPLD_GPIO_STS, 0xffff);
+++	kempld_write16(pld, KEMPLD_GPIO_NMIEN, gpio->nmien);
+++	kempld_write16(pld, KEMPLD_GPIO_IEN, gpio->ien);
+++	kempld_write16(pld, KEMPLD_GPIO_EVT_LVL_EDGE, gpio->evt_lvl_edge);
+++	kempld_write16(pld, KEMPLD_GPIO_EVT_LOW_HIGH, gpio->evt_low_high);
+++
+++	irq = kempld_read8(pld, KEMPLD_IRQ_GPIO);
+++
+++	kempld_release_mutex(pld);
+++
+++	if (irq & KEMPLD_IRQ_GPIO_NMI_AVAILABLE) {
+++		gpio->nmi_mask = gpionmien & (BIT(chip->ngpio)-1);
+++		if (gpio->nmi_mask)
+++			dev_info(pld->dev, "GPIO NMI source mask: 0x%04X",
+++				 gpio->nmi_mask);
+++	}
+++
+++	irq = irq & KEMPLD_IRQ_GPIO_MASK;
+++
+++	if (irq == 0)
+++		gpio->irq = -1;
+++	else
+++		gpio->irq = irq;
+++}
+++
+++#ifdef CONFIG_GPIOLIB_IRQCHIP
+++static void kempld_irq_mask(struct irq_data *data)
+++{
+++	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	gpio->ien &= ~BIT(data->hwirq);
+++	gpio->nmien &= ~BIT(data->hwirq);
+++
+++	kempld_write16(pld, KEMPLD_GPIO_NMIEN, gpio->nmien);
+++	kempld_write16(pld, KEMPLD_GPIO_IEN, gpio->ien);
+++}
+++
+++static void kempld_irq_unmask(struct irq_data *data)
+++{
+++	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	/* If GPIO is set to NMI, IRQ is masked and only NMI is activated */
+++	gpio->ien |= ~gpio->nmi_mask & BIT(data->hwirq);
+++	gpio->nmien |= gpio->nmi_mask & BIT(data->hwirq);
+++
+++	kempld_write16(pld, KEMPLD_GPIO_STS, BIT(data->hwirq));
+++	kempld_write16(pld, KEMPLD_GPIO_NMIEN, gpio->nmien);
+++	kempld_write16(pld, KEMPLD_GPIO_IEN, gpio->ien);
+++}
+++
+++static int kempld_irq_set_type(struct irq_data *data, unsigned int type)
+++{
+++	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	switch (type) {
+++	case IRQ_TYPE_EDGE_RISING:
+++		gpio->evt_low_high |= BIT(data->hwirq);
+++		gpio->evt_lvl_edge |= BIT(data->hwirq);
+++		break;
+++	case IRQ_TYPE_EDGE_FALLING:
+++		gpio->evt_low_high &= ~BIT(data->hwirq);
+++		gpio->evt_lvl_edge |= BIT(data->hwirq);
+++		break;
+++	case IRQ_TYPE_LEVEL_HIGH:
+++		gpio->evt_low_high |= BIT(data->hwirq);
+++		gpio->evt_lvl_edge &= ~BIT(data->hwirq);
+++		break;
+++	case IRQ_TYPE_LEVEL_LOW:
+++		gpio->evt_low_high &= ~BIT(data->hwirq);
+++		gpio->evt_lvl_edge &= ~BIT(data->hwirq);
+++		break;
+++	default:
+++		return -EINVAL;
+++	}
+++
+++	kempld_write16(pld, KEMPLD_GPIO_EVT_LVL_EDGE, gpio->evt_lvl_edge);
+++	kempld_write16(pld, KEMPLD_GPIO_EVT_LOW_HIGH, gpio->evt_low_high);
+++
+++	return 0;
+++}
+++
+++static void kempld_bus_lock(struct irq_data *data)
+++{
+++	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	kempld_get_mutex(pld);
+++}
+++
+++static void kempld_bus_sync_unlock(struct irq_data *data)
+++{
+++	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	kempld_release_mutex(pld);
+++}
+++
+++
+++static struct irq_chip kempld_irqchip = {
+++	.name			= "kempld-gpio",
+++	.irq_mask		= kempld_irq_mask,
+++	.irq_unmask		= kempld_irq_unmask,
+++	.irq_set_type		= kempld_irq_set_type,
+++	.irq_bus_lock		= kempld_bus_lock,
+++	.irq_bus_sync_unlock	= kempld_bus_sync_unlock,
+++};
+++
+++/* NOTE: The IRQ handler is threaded */
+++static irqreturn_t kempld_gpio_irq_handler(int irq, void *dev_id)
+++{
+++	struct gpio_chip *chip = dev_id;
+++	struct kempld_gpio_data *gpio = gpiochip_get_data(chip);
+++	struct kempld_device_data *pld = gpio->pld;
+++	u16 status;
+++	int handled = 0;
+++	unsigned int pin, virq;
+++
+++	/*
+++	 * Loop until all incoming interrupts are handled, otherwise it might
+++	 * happen that something gets lost with a lot events and the IRQ
+++	 * handling stops.
+++	 */
+++	while (1) {
+++		kempld_get_mutex(pld);
+++		if (gpio->ien & ~0xff)
+++			status = kempld_read16(pld, KEMPLD_GPIO_STS);
+++		else
+++			status = kempld_read8(pld, KEMPLD_GPIO_STS);
+++
+++		if (!status) {
+++			kempld_release_mutex(pld);
+++			break;
+++		}
+++
+++		if (gpio->ien & ~0xff)
+++			kempld_write16(pld, KEMPLD_GPIO_STS, status);
+++		else
+++			kempld_write8(pld, KEMPLD_GPIO_STS, status);
+++		kempld_release_mutex(pld);
+++
+++		status &= gpio->ien;
+++
+++		for_each_set_bit(pin, (const unsigned long *)&status,
+++				 chip->ngpio) {
+++			virq = irq_find_mapping(chip->irq.domain, pin);
+++			handle_nested_irq(virq);
+++		}
+++		handled = 1;
+++	}
+++
+++	return handled ? IRQ_HANDLED : IRQ_NONE;
+++}
+++
+++static int kempld_gpio_irq_init(struct device *dev,
+++				struct kempld_gpio_data *gpio,
+++				struct gpio_chip *chip)
+++{
+++	int ret;
+++
+++	ret = devm_request_threaded_irq(dev, gpio->irq, NULL,
+++					kempld_gpio_irq_handler, IRQF_ONESHOT,
+++					chip->label, chip);
+++	if (ret) {
+++		dev_err(dev, "failed to request irq %d\n", gpio->irq);
+++		return ret;
+++	}
+++
+++	ret = gpiochip_irqchip_add_nested(chip, &kempld_irqchip, 0,
+++				   handle_simple_irq, IRQ_TYPE_NONE);
+++	if (ret) {
+++		dev_err(dev, "could not add irqchip\n");
+++		return ret;
+++	}
+++	gpiochip_set_nested_irqchip(chip, &kempld_irqchip, gpio->irq);
+++
+++	dev_info(dev, "Enabled IRQ functionality with IRQ %u as base\n",
+++		 gpio->irq);
+++
+++	return 0;
+++}
+++#else
+++static int kempld_gpio_irq_init(struct device *dev,
+++				struct kempld_gpio_data *gpio,
+++				struct gpio_chip *chip)
+++{
+++	dev_warn(dev,
+++		 "GPIOLIB_IRQCHIP not enabled - GPIO IRQs not supported\n");
+++
+++	return 0;
+++}
+++#endif
+++
++ static int kempld_gpio_probe(struct platform_device *pdev)
++ {
++ 	struct device *dev = &pdev->dev;
++@@ -149,6 +627,9 @@ static int kempld_gpio_probe(struct platform_device *pdev)
++ 	if (!gpio)
++ 		return -ENOMEM;
++ 
+++	if ((pld->info.spec_major > 2) || (pld->info.spec_minor >= 8))
+++		gpio->has_out_lvl_reg = 1;
+++
++ 	gpio->pld = pld;
++ 
++ 	platform_set_drvdata(pdev, gpio);
++@@ -158,43 +639,153 @@ static int kempld_gpio_probe(struct platform_device *pdev)
++ 	chip->owner = THIS_MODULE;
++ 	chip->parent = dev;
++ 	chip->can_sleep = true;
++-	if (pdata && pdata->gpio_base)
++-		chip->base = pdata->gpio_base;
++-	else
++-		chip->base = -1;
+++	chip->base = modparam_gpiobase;
++ 	chip->direction_input = kempld_gpio_direction_input;
++ 	chip->direction_output = kempld_gpio_direction_output;
++ 	chip->get_direction = kempld_gpio_get_direction;
++ 	chip->get = kempld_gpio_get;
++ 	chip->set = kempld_gpio_set;
+++	chip->get_multiple = kempld_gpio_get_multiple;
+++	chip->set_multiple = kempld_gpio_set_multiple;
++ 	chip->ngpio = kempld_gpio_pincount(pld);
++ 	if (chip->ngpio == 0) {
++ 		dev_err(dev, "No GPIO pins detected\n");
++ 		return -ENODEV;
++ 	}
++ 
+++	if (assign_names)
+++		chip->names = pdata->gpio_names;
+++
+++	if (CUSTOM_DBG_SHOW)
+++		chip->dbg_show = kempld_gpio_dbg_show;
+++
+++	if (gpio->irq)
+++		chip->to_irq = kempld_gpio_to_irq;
+++
++ 	ret = devm_gpiochip_add_data(dev, chip, gpio);
++ 	if (ret) {
++ 		dev_err(dev, "Could not register GPIO chip\n");
++ 		return ret;
++ 	}
++ 
+++	gpio->nmien = 0x0000;
+++	gpio->ien = 0x0000;
+++	gpio->evt_lvl_edge = 0xffff;
+++	gpio->evt_low_high = 0xffff;
+++
+++	/* Make sure the lvl and dir shadow registers are initialized */
+++	kempld_get_mutex(pld);
+++	gpio->lvl_save = kempld_read16(pld, KEMPLD_GPIO_LVL);
+++	kempld_write16(pld, KEMPLD_GPIO_LVL, gpio->lvl_save);
+++	gpio->dir_save = kempld_read16(pld, KEMPLD_GPIO_DIR);
+++	kempld_write16(pld, KEMPLD_GPIO_DIR, gpio->dir_save);
+++	kempld_release_mutex(pld);
+++
+++	kempld_gpio_setup_event(gpio);
+++	if (gpio->irq > 0) {
+++		ret = kempld_gpio_irq_init(dev, gpio, chip);
+++		if (ret) {
+++			dev_err(dev, "GPIO IRQ initialization failed\n");
+++			gpio->irq = -1;
+++		}
+++	}
+++
++ 	dev_info(dev, "GPIO functionality initialized with %d pins\n",
++ 		 chip->ngpio);
++ 
++ 	return 0;
++ }
++ 
+++#ifdef CONFIG_PM
+++static int kempld_gpio_suspend(struct device *dev)
+++{
+++	struct kempld_gpio_data *gpio = dev_get_drvdata(dev);
+++	struct kempld_device_data *pld = dev_get_drvdata(dev->parent);
+++
+++	dev_dbg(pld->dev, "Suspending KEMPLD GPIO driver\n");
+++
+++	kempld_get_mutex(pld);
+++	if (use_shadow_registers) {
+++		gpio->lvl_save = kempld_read16_shadow(pld, KEMPLD_GPIO_LVL);
+++		gpio->dir_save = kempld_read16_shadow(pld, KEMPLD_GPIO_DIR);
+++	} else {
+++		gpio->lvl_save = kempld_read16(pld, KEMPLD_GPIO_LVL);
+++		gpio->dir_save = kempld_read16(pld, KEMPLD_GPIO_DIR);
+++	}
+++	kempld_release_mutex(pld);
+++
+++	return 0;
+++}
+++
+++static int kempld_gpio_resume(struct device *dev)
+++{
+++	struct kempld_gpio_data *gpio = dev_get_drvdata(dev);
+++	struct kempld_device_data *pld = dev_get_drvdata(dev->parent);
+++
+++	dev_dbg(pld->dev, "Resuming KEMPLD GPIO driver\n");
+++
+++	if (!restore_state)
+++		return 0;
+++
+++	dev_dbg(pld->dev, "Restoring KEMPLD GPIO configuration\n");
+++
+++	kempld_get_mutex(pld);
+++
+++	kempld_write16(pld, KEMPLD_GPIO_LVL, gpio->lvl_save);
+++	kempld_write16(pld, KEMPLD_GPIO_DIR, gpio->dir_save);
+++
+++	kempld_release_mutex(pld);
+++
+++	kempld_gpio_setup_event(gpio);
+++
+++	return 0;
+++}
+++#endif
+++
+++static int kempld_gpio_remove(struct platform_device *pdev)
+++{
+++	struct kempld_gpio_data *gpio = platform_get_drvdata(pdev);
+++	struct kempld_device_data *pld = gpio->pld;
+++
+++	kempld_free_irq_num(pld, gpio->irq);
+++
+++	return 0;
+++}
+++
+++static const struct dev_pm_ops kempld_gpio_pm_ops = {
+++#ifdef CONFIG_PM_SLEEP
+++	.suspend = kempld_gpio_suspend,
+++	.resume = kempld_gpio_resume,
+++	.poweroff =  kempld_gpio_suspend,
+++	.restore = kempld_gpio_resume,
+++#endif
+++};
+++
++ static struct platform_driver kempld_gpio_driver = {
++ 	.driver = {
++ 		.name = "kempld-gpio",
+++		.owner = THIS_MODULE,
+++		.pm = &kempld_gpio_pm_ops,
++ 	},
++ 	.probe		= kempld_gpio_probe,
+++	.remove		= kempld_gpio_remove,
++ };
++ 
++-module_platform_driver(kempld_gpio_driver);
+++static int __init kempld_gpio_init(void)
+++{
+++	return platform_driver_register(&kempld_gpio_driver);
+++}
+++
+++static void __exit kempld_gpio_exit(void)
+++{
+++	platform_driver_unregister(&kempld_gpio_driver);
+++}
+++
+++module_init(kempld_gpio_init);
+++module_exit(kempld_gpio_exit);
++ 
++ MODULE_DESCRIPTION("KEM PLD GPIO Driver");
++ MODULE_AUTHOR("Michael Brunner <michael.brunner@kontron.com>");
++ MODULE_LICENSE("GPL");
++ MODULE_ALIAS("platform:kempld-gpio");
+++MODULE_VERSION("34.0");
++diff --git a/drivers/i2c/busses/i2c-kempld.c b/drivers/i2c/busses/i2c-kempld.c
++index 2d60be0..6d19bca 100644
++--- a/drivers/i2c/busses/i2c-kempld.c
+++++ b/drivers/i2c/busses/i2c-kempld.c
++@@ -2,83 +2,68 @@
++ /*
++  * I2C bus driver for Kontron COM modules
++  *
++- * Copyright (c) 2010-2013 Kontron Europe GmbH
+++ * Copyright (c) 2010-2016 Kontron Europe GmbH
++  * Author: Michael Brunner <michael.brunner@kontron.com>
++  *
++  * The driver is based on the i2c-ocores driver by Peter Korsgaard.
++  */
++ 
+++#include <linux/kernel.h>
++ #include <linux/module.h>
+++#include <linux/init.h>
++ #include <linux/platform_device.h>
++ #include <linux/i2c.h>
++ #include <linux/delay.h>
+++#include <linux/slab.h>
++ #include <linux/mfd/kempld.h>
++-
++-#define KEMPLD_I2C_PRELOW	0x0b
++-#define KEMPLD_I2C_PREHIGH	0x0c
++-#define KEMPLD_I2C_DATA		0x0e
++-
++-#define KEMPLD_I2C_CTRL		0x0d
++-#define I2C_CTRL_IEN		0x40
++-#define I2C_CTRL_EN		0x80
++-
++-#define KEMPLD_I2C_STAT		0x0f
++-#define I2C_STAT_IF		0x01
++-#define I2C_STAT_TIP		0x02
++-#define I2C_STAT_ARBLOST	0x20
++-#define I2C_STAT_BUSY		0x40
++-#define I2C_STAT_NACK		0x80
++-
++-#define KEMPLD_I2C_CMD		0x0f
++-#define I2C_CMD_START		0x91
++-#define I2C_CMD_STOP		0x41
++-#define I2C_CMD_READ		0x21
++-#define I2C_CMD_WRITE		0x11
++-#define I2C_CMD_READ_ACK	0x21
++-#define I2C_CMD_READ_NACK	0x29
++-#define I2C_CMD_IACK		0x01
++-
++-#define KEMPLD_I2C_FREQ_MAX	2700	/* 2.7 mHz */
++-#define KEMPLD_I2C_FREQ_STD	100	/* 100 kHz */
++-
++-enum {
++-	STATE_DONE = 0,
++-	STATE_INIT,
++-	STATE_ADDR,
++-	STATE_ADDR10,
++-	STATE_START,
++-	STATE_WRITE,
++-	STATE_READ,
++-	STATE_ERROR,
++-};
++-
++-struct kempld_i2c_data {
++-	struct device			*dev;
++-	struct kempld_device_data	*pld;
++-	struct i2c_adapter		adap;
++-	struct i2c_msg			*msg;
++-	int				pos;
++-	int				nmsgs;
++-	int				state;
++-	bool				was_active;
++-};
++-
++-static unsigned int bus_frequency = KEMPLD_I2C_FREQ_STD;
++-module_param(bus_frequency, uint, 0);
++-MODULE_PARM_DESC(bus_frequency, "Set I2C bus frequency in kHz (default="
++-				__MODULE_STRING(KEMPLD_I2C_FREQ_STD)")");
++-
+++#include <linux/interrupt.h>
+++#include "i2c-kempld.h"
+++
+++static int scl_frequency; /* 0 = don't change */
+++module_param(scl_frequency, int, 0444);
+++MODULE_PARM_DESC(scl_frequency,
+++		 "Set I2C SCL frequency (0=don't change, otherwise kHz, default=0)");
+++static int i2c_mx_bus = -1;
+++module_param(i2c_mx_bus, int, 0444);
+++MODULE_PARM_DESC(i2c_mx_bus, "Set I2C MX bus (0-15, default=-1 (FW default))");
+++static bool force_polling;
+++module_param(force_polling, bool, 0444);
+++MODULE_PARM_DESC(force_polling, "Force polling mode");
+++static int i2c_gpio_mux = -1;
+++module_param(i2c_gpio_mux, int, 0444);
+++MODULE_PARM_DESC(i2c_gpio_mux, "Enable I2C port on GPIO out");
+++static int i2c_irq = -1;
+++module_param(i2c_irq, int, 0444);
+++MODULE_PARM_DESC(i2c_irq, "Set legacy I2C IRQ (1-15)");
++ static int i2c_bus = -1;
++-module_param(i2c_bus, int, 0);
++-MODULE_PARM_DESC(i2c_bus, "Set I2C bus number (default=-1 for dynamic assignment)");
+++module_param(i2c_bus, int, 0444);
+++MODULE_PARM_DESC(i2c_bus,
+++		 "Set I2C bus number (default=-1 for dynamic assignment)");
+++static int enbusclear = -1;
+++module_param(enbusclear, int, 0444);
+++MODULE_PARM_DESC(enbusclear,
+++		 "Enable bus-clear functionality (0/1 (default=-1 for BIOS default))");
+++static int timeout = 1000;
+++module_param(timeout, int, 0664);
+++MODULE_PARM_DESC(timeout, "Transaction timeout in ms (default=1000)");
+++
+++static void kempld_controller_reset(struct kempld_i2c_data *i2c)
+++{
+++	struct kempld_device_data *pld = i2c->pld;
+++	u8 ctrl, stat;
++ 
++-static bool i2c_gpio_mux;
++-module_param(i2c_gpio_mux, bool, 0);
++-MODULE_PARM_DESC(i2c_gpio_mux, "Enable I2C port on GPIO out (default=false)");
+++	kempld_get_mutex(pld);
+++	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++	ctrl &= ~I2C_CTRL_EN;
+++	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++	ctrl |= I2C_CTRL_EN;
+++	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++	stat = kempld_read8(pld, KEMPLD_I2C_STAT);
+++	if (stat & I2C_STAT_BUSY)
+++		kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
+++	kempld_release_mutex(pld);
+++}
++ 
++-/*
++- * kempld_get_mutex must be called prior to calling this function.
++- */
++ static int kempld_i2c_process(struct kempld_i2c_data *i2c)
++ {
++ 	struct kempld_device_data *pld = i2c->pld;
++@@ -86,33 +71,33 @@ static int kempld_i2c_process(struct kempld_i2c_data *i2c)
++ 	struct i2c_msg *msg = i2c->msg;
++ 	u8 addr;
++ 
+++	i2c->irq_wake = 0;
+++
++ 	/* Ready? */
++ 	if (stat & I2C_STAT_TIP)
++ 		return -EBUSY;
++ 
++ 	if (i2c->state == STATE_DONE || i2c->state == STATE_ERROR) {
+++		i2c->irq_wake = 1;
++ 		/* Stop has been sent */
++-		kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_IACK);
++ 		if (i2c->state == STATE_ERROR)
++ 			return -EIO;
++ 		return 0;
++ 	}
++ 
++-	/* Error? */
++-	if (stat & I2C_STAT_ARBLOST) {
++-		i2c->state = STATE_ERROR;
++-		kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
++-		return -EAGAIN;
++-	}
++-
++ 	if (i2c->state == STATE_INIT) {
++ 		if (stat & I2C_STAT_BUSY)
++ 			return -EBUSY;
++ 
++ 		i2c->state = STATE_ADDR;
+++	} else if (stat & I2C_STAT_ARBLOST) {
+++		i2c->state = STATE_ERROR;
+++		i2c->irq_wake = 1;
+++		kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
+++		return -EAGAIN;
++ 	}
++ 
++-	if (i2c->state == STATE_ADDR) {
+++	if (i2c->state == STATE_ADDR || i2c->state == STATE_ADDR_CONT) {
++ 		/* 10 bit address? */
++ 		if (i2c->msg->flags & I2C_M_TEN) {
++ 			addr = 0xf0 | ((i2c->msg->addr >> 7) & 0x6);
++@@ -144,6 +129,7 @@ static int kempld_i2c_process(struct kempld_i2c_data *i2c)
++ 
++ 		if (stat & I2C_STAT_NACK) {
++ 			i2c->state = STATE_ERROR;
+++			i2c->irq_wake = 1;
++ 			kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
++ 			return -ENXIO;
++ 		}
++@@ -159,14 +145,19 @@ static int kempld_i2c_process(struct kempld_i2c_data *i2c)
++ 
++ 		if (i2c->nmsgs) {
++ 			if (!(msg->flags & I2C_M_NOSTART)) {
++-				i2c->state = STATE_ADDR;
+++				/*
+++				 * This is a virtual state, directly restart
+++				 * the handler.
+++				 */
+++				i2c->state = STATE_ADDR_CONT;
+++				i2c->irq_wake = 1;
++ 				return 0;
++-			} else {
++-				i2c->state = (msg->flags & I2C_M_RD)
++-					? STATE_READ : STATE_WRITE;
++ 			}
+++			i2c->state = (msg->flags & I2C_M_RD)
+++					? STATE_READ : STATE_WRITE;
++ 		} else {
++ 			i2c->state = STATE_DONE;
+++			i2c->irq_wake = 1;
++ 			kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
++ 			return 0;
++ 		}
++@@ -183,96 +174,292 @@ static int kempld_i2c_process(struct kempld_i2c_data *i2c)
++ 	return 0;
++ }
++ 
+++static irqreturn_t kempld_i2c_isr(int irq, void *dev_id)
+++{
+++	struct kempld_i2c_data *i2c = dev_id;
+++	struct kempld_device_data *pld = i2c->pld;
+++
+++	kempld_get_mutex(pld);
+++	i2c->ret = kempld_i2c_process(i2c);
+++	kempld_release_mutex(pld);
+++	wake_up(&i2c->wait);
+++
+++	return IRQ_HANDLED;
+++}
+++
++ static int kempld_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
++-				int num)
+++			   int num)
++ {
++ 	struct kempld_i2c_data *i2c = i2c_get_adapdata(adap);
++ 	struct kempld_device_data *pld = i2c->pld;
++-	unsigned long timeout = jiffies + HZ;
++-	int ret;
+++	unsigned long time_limit;
++ 
+++	i2c->timeout = msecs_to_jiffies(timeout);
++ 	i2c->msg = msgs;
++ 	i2c->pos = 0;
++ 	i2c->nmsgs = num;
++ 	i2c->state = STATE_INIT;
+++	i2c->ret = -ETIMEDOUT;
++ 
++ 	/* Handle the transfer */
++-	while (time_before(jiffies, timeout)) {
++-		kempld_get_mutex(pld);
++-		ret = kempld_i2c_process(i2c);
++-		kempld_release_mutex(pld);
+++	time_limit = i2c->timeout + jiffies;
+++	do {
+++		if ((i2c->irq < 1) || (i2c->state == STATE_INIT)
+++		    || (i2c->state == STATE_ADDR_CONT)) {
+++			kempld_get_mutex(pld);
+++			i2c->ret = kempld_i2c_process(i2c);
+++			kempld_release_mutex(pld);
+++		}
++ 
++ 		if (i2c->state == STATE_DONE || i2c->state == STATE_ERROR)
++-			return (i2c->state == STATE_DONE) ? num : ret;
+++			return (i2c->state == STATE_DONE) ? num : i2c->ret;
++ 
++-		if (ret == 0)
++-			timeout = jiffies + HZ;
++ 
++-		usleep_range(5, 15);
++-	}
+++		if ((i2c->irq > 0) && (i2c->state > STATE_INIT)) {
+++			i2c->ret = -ETIMEDOUT;
+++			wait_event_timeout(i2c->wait, i2c->irq_wake,
+++					   i2c->timeout);
+++		} else if (i2c->state != STATE_ADDR_CONT)
+++			usleep_range(5, 15);
+++
+++		if (i2c->ret == 0)
+++			time_limit = jiffies + i2c->timeout;
+++	} while (time_before(jiffies, time_limit));
+++
+++	dev_warn(&adap->dev, "Bus seems to be blocked - trying reset!\n");
++ 
++ 	i2c->state = STATE_ERROR;
+++	kempld_controller_reset(i2c);
++ 
++ 	return -ETIMEDOUT;
++ }
++ 
++-/*
++- * kempld_get_mutex must be called prior to calling this function.
++- */
++ static void kempld_i2c_device_init(struct kempld_i2c_data *i2c)
++ {
++ 	struct kempld_device_data *pld = i2c->pld;
++-	u16 prescale_corr;
+++	struct device *dev = &i2c->adap.dev;
++ 	long prescale;
+++	u16 prescale_corr;
+++	u8 cfg;
++ 	u8 ctrl;
++ 	u8 stat;
++-	u8 cfg;
+++	u8 mx;
+++
+++	kempld_get_mutex(pld);
++ 
++-	/* Make sure the device is disabled */
++ 	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++	if (ctrl & I2C_CTRL_EN)
+++		i2c->was_active = 1;
+++
+++	/* make sure the device is disabled */
++ 	ctrl &= ~(I2C_CTRL_EN | I2C_CTRL_IEN);
++ 	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
++ 
++-	if (bus_frequency > KEMPLD_I2C_FREQ_MAX)
++-		bus_frequency = KEMPLD_I2C_FREQ_MAX;
++-
++-	if (pld->info.spec_major == 1)
++-		prescale = pld->pld_clock / (bus_frequency * 5) - 1000;
++-	else
++-		prescale = pld->pld_clock / (bus_frequency * 4) - 3000;
++-
++-	if (prescale < 0)
++-		prescale = 0;
+++	/* set bus frequency */
+++	if (scl_frequency > 0) {
+++		/*
+++		 * The clock frequency calculation has been changed a bit
+++		 * between the spec. revisions
+++		 */
+++		if (pld->info.spec_major == 1)
+++			prescale = (pld->pld_clock / (scl_frequency*5)) - 1000;
+++		else
+++			prescale = (pld->pld_clock / (scl_frequency*4)) - 3000;
+++
+++		/* Prevent negative prescaler values */
+++		if (prescale < 0)
+++			prescale = 0;
+++
+++		/* Round to the best matching value */
+++		prescale_corr = prescale / 1000;
+++		if ((prescale % 1000) >= 500)
+++			prescale_corr++;
+++
+++		kempld_write8(pld, KEMPLD_I2C_PRELOW, prescale_corr & 0xff);
+++		kempld_write8(pld, KEMPLD_I2C_PREHIGH, prescale_corr >> 8);
+++	}
++ 
++-	/* Round to the best matching value */
++-	prescale_corr = prescale / 1000;
++-	if (prescale % 1000 >= 500)
++-		prescale_corr++;
+++	if (enbusclear > -1) {
+++		if (enbusclear)
+++			ctrl |= I2C_CTRL_BCEN;
+++		else
+++			ctrl &= ~I2C_CTRL_BCEN;
+++	}
++ 
++-	kempld_write8(pld, KEMPLD_I2C_PRELOW, prescale_corr & 0xff);
++-	kempld_write8(pld, KEMPLD_I2C_PREHIGH, prescale_corr >> 8);
+++	/* Check how much multiplexed I2C busses we have */
+++	mx = kempld_read8(pld, KEMPLD_I2C_MX);
+++	if (pld->info.spec_major > 1) {
+++		i2c->mx_max = KEMPLD_I2C_MX_GET_MAX(mx);
+++		if (i2c->mx_max == 0xf) /* No multiplexer available */
+++			i2c->mx_max = 0;
+++	} else {
+++		if ((mx & KEMPLD_I2C_MX_MASK) == 0xf)
+++			i2c->mx_max = 0; /* No multiplexer available */
+++		else
+++			i2c->mx_max = 1; /*
+++					  * 2 busses should be enough for all
+++					  * boards using spec revision 1
+++					  */
+++	}
++ 
++ 	/* Activate I2C bus output on GPIO pins */
++-	cfg = kempld_read8(pld, KEMPLD_CFG);
++-	if (i2c_gpio_mux)
++-		cfg |= KEMPLD_CFG_GPIO_I2C_MUX;
++-	else
++-		cfg &= ~KEMPLD_CFG_GPIO_I2C_MUX;
++-	kempld_write8(pld, KEMPLD_CFG, cfg);
+++	if ((i2c->mx_max > 0) && (pld->info.spec_major > 1)) {
+++		if (i2c_gpio_mux > -1) {
+++			cfg = kempld_read8(pld, KEMPLD_CFG);
+++			if (i2c_gpio_mux)
+++				cfg |= KEMPLD_CFG_GPIO_I2C_MUX;
+++			else
+++				cfg &= ~KEMPLD_CFG_GPIO_I2C_MUX;
+++			kempld_write8(pld, KEMPLD_CFG, cfg);
+++		}
+++		cfg = kempld_read8(pld, KEMPLD_CFG);
+++		if (cfg & KEMPLD_CFG_GPIO_I2C_MUX)
+++			i2c->gpio_mux = 1;
+++		else
+++			i2c->gpio_mux = 0;
+++		if (((i2c_gpio_mux > 0) && (!i2c->gpio_mux))
+++		    || ((i2c_gpio_mux == 0) && (i2c->gpio_mux)))
+++			dev_warn(dev,
+++				 "Unable to change GPIO I2C MUX setting\n");
+++	}
++ 
++-	/* Enable the device */
++-	kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_IACK);
+++	/* Check which MX setting should be set */
+++	if ((i2c_mx_bus == -1) || (i2c_mx_bus > i2c->mx_max)) {
+++		if (i2c_mx_bus > i2c->mx_max) {
+++			dev_err(dev,
+++				"bus selected with i2c_mx_bus not available - leaving MX setting unchanged\n");
+++		}
+++		if (i2c->mx_max > 0)
+++			i2c->mx = mx & KEMPLD_I2C_MX_MASK;
+++		else
+++			i2c->mx = 0;
+++	} else
+++		i2c->mx = i2c_mx_bus;
+++
+++	/* Connect the controller to the chosen bus output */
+++	if (i2c->mx_max > 0)
+++		kempld_write8(pld, KEMPLD_I2C_MX, i2c->mx);
+++
+++	/* enable the device */
++ 	ctrl |= I2C_CTRL_EN;
++ 	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
++ 
+++	/*
+++	 * If bus is busy send a STOP signal to be sure the controller is
+++	 * not hanging...
+++	 */
++ 	stat = kempld_read8(pld, KEMPLD_I2C_STAT);
++-	if (stat & I2C_STAT_BUSY)
+++	if (stat & I2C_STAT_BUSY) {
+++		dev_warn(dev, "I2C bus is busy - generating stop signal\n");
++ 		kempld_write8(pld, KEMPLD_I2C_CMD, I2C_CMD_STOP);
+++	}
+++
+++	/* Read again to check if busclear is supported */
+++	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++
+++	kempld_release_mutex(pld);
+++
+++	i2c->busclear = (ctrl & I2C_CTRL_BCEN) ? 1 : 0;
+++}
+++
+++static void kempld_i2c_irq_enable(struct kempld_i2c_data *i2c)
+++{
+++	struct kempld_device_data *pld = i2c->pld;
+++	struct device *dev = &i2c->adap.dev;
+++	u8 irq, ctrl;
+++	int irq_tmp, ret;
+++
+++	if (i2c->irq < 0)
+++		return;
+++
+++	irq_tmp = i2c->irq;
+++
+++	kempld_get_mutex(pld);
+++
+++	irq = kempld_read8(pld, KEMPLD_IRQ_I2C);
+++
+++	if (irq == 0xff) {
+++		kempld_release_mutex(pld);
+++		dev_info(dev, "I2C controller has no IRQ support\n");
+++		i2c->irq = -1;
+++		return;
+++	}
+++
+++	if (i2c->irq == 0) {
+++		irq_tmp = kempld_request_irq_num(pld,
+++						  irq & KEMPLD_IRQ_I2C_MASK);
+++		if (irq_tmp < 0) {
+++			dev_notice(dev,
+++				   "Automatic IRQ configuration failed");
+++			irq_tmp = 0;
+++		}
+++	}
+++
+++	irq &= ~KEMPLD_IRQ_I2C_MASK;
+++
+++	if ((i2c_irq > 0) && (i2c_irq <= 15)) {
+++		irq |= i2c_irq;
+++	} else {
+++		if (i2c_irq != -1) {
+++			dev_warn(dev,
+++				 "i2c_irq option out of range - ignored\n");
+++			i2c_irq = -1;
+++		}
+++		irq |= irq_tmp;
+++	}
+++
+++	kempld_write8(pld, KEMPLD_IRQ_I2C, irq);
+++	irq = kempld_read8(pld, KEMPLD_IRQ_I2C) & KEMPLD_IRQ_I2C_MASK;
+++	kempld_release_mutex(pld);
+++
+++	/* IRQ support disabled */
+++	if (irq == 0) {
+++		i2c->irq = -1;
+++		return;
+++	}
+++
+++	/* Initialize interrupt handlers if not already done */
+++	if (i2c->irq == 0) {
+++		ret = devm_request_threaded_irq(dev, irq, NULL, kempld_i2c_isr,
+++						IRQF_ONESHOT, i2c->adap.name,
+++						i2c);
+++		if (ret) {
+++			dev_err(dev,
+++				"Unable to claim IRQ - using polling mode\n");
+++			i2c->irq = -1;
+++			return;
+++		}
+++	}
+++
+++	i2c->irq = irq;
+++
+++	/* Now enable interrupts in the controller */
+++	kempld_get_mutex(pld);
+++	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++	ctrl |= I2C_CTRL_IEN;
+++	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++	kempld_release_mutex(pld);
+++}
+++
+++static void kempld_i2c_irq_disable(struct kempld_i2c_data *i2c)
+++{
+++	struct kempld_device_data *pld = i2c->pld;
+++	u8 ctrl;
+++
+++	if (i2c->irq <= 0)
+++		return;
+++
+++	kempld_get_mutex(pld);
+++	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++	ctrl &= ~I2C_CTRL_IEN;
+++	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++	kempld_release_mutex(pld);
++ }
++ 
++ static u32 kempld_i2c_func(struct i2c_adapter *adap)
++ {
++-	return I2C_FUNC_I2C | I2C_FUNC_10BIT_ADDR | I2C_FUNC_SMBUS_EMUL;
+++	return I2C_FUNC_I2C | I2C_FUNC_10BIT_ADDR
+++		| I2C_FUNC_SMBUS_EMUL;
++ }
++ 
++ static const struct i2c_algorithm kempld_i2c_algorithm = {
++@@ -283,48 +470,110 @@ static const struct i2c_algorithm kempld_i2c_algorithm = {
++ static const struct i2c_adapter kempld_i2c_adapter = {
++ 	.owner		= THIS_MODULE,
++ 	.name		= "i2c-kempld",
++-	.class		= I2C_CLASS_HWMON | I2C_CLASS_SPD,
+++	.class		= 0,			/*
+++						 * No autodetection as we don't
+++						 * know the mux setting of the
+++						 * adapter - use i2c-mux-kempld
+++						 * driver if autodetection is
+++						 * desired
+++						 */
++ 	.algo		= &kempld_i2c_algorithm,
++ };
++ 
+++static int kempld_i2c_get_scl_frequency(struct kempld_i2c_data *i2c)
+++{
+++	struct kempld_device_data *pld = i2c->pld;
+++	int frequency;
+++	u16 prescale;
+++
+++	kempld_get_mutex(pld);
+++
+++	prescale = kempld_read8(pld, KEMPLD_I2C_PRELOW)
+++		| kempld_read8(pld, KEMPLD_I2C_PREHIGH)<<8;
+++
+++	kempld_release_mutex(pld);
+++
+++	/*
+++	 * The clock frequency calculation has been changed a bit
+++	 * between the spec. revisions
+++	 */
+++	if (pld->info.spec_major == 1)
+++		frequency = (pld->pld_clock / (prescale + 1)) / 5000;
+++	else
+++		frequency = (pld->pld_clock / (prescale + 3)) / 4000;
+++
+++	return frequency;
+++}
+++
++ static int kempld_i2c_probe(struct platform_device *pdev)
++ {
++-	struct kempld_device_data *pld = dev_get_drvdata(pdev->dev.parent);
++ 	struct kempld_i2c_data *i2c;
+++	struct kempld_device_data *pld;
++ 	int ret;
++-	u8 ctrl;
+++
+++	pld = dev_get_drvdata(pdev->dev.parent);
++ 
++ 	i2c = devm_kzalloc(&pdev->dev, sizeof(*i2c), GFP_KERNEL);
++ 	if (!i2c)
++ 		return -ENOMEM;
++ 
++ 	i2c->pld = pld;
++-	i2c->dev = &pdev->dev;
++-	i2c->adap = kempld_i2c_adapter;
++-	i2c->adap.dev.parent = i2c->dev;
++-	i2c_set_adapdata(&i2c->adap, i2c);
++-	platform_set_drvdata(pdev, i2c);
++-
++-	kempld_get_mutex(pld);
++-	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
++-
++-	if (ctrl & I2C_CTRL_EN)
++-		i2c->was_active = true;
++ 
++ 	kempld_i2c_device_init(i2c);
++-	kempld_release_mutex(pld);
+++
+++	/* hook up driver to tree */
+++	platform_set_drvdata(pdev, i2c);
+++	i2c->adap = kempld_i2c_adapter;
+++	i2c_set_adapdata(&i2c->adap, i2c);
+++	i2c->adap.dev.parent = &pdev->dev;
++ 
++ 	/* Add I2C adapter to I2C tree */
++-	if (i2c_bus >= -1)
+++	if (i2c_bus >= -1) {
++ 		i2c->adap.nr = i2c_bus;
+++		i2c->base_nr = i2c_bus;
+++	}
++ 	ret = i2c_add_numbered_adapter(&i2c->adap);
++-	if (ret)
++-		return ret;
+++	if (ret) {
+++		dev_err(&pdev->dev, "Failed to add adapter\n");
+++		goto add_adapter_failed;
+++	}
++ 
++-	dev_info(i2c->dev, "I2C bus initialized at %dkHz\n",
++-		 bus_frequency);
+++	/* Set up IRQ support */
+++	if (force_polling)
+++		i2c->irq = -1;
+++
+++	init_waitqueue_head(&i2c->wait);
+++	kempld_i2c_irq_enable(i2c);
+++
+++	/* Register i2c-mux device */
+++	i2c->mux_pdev = platform_device_register_data(&i2c->adap.dev,
+++					       "i2c-mux-kempld",
+++					       PLATFORM_DEVID_AUTO,
+++					       i2c,
+++					       sizeof(struct kempld_i2c_data));
+++	if (IS_ERR(i2c->mux_pdev)) {
+++		dev_err(&pdev->dev, "Failed to register mux platform device\n");
+++		goto register_mux_failed;
+++	}
+++
+++	dev_info(&pdev->dev, "I2C bus initialized with %d kHz SCL frequency\n",
+++		 kempld_i2c_get_scl_frequency(i2c));
+++	dev_info(&pdev->dev, "I2C MUX connected to bus %d (available: %s%d)\n",
+++		 i2c->mx, i2c->mx_max ? "0-" : "", i2c->mx_max);
+++	dev_info(&pdev->dev, "I2C IRQs %s\n", (i2c->irq > 0) ? "enabled"
+++		 : "disabled");
+++	dev_info(&pdev->dev, "I2C Bus Clear %s\n", i2c->busclear ? "enabled"
+++		 : "disabled");
+++	if (i2c->gpio_mux)
+++		dev_info(&pdev->dev, "GPIO I2C MUX pins enabled\n");
++ 
++ 	return 0;
+++
+++register_mux_failed:
+++	i2c_del_adapter(&i2c->adap);
+++add_adapter_failed:
+++
+++	return ret;
++ }
++ 
++ static int kempld_i2c_remove(struct platform_device *pdev)
++@@ -333,68 +582,100 @@ static int kempld_i2c_remove(struct platform_device *pdev)
++ 	struct kempld_device_data *pld = i2c->pld;
++ 	u8 ctrl;
++ 
++-	kempld_get_mutex(pld);
++-	/*
++-	 * Disable I2C logic if it was not activated before the
++-	 * driver loaded
++-	 */
+++	platform_device_unregister(i2c->mux_pdev);
+++
+++	kempld_i2c_irq_disable(i2c);
+++	kempld_free_irq_num(pld, i2c->irq);
+++
++ 	if (!i2c->was_active) {
+++		/*
+++		 * disable I2C logic if it was not activated before the
+++		 * driver loaded
+++		 */
+++		kempld_get_mutex(pld);
++ 		ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
++ 		ctrl &= ~I2C_CTRL_EN;
++ 		kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++		kempld_release_mutex(pld);
++ 	}
++-	kempld_release_mutex(pld);
++ 
+++	/* remove adapter & data */
++ 	i2c_del_adapter(&i2c->adap);
++ 
+++	platform_set_drvdata(pdev, NULL);
+++
++ 	return 0;
++ }
++ 
++-#ifdef CONFIG_PM
++-static int kempld_i2c_suspend(struct platform_device *pdev, pm_message_t state)
+++#ifdef CONFIG_PM_SLEEP
+++static int kempld_i2c_suspend(struct device *dev)
++ {
++-	struct kempld_i2c_data *i2c = platform_get_drvdata(pdev);
+++	struct kempld_i2c_data *i2c = dev_get_drvdata(dev);
++ 	struct kempld_device_data *pld = i2c->pld;
++ 	u8 ctrl;
++ 
++-	kempld_get_mutex(pld);
++-	ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
++-	ctrl &= ~I2C_CTRL_EN;
++-	kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
++-	kempld_release_mutex(pld);
+++	kempld_i2c_irq_disable(i2c);
+++
+++	if (!i2c->was_active) {
+++		/* make sure the device is disabled */
+++		kempld_get_mutex(pld);
+++		ctrl = kempld_read8(pld, KEMPLD_I2C_CTRL);
+++		ctrl &= ~I2C_CTRL_EN;
+++		kempld_write8(pld, KEMPLD_I2C_CTRL, ctrl);
+++		kempld_release_mutex(pld);
+++	}
++ 
++ 	return 0;
++ }
++ 
++-static int kempld_i2c_resume(struct platform_device *pdev)
+++static int kempld_i2c_resume(struct device *dev)
++ {
++-	struct kempld_i2c_data *i2c = platform_get_drvdata(pdev);
++-	struct kempld_device_data *pld = i2c->pld;
+++	struct kempld_i2c_data *i2c = dev_get_drvdata(dev);
++ 
++-	kempld_get_mutex(pld);
++ 	kempld_i2c_device_init(i2c);
++-	kempld_release_mutex(pld);
+++	kempld_i2c_irq_enable(i2c);
++ 
++ 	return 0;
++ }
++-#else
++-#define kempld_i2c_suspend	NULL
++-#define kempld_i2c_resume	NULL
++ #endif
++ 
+++static const struct dev_pm_ops kempld_i2c_pm_ops = {
+++#ifdef CONFIG_PM_SLEEP
+++	.suspend = kempld_i2c_suspend,
+++	.resume = kempld_i2c_resume,
+++	.poweroff =  kempld_i2c_suspend,
+++	.restore = kempld_i2c_resume,
+++#endif
+++};
+++
++ static struct platform_driver kempld_i2c_driver = {
++ 	.driver = {
++ 		.name = "kempld-i2c",
+++		.pm = &kempld_i2c_pm_ops,
++ 	},
++ 	.probe		= kempld_i2c_probe,
++ 	.remove		= kempld_i2c_remove,
++-	.suspend	= kempld_i2c_suspend,
++-	.resume		= kempld_i2c_resume,
++ };
++ 
++-module_platform_driver(kempld_i2c_driver);
+++static int __init kempld_i2c_init(void)
+++{
+++	/* Check if a valid value for the i2c_mx_bus parameter is provided */
+++	if ((i2c_mx_bus != -1) && (i2c_mx_bus & ~KEMPLD_I2C_MX_MASK))
+++		return -EINVAL;
+++
+++	return platform_driver_register(&kempld_i2c_driver);
+++}
+++
+++static void __exit kempld_i2c_exit(void)
+++{
+++	platform_driver_unregister(&kempld_i2c_driver);
+++}
+++
+++module_init(kempld_i2c_init);
+++module_exit(kempld_i2c_exit);
++ 
++ MODULE_DESCRIPTION("KEM PLD I2C Driver");
++ MODULE_AUTHOR("Michael Brunner <michael.brunner@kontron.com>");
++ MODULE_LICENSE("GPL");
++ MODULE_ALIAS("platform:kempld_i2c");
+++MODULE_VERSION("34.0");
++diff --git a/drivers/i2c/busses/i2c-kempld.h b/drivers/i2c/busses/i2c-kempld.h
++new file mode 100644
++index 00000000..cc49aed
++--- /dev/null
+++++ b/drivers/i2c/busses/i2c-kempld.h
++@@ -0,0 +1,74 @@
+++/* SPDX-License-Identifier: GPL-2.0 */
+++/*
+++ *  Kontron PLD I2C driver definitions
+++ *
+++ *  Copyright (c) 2010-2014 Kontron Europe GmbH
+++ *  Author: Michael Brunner <michael.brunner@kontron.com>
+++ */
+++
+++#ifndef _KEMPLD_I2C_H_
+++#define _KEMPLD_I2C_H_
+++
+++#define KEMPLD_I2C_PRELOW	0x0b
+++#define KEMPLD_I2C_PREHIGH	0x0c
+++#define KEMPLD_I2C_DATA		0x0e
+++
+++#define KEMPLD_I2C_CTRL		0x0d
+++#define I2C_CTRL_BCEN		0x20
+++#define I2C_CTRL_IEN		0x40
+++#define I2C_CTRL_EN		0x80
+++
+++#define KEMPLD_I2C_STAT		0x0f
+++#define I2C_STAT_IF		0x01
+++#define I2C_STAT_TIP		0x02
+++#define I2C_STAT_ARBLOST	0x20
+++#define I2C_STAT_BUSY		0x40
+++#define I2C_STAT_NACK		0x80
+++
+++#define KEMPLD_I2C_CMD		0x0f
+++#define I2C_CMD_START		0x91
+++#define I2C_CMD_STOP		0x41
+++#define I2C_CMD_READ		0x21
+++#define I2C_CMD_WRITE		0x11
+++#define I2C_CMD_READ_ACK	0x21
+++#define I2C_CMD_READ_NACK	0x29
+++#define I2C_CMD_IACK		0x01
+++
+++#define KEMPLD_I2C_MX			0x15
+++#define	KEMPLD_I2C_MX_GET_MAX(x)	((x & 0xf0)>>4)
+++#define	KEMPLD_I2C_MX_MASK		0x0f
+++
+++enum {
+++	STATE_DONE = 0,
+++	STATE_INIT,
+++	STATE_ADDR,
+++	STATE_ADDR_CONT,
+++	STATE_ADDR10,
+++	STATE_START,
+++	STATE_WRITE,
+++	STATE_READ,
+++	STATE_ERROR,
+++};
+++
+++struct kempld_i2c_data {
+++	struct i2c_adapter		adap;
+++	struct platform_device          *mux_pdev;
+++	struct i2c_msg			*msg;
+++	int				base_nr; /* -1 for dynamic */
+++	int				pos;
+++	int				nmsgs;
+++	int				state;
+++	int				was_active;
+++	int				busclear;
+++	int				mx;
+++	int				mx_max;
+++	int				gpio_mux;
+++	wait_queue_head_t		wait;
+++	int				irq_wake;
+++	unsigned long			timeout;
+++	int				ret;
+++	int				irq;
+++	struct kempld_device_data	*pld;
+++};
+++
+++#endif /* _KEMPLD_I2C_H_ */
++diff --git a/drivers/i2c/muxes/Kconfig b/drivers/i2c/muxes/Kconfig
++index 1708b1a..ccb6b19 100644
++--- a/drivers/i2c/muxes/Kconfig
+++++ b/drivers/i2c/muxes/Kconfig
++@@ -119,4 +119,16 @@ config I2C_MUX_MLXCPLD
++ 	  This driver can also be built as a module.  If so, the module
++ 	  will be called i2c-mux-mlxcpld.
++ 
+++config I2C_MUX_KEMPLD
+++	tristate "Kontron COM I2C multiplexer"
+++    depends on I2C_KEMPLD
+++	help
+++	  This enables support for additional I2C ports available on some Kontron
+++	  modules. Usually those ports are for board internal usage and not
+++	  routed outside the module.
+++	  Do not use this option unless you know what you are doing!
+++
+++	  This driver can also be built as a module. If so, the module will be
+++	  called i2c-mux-kempld.
+++
++ endmenu
++diff --git a/drivers/i2c/muxes/Makefile b/drivers/i2c/muxes/Makefile
++index 6d9d865..5eea3a3 100644
++--- a/drivers/i2c/muxes/Makefile
+++++ b/drivers/i2c/muxes/Makefile
++@@ -6,6 +6,7 @@ obj-$(CONFIG_I2C_ARB_GPIO_CHALLENGE)	+= i2c-arb-gpio-challenge.o
++ 
++ obj-$(CONFIG_I2C_DEMUX_PINCTRL)		+= i2c-demux-pinctrl.o
++ 
+++obj-$(CONFIG_I2C_MUX_KEMPLD)	+= i2c-mux-kempld.o
++ obj-$(CONFIG_I2C_MUX_GPIO)	+= i2c-mux-gpio.o
++ obj-$(CONFIG_I2C_MUX_GPMUX)	+= i2c-mux-gpmux.o
++ obj-$(CONFIG_I2C_MUX_LTC4306)	+= i2c-mux-ltc4306.o
++diff --git a/drivers/i2c/muxes/i2c-mux-kempld.c b/drivers/i2c/muxes/i2c-mux-kempld.c
++new file mode 100644
++index 00000000..b5756f4
++--- /dev/null
+++++ b/drivers/i2c/muxes/i2c-mux-kempld.c
++@@ -0,0 +1,199 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ *  I2C bus multiplexer driver for Kontron COM modules
+++ *
+++ *  Copyright (c) 2010-2016 Kontron Europe GmbH
+++ *  Author: Michael Brunner <michael.brunner@kontron.com>
+++ */
+++
+++#include <linux/kernel.h>
+++#include <linux/module.h>
+++#include <linux/init.h>
+++#include <linux/platform_device.h>
+++#include <linux/dmi.h>
+++#include <linux/i2c.h>
+++#include <linux/i2c-mux.h>
+++#include <linux/delay.h>
+++#include <linux/slab.h>
+++#include <linux/mfd/kempld.h>
+++#include "../busses/i2c-kempld.h"
+++
+++static bool noeeep;
+++module_param(noeeep, bool, 0444);
+++MODULE_PARM_DESC(noeeep, "Skip registering the Kontron EEEP device");
+++
+++static const struct i2c_board_info kontron_eeep_info_come = {
+++	I2C_BOARD_INFO("kontron_eeep", 0x50),
+++};
+++
+++static const struct i2c_board_info kontron_eeep_info_bkpl = {
+++	I2C_BOARD_INFO("kontron_eeep", 0x57),
+++};
+++
+++static void i2c_mux_kempld_register_eeep(struct kempld_device_data *pld,
+++					 struct i2c_mux_core *muxc)
+++{
+++	if (pld->eeep == KEMPLD_EEEP_NONE)
+++		return;
+++
+++	if (pld->eeep == KEMPLD_EEEP_COME_BKPL
+++	    || pld->eeep == KEMPLD_EEEP_COME) {
+++		if (i2c_new_client_device(muxc->adapter[0],
+++					  &kontron_eeep_info_come))
+++			dev_info(pld->dev, "Registered COMe EEEP\n");
+++		if (pld->eeep == KEMPLD_EEEP_COME)
+++			return;
+++	}
+++
+++	if (pld->eeep == KEMPLD_EEEP_COME_BKPL
+++	    || pld->eeep == KEMPLD_EEEP_BKPL) {
+++		if (i2c_new_client_device(muxc->adapter[0],
+++					  &kontron_eeep_info_bkpl))
+++			dev_info(pld->dev, "Registered COMe backplane EEEP\n");
+++		return;
+++	}
+++
+++	dev_warn(pld->dev, "Unknown EEEP configuration specified (%d)\n",
+++		 pld->eeep);
+++}
+++
+++static int i2c_mux_kempld_select(struct i2c_mux_core *muxc, u32 chan)
+++{
+++	struct kempld_i2c_data *i2c = i2c_mux_priv(muxc);
+++	struct kempld_device_data *pld = i2c->pld;
+++	int ret = 0;
+++
+++	if ((i2c->state == STATE_DONE) || (i2c->state == STATE_ERROR)) {
+++		if (i2c->mx != chan) {
+++			kempld_get_mutex(pld);
+++			i2c->mx = chan & 0x0f;
+++			kempld_write8(pld, KEMPLD_I2C_MX, i2c->mx);
+++			kempld_release_mutex(pld);
+++		}
+++	} else
+++		ret = -EBUSY;
+++
+++	return ret;
+++}
+++
+++unsigned int mux_class_come[] = {
+++	0,				 /* 0 default I2C bus */
+++	I2C_CLASS_DDC,			 /*
+++					  * 1 system/internal and/or
+++					  * DDC I2C bus
+++					  */
+++	0,				 /* 2 optional GPIO I2C */
+++};
+++
+++static int i2c_mux_kempld_probe(struct platform_device *pdev)
+++{
+++	struct i2c_mux_core *muxc;
+++	struct kempld_i2c_data *i2c = dev_get_platdata(&pdev->dev);
+++	struct kempld_device_data *pld = i2c->pld;
+++	struct i2c_adapter *parent;
+++	unsigned int class;
+++	unsigned int *mux_class;
+++	int mux_class_size;
+++	int i;
+++	int ret;
+++
+++	parent = i2c_get_adapter(i2c->adap.nr);
+++	if (!parent)
+++		return -EPROBE_DEFER;
+++
+++	muxc = i2c_mux_alloc(parent, &pdev->dev, i2c->mx_max + 1, 0, 0,
+++			     i2c_mux_kempld_select, NULL);
+++	if (!muxc)
+++		return -ENOMEM;
+++
+++	muxc->priv = i2c;
+++
+++	platform_set_drvdata(pdev, muxc);
+++
+++	switch (pld->ddc) {
+++	case KEMPLD_DDC_NONE:
+++		break;
+++	case KEMPLD_DDC_COME:
+++		dev_info(pld->dev, "Registered COMe panel DDC\n");
+++		mux_class = mux_class_come;
+++		mux_class_size = ARRAY_SIZE(mux_class_come);
+++		break;
+++	default:
+++		dev_warn(pld->dev,
+++			 "Unknown DDC configuration specified (%d)\n",
+++			 pld->ddc);
+++	}
+++
+++
+++	for (i = 0; i <= i2c->mx_max; i++) {
+++		u32 nr = 0;
+++
+++		if (i2c->base_nr >= 0)
+++			nr = i2c->base_nr + 1 + i;
+++
+++		if (i < mux_class_size)
+++			class = *(mux_class + i);
+++		else
+++			class = 0;
+++
+++		ret = i2c_mux_add_adapter(muxc, nr, i, class);
+++		if (ret) {
+++			dev_err(&pdev->dev, "Failed to add adapter %d\n", i);
+++			goto add_mux_adapter_failed;
+++		}
+++	}
+++
+++	/*
+++	 * Check for Kontron EEEP devices that might be attached to this
+++	 * controller
+++	 */
+++	if (!noeeep)
+++		i2c_mux_kempld_register_eeep(pld, muxc);
+++
+++	return 0;
+++
+++add_mux_adapter_failed:
+++	i2c_mux_del_adapters(muxc);
+++	i2c_put_adapter(parent);
+++
+++	return ret;
+++}
+++
+++static int i2c_mux_kempld_remove(struct platform_device *pdev)
+++{
+++	struct i2c_mux_core *muxc = platform_get_drvdata(pdev);
+++
+++	i2c_mux_del_adapters(muxc);
+++
+++	if (muxc->parent)
+++		i2c_put_adapter(muxc->parent);
+++
+++	return 0;
+++}
+++
+++static struct platform_driver i2c_mux_kempld_driver = {
+++	.driver = {
+++		.name = "i2c-mux-kempld",
+++	},
+++	.probe		= i2c_mux_kempld_probe,
+++	.remove		= i2c_mux_kempld_remove,
+++};
+++
+++static int __init i2c_mux_kempld_init(void)
+++{
+++	return platform_driver_register(&i2c_mux_kempld_driver);
+++}
+++
+++static void __exit i2c_mux_kempld_exit(void)
+++{
+++	platform_driver_unregister(&i2c_mux_kempld_driver);
+++}
+++
+++module_init(i2c_mux_kempld_init);
+++module_exit(i2c_mux_kempld_exit);
+++
+++MODULE_DESCRIPTION("KEM PLD I2C multiplexer driver");
+++MODULE_AUTHOR("Michael Brunner <michael.brunner@kontron.com>");
+++MODULE_LICENSE("GPL");
+++MODULE_ALIAS("platform:i2c-mux-kempld");
+++MODULE_VERSION("34.0");
++diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig
++index 8b99a13..befd19d 100644
++--- a/drivers/mfd/Kconfig
+++++ b/drivers/mfd/Kconfig
++@@ -720,33 +720,9 @@ config MFD_KEMPLD
++ 	select MFD_CORE
++ 	help
++ 	  This is the core driver for the PLD (Programmable Logic Device) found
++-	  on some Kontron ETX and COMexpress (ETXexpress) modules. The PLD
++-	  device may provide functions like watchdog, GPIO, UART and I2C bus.
++-
++-	  The following modules are supported:
++-		* COMe-bBD#
++-		* COMe-bBL6
++-		* COMe-bHL6
++-		* COMe-bSL6
++-		* COMe-bIP#
++-		* COMe-bKL6
++-		* COMe-bPC2 (ETXexpress-PC)
++-		* COMe-bSC# (ETXexpress-SC T#)
++-		* COMe-cAL6
++-		* COMe-cBL6
++-		* COMe-cBT6
++-		* COMe-cBW6
++-		* COMe-cCT6
++-		* COMe-cDC2 (microETXexpress-DC)
++-		* COMe-cHL6
++-		* COMe-cKL6
++-		* COMe-cPC2 (microETXexpress-PC)
++-		* COMe-cSL6
++-		* COMe-mAL10
++-		* COMe-mBT10
++-		* COMe-mCT10
++-		* COMe-mTT10 (nanoETXexpress-TT)
++-		* ETX-OH
+++	  on some Kontron ETX and nearly all COMexpress (ETXexpress) modules as
+++	  well as on some other Kontron products. The PLD device may provide
+++	  functions like watchdog, GPIO, UART and I2C bus.
++ 
++ 	  This driver can also be built as a module. If so, the module
++ 	  will be called kempld-core.
++diff --git a/drivers/mfd/kempld-core.c b/drivers/mfd/kempld-core.c
++index 2c92959..d86e40c 100644
++--- a/drivers/mfd/kempld-core.c
+++++ b/drivers/mfd/kempld-core.c
++@@ -2,7 +2,7 @@
++ /*
++  * Kontron PLD MFD core driver
++  *
++- * Copyright (c) 2010-2013 Kontron Europe GmbH
+++ * Copyright (c) 2010-2018 Kontron Europe GmbH
++  * Author: Michael Brunner <michael.brunner@kontron.com>
++  */
++ 
++@@ -11,6 +11,7 @@
++ #include <linux/mfd/kempld.h>
++ #include <linux/module.h>
++ #include <linux/dmi.h>
+++#include <linux/slab.h>
++ #include <linux/io.h>
++ #include <linux/delay.h>
++ #include <linux/acpi.h>
++@@ -21,6 +22,60 @@ module_param_string(force_device_id, force_device_id,
++ 		    sizeof(force_device_id), 0);
++ MODULE_PARM_DESC(force_device_id, "Override detected product");
++ 
+++static int eeep = -1;
+++module_param(eeep, int, 0444);
+++MODULE_PARM_DESC(eeep,
+++		 "Override EEEP platform default (0=none, 1=COMe, 2=COMe+Backplane, 3=Backplane)");
+++
+++static int ddc = -1;
+++module_param(ddc, int, 0444);
+++MODULE_PARM_DESC(ddc, "Override DDC platform default (none=0, COMe=1)");
+++
+++static bool autoirq;
+++module_param(autoirq, bool, 0444);
+++MODULE_PARM_DESC(autoirq, "Try to assign irq automatically from BIOS irq pool");
+++
+++/*
+++ * this option is only here for debugging and should never be needed in
+++ * production environments
+++ */
+++static bool force_unlock;
+++module_param(force_unlock, bool, 0444);
+++MODULE_PARM_DESC(force_unlock, "Force breaking the semaphore on driver load");
+++
+++/*
+++ * GPIO names arrays are expected to include 16 entries
+++ */
+++static const char *kempld_gpio_names_generic[16] = {
+++	"GPIO0", "GPIO1", "GPIO2", "GPIO3", "GPIO4", "GPIO5", "GPIO6", "GPIO7",
+++	"GPIO9", "GPIO9", "GPIO10", "GPIO11", "GPIO12", "GPIO13", "GPIO14",
+++	"GPIO15"
+++};
+++
+++static const char *kempld_gpio_names_sxal[16] = {
+++	"GPIO0_CAM0_PWR_N", "GPIO1_CAM1_PWR_N", "GPIO2_CAM0_RST_N",
+++	"GPIO3_CAM1_RST_N", "GPIO4_HDA_RST_N", "GPIO5_PWM_OUT", "GPIO6_TACHIN",
+++	"GPIO7", "GPIO8", "GPIO9", "GPIO10", "GPIO11"
+++};
+++
+++static const char *kempld_gpio_names_sxel[16] = {
+++	"GPIO0", "GPIO1", "GPIO2", "GPIO3",
+++	"GPIO4_HDA_RST_N", "GPIO5_PWM_OUT", "GPIO6_TACHIN",
+++	"GPIO7", "GPIO8", "GPIO9", "GPIO10", "GPIO11", "GPIO12", "GPIO13",
+++	"GPIO14", "GPIO15"
+++};
+++
+++static const char * const lrc_strings[] = {
+++	"power-on",
+++	"external",
+++	"watchdog",
+++	"over-temperature",
+++	"power-good-fail",
+++	"software",
+++	"other",
+++	NULL
+++};
+++
++ /*
++  * Get hardware mutex to block firmware from accessing the pld.
++  * It is possible for the firmware may hold the mutex for an extended length of
++@@ -28,15 +83,19 @@ MODULE_PARM_DESC(force_device_id, "Override detected product");
++  */
++ static void kempld_get_hardware_mutex(struct kempld_device_data *pld)
++ {
+++	u8 index;
+++
++ 	/* The mutex bit will read 1 until access has been granted */
++-	while (ioread8(pld->io_index) & KEMPLD_MUTEX_KEY)
+++	while ((index = ioread8(pld->io_index)) & KEMPLD_MUTEX_KEY)
++ 		usleep_range(1000, 3000);
+++
+++	pld->last_index = index;
++ }
++ 
++ static void kempld_release_hardware_mutex(struct kempld_device_data *pld)
++ {
++ 	/* The harware mutex is released when 1 is written to the mutex bit. */
++-	iowrite8(KEMPLD_MUTEX_KEY, pld->io_index);
+++	iowrite8(KEMPLD_MUTEX_KEY | pld->last_index, pld->io_index);
++ }
++ 
++ static int kempld_get_info_generic(struct kempld_device_data *pld)
++@@ -115,9 +174,53 @@ static struct resource kempld_ioresource = {
++ 	.flags	= IORESOURCE_IO,
++ };
++ 
+++/* this is the default CPLD configuration unless something else is defined */
++ static const struct kempld_platform_data kempld_platform_data_generic = {
++ 	.pld_clock		= KEMPLD_CLK,
++ 	.ioresource		= &kempld_ioresource,
+++	.force_index_write	= 0,
+++	.eeep			= KEMPLD_EEEP_NONE,
+++	.ddc			= KEMPLD_DDC_NONE,
+++	.gpio_names		= kempld_gpio_names_generic,
+++	.get_hardware_mutex	= kempld_get_hardware_mutex,
+++	.release_hardware_mutex	= kempld_release_hardware_mutex,
+++	.get_info		= kempld_get_info_generic,
+++	.register_cells		= kempld_register_cells_generic,
+++};
+++
+++static const struct kempld_platform_data kempld_platform_data_come = {
+++	.pld_clock		= KEMPLD_CLK,
+++	.ioresource		= &kempld_ioresource,
+++	.force_index_write	= 0,
+++	.eeep			= KEMPLD_EEEP_COME,
+++	.ddc			= KEMPLD_DDC_COME,
+++	.gpio_names		= kempld_gpio_names_generic,
+++	.get_hardware_mutex	= kempld_get_hardware_mutex,
+++	.release_hardware_mutex	= kempld_release_hardware_mutex,
+++	.get_info		= kempld_get_info_generic,
+++	.register_cells		= kempld_register_cells_generic,
+++};
+++
+++static const struct kempld_platform_data kempld_platform_data_sxal = {
+++	.pld_clock		= KEMPLD_CLK,
+++	.ioresource		= &kempld_ioresource,
+++	.force_index_write	= 0,
+++	.eeep			= KEMPLD_EEEP_NONE,
+++	.ddc			= KEMPLD_DDC_NONE,
+++	.gpio_names		= kempld_gpio_names_sxal,
+++	.get_hardware_mutex	= kempld_get_hardware_mutex,
+++	.release_hardware_mutex	= kempld_release_hardware_mutex,
+++	.get_info		= kempld_get_info_generic,
+++	.register_cells		= kempld_register_cells_generic,
+++};
+++
+++static const struct kempld_platform_data kempld_platform_data_sxel = {
+++	.pld_clock		= KEMPLD_CLK,
+++	.ioresource		= &kempld_ioresource,
+++	.force_index_write	= 0,
+++	.eeep			= KEMPLD_EEEP_COME,
+++	.ddc			= KEMPLD_DDC_COME,
+++	.gpio_names		= kempld_gpio_names_sxel,
++ 	.get_hardware_mutex	= kempld_get_hardware_mutex,
++ 	.release_hardware_mutex	= kempld_release_hardware_mutex,
++ 	.get_info		= kempld_get_info_generic,
++@@ -125,11 +228,10 @@ static const struct kempld_platform_data kempld_platform_data_generic = {
++ };
++ 
++ static struct platform_device *kempld_pdev;
++-static bool kempld_acpi_mode;
++ 
++ static int kempld_create_platform_device(const struct dmi_system_id *id)
++ {
++-	const struct kempld_platform_data *pdata = id->driver_data;
+++	struct kempld_platform_data *pdata = id->driver_data;
++ 	int ret;
++ 
++ 	kempld_pdev = platform_device_alloc("kempld", -1);
++@@ -155,6 +257,74 @@ static int kempld_create_platform_device(const struct dmi_system_id *id)
++ }
++ 
++ /**
+++ * kempld_set_index -  change the current register index of the PLD
+++ * @pld: kempld_device_data structure describing the PLD
+++ * @pld:   kempld_device_data structure describing the PLD
+++ * @index: register index on the chip
+++ *
+++ * kempld_get_mutex must be called prior to calling this function.
+++ */
+++static void kempld_set_index(struct kempld_device_data *pld, u8 index)
+++{
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++
+++	if (pld->last_index != index || pdata->force_index_write) {
+++		iowrite8(index, pld->io_index);
+++		pld->last_index = index;
+++	}
+++}
+++
+++/**
+++ * kempld_request_irq_num - request free IRQ number from resource pool
+++ * @pld: kempld_device_data structure describing the PLD
+++ * @irq: requested irq number, 0 for next free one
+++ */
+++int kempld_request_irq_num(struct kempld_device_data *pld, int irq)
+++{
+++	struct platform_device *pdev = to_platform_device(pld->dev);
+++	struct resource *r;
+++	int i = 0;
+++
+++	if ((irq == 0) && !autoirq)
+++		return  0;
+++
+++	while ((r = platform_get_resource(pdev, IORESOURCE_IRQ, i++))) {
+++		if ((irq == 0) && !(r->flags & IORESOURCE_BUSY)) {
+++			r->flags |= IORESOURCE_BUSY;
+++			return r->start;
+++		} else if (r->start == irq) {
+++			if (r->flags & IORESOURCE_BUSY)
+++				return -EBUSY;
+++			else
+++				return irq;
+++		}
+++	}
+++
+++	return -ENXIO;
+++}
+++EXPORT_SYMBOL_GPL(kempld_request_irq_num);
+++
+++/**
+++ * kempld_free_irq_num - mark IRQ number from the resource pool as free
+++ * @pld: kempld_device_data structure describing the PLD
+++ * @irq: irq number
+++ */
+++void kempld_free_irq_num(struct kempld_device_data *pld, int irq)
+++{
+++	struct platform_device *pdev = to_platform_device(pld->dev);
+++	struct resource *r;
+++	int i = 0;
+++
+++	while ((r = platform_get_resource(pdev, IORESOURCE_IRQ, i++))) {
+++		if (r->start == irq) {
+++			r->flags &= ~IORESOURCE_BUSY;
+++			return;
+++		}
+++	}
+++}
+++EXPORT_SYMBOL_GPL(kempld_free_irq_num);
+++
+++/**
++  * kempld_read8 - read 8 bit register
++  * @pld: kempld_device_data structure describing the PLD
++  * @index: register index on the chip
++@@ -163,11 +333,19 @@ static int kempld_create_platform_device(const struct dmi_system_id *id)
++  */
++ u8 kempld_read8(struct kempld_device_data *pld, u8 index)
++ {
++-	iowrite8(index, pld->io_index);
+++	kempld_set_index(pld, index);
+++
++ 	return ioread8(pld->io_data);
++ }
++ EXPORT_SYMBOL_GPL(kempld_read8);
++ 
+++u8 kempld_read8_shadow(struct kempld_device_data *pld, u8 index)
+++{
+++
+++	return pld->shadow[index];
+++}
+++EXPORT_SYMBOL_GPL(kempld_read8_shadow);
+++
++ /**
++  * kempld_write8 - write 8 bit register
++  * @pld: kempld_device_data structure describing the PLD
++@@ -178,7 +356,9 @@ EXPORT_SYMBOL_GPL(kempld_read8);
++  */
++ void kempld_write8(struct kempld_device_data *pld, u8 index, u8 data)
++ {
++-	iowrite8(index, pld->io_index);
+++	kempld_set_index(pld, index);
+++
+++	pld->shadow[index] = data;
++ 	iowrite8(data, pld->io_data);
++ }
++ EXPORT_SYMBOL_GPL(kempld_write8);
++@@ -196,6 +376,13 @@ u16 kempld_read16(struct kempld_device_data *pld, u8 index)
++ }
++ EXPORT_SYMBOL_GPL(kempld_read16);
++ 
+++u16 kempld_read16_shadow(struct kempld_device_data *pld, u8 index)
+++{
+++	return kempld_read8_shadow(pld, index)
+++		| kempld_read8_shadow(pld, index + 1) << 8;
+++}
+++EXPORT_SYMBOL_GPL(kempld_read16_shadow);
+++
++ /**
++  * kempld_write16 - write 16 bit register
++  * @pld: kempld_device_data structure describing the PLD
++@@ -224,6 +411,13 @@ u32 kempld_read32(struct kempld_device_data *pld, u8 index)
++ }
++ EXPORT_SYMBOL_GPL(kempld_read32);
++ 
+++u32 kempld_read32_shadow(struct kempld_device_data *pld, u8 index)
+++{
+++	return kempld_read16_shadow(pld, index)
+++		| kempld_read16_shadow(pld, index + 2) << 16;
+++}
+++EXPORT_SYMBOL_GPL(kempld_read32_shadow);
+++
++ /**
++  * kempld_write32 - write 32 bit register
++  * @pld: kempld_device_data structure describing the PLD
++@@ -245,7 +439,7 @@ EXPORT_SYMBOL_GPL(kempld_write32);
++  */
++ void kempld_get_mutex(struct kempld_device_data *pld)
++ {
++-	const struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
++ 
++ 	mutex_lock(&pld->lock);
++ 	pdata->get_hardware_mutex(pld);
++@@ -258,7 +452,7 @@ EXPORT_SYMBOL_GPL(kempld_get_mutex);
++  */
++ void kempld_release_mutex(struct kempld_device_data *pld)
++ {
++-	const struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
++ 
++ 	pdata->release_hardware_mutex(pld);
++ 	mutex_unlock(&pld->lock);
++@@ -276,7 +470,7 @@ EXPORT_SYMBOL_GPL(kempld_release_mutex);
++ static int kempld_get_info(struct kempld_device_data *pld)
++ {
++ 	int ret;
++-	const struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
++ 	char major, minor;
++ 
++ 	ret = pdata->get_info(pld);
++@@ -309,6 +503,36 @@ static int kempld_get_info(struct kempld_device_data *pld)
++ 	return 0;
++ }
++ 
+++/**
+++ * kempld_get_last_reset_cause - get reason for last reset
+++ * @pld: kempld_device_data structure describing the PLD
+++ *
+++ * This function reads out the LRC register, if available, and stores the
+++ * information in the pld structure.
+++ */
+++static int kempld_get_last_reset_cause(struct kempld_device_data *pld)
+++{
+++	u8 lrc;
+++
+++	if ((pld->info.spec_major < 2) ||
+++	    ((pld->info.spec_major == 2) && (pld->info.spec_minor < 7))) {
+++		pld->last_reset_cause = 0xff;
+++		return -ENXIO;
+++	}
+++
+++	kempld_get_mutex(pld);
+++	lrc = kempld_read8(pld, KEMPLD_LRC);
+++	kempld_release_mutex(pld);
+++	if (lrc == 0xff) {
+++		pld->last_reset_cause = 0xff;
+++		return -ENXIO;
+++	}
+++
+++	pld->last_reset_cause = lrc & KEMPLD_LRC_MASK;
+++
+++	return 0;
+++}
+++
++ /*
++  * kempld_register_cells - register cell drivers
++  *
++@@ -318,7 +542,7 @@ static int kempld_get_info(struct kempld_device_data *pld)
++  */
++ static int kempld_register_cells(struct kempld_device_data *pld)
++ {
++-	const struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
++ 
++ 	return pdata->register_cells(pld);
++ }
++@@ -345,7 +569,34 @@ static const char *kempld_get_type_string(struct kempld_device_data *pld)
++ 	return version_type;
++ }
++ 
++-static ssize_t kempld_version_show(struct device *dev,
+++static ssize_t kempld_build_lrc_string(struct kempld_device_data *pld,
+++				       char *buf, ssize_t length)
+++{
+++	ssize_t count = 0;
+++	int i;
+++
+++	if (pld->last_reset_cause == 0)
+++		return scnprintf(buf, length, "0x00 (unknown)\n");
+++	else if (pld->last_reset_cause == 0xff)
+++		return scnprintf(buf, length, "0xff (not-supported)\n");
+++
+++	count = scnprintf(buf, length, "0x%02x (", pld->last_reset_cause);
+++
+++	i = 0;
+++	do {
+++		if (pld->last_reset_cause & (1 << i))
+++			count += scnprintf(&buf[count],
+++					   (length - count - 2),
+++					  "%s|", lrc_strings[i]);
+++	} while (lrc_strings[++i]);
+++
+++	count--;
+++	count += scnprintf(&buf[count], (length - count - 2), ")\n");
+++
+++	return count;
+++}
+++
+++static ssize_t pld_version_show(struct device *dev,
++ 		struct device_attribute *attr, char *buf)
++ {
++ 	struct kempld_device_data *pld = dev_get_drvdata(dev);
++@@ -353,7 +604,7 @@ static ssize_t kempld_version_show(struct device *dev,
++ 	return scnprintf(buf, PAGE_SIZE, "%s\n", pld->info.version);
++ }
++ 
++-static ssize_t kempld_specification_show(struct device *dev,
+++static ssize_t pld_specification_show(struct device *dev,
++ 		struct device_attribute *attr, char *buf)
++ {
++ 	struct kempld_device_data *pld = dev_get_drvdata(dev);
++@@ -362,7 +613,7 @@ static ssize_t kempld_specification_show(struct device *dev,
++ 		       pld->info.spec_minor);
++ }
++ 
++-static ssize_t kempld_type_show(struct device *dev,
+++static ssize_t pld_type_show(struct device *dev,
++ 		struct device_attribute *attr, char *buf)
++ {
++ 	struct kempld_device_data *pld = dev_get_drvdata(dev);
++@@ -370,15 +621,155 @@ static ssize_t kempld_type_show(struct device *dev,
++ 	return scnprintf(buf, PAGE_SIZE, "%s\n", kempld_get_type_string(pld));
++ }
++ 
++-static DEVICE_ATTR(pld_version, S_IRUGO, kempld_version_show, NULL);
++-static DEVICE_ATTR(pld_specification, S_IRUGO, kempld_specification_show,
++-		   NULL);
++-static DEVICE_ATTR(pld_type, S_IRUGO, kempld_type_show, NULL);
+++static ssize_t last_reset_cause_show(struct device *dev,
+++		struct device_attribute *attr, char *buf)
+++{
+++	return kempld_build_lrc_string(dev_get_drvdata(dev), buf, PAGE_SIZE);
+++}
+++
+++static ssize_t active_bios_cs_show(struct device *dev,
+++		struct device_attribute *attr, char *buf)
+++{
+++	struct kempld_device_data *pld = dev_get_drvdata(dev);
+++	const char *cs_str = "normal";
+++	const char *sel_str;
+++	u8 cfg;
+++
+++	if ((pld->info.spec_major > 2) ||
+++	    ((pld->info.spec_major == 2) && (pld->info.spec_minor >= 7))) {
+++		kempld_get_mutex(pld);
+++		cfg = kempld_read8(pld, KEMPLD_CFG);
+++		kempld_release_mutex(pld);
+++		if (cfg & KEMPLD_CFG_ACTIVE_BIOS_CS)
+++			cs_str = "secondary";
+++		if (cfg & KEMPLD_CFG_SBSO)
+++			sel_str = "override";
+++		else
+++			sel_str = "auto";
+++	} else
+++		sel_str = "not supported";
+++
+++	return scnprintf(buf, PAGE_SIZE, "%s (%s)\n", cs_str, sel_str);
+++}
+++
+++static int kempld_get_bios_set_protect(struct kempld_device_data *pld)
+++{
+++	u8 cfg;
+++
+++	if ((pld->info.spec_major > 2) ||
+++	    ((pld->info.spec_major == 2) && (pld->info.spec_minor >= 9))) {
+++		kempld_get_mutex(pld);
+++		cfg = kempld_read8(pld, KEMPLD_CFG);
+++		kempld_release_mutex(pld);
+++		return !!(cfg & KEMPLD_CFG_BIOS_SET_PROTECT);
+++	} else
+++		return -ENXIO;
+++}
+++
+++static ssize_t active_bios_cs_store(struct device *dev,
+++		struct device_attribute *attr, const char *buf, size_t count)
+++{
+++	struct kempld_device_data *pld = dev_get_drvdata(dev);
+++	u8 cfg, cfg_cur;
+++	int ret = 0;
+++
+++	if ((pld->info.spec_major < 2) ||
+++	    ((pld->info.spec_major == 2) && (pld->info.spec_minor < 7)))
+++		return -ENXIO;
+++
+++	if (kempld_get_bios_set_protect(pld) > 0)
+++		return -EACCES;
+++
+++	kempld_get_mutex(pld);
+++	cfg = kempld_read8(pld, KEMPLD_CFG);
+++
+++	if (sysfs_streq(buf, "secondary"))
+++		cfg |= KEMPLD_CFG_ACTIVE_BIOS_CS | KEMPLD_CFG_SBSO;
+++	else if (sysfs_streq(buf, "normal")) {
+++		cfg &= ~KEMPLD_CFG_ACTIVE_BIOS_CS;
+++		cfg |= KEMPLD_CFG_SBSO;
+++	} else if (sysfs_streq(buf, "auto"))
+++		cfg &= ~KEMPLD_CFG_SBSO;
+++	else
+++		ret = -EINVAL;
+++
+++	kempld_write8(pld, KEMPLD_CFG, cfg);
+++	cfg_cur = kempld_read8(pld, KEMPLD_CFG);
+++	kempld_release_mutex(pld);
+++
+++	if (cfg_cur != cfg)
+++		ret = -ENXIO;
+++
+++	return ret;
+++}
+++
+++static ssize_t bios_set_protect_show(struct device *dev,
+++		struct device_attribute *attr, char *buf)
+++{
+++	struct kempld_device_data *pld = dev_get_drvdata(dev);
+++	int bios_set_protect = kempld_get_bios_set_protect(pld);
+++	const char *str;
+++
+++	if (bios_set_protect > 0)
+++		str = "on";
+++	else if (bios_set_protect == 0)
+++		str = "off";
+++	else
+++		str = "not supported";
+++
+++	return scnprintf(buf, PAGE_SIZE, "%s\n", str);
+++}
+++
+++static ssize_t bios_set_protect_store(struct device *dev,
+++		struct device_attribute *attr, const char *buf, size_t count)
+++{
+++	struct kempld_device_data *pld = dev_get_drvdata(dev);
+++	u8 cfg, cfg_cur;
+++	int ret;
+++
+++	ret = kempld_get_bios_set_protect(pld);
+++	if (ret < 0)
+++		return ret;
+++
+++	kempld_get_mutex(pld);
+++	cfg = kempld_read8(pld, KEMPLD_CFG);
+++
+++	if (sysfs_streq(buf, "on"))
+++		cfg |= KEMPLD_CFG_BIOS_SET_PROTECT;
+++	else if (sysfs_streq(buf, "off"))
+++		/*
+++		 * On production PLDs it should not be possible to set this
+++		 * bit to zero, therefore this can be used to verify if the
+++		 * BIOS related setting protection actually works
+++		 */
+++		cfg &= ~KEMPLD_CFG_BIOS_SET_PROTECT;
+++	else
+++		ret = -EINVAL;
+++
+++	kempld_write8(pld, KEMPLD_CFG, cfg);
+++	cfg_cur = kempld_read8(pld, KEMPLD_CFG);
+++	kempld_release_mutex(pld);
+++
+++	if (cfg_cur != cfg)
+++		ret = -EACCES;
+++
+++	return ret;
+++}
+++
+++static DEVICE_ATTR_RO(pld_version);
+++static DEVICE_ATTR_RO(pld_specification);
+++static DEVICE_ATTR_RO(pld_type);
+++static DEVICE_ATTR_RO(last_reset_cause);
+++static DEVICE_ATTR_RW(active_bios_cs);
+++static DEVICE_ATTR_RW(bios_set_protect);
++ 
++ static struct attribute *pld_attributes[] = {
++ 	&dev_attr_pld_version.attr,
++ 	&dev_attr_pld_specification.attr,
++ 	&dev_attr_pld_type.attr,
+++	&dev_attr_last_reset_cause.attr,
+++	&dev_attr_active_bios_cs.attr,
+++	&dev_attr_bios_set_protect.attr,
++ 	NULL
++ };
++ 
++@@ -390,6 +781,7 @@ static int kempld_detect_device(struct kempld_device_data *pld)
++ {
++ 	u8 index_reg;
++ 	int ret;
+++	int timeout = 1000;
++ 
++ 	mutex_lock(&pld->lock);
++ 
++@@ -400,6 +792,21 @@ static int kempld_detect_device(struct kempld_device_data *pld)
++ 		return -ENODEV;
++ 	}
++ 
+++	/* Try to aquire mutex if not already done */
+++	while (index_reg & KEMPLD_MUTEX_KEY && timeout--) {
+++		usleep_range(1000, 3000);
+++		index_reg = ioread8(pld->io_index);
+++	}
+++	if (index_reg & KEMPLD_MUTEX_KEY) {
+++		dev_err(pld->dev, "HW mutex timed out\n");
+++		if (!force_unlock) {
+++			mutex_unlock(&pld->lock);
+++			return -ENODEV;
+++		}
+++		dev_warn(pld->dev, "force_unlock enabled - releasing mutex\n");
+++		index_reg = 0;
+++	}
+++
++ 	/* Release hardware mutex if acquired */
++ 	if (!(index_reg & KEMPLD_MUTEX_KEY)) {
++ 		iowrite8(KEMPLD_MUTEX_KEY, pld->io_index);
++@@ -417,6 +824,14 @@ static int kempld_detect_device(struct kempld_device_data *pld)
++ 		 pld->info.version, kempld_get_type_string(pld),
++ 		 pld->info.spec_major, pld->info.spec_minor);
++ 
+++	ret = kempld_get_last_reset_cause(pld);
+++	if (ret == 0) {
+++		char buf[128];
+++
+++		kempld_build_lrc_string(pld, buf, 128);
+++		dev_info(pld->dev, "Last reset cause: %s", buf);
+++	}
+++
++ 	ret = sysfs_create_group(&pld->dev->kobj, &pld_attr_group);
++ 	if (ret)
++ 		return ret;
++@@ -501,8 +916,6 @@ static int kempld_probe(struct platform_device *pdev)
++ 		ret = kempld_get_acpi_data(pdev);
++ 		if (ret)
++ 			return ret;
++-
++-		kempld_acpi_mode = true;
++ 	} else if (kempld_pdev != pdev) {
++ 		/*
++ 		 * The platform device we are probing is not the one we
++@@ -532,6 +945,17 @@ static int kempld_probe(struct platform_device *pdev)
++ 	pld->io_index = pld->io_base;
++ 	pld->io_data = pld->io_base + 1;
++ 	pld->pld_clock = pdata->pld_clock;
+++
+++	if (ddc < 0)
+++		pld->ddc = pdata->ddc;
+++	else
+++		pld->ddc = ddc;
+++
+++	if (eeep < 0)
+++		pld->eeep = pdata->eeep;
+++	else
+++		pld->eeep = eeep;
+++
++ 	pld->dev = dev;
++ 
++ 	mutex_init(&pld->lock);
++@@ -543,7 +967,7 @@ static int kempld_probe(struct platform_device *pdev)
++ static int kempld_remove(struct platform_device *pdev)
++ {
++ 	struct kempld_device_data *pld = platform_get_drvdata(pdev);
++-	const struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
+++	struct kempld_platform_data *pdata = dev_get_platdata(pld->dev);
++ 
++ 	sysfs_remove_group(&pld->dev->kobj, &pld_attr_group);
++ 
++@@ -555,7 +979,8 @@ static int kempld_remove(struct platform_device *pdev)
++ 
++ #ifdef CONFIG_ACPI
++ static const struct acpi_device_id kempld_acpi_table[] = {
++-	{ "KEM0001", (kernel_ulong_t)&kempld_platform_data_generic },
+++	{ "KEM0000", (kernel_ulong_t)&kempld_platform_data_generic },
+++	{ "KEM0001", (kernel_ulong_t)&kempld_platform_data_come },
++ 	{}
++ };
++ MODULE_DEVICE_TABLE(acpi, kempld_acpi_table);
++@@ -565,20 +990,19 @@ static struct platform_driver kempld_driver = {
++ 	.driver		= {
++ 		.name	= "kempld",
++ 		.acpi_match_table = ACPI_PTR(kempld_acpi_table),
++-		.probe_type = PROBE_FORCE_SYNCHRONOUS,
++ 	},
++ 	.probe		= kempld_probe,
++ 	.remove		= kempld_remove,
++ };
++ 
++-static const struct dmi_system_id kempld_dmi_table[] __initconst = {
+++static struct dmi_system_id kempld_dmi_table[] __initdata = {
++ 	{
++ 		.ident = "BBD6",
++ 		.matches = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bBD"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "BBL6",
++@@ -586,7 +1010,15 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bBL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "BDV7",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "COMe-bDV7"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "BHL6",
++@@ -594,7 +1026,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bHL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "BKL6",
++@@ -602,7 +1034,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bKL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "BSL6",
++@@ -610,7 +1042,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bSL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CAL6",
++@@ -618,7 +1050,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cAL"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CBL6",
++@@ -626,7 +1058,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cBL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CBW6",
++@@ -634,7 +1066,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cBW6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CCR2",
++@@ -642,7 +1074,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bIP2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CCR6",
++@@ -650,7 +1082,15 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bIP6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "CDV7",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "COMe-cDV7"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHL6",
++@@ -658,7 +1098,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cHL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR2",
++@@ -666,7 +1106,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETXexpress-SC T2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR2",
++@@ -674,7 +1114,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETXe-SC T2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR2",
++@@ -682,7 +1122,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bSC2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR6",
++@@ -690,7 +1130,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETXexpress-SC T6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR6",
++@@ -698,7 +1138,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETXe-SC T6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CHR6",
++@@ -706,7 +1146,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bSC6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CKL6",
++@@ -714,7 +1154,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cKL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CNTG",
++@@ -722,7 +1162,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETXexpress-PC"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CNTG",
++@@ -730,7 +1170,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-bPC2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CNTX",
++@@ -738,7 +1178,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "PXT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CSL6",
++@@ -746,7 +1186,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cSL6"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "CVV6",
++@@ -754,7 +1194,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cBT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "FRI2",
++@@ -762,21 +1202,45 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BIOS_VERSION, "FRI2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "FRI2",
++ 		.matches = {
++ 			DMI_MATCH(DMI_PRODUCT_NAME, "Fish River Island II"),
++ 		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "A203",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "KBox A-203"),
+++		},
++ 		.driver_data = (void *)&kempld_platform_data_generic,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
+++		.ident = "M4A1",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "COMe-m4AL"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
++ 		.ident = "MAL1",
++ 		.matches = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-mAL10"),
++ 		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "MAPL",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "mITX-APL"),
+++		},
++ 		.driver_data = (void *)&kempld_platform_data_generic,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++@@ -785,7 +1249,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "ETX-OH"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "MVV1",
++@@ -793,7 +1257,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-mBT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "NTC1",
++@@ -801,7 +1265,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "nanoETXexpress-TT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "NTC1",
++@@ -809,7 +1273,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "nETXe-TT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "NTC1",
++@@ -817,7 +1281,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-mTT"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "NUP1",
++@@ -825,15 +1289,47 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-mCT"),
++ 		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "PAPL",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "pITX-APL"),
+++		},
++ 		.driver_data = (void *)&kempld_platform_data_generic,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
+++		.ident = "SXAL",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "SMARC-sXAL"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_sxal,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "SXAL4",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "SMARC-sXA4"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_sxal,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "SXEL",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "SMARC-SXEL"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_sxel,
+++		.callback = kempld_create_platform_device,
+++	}, {
++ 		.ident = "UNP1",
++ 		.matches = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "microETXexpress-DC"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "UNP1",
++@@ -841,7 +1337,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cDC2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "UNTG",
++@@ -849,7 +1345,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "microETXexpress-PC"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "UNTG",
++@@ -857,7 +1353,7 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cPC2"),
++ 		},
++-		.driver_data = (void *)&kempld_platform_data_generic,
+++		.driver_data = (void *)&kempld_platform_data_come,
++ 		.callback = kempld_create_platform_device,
++ 	}, {
++ 		.ident = "UUP6",
++@@ -865,14 +1361,39 @@ static const struct dmi_system_id kempld_dmi_table[] __initconst = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++ 			DMI_MATCH(DMI_BOARD_NAME, "COMe-cCT6"),
++ 		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "UTH6",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "COMe-cTH6"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "Q7AL",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "Qseven-Q7AL"),
+++		},
++ 		.driver_data = (void *)&kempld_platform_data_generic,
++ 		.callback = kempld_create_platform_device,
++ 	},
+++	/* The following are dummy entries, not representing actual products */
++ 	{
++-		.ident = "UTH6",
+++		.ident = "come",
++ 		.matches = {
++ 			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
++-			DMI_MATCH(DMI_BOARD_NAME, "COMe-cTH6"),
+++			DMI_MATCH(DMI_BOARD_NAME, "*come*"),
+++		},
+++		.driver_data = (void *)&kempld_platform_data_come,
+++		.callback = kempld_create_platform_device,
+++	}, {
+++		.ident = "gene",
+++		.matches = {
+++			DMI_MATCH(DMI_BOARD_VENDOR, "Kontron"),
+++			DMI_MATCH(DMI_BOARD_NAME, "*generic*"),
++ 		},
++ 		.driver_data = (void *)&kempld_platform_data_generic,
++ 		.callback = kempld_create_platform_device,
++@@ -884,7 +1405,6 @@ MODULE_DEVICE_TABLE(dmi, kempld_dmi_table);
++ static int __init kempld_init(void)
++ {
++ 	const struct dmi_system_id *id;
++-	int ret;
++ 
++ 	if (force_device_id[0]) {
++ 		for (id = kempld_dmi_table;
++@@ -894,24 +1414,11 @@ static int __init kempld_init(void)
++ 					break;
++ 		if (id->matches[0].slot == DMI_NONE)
++ 			return -ENODEV;
++-	}
++-
++-	ret = platform_driver_register(&kempld_driver);
++-	if (ret)
++-		return ret;
++-
++-	/*
++-	 * With synchronous probing the device should already be probed now.
++-	 * If no device id is forced and also no ACPI definition for the
++-	 * device was found, scan DMI table as fallback.
++-	 *
++-	 * If drivers_autoprobing is disabled and the device is found here,
++-	 * only that device can be bound manually later.
++-	 */
++-	if (!kempld_pdev && !kempld_acpi_mode)
+++	} else {
++ 		dmi_check_system(kempld_dmi_table);
+++	}
++ 
++-	return 0;
+++	return platform_driver_register(&kempld_driver);
++ }
++ 
++ static void __exit kempld_exit(void)
++@@ -929,3 +1436,4 @@ MODULE_DESCRIPTION("KEM PLD Core Driver");
++ MODULE_AUTHOR("Michael Brunner <michael.brunner@kontron.com>");
++ MODULE_LICENSE("GPL");
++ MODULE_ALIAS("platform:kempld-core");
+++MODULE_VERSION("34.0");
++diff --git a/drivers/watchdog/kempld_wdt.c b/drivers/watchdog/kempld_wdt.c
++index 40bd518..0e43ab8e 100644
++--- a/drivers/watchdog/kempld_wdt.c
+++++ b/drivers/watchdog/kempld_wdt.c
++@@ -22,21 +22,23 @@
++ #include <linux/watchdog.h>
++ #include <linux/platform_device.h>
++ #include <linux/mfd/kempld.h>
+++#include <linux/nmi.h>
++ 
++ #define KEMPLD_WDT_STAGE_TIMEOUT(x)	(0x1b + (x) * 4)
++ #define KEMPLD_WDT_STAGE_CFG(x)		(0x18 + (x))
++ #define STAGE_CFG_GET_PRESCALER(x)	(((x) & 0x30) >> 4)
++ #define STAGE_CFG_SET_PRESCALER(x)	(((x) & 0x3) << 4)
++ #define STAGE_CFG_PRESCALER_MASK	0x30
++-#define STAGE_CFG_ACTION_MASK		0x7
++-#define STAGE_CFG_ASSERT		(1 << 3)
+++#define STAGE_CFG_ACTION_MASK		0xf
++ 
++ #define KEMPLD_WDT_MAX_STAGES		2
++ #define KEMPLD_WDT_KICK			0x16
++ #define KEMPLD_WDT_CFG			0x17
++-#define KEMPLD_WDT_CFG_ENABLE		0x10
++-#define KEMPLD_WDT_CFG_ENABLE_LOCK	0x8
++-#define KEMPLD_WDT_CFG_GLOBAL_LOCK	0x80
+++#define KEMPLD_WDT_CFG_GLOBAL_LOCK	(1 << 7)
+++#define KEMPLD_WDT_CFG_AUTO_RELOAD_EN	(1 << 6)
+++#define KEMPLD_WDT_CFG_ENABLE		(1 << 4)
+++#define KEMPLD_WDT_CFG_ENABLE_LOCK	(1 << 3)
+++#define KEMPLD_WDT_CFG_STAGE_TOUT(x)	(1 << x)
++ 
++ enum {
++ 	ACTION_NONE = 0,
++@@ -45,6 +47,16 @@ enum {
++ 	ACTION_SMI,
++ 	ACTION_SCI,
++ 	ACTION_DELAY,
+++	ACTION_WDT,
+++	ACTION_RESERVED1,
+++	ACTION_RESERVED2,
+++	ACTION_RESET_WDT,
+++	ACTION_NMI_WDT,
+++	ACTION_SMI_WDT,
+++	ACTION_SCI_WDT,
+++	ACTION_DELAY_WDT,
+++	ACTION_RESERVED3,
+++	ACTION_RESERVED4,
++ };
++ 
++ enum {
++@@ -73,34 +85,117 @@ struct kempld_wdt_stage {
++ struct kempld_wdt_data {
++ 	struct kempld_device_data	*pld;
++ 	struct watchdog_device		wdd;
++-	unsigned int			pretimeout;
++ 	struct kempld_wdt_stage		stage[KEMPLD_WDT_MAX_STAGES];
+++	bool				locked;
++ #ifdef CONFIG_PM
++ 	u8				pm_status_store;
++ #endif
++ };
++ 
++-#define DEFAULT_TIMEOUT		30 /* seconds */
++-#define DEFAULT_PRETIMEOUT	0
+++#define DEFAULT_TIMEOUT			30 /* seconds */
+++#define DEFAULT_PRETIMEOUT		0
+++#define DEFAULT_PRETIMEOUT_ACTION	ACTION_NMI
+++#define DEFAULT_TIMEOUT_ACTION		ACTION_RESET_WDT
+++#define DEFAULT_UPDATE_ON_RESTART	true
++ 
++ static unsigned int timeout = DEFAULT_TIMEOUT;
++-module_param(timeout, uint, 0);
+++module_param(timeout, uint, 0444);
++ MODULE_PARM_DESC(timeout,
++ 	"Watchdog timeout in seconds. (>=0, default="
++ 	__MODULE_STRING(DEFAULT_TIMEOUT) ")");
++ 
+++static unsigned int timeout_action = DEFAULT_TIMEOUT_ACTION;
+++module_param(timeout_action, uint, 0664);
+++MODULE_PARM_DESC(timeout_action,
+++	"Watchdog timeout action. (0-10, default="
+++	__MODULE_STRING(DEFAULT_TIMEOUT_ACTION)
+++	", none=0, reset=1, NMI=2, SMI=3, SCI=4, delay=5, WDT=8, reset+WDT=9, NMI+WDT=10, SMI+WDT=11, SCI+WDT=12, delay+WDT=13)"
+++	);
+++
++ static unsigned int pretimeout = DEFAULT_PRETIMEOUT;
++-module_param(pretimeout, uint, 0);
+++module_param(pretimeout, uint, 0444);
++ MODULE_PARM_DESC(pretimeout,
++ 	"Watchdog pretimeout in seconds. (>=0, default="
++ 	__MODULE_STRING(DEFAULT_PRETIMEOUT) ")");
++ 
+++static unsigned int pretimeout_action = DEFAULT_PRETIMEOUT_ACTION;
+++module_param(pretimeout_action, uint, 0664);
+++MODULE_PARM_DESC(pretimeout_action,
+++	"Watchdog pretimeout action. (0-10, default="
+++	__MODULE_STRING(DEFAULT_PRETIMEOUT_ACTION)
+++	", none=0, reset=1, NMI=2, SMI=3, SCI=4, delay=5, WDT=8, reset+WDT=9, NMI+WDT=10, SMI+WDT=11, SCI+WDT=12, delay+WDT=13)"
+++	);
+++
++ static bool nowayout = WATCHDOG_NOWAYOUT;
++-module_param(nowayout, bool, 0);
+++module_param(nowayout, bool, 0444);
++ MODULE_PARM_DESC(nowayout,
++ 	"Watchdog cannot be stopped once started (default="
++ 	__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
++ 
+++static bool updateonrestart = DEFAULT_UPDATE_ON_RESTART;
+++module_param(updateonrestart, bool, 0444);
+++MODULE_PARM_DESC(updateonrestart,
+++	"Update timeouts if wdt is already active at first start (default="
+++	__MODULE_STRING(DEFAULT_UPDATE_ON_RESTART) ")");
+++
+++static int kempld_wdt_get_bootstatus(struct watchdog_device *wdd)
+++{
+++	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
+++	struct kempld_device_data *pld = wdt_data->pld;
+++
+++	if (!pld->last_reset_cause)
+++		return -ENXIO;
+++
+++	if (pld->last_reset_cause & KEMPLD_LRC_TEMP)
+++		wdd->bootstatus |= WDIOF_OVERHEAT;
+++
+++	if (pld->last_reset_cause & KEMPLD_LRC_EXT)
+++		wdd->bootstatus |= WDIOF_EXTERN1;
+++
+++	if (pld->last_reset_cause & KEMPLD_LRC_PWRGOOD)
+++		wdd->bootstatus |= WDIOF_POWERUNDER;
+++
+++	if (pld->last_reset_cause & KEMPLD_LRC_WDT)
+++		wdd->bootstatus |= WDIOF_CARDRESET;
+++
+++	return 0;
+++}
+++
+++static int kempld_wdt_check_stage_action(struct kempld_wdt_data *wdt_data,
+++					u8 action)
+++{
+++	struct kempld_device_data *pld = wdt_data->pld;
+++	int ret = 0;
+++
+++	switch (action) {
+++	case ACTION_NMI:
+++	case ACTION_NMI_WDT:
+++		if (!(pld->feature_mask & KEMPLD_FEATURE_BIT_NMI))
+++			ret = -EINVAL;
+++		break;
+++	case ACTION_SMI:
+++	case ACTION_SMI_WDT:
+++		if (!(pld->feature_mask & KEMPLD_FEATURE_BIT_SMI))
+++			ret = -EINVAL;
+++		break;
+++	case ACTION_SCI:
+++	case ACTION_SCI_WDT:
+++		if (!(pld->feature_mask & KEMPLD_FEATURE_BIT_SMI))
+++			ret = -EINVAL;
+++		break;
+++	case ACTION_RESERVED1:
+++	case ACTION_RESERVED2:
+++	case ACTION_RESERVED3:
+++	case ACTION_RESERVED4:
+++		ret = -EINVAL;
+++		break;
+++	default:
+++		break;
+++	}
+++
+++	return ret;
+++}
+++
++ static int kempld_wdt_set_stage_action(struct kempld_wdt_data *wdt_data,
++ 					struct kempld_wdt_stage *stage,
++ 					u8 action)
++@@ -108,18 +203,13 @@ static int kempld_wdt_set_stage_action(struct kempld_wdt_data *wdt_data,
++ 	struct kempld_device_data *pld = wdt_data->pld;
++ 	u8 stage_cfg;
++ 
++-	if (!stage || !stage->mask)
+++	if (!stage || !stage->mask || action > ACTION_RESERVED4)
++ 		return -EINVAL;
++ 
++ 	kempld_get_mutex(pld);
++ 	stage_cfg = kempld_read8(pld, KEMPLD_WDT_STAGE_CFG(stage->id));
++ 	stage_cfg &= ~STAGE_CFG_ACTION_MASK;
++-	stage_cfg |= (action & STAGE_CFG_ACTION_MASK);
++-
++-	if (action == ACTION_RESET)
++-		stage_cfg |= STAGE_CFG_ASSERT;
++-	else
++-		stage_cfg &= ~STAGE_CFG_ASSERT;
+++	stage_cfg |= action;
++ 
++ 	kempld_write8(pld, KEMPLD_WDT_STAGE_CFG(stage->id), stage_cfg);
++ 	kempld_release_mutex(pld);
++@@ -127,6 +217,22 @@ static int kempld_wdt_set_stage_action(struct kempld_wdt_data *wdt_data,
++ 	return 0;
++ }
++ 
+++static int kempld_wdt_get_stage_action(struct kempld_wdt_data *wdt_data,
+++					struct kempld_wdt_stage *stage)
+++{
+++	struct kempld_device_data *pld = wdt_data->pld;
+++	u8 stage_cfg;
+++
+++	if (!stage || !stage->mask)
+++		return -EINVAL;
+++
+++	kempld_get_mutex(pld);
+++	stage_cfg = kempld_read8(pld, KEMPLD_WDT_STAGE_CFG(stage->id));
+++	kempld_release_mutex(pld);
+++
+++	return stage_cfg & STAGE_CFG_ACTION_MASK;
+++}
+++
++ static int kempld_wdt_set_stage_timeout(struct kempld_wdt_data *wdt_data,
++ 					struct kempld_wdt_stage *stage,
++ 					unsigned int timeout)
++@@ -187,8 +293,6 @@ static unsigned int kempld_wdt_get_timeout(struct kempld_wdt_data *wdt_data,
++ 
++ 	stage_timeout = (stage_timeout & stage->mask) * prescaler;
++ 	remainder = do_div(stage_timeout, pld->pld_clock);
++-	if (remainder)
++-		stage_timeout++;
++ 
++ 	timeout = stage_timeout;
++ 	WARN_ON_ONCE(timeout != stage_timeout);
++@@ -202,24 +306,43 @@ static int kempld_wdt_set_timeout(struct watchdog_device *wdd,
++ 	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
++ 	struct kempld_wdt_stage *pretimeout_stage;
++ 	struct kempld_wdt_stage *timeout_stage;
+++	unsigned int pretimeout = 0;
++ 	int ret;
++ 
+++	if (wdt_data->locked)
+++		return -EPERM;
+++
++ 	timeout_stage = &wdt_data->stage[STAGE_TIMEOUT];
++ 	pretimeout_stage = &wdt_data->stage[STAGE_PRETIMEOUT];
++ 
++-	if (pretimeout_stage->mask && wdt_data->pretimeout > 0)
++-		timeout = wdt_data->pretimeout;
+++	if (pretimeout_stage->mask && wdd->pretimeout > 0) {
+++		if (wdd->pretimeout > timeout)
+++			return -EINVAL;
+++
+++		pretimeout = timeout - wdd->pretimeout;
+++		timeout = wdd->pretimeout;
+++
+++		ret = kempld_wdt_set_stage_timeout(wdt_data, pretimeout_stage,
+++						   pretimeout);
+++		if (ret)
+++			return ret;
+++	}
+++
+++	if (kempld_wdt_check_stage_action(wdt_data, timeout_action))
+++		dev_warn(wdd->parent,
+++			 "Requested timeout action (%d) not supported",
+++			 timeout_action);
++ 
++ 	ret = kempld_wdt_set_stage_action(wdt_data, timeout_stage,
++-						ACTION_RESET);
+++						timeout_action);
++ 	if (ret)
++ 		return ret;
++-	ret = kempld_wdt_set_stage_timeout(wdt_data, timeout_stage,
++-						timeout);
+++	ret = kempld_wdt_set_stage_timeout(wdt_data, timeout_stage, timeout);
++ 	if (ret)
++ 		return ret;
++ 
++-	wdd->timeout = timeout;
+++	wdd->timeout = timeout + pretimeout;
+++
++ 	return 0;
++ }
++ 
++@@ -228,9 +351,14 @@ static int kempld_wdt_set_pretimeout(struct watchdog_device *wdd,
++ {
++ 	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
++ 	struct kempld_wdt_stage *pretimeout_stage;
+++	struct kempld_wdt_stage *timeout_stage;
++ 	u8 action = ACTION_NONE;
++ 	int ret;
++ 
+++	if (wdt_data->locked)
+++		return -EPERM;
+++
+++	timeout_stage = &wdt_data->stage[STAGE_TIMEOUT];
++ 	pretimeout_stage = &wdt_data->stage[STAGE_PRETIMEOUT];
++ 
++ 	if (!pretimeout_stage->mask)
++@@ -240,7 +368,21 @@ static int kempld_wdt_set_pretimeout(struct watchdog_device *wdd,
++ 		return -EINVAL;
++ 
++ 	if (pretimeout > 0)
++-		action = ACTION_NMI;
+++		action = pretimeout_action;
+++
+++	if (kempld_wdt_check_stage_action(wdt_data, action))
+++		dev_warn(wdd->parent,
+++			 "Requested pretimeout action (%d) not supported",
+++			 action);
+++	/*
+++	 * If action is configured to delay, stage 0 disables itself after
+++	 * timeout occures - this is usually not what we want.
+++	 */
+++	if (((action == ACTION_DELAY) || (action == ACTION_DELAY_WDT))
+++	    && (pretimeout_stage->id == 0)) {
+++		dev_warn(wdd->parent,
+++			 "Pretimeout action delay might not work as expected!");
+++	}
++ 
++ 	ret = kempld_wdt_set_stage_action(wdt_data, pretimeout_stage,
++ 						action);
++@@ -250,17 +392,22 @@ static int kempld_wdt_set_pretimeout(struct watchdog_device *wdd,
++ 						wdd->timeout - pretimeout);
++ 	if (ret)
++ 		return ret;
+++	ret = kempld_wdt_set_stage_timeout(wdt_data, timeout_stage,
+++					   pretimeout);
+++	if (ret)
+++		return ret;
++ 
++-	wdt_data->pretimeout = pretimeout;
+++	wdd->pretimeout = pretimeout;
++ 	return 0;
++ }
++ 
++ static void kempld_wdt_update_timeouts(struct kempld_wdt_data *wdt_data)
++ {
+++	struct watchdog_device *wdd = &wdt_data->wdd;
++ 	struct kempld_device_data *pld = wdt_data->pld;
++ 	struct kempld_wdt_stage *pretimeout_stage;
++ 	struct kempld_wdt_stage *timeout_stage;
++-	unsigned int pretimeout, timeout;
+++	unsigned int pretimeout, timeout, action;
++ 
++ 	pretimeout_stage = &wdt_data->stage[STAGE_PRETIMEOUT];
++ 	timeout_stage = &wdt_data->stage[STAGE_TIMEOUT];
++@@ -270,10 +417,14 @@ static void kempld_wdt_update_timeouts(struct kempld_wdt_data *wdt_data)
++ 	timeout = kempld_wdt_get_timeout(wdt_data, timeout_stage);
++ 	kempld_release_mutex(pld);
++ 
+++	action = kempld_wdt_get_stage_action(wdt_data, pretimeout_stage);
+++	if ((action == ACTION_RESET) || (action == ACTION_RESET_WDT))
+++		timeout = 0;
+++
++ 	if (pretimeout)
++-		wdt_data->pretimeout = timeout;
+++		wdd->pretimeout = timeout;
++ 	else
++-		wdt_data->pretimeout = 0;
+++		wdd->pretimeout = 0;
++ 
++ 	wdt_data->wdd.timeout = pretimeout + timeout;
++ }
++@@ -282,16 +433,36 @@ static int kempld_wdt_start(struct watchdog_device *wdd)
++ {
++ 	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
++ 	struct kempld_device_data *pld = wdt_data->pld;
+++	int pretimeout_stage_id, timeout_stage_id;
++ 	u8 status;
++ 	int ret;
++ 
++-	ret = kempld_wdt_set_timeout(wdd, wdd->timeout);
++-	if (ret)
++-		return ret;
+++	if (!wdt_data->locked) {
+++		if (updateonrestart) {
+++			wdd->pretimeout = pretimeout;
+++			wdd->timeout = timeout;
+++			updateonrestart = 0;
+++		}
+++
+++		if (wdd->info->options & WDIOF_PRETIMEOUT) {
+++			ret = kempld_wdt_set_pretimeout(wdd, wdd->pretimeout);
+++			if (ret)
+++				return ret;
+++		}
+++
+++		ret = kempld_wdt_set_timeout(wdd, wdd->timeout);
+++		if (ret)
+++			return ret;
+++	}
+++
+++	pretimeout_stage_id = wdt_data->stage[STAGE_PRETIMEOUT].id;
+++	timeout_stage_id = wdt_data->stage[STAGE_TIMEOUT].id;
++ 
++ 	kempld_get_mutex(pld);
++ 	status = kempld_read8(pld, KEMPLD_WDT_CFG);
++ 	status |= KEMPLD_WDT_CFG_ENABLE;
+++	status |= KEMPLD_WDT_CFG_STAGE_TOUT(pretimeout_stage_id);
+++	status |= KEMPLD_WDT_CFG_STAGE_TOUT(timeout_stage_id);
++ 	kempld_write8(pld, KEMPLD_WDT_CFG, status);
++ 	status = kempld_read8(pld, KEMPLD_WDT_CFG);
++ 	kempld_release_mutex(pld);
++@@ -338,7 +509,6 @@ static int kempld_wdt_keepalive(struct watchdog_device *wdd)
++ static long kempld_wdt_ioctl(struct watchdog_device *wdd, unsigned int cmd,
++ 				unsigned long arg)
++ {
++-	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
++ 	void __user *argp = (void __user *)arg;
++ 	int ret = -ENOIOCTLCMD;
++ 	int __user *p = argp;
++@@ -353,17 +523,13 @@ static long kempld_wdt_ioctl(struct watchdog_device *wdd, unsigned int cmd,
++ 			return ret;
++ 		ret = kempld_wdt_keepalive(wdd);
++ 		break;
++-	case WDIOC_GETPRETIMEOUT:
++-		ret = put_user(wdt_data->pretimeout, (int __user *)arg);
++-		break;
++ 	}
++ 
++ 	return ret;
++ }
++ 
++-static int kempld_wdt_probe_stages(struct watchdog_device *wdd)
+++static int kempld_wdt_probe_stages(struct kempld_wdt_data *wdt_data)
++ {
++-	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
++ 	struct kempld_device_data *pld = wdt_data->pld;
++ 	struct kempld_wdt_stage *pretimeout_stage;
++ 	struct kempld_wdt_stage *timeout_stage;
++@@ -385,12 +551,17 @@ static int kempld_wdt_probe_stages(struct watchdog_device *wdd)
++ 		/* Probe each byte individually. */
++ 		for (j = 0; j < 4; j++) {
++ 			data_orig = kempld_read8(pld, index + j);
++-			kempld_write8(pld, index + j, 0x00);
++-			data = kempld_read8(pld, index + j);
++-			/* A failed write means this byte is reserved */
++-			if (data != 0x00)
++-				break;
++-			kempld_write8(pld, index + j, data_orig);
+++			if (!wdt_data->locked) {
+++				kempld_write8(pld, index + j, 0x00);
+++				data = kempld_read8(pld, index + j);
+++				/* A failed write means this byte is reserved */
+++				if (data != 0x00)
+++					break;
+++				kempld_write8(pld, index + j, data_orig);
+++			} else
+++				if (data_orig == 0xff)
+++					break;
+++
++ 			mask |= 0xff << (j * 8);
++ 		}
++ 		kempld_release_mutex(pld);
++@@ -400,28 +571,60 @@ static int kempld_wdt_probe_stages(struct watchdog_device *wdd)
++ 			timeout_stage->mask = mask;
++ 			timeout_stage->id = i;
++ 		} else {
++-			if (pld->feature_mask & KEMPLD_FEATURE_BIT_NMI) {
++-				pretimeout_stage->mask = timeout_stage->mask;
++-				timeout_stage->mask = mask;
++-				pretimeout_stage->id = timeout_stage->id;
++-				timeout_stage->id = i;
++-			}
+++			pretimeout_stage->mask = timeout_stage->mask;
+++			timeout_stage->mask = mask;
+++			pretimeout_stage->id = timeout_stage->id;
+++			timeout_stage->id = i;
++ 			break;
++ 		}
++ 	}
++ 
++-	if (!timeout_stage->mask)
+++	if ((!timeout_stage->mask) && (!wdt_data->locked))
++ 		return -ENODEV;
++ 
++ 	return 0;
++ }
++ 
++-static const struct watchdog_info kempld_wdt_info = {
+++#ifdef CONFIG_WATCHDOG_PRETIMEOUT_GOV
+++static struct watchdog_device *nmi_watchdog_device;
+++
+++static int kempld_wdt_pretimeout_nmi(unsigned int reason,
+++				     struct pt_regs *regs)
+++{
+++	watchdog_notify_pretimeout(nmi_watchdog_device);
+++
+++	return NMI_HANDLED;
+++}
+++
+++static void kempld_wdt_register_nmi(struct watchdog_device *wdd)
+++{
+++	int ret;
+++
+++	/* Try to register an NMI handler */
+++	nmi_watchdog_device = wdd;
+++	ret = register_nmi_handler(NMI_UNKNOWN,
+++				   kempld_wdt_pretimeout_nmi, 0,
+++				   "kempld-wdt");
+++	if (ret) {
+++		nmi_watchdog_device = NULL;
+++		dev_warn(wdd->parent,
+++			 "Unable to register a pretimeout NMI handler.\n");
+++	}
+++}
+++
+++static void kempld_wdt_unregister_nmi(void)
+++{
+++	if (nmi_watchdog_device)
+++		unregister_nmi_handler(NMI_UNKNOWN, "kempld-wdt");
+++}
+++#else
+++static void kempld_wdt_register_nmi(struct watchdog_device *wdd) { }
+++static void kempld_wdt_unregister_nmi(void) { }
+++#endif
+++
+++static struct watchdog_info kempld_wdt_info = {
++ 	.identity	= "KEMPLD Watchdog",
++-	.options	= WDIOF_SETTIMEOUT |
++-			WDIOF_KEEPALIVEPING |
++-			WDIOF_MAGICCLOSE |
++-			WDIOF_PRETIMEOUT
+++	.options	= WDIOF_KEEPALIVEPING
++ };
++ 
++ static const struct watchdog_ops kempld_wdt_ops = {
++@@ -455,13 +658,33 @@ static int kempld_wdt_probe(struct platform_device *pdev)
++ 	kempld_release_mutex(pld);
++ 
++ 	/* Enable nowayout if watchdog is already locked */
++-	if (status & (KEMPLD_WDT_CFG_ENABLE_LOCK |
++-			KEMPLD_WDT_CFG_GLOBAL_LOCK)) {
+++
+++	if (status & KEMPLD_WDT_CFG_GLOBAL_LOCK) {
+++		wdt_data->locked = true;
+++		dev_notice(dev, "Watchdog registers are globally locked - no access!\n");
+++		dev_notice(dev, "Probing stages and configured timeouts may be inaccurate!\n");
+++	} else
+++		kempld_wdt_info.options |= WDIOF_SETTIMEOUT;
+++
+++	if (status & KEMPLD_WDT_CFG_ENABLE_LOCK) {
++ 		if (!nowayout)
++ 			dev_warn(dev,
++ 				 "Forcing nowayout - watchdog lock enabled!\n");
++ 		nowayout = true;
++-	}
+++	} else
+++		kempld_wdt_info.options |= WDIOF_MAGICCLOSE;
+++
+++	/* watchdog firmware version is identical to the CPLD version */
+++	kempld_wdt_info.firmware_version = (pld->info.major<<24)
+++		| (pld->info.minor<<16) | pld->info.buildnr;
+++
+++	ret = kempld_wdt_probe_stages(wdt_data);
+++	if (ret)
+++		return ret;
+++
+++
+++	if (wdt_data->stage[STAGE_PRETIMEOUT].mask)
+++		kempld_wdt_info.options |= WDIOF_PRETIMEOUT;
++ 
++ 	wdd->info = &kempld_wdt_info;
++ 	wdd->ops = &kempld_wdt_ops;
++@@ -469,20 +692,34 @@ static int kempld_wdt_probe(struct platform_device *pdev)
++ 	watchdog_set_drvdata(wdd, wdt_data);
++ 	watchdog_set_nowayout(wdd, nowayout);
++ 
++-	ret = kempld_wdt_probe_stages(wdd);
++-	if (ret)
++-		return ret;
+++	if (timeout_action & ~STAGE_CFG_ACTION_MASK)
+++		return -EINVAL;
+++
+++	if (pretimeout_action & ~STAGE_CFG_ACTION_MASK)
+++		return -EINVAL;
++ 
++-	kempld_wdt_set_timeout(wdd, timeout);
++-	kempld_wdt_set_pretimeout(wdd, pretimeout);
+++	/* Get current watchdog settings */
+++	kempld_wdt_update_timeouts(wdt_data);
++ 
++ 	/* Check if watchdog is already enabled */
++ 	if (status & KEMPLD_WDT_CFG_ENABLE) {
++-		/* Get current watchdog settings */
++-		kempld_wdt_update_timeouts(wdt_data);
+++		set_bit(WDOG_HW_RUNNING, &wdd->status);
++ 		dev_info(dev, "Watchdog was already enabled\n");
+++		if (updateonrestart && !wdt_data->locked)
+++			dev_info(dev,
+++				 "New watchdog timings will be set on (re)start\n");
+++	} else if (!wdt_data->locked) {
+++		kempld_wdt_set_pretimeout(wdd, pretimeout);
+++		kempld_wdt_set_timeout(wdd, timeout);
++ 	}
++ 
+++	/* Get bootstatus, if the device supports it */
+++	if (kempld_wdt_get_bootstatus(wdd) == 0)
+++		kempld_wdt_info.options |= WDIOF_OVERHEAT | WDIOF_EXTERN1
+++			| WDIOF_POWERUNDER | WDIOF_CARDRESET;
+++
+++	kempld_wdt_register_nmi(wdd);
+++
++ 	platform_set_drvdata(pdev, wdt_data);
++ 	watchdog_stop_on_reboot(wdd);
++ 	watchdog_stop_on_unregister(wdd);
++@@ -495,6 +732,13 @@ static int kempld_wdt_probe(struct platform_device *pdev)
++ 	return 0;
++ }
++ 
+++static int kempld_wdt_remove(struct platform_device *pdev)
+++{
+++	kempld_wdt_unregister_nmi();
+++
+++	return 0;
+++}
+++
++ #ifdef CONFIG_PM
++ /* Disable watchdog if it is active during suspend */
++ static int kempld_wdt_suspend(struct platform_device *pdev,
++@@ -520,7 +764,20 @@ static int kempld_wdt_suspend(struct platform_device *pdev,
++ static int kempld_wdt_resume(struct platform_device *pdev)
++ {
++ 	struct kempld_wdt_data *wdt_data = platform_get_drvdata(pdev);
+++	struct kempld_device_data *pld = wdt_data->pld;
++ 	struct watchdog_device *wdd = &wdt_data->wdd;
+++	u8 status;
+++
+++	if (wdt_data->locked) {
+++		/* Check again if the global lock is still active */
+++		kempld_get_mutex(pld);
+++		status = kempld_read8(pld, KEMPLD_WDT_CFG);
+++		kempld_release_mutex(pld);
+++		if (!(status & KEMPLD_WDT_CFG_GLOBAL_LOCK)) {
+++			wdt_data->locked = false;
+++			kempld_wdt_update_timeouts(wdt_data);
+++		}
+++	}
++ 
++ 	/*
++ 	 * If watchdog was stopped before suspend be sure it gets disabled
++@@ -541,6 +798,7 @@ static struct platform_driver kempld_wdt_driver = {
++ 		.name	= "kempld-wdt",
++ 	},
++ 	.probe		= kempld_wdt_probe,
+++	.remove		= kempld_wdt_remove,
++ 	.suspend	= kempld_wdt_suspend,
++ 	.resume		= kempld_wdt_resume,
++ };
++diff --git a/include/linux/mfd/kempld.h b/include/linux/mfd/kempld.h
++index 643c096..83bdf081 100644
++--- a/include/linux/mfd/kempld.h
+++++ b/include/linux/mfd/kempld.h
++@@ -2,7 +2,7 @@
++ /*
++  * Kontron PLD driver definitions
++  *
++- * Copyright (c) 2010-2012 Kontron Europe GmbH
+++ * Copyright (c) 2010-2016 Kontron Europe GmbH
++  * Author: Michael Brunner <michael.brunner@kontron.com>
++  */
++ 
++@@ -12,6 +12,7 @@
++ /* kempld register definitions */
++ #define KEMPLD_IOINDEX			0xa80
++ #define KEMPLD_IODATA			0xa81
+++#define KEMPLD_REGISTER_SPACE_LEN	128
++ #define KEMPLD_MUTEX_KEY		0x80
++ #define KEMPLD_VERSION			0x00
++ #define KEMPLD_VERSION_LSB		0x00
++@@ -37,19 +38,51 @@
++ #define KEMPLD_SPEC_GET_MINOR(x)	(x & 0x0f)
++ #define KEMPLD_SPEC_GET_MAJOR(x)	((x >> 4) & 0x0f)
++ #define KEMPLD_IRQ_GPIO			0x35
+++#define KEMPLD_IRQ_GPIO_MASK		(0xf << 0)
+++#define KEMPLD_IRQ_GPIO_NMI_AVAILABLE	(1 << 5)
++ #define KEMPLD_IRQ_I2C			0x36
+++#define KEMPLD_IRQ_I2C_MASK		(0xf << 0)
++ #define KEMPLD_CFG			0x37
++ #define KEMPLD_CFG_GPIO_I2C_MUX		(1 << 0)
++-#define KEMPLD_CFG_BIOS_WP		(1 << 7)
+++#define KEMPLD_CFG_BIOS_SET_PROTECT	(1 << 2)
+++#define KEMPLD_CFG_SAFE_BIOS_WD_EN	(1 << 3)
+++#define KEMPLD_CFG_ACTIVE_BIOS_CS	(1 << 4)
+++#define KEMPLD_CFG_SBSO			(1 << 5)
+++#define KEMPLD_CFG_FDSO			(1 << 6)
+++#define KEMPLD_CFG_EFSO			(1 << 7)
+++#define KEMPLD_LRC			0x38
+++#define KEMPLD_LRC_POR			(1 << 0)
+++#define KEMPLD_LRC_EXT			(1 << 1)
+++#define KEMPLD_LRC_WDT			(1 << 2)
+++#define KEMPLD_LRC_TEMP			(1 << 3)
+++#define KEMPLD_LRC_PWRGOOD		(1 << 4)
+++#define KEMPLD_LRC_SW			(1 << 5)
+++#define KEMPLD_LRC_OTHER		(1 << 6)
+++#define KEMPLD_LRC_SW_SCHEDULED		(1 << 7)
+++#define KEMPLD_LRC_MASK			(0x7f << 0)
++ 
++-#define KEMPLD_CLK			33333333
+++#define	KEMPLD_CLK			33333333
++ 
++ #define	KEMPLD_TYPE_RELEASE		0x0
++ #define	KEMPLD_TYPE_DEBUG		0x1
++ #define	KEMPLD_TYPE_CUSTOM		0x2
++ 
+++#define KEMPLD_MUTEX_NOTIMEOUT		((unsigned int)~0)
+++
++ #define KEMPLD_VERSION_LEN		10
++ 
+++enum kempld_eeep_type {
+++	KEMPLD_EEEP_NONE	= 0,
+++	KEMPLD_EEEP_COME	= 1, /* Board has COMe EEEP */
+++	KEMPLD_EEEP_COME_BKPL	= 2, /* Board has COMe EEEP & baseboard EEP */
+++	KEMPLD_EEEP_BKPL	= 3, /* Board has baseboard EEEP */
+++};
+++
+++enum kempld_ddc_type {
+++	KEMPLD_DDC_NONE		= 0,
+++	KEMPLD_DDC_COME		= 1, /* Board has COMe DDC */
+++};
+++
++ /**
++  * struct kempld_info - PLD device information structure
++  * @major:	PLD major revision
++@@ -79,9 +112,15 @@ struct kempld_info {
++  * @io_data:		Pointer to the IO data register
++  * @pld_clock:		PLD clock frequency
++  * @feature_mask:	PLD feature mask
+++ * @have_mutex:		Bool value that indicates if hw mutex is acquired
+++ * @last_index:		Last written index value
++  * @dev:		Pointer to kernel device structure
++  * @info:		KEMPLD info structure
++  * @lock:		PLD mutex
+++ * @shadow:		PLD shadow registers
+++ * @last_reset_cause	Last reset cause
+++ * @eeep:		EEEP device on I2C bus
+++ * @ddc:		DDC device on I2C bus
++  */
++ struct kempld_device_data {
++ 	void __iomem		*io_base;
++@@ -89,16 +128,25 @@ struct kempld_device_data {
++ 	void __iomem		*io_data;
++ 	u32			pld_clock;
++ 	u32			feature_mask;
+++	int			have_mutex;
+++	u8			last_index;
++ 	struct device		*dev;
++ 	struct kempld_info	info;
++ 	struct mutex		lock;
+++	u8			shadow[KEMPLD_REGISTER_SPACE_LEN];
+++	u8			last_reset_cause;
+++	enum kempld_eeep_type	eeep;
+++	enum kempld_ddc_type	ddc;
++ };
++ 
++ /**
++  * struct kempld_platform_data - PLD hardware configuration structure
++  * @pld_clock:			PLD clock frequency
++- * @gpio_base			GPIO base pin number
++  * @ioresource:			IO addresses of the PLD
+++ * @force_index_write:		Force writing the index register
+++ * @eeep:			EEEP device on I2C bus
+++ * @ddc:			DDC device on I2C bus
+++ * @gpio_names:			Platform specific GPIO naming
++  * @get_mutex:			PLD specific get_mutex callback
++  * @release_mutex:		PLD specific release_mutex callback
++  * @get_info:			PLD specific get_info callback
++@@ -106,8 +154,11 @@ struct kempld_device_data {
++  */
++ struct kempld_platform_data {
++ 	u32				pld_clock;
++-	int				gpio_base;
++ 	struct resource			*ioresource;
+++	int				force_index_write;
+++	enum kempld_eeep_type		eeep;
+++	enum kempld_ddc_type		ddc;
+++	const char			**gpio_names;
++ 	void (*get_hardware_mutex)	(struct kempld_device_data *);
++ 	void (*release_hardware_mutex)	(struct kempld_device_data *);
++ 	int (*get_info)			(struct kempld_device_data *);
++@@ -116,11 +167,17 @@ struct kempld_platform_data {
++ 
++ extern void kempld_get_mutex(struct kempld_device_data *pld);
++ extern void kempld_release_mutex(struct kempld_device_data *pld);
+++
++ extern u8 kempld_read8(struct kempld_device_data *pld, u8 index);
+++extern u8 kempld_read8_shadow(struct kempld_device_data *pld, u8 index);
++ extern void kempld_write8(struct kempld_device_data *pld, u8 index, u8 data);
++ extern u16 kempld_read16(struct kempld_device_data *pld, u8 index);
+++extern u16 kempld_read16_shadow(struct kempld_device_data *pld, u8 index);
++ extern void kempld_write16(struct kempld_device_data *pld, u8 index, u16 data);
++ extern u32 kempld_read32(struct kempld_device_data *pld, u8 index);
+++extern u32 kempld_read32_shadow(struct kempld_device_data *pld, u8 index);
++ extern void kempld_write32(struct kempld_device_data *pld, u8 index, u32 data);
+++extern int kempld_request_irq_num(struct kempld_device_data *pld, int irq);
+++extern void kempld_free_irq_num(struct kempld_device_data *pld, int irq);
++ 
++ #endif /* _LINUX_MFD_KEMPLD_H_ */
+diff --git a/patch/series b/patch/series
+index 67be72f..46ec7d5 100755
+--- a/patch/series
++++ b/patch/series
+@@ -218,6 +218,9 @@ armhf_secondary_boot_online.patch
+ 0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
+ 0020-dts-marvell-Add-support-for-7020-comexpress.patch
+ 
++# Kontron kernel patches
++linux-5.10-kempld34.patch
++
+ #
+ #
+ ############################################################
+-- 
+2.17.1
+

@@ -39,8 +39,9 @@ SERIES="0001-marvell-x86-syncd-docker-TL10-and-SAI-inclusions.patch
 PATCHES=""
 
 # Sub module patches
-declare -a SUB_PATCHES=(SP1)
+declare -a SUB_PATCHES=(SP1 SP2)
 declare -A SP1=([NAME]="0001-Marvell-teralynx-generate_dump.patch" [DIR]="src/sonic-utilities")
+declare -A SP2=([NAME]="0001-kempld-patches-for-5.10.patch" [DIR]="src/sonic-linux-kernel")
 
 log()
 {
