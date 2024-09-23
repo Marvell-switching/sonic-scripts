@@ -1,0 +1,25 @@
+From c092e211582c78efb143c79f9aede98a746d36f0 Mon Sep 17 00:00:00 2001
+From: nipunjoy <njoy@marvell.com>
+Date: Mon, 23 Sep 2024 10:19:47 +0000
+Subject: [PATCH] iccpd enabled in 202405
+
+---
+ rules/config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rules/config b/rules/config
+index d081fd5aa..48ebd139e 100644
+--- a/rules/config
++++ b/rules/config
+@@ -128,7 +128,7 @@ INCLUDE_SYSTEM_EVENTD = y
+ INCLUDE_SYSTEM_TELEMETRY = n
+ 
+ # INCLUDE_ICCPD - build docker-iccpd for mclag support
+-INCLUDE_ICCPD = n
++INCLUDE_ICCPD = y
+ 
+ # INCLUDE_SFLOW - build docker-sflow for sFlow support
+ INCLUDE_SFLOW = y
+-- 
+2.25.1
+
