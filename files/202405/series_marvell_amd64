@@ -1,2 +1,3 @@
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
 3135.patch|src/sonic-swss
+20493.patch|sonic-buildimage
