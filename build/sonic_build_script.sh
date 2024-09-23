@@ -244,12 +244,7 @@ patch_ws()
     if [ -v PATCH_SCRIPT_URL ]; then
         wget --timeout=2 -c $PATCH_SCRIPT_URL
         URL=${PATCH_SCRIPT_URL%marvell_sonic_patch_script.sh}
-        if [ "$BRANCH" == "master" ]; then
-            PATCH_BRANCH="master-bookworm"
-        else
-            PATCH_BRANCH=${BRANCH}
-        fi
-        bash marvell_sonic_patch_script.sh --branch ${PATCH_BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
+        bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
     fi
 }
