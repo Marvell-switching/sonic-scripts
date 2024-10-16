@@ -193,7 +193,7 @@ apply_hwsku_changes()
 		wget --timeout=2 -c $WGET_PATH/prestera_hwsku.tgz
 		if [ $? -eq 0 ]; then
 			rm -fr device/marvell/x86_64-marvell_db* || true
-			tar -C device/marvell/ -xzf prestera_hwsku.tgz
+			tar -C device/ -xzf prestera_hwsku.tgz
 		fi
 	fi
 	if [ "$PLATFORM" == "innovium" ]; then
