@@ -1,2 +1,3 @@
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
 3135.patch|src/sonic-swss
+0001-Marvell-Falcone-3.2T-support.patch|sonic-buildimage
