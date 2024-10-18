@@ -1,0 +1,23 @@
+From b1d32a7e58b8a327af9638ad780efe4354e896ee Mon Sep 17 00:00:00 2001
+From: "Wadood A. Khan" <wkhan@marvell.com>
+Date: Mon, 16 Sep 2024 16:11:27 +0530
+Subject: [PATCH] [Marvell] Add Flag to identify SONiC related Init Handling
+
+Signed-off-by: Wadood A. Khan <wkhan@marvell.com>
+---
+ syncd/scripts/syncd_init_common.sh | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/syncd/scripts/syncd_init_common.sh b/syncd/scripts/syncd_init_common.sh
+index e2b56229b..798aeffb3 100644
+--- a/syncd/scripts/syncd_init_common.sh
++++ b/syncd/scripts/syncd_init_common.sh
+@@ -280,6 +280,8 @@ config_syncd_marvell()
+ {
+     CMD_ARGS+=" -p $HWSKU_DIR/sai.profile"
+ 
++    export MRVL_PSAI_SONIC=1
++
+     [ -e /dev/net/tun ] || ( mkdir -p /dev/net && mknod /dev/net/tun c 10 200 )
+ }
+ 
