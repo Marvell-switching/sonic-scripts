@@ -2,3 +2,4 @@
 3135.patch|src/sonic-swss
 20493.patch|sonic-buildimage
 0001-Marvell-Falcone-3.2T-support.patch|sonic-buildimage
+1420.patch|src/sonic-sairedis
