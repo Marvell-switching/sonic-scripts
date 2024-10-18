@@ -3,3 +3,4 @@
 3135.patch|src/sonic-swss
 20493.patch|sonic-buildimage
 19324.patch|sonic-buildimage
+0001-Marvell-Update-sai.mk-version.patch|sonic-buildimage

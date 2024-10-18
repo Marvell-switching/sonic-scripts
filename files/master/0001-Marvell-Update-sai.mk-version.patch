@@ -1,0 +1,32 @@
+From af8517b1626bd145bf52f13a7058d31ad6e8b475 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Fri, 18 Oct 2024 07:28:25 +0000
+Subject: [PATCH] [Marvell] Update sai.mk version
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/sai.mk | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
+index 87bd92448..b6e0702ca 100644
+--- a/platform/marvell/sai.mk
++++ b/platform/marvell/sai.mk
+@@ -2,11 +2,11 @@
+ 
+ BRANCH = master
+ ifeq ($(CONFIGURED_ARCH),arm64)
+-MRVL_SAI_VERSION = 1.14.0-1
++MRVL_SAI_VERSION = 1.14.0-2
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+-MRVL_SAI_VERSION = 1.14.0-1
++MRVL_SAI_VERSION = 1.14.0-2
+ else
+-MRVL_SAI_VERSION = 1.14.0-1
++MRVL_SAI_VERSION = 1.14.0-2
+ endif
+ 
+ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
+-- 
+2.25.1
+

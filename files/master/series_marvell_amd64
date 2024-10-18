@@ -3,4 +3,4 @@
 0001-Marvell-Falcone-3.2T-support.patch|sonic-buildimage
 20493.patch|sonic-buildimage
 19324.patch|sonic-buildimage
-0001-Marvell-Update-amd64-SAI-deb-version-to-1.14.0-2.patch|sonic-buildimage
+0001-Marvell-Update-sai.mk-version.patch|sonic-buildimage

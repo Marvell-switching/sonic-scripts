@@ -4,3 +4,4 @@
 20493.patch|sonic-buildimage
 1420.patch|src/sonic-sairedis
 19324.patch|sonic-buildimage
+0001-Marvell-202405-Update-sai.mk-version.patch|sonic-buildimage
