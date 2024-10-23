@@ -6,7 +6,6 @@
 # arguments
 BUILD_SAISERVER="N"
 BUILD_RPC="N"
-BUILD_ICCPD="N"
 OTHER_BUILD_OPTIONS=""
 NO_CACHE="N"
 
@@ -28,7 +27,6 @@ print_usage()
     echo ""
     echo "				-s : Build docker saiserver v2"
     echo "				-r : ENABLE_SYNCD_RPC=y"
-    echo "				-i : INCLUDE_ICCPD=y"
     echo "				-c : checkout commit id"
     echo "				--no-cache: Build without any pre cache"
     echo "				--mark_no_del_ws: Do not cleanup ws during cleanup"
@@ -66,10 +64,6 @@ parse_arguments()
                 ;;
             -r|--rpc)
                 BUILD_RPC="Y"
-                shift # past argument
-                ;;
-            -i|--iccpd)
-                BUILD_ICCPD="Y"
                 shift # past argument
                 ;;
             --no-cache)
@@ -268,11 +262,6 @@ build_ws()
     if [ "$BUILD_RPC" == "Y" ]; then
         if [ "$BUILD_PLATFORM_ARCH" != "armhf" ]; then
             BUILD_OPTIONS="${BUILD_OPTIONS} ENABLE_SYNCD_RPC=y"
-        fi
-    fi
-    if [ "$BUILD_ICCPD" == "Y" ]; then
-        if [ "$BUILD_PLATFORM_ARCH" != "armhf" ]; then
-            BUILD_OPTIONS="${BUILD_OPTIONS} INCLUDE_ICCPD=y"
         fi
     fi
     if [[ ! -z ${OTHER_BUILD_OPTIONS} ]]; then
