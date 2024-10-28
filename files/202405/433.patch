@@ -1,7 +1,7 @@
-From 4a273a03fdd6c7dd5460e92c4cbd1d8e8cb72289 Mon Sep 17 00:00:00 2001
+From db99b88f26d3857d9ba199697164d774581666a0 Mon Sep 17 00:00:00 2001
 From: nipunjoy <njoy@marvell.com>
-Date: Wed, 16 Oct 2024 06:13:51 +0000
-Subject: [PATCH] Add arm64 dts and xmc spi device for Wistron platform
+Date: Mon, 28 Oct 2024 10:53:03 +0000
+Subject: [PATCH] [arm64] dts and xmc spi device for Wistron platform device
 
 Signed-off-by: nipunjoy <njoy@marvell.com>
 ---
