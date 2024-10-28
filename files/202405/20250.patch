@@ -1,7 +1,7 @@
 From 90354fc09bff0874b8718a056b3a707d8f63b389 Mon Sep 17 00:00:00 2001
 From: Owen Wu <twowen@gmail.com>
 Date: Fri, 13 Sep 2024 10:27:10 +0800
-Subject: [PATCH 1/4] Add Wistron platform ES1227-54TS and ES2227-54TS
+Subject: [PATCH 1/5] Add Wistron platform ES1227-54TS and ES2227-54TS
 
 Signed-off-by: Owen Wu <twowen@gmail.com>
 ---
@@ -62153,7 +62153,7 @@ index f3ff5ac7cec1..e0f4da853c49 100644
 From c103b6db024d13fcd8425fdd4778f63f7add957c Mon Sep 17 00:00:00 2001
 From: Owen Wu <twowen@gmail.com>
 Date: Mon, 30 Sep 2024 16:54:22 +0800
-Subject: [PATCH 2/4] Update EZB XML for static TX-EQ tunning
+Subject: [PATCH 2/5] Update EZB XML for static TX-EQ tunning
 
 Signed-off-by: Owen Wu <twowen@gmail.com>
 ---
@@ -62550,7 +62550,7 @@ index b440907bdb9e..7590d96b4513 100644
 From f315159aea19eac612d4f22c2c7e9acadbba60db Mon Sep 17 00:00:00 2001
 From: Owen Wu <twowen@gmail.com>
 Date: Tue, 8 Oct 2024 14:47:02 +0800
-Subject: [PATCH 3/4] Adjust code segment regarding installation for specific
+Subject: [PATCH 3/5] Adjust code segment regarding installation for specific
  platform
 
 Move kernel command parameter to device vendor folder
@@ -62695,7 +62695,7 @@ index ee34e6c2b6d5..37cea76cdb43 100644
 From f51700176958f0c434fde751e14fc786fa297ef7 Mon Sep 17 00:00:00 2001
 From: Owen Wu <twowen@gmail.com>
 Date: Tue, 22 Oct 2024 10:27:50 +0800
-Subject: [PATCH 4/4] Remove unused/reference EZB files for Wistron arm64 hwsku
+Subject: [PATCH 4/5] Remove unused/reference EZB files for Wistron arm64 hwsku
 
 Remove unused boot variables from installation preparing of arm64
 
@@ -75058,3 +75058,2059 @@ index 37cea76cdb43..18fda1bb1520 100644
      fw_setenv ${FW_ARG} sonic_image_2 "$SONIC_BOOT_CMD_OLD" > /dev/null
      fw_setenv ${FW_ARG} sonic_image_1 "$SONIC_BOOT_CMD" > /dev/null
      fw_setenv ${FW_ARG} boot_next  'run sonic_image_1'> /dev/null
+
+From 4038f1fb38c7473632d23acb50f04711b840074d Mon Sep 17 00:00:00 2001
+From: Owen Wu <twowen@gmail.com>
+Date: Thu, 24 Oct 2024 15:38:19 +0800
+Subject: [PATCH 5/5] - What I did   Replace dynamic TX EA tuning with static
+ TX EA tuning for SFP transceiver.   Fix kernel module loading failed error by
+ correcting kernel module path.   Remove PHY temperature monitoring from
+ thermal management policy.   Fix issues of Semgrep check.   Remove unused
+ files.
+
+- How to verify it
+  Compile the image and run it on the Wistron switch.
+  Verify that SFP TX EA value is correct.
+  Verify that kernel modules are loaded successfully after system starts.
+  Verify that system temperature information is normal by heat chamber test.
+  Verify that sonic commands are running well.
+
+Signed-off-by: Owen Wu <twowen@gmail.com>
+---
+ .../plugins/eeprom.py                         |  13 -
+ .../plugins/eeprom.py                         |  13 -
+ .../plugins/eeprom.py                         |  13 -
+ .../sonic-platform-es1227-54ts.postinst       |   1 +
+ .../sonic-platform-es2227-54ts-p.postinst     |   1 +
+ .../sonic-platform-es2227-54ts.postinst       |   1 +
+ .../es1227_54ts/scripts/es1227_54ts-init.sh   |  12 +-
+ .../es1227_54ts/sonic_platform/chassis.py     |   4 +-
+ .../es1227_54ts/sonic_platform/sfp.py         | 247 ------------------
+ .../es1227_54ts/sonic_platform/thermal.py     |  63 +----
+ .../sonic_platform/thermal_actions.py         |  17 +-
+ .../es1227_54ts/utils/rst_button.py           |  22 +-
+ .../es2227_54ts/scripts/es2227_54ts-init.sh   |  12 +-
+ .../es2227_54ts/sonic_platform/chassis.py     |   4 +-
+ .../es2227_54ts/sonic_platform/sfp.py         | 247 ------------------
+ .../es2227_54ts/sonic_platform/thermal.py     |  63 +----
+ .../sonic_platform/thermal_actions.py         |  17 +-
+ .../es2227_54ts/utils/rst_button.py           |  22 +-
+ .../es2227_54ts_p/modules/cpld_driver.patch   | 113 --------
+ .../scripts/es2227_54ts_p-init.sh             |  12 +-
+ .../es2227_54ts_p/sonic_platform/chassis.py   |   4 +-
+ .../es2227_54ts_p/sonic_platform/sfp.py       | 247 ------------------
+ .../es2227_54ts_p/sonic_platform/thermal.py   |  63 +----
+ .../sonic_platform/thermal_actions.py         |  11 +-
+ .../es2227_54ts_p/utils/poe_cfg_init.py       |  12 +-
+ .../es2227_54ts_p/utils/poe_cfg_lldp.py       |  15 +-
+ .../es2227_54ts_p/utils/poe_lldp.py           |   6 +-
+ .../es2227_54ts_p/utils/rst_button.py         |  22 +-
+ 28 files changed, 126 insertions(+), 1151 deletions(-)
+ delete mode 100644 device/wistron/arm64-wistron_es1227_54ts-r0/plugins/eeprom.py
+ delete mode 100644 device/wistron/arm64-wistron_es2227_54ts-r0/plugins/eeprom.py
+ delete mode 100644 device/wistron/arm64-wistron_es2227_54ts_p-r0/plugins/eeprom.py
+ delete mode 100644 platform/marvell/sonic-platform-wistron/es2227_54ts_p/modules/cpld_driver.patch
+
+diff --git a/device/wistron/arm64-wistron_es1227_54ts-r0/plugins/eeprom.py b/device/wistron/arm64-wistron_es1227_54ts-r0/plugins/eeprom.py
+deleted file mode 100644
+index a5461871c420..000000000000
+--- a/device/wistron/arm64-wistron_es1227_54ts-r0/plugins/eeprom.py
++++ /dev/null
+@@ -1,13 +0,0 @@
+-#!/usr/bin/env python
+-
+-try:
+-    from sonic_eeprom import eeprom_tlvinfo
+-except ImportError as e:
+-    raise ImportError (str(e) + "- required module not found")
+-
+-
+-class board(eeprom_tlvinfo.TlvInfoDecoder):
+-
+-    def __init__(self, name, path, cpld_root, ro):
+-        self.eeprom_path = "/etc/sonic/eeprom"
+-        super(board, self).__init__(self.eeprom_path, 0, '', True)
+diff --git a/device/wistron/arm64-wistron_es2227_54ts-r0/plugins/eeprom.py b/device/wistron/arm64-wistron_es2227_54ts-r0/plugins/eeprom.py
+deleted file mode 100644
+index a5461871c420..000000000000
+--- a/device/wistron/arm64-wistron_es2227_54ts-r0/plugins/eeprom.py
++++ /dev/null
+@@ -1,13 +0,0 @@
+-#!/usr/bin/env python
+-
+-try:
+-    from sonic_eeprom import eeprom_tlvinfo
+-except ImportError as e:
+-    raise ImportError (str(e) + "- required module not found")
+-
+-
+-class board(eeprom_tlvinfo.TlvInfoDecoder):
+-
+-    def __init__(self, name, path, cpld_root, ro):
+-        self.eeprom_path = "/etc/sonic/eeprom"
+-        super(board, self).__init__(self.eeprom_path, 0, '', True)
+diff --git a/device/wistron/arm64-wistron_es2227_54ts_p-r0/plugins/eeprom.py b/device/wistron/arm64-wistron_es2227_54ts_p-r0/plugins/eeprom.py
+deleted file mode 100644
+index a5461871c420..000000000000
+--- a/device/wistron/arm64-wistron_es2227_54ts_p-r0/plugins/eeprom.py
++++ /dev/null
+@@ -1,13 +0,0 @@
+-#!/usr/bin/env python
+-
+-try:
+-    from sonic_eeprom import eeprom_tlvinfo
+-except ImportError as e:
+-    raise ImportError (str(e) + "- required module not found")
+-
+-
+-class board(eeprom_tlvinfo.TlvInfoDecoder):
+-
+-    def __init__(self, name, path, cpld_root, ro):
+-        self.eeprom_path = "/etc/sonic/eeprom"
+-        super(board, self).__init__(self.eeprom_path, 0, '', True)
+diff --git a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es1227-54ts.postinst b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es1227-54ts.postinst
+index 1b9e346eecc8..8eef2a01d5b0 100644
+--- a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es1227-54ts.postinst
++++ b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es1227-54ts.postinst
+@@ -20,6 +20,7 @@ set -e
+ 
+ case "$1" in
+     configure)
++	depmod -a
+ 	sh /usr/local/bin/es1227_54ts_plt_setup.sh
+ 	chmod a+x /usr/local/bin/es1227_54ts-init.sh
+ 	systemctl enable es1227_54ts-init.service
+diff --git a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts-p.postinst b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts-p.postinst
+index c9e84e0c2522..54753db37cc9 100644
+--- a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts-p.postinst
++++ b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts-p.postinst
+@@ -20,6 +20,7 @@ set -e
+ 
+ case "$1" in
+     configure)
++	depmod -a
+ 	sh /usr/local/bin/es2227_54ts_p_plt_setup.sh
+ 	chmod a+x /usr/local/bin/es2227_54ts_p-init.sh
+ 	systemctl enable es2227_54ts_p-init.service
+diff --git a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts.postinst b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts.postinst
+index e8bbd61c7aaa..619c26f531ab 100644
+--- a/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts.postinst
++++ b/platform/marvell/sonic-platform-wistron/debian/sonic-platform-es2227-54ts.postinst
+@@ -20,6 +20,7 @@ set -e
+ 
+ case "$1" in
+     configure)
++	depmod -a
+ 	sh /usr/local/bin/es2227_54ts_plt_setup.sh
+ 	chmod a+x /usr/local/bin/es2227_54ts-init.sh
+ 	systemctl enable es2227_54ts-init.service
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/scripts/es1227_54ts-init.sh b/platform/marvell/sonic-platform-wistron/es1227_54ts/scripts/es1227_54ts-init.sh
+index c2030e464fba..e823bb8a8abc 100755
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/scripts/es1227_54ts-init.sh
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/scripts/es1227_54ts-init.sh
+@@ -12,12 +12,12 @@ load_kernel_drivers() {
+     # Carefully control the load order here to ensure consistent i2c bus numbering
+     modprobe i2c_mv64xxx
+     modprobe i2c_dev
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_cpld.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_max31790.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_psu.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/mvcpss.ko
+-	modprobe optoe
+-	modprobe jc42
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_cpld.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_max31790.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_psu.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/mvcpss.ko
++    modprobe optoe
++    modprobe jc42
+ }
+ 
+ # - Main entry
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/chassis.py b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/chassis.py
+index 52f6813f3b81..2a08dbda2732 100644
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/chassis.py
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/chassis.py
+@@ -24,7 +24,7 @@
+ 
+ NUM_FANTRAY = 2
+ NUM_PSU = 2
+-NUM_THERMAL = 15
++NUM_THERMAL = 14
+ COPPER_PORT_START = 1
+ COPPER_PORT_END = 48
+ SFP_BASE = 49
+@@ -250,8 +250,6 @@ def get_change_event(self, timeout=0):
+                     change_event = True
+                     if cur_presence[port] == 1:
+                         port_dict[port + 1] = '1'
+-                        sfp = self._sfp_list[port]
+-                        sfp.apply_ea_value()
+                     else:
+                         port_dict[port + 1] = '0'
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/sfp.py b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/sfp.py
+index 1d2e91ccbdd1..be54683082a5 100644
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/sfp.py
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/sfp.py
+@@ -74,205 +74,6 @@ class Sfp(SfpOptoeBase):
+         53: 495,
+     }
+ 
+-    PORT_SFP_EA_VALUE = {
+-        'fiber': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                50: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                51: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                52: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                53: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                54: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-            },
+-        },
+-
+-        'copper': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                50: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                51: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                52: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                53: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                54: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                },
+-        },
+-    }
+     port_to_i2c_mapping = 0
+ 
+     def __init__(self, index, sfp_type):
+@@ -562,54 +363,6 @@ def is_replaceable(self):
+         else:
+             return False
+ 
+-    def is_copper_cable(self):
+-        import ast
+-        cable_info = self.get_transceiver_info()
+-        if cable_info is not None:
+-            compliance = ast.literal_eval(cable_info['specification_compliance'])
+-            if compliance['SFP+CableTechnology'] == 'Passive Cable':
+-                return True
+-
+-        return False
+-
+-    def apply_ea_value(self):
+-        import telnetlib
+-        tn = telnetlib.Telnet('localhost', '12345', 5)
+-        is_copper = self.is_copper_cable()
+-        port_name = self.get_name()
+-        speed_cmd = 'redis-cli -n 4 hget "PORT|{}"  "speed"'.format(port_name)
+-        fec_cmd = 'redis-cli -n 4 hget "PORT|{}"  "fec"'.format(port_name)
+-        sta_cmd = 'redis-cli -n 4 hget "PORT|{}"  "admin_status"'.format(port_name)
+-
+-        cmdstatus, admin_sta = cmd.getstatusoutput(sta_cmd)
+-        if admin_sta == 'down':
+-            return
+-
+-        cmdstatus, speed = cmd.getstatusoutput(speed_cmd)
+-        cmdstatus, fec_r = cmd.getstatusoutput(fec_cmd)
+-
+-        if fec_r == 'none':
+-            fec = 'disabled'
+-        elif fec_r == 'fc':
+-            fec = 'fc_fec'
+-        else:
+-            fec = 'rs_fec'
+-
+-        ea = self.PORT_SFP_EA_VALUE['copper' if is_copper else 'fiber'][speed][self.index]
+-        port_cmd = "interface range ethernet 0/{}".format(self.index - 1)
+-        intf_cmd = "speed {} mode {}".format(speed, '1000Base_X' if speed == '1000' else 'KR' if is_copper else 'SR_LR')
+-        fec_cmd = "fec {}".format(fec)
+-        ea_cmd = "serdes tx amplitude {} emph {} {} 0 0".format(ea['attn'], ea['post'], ea['pre'])
+-
+-        tn.write("config".encode('ascii') + b"\r\n")
+-        tn.write(port_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no speed".encode('ascii') + b"\r\n")
+-        tn.write(intf_cmd.encode('ascii') + b"\r\n")
+-        tn.write(fec_cmd.encode('ascii') + b"\r\n")
+-        tn.write(ea_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no shutdown".encode('ascii') + b"\r\n")
+-        tn.write("CLIexit".encode('ascii') + b"\r\n")
+-
+     def get_error_description(self):
+         """
+         Retrives the error descriptions of the SFP module
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal.py b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal.py
+index 45bd98982081..a92ed271c147 100644
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal.py
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal.py
+@@ -9,7 +9,6 @@
+ 
+ import os
+ import os.path
+-import telnetlib
+ 
+ try:
+     from sonic_platform.sfp import Sfp
+@@ -33,12 +32,10 @@ class Thermal(ThermalBase):
+ 
+     def __init__(self, thermal_index):
+         self.index = thermal_index
+-        self.tn = None
+-        self.is_connected = False
+         self.fan = Fan(0, 0)
+         self.direction = self.fan.get_direction()
+-        if thermal_index >= 9:
+-            self.sfp_module = Sfp(49 + (thermal_index - 9), 'SFP')
++        if thermal_index >= 8:
++            self.sfp_module = Sfp(49 + (thermal_index - 8), 'SFP')
+ 
+         # Add thermal name
+         if self.direction == "exhaust":
+@@ -55,7 +52,6 @@ def __init__(self, thermal_index):
+         self.THERMAL_NAME_LIST.append("CPU Temp")
+         self.THERMAL_NAME_LIST.append("Dimm Temp")
+         self.THERMAL_NAME_LIST.append("MAC Temp")
+-        self.THERMAL_NAME_LIST.append("PHY Temp")
+ 
+         self.THERMAL_NAME_LIST.append("XCVR 1 Temp")
+         self.THERMAL_NAME_LIST.append("XCVR 2 Temp")
+@@ -67,18 +63,6 @@ def __init__(self, thermal_index):
+         self.minimum_thermal = 150.0
+         self.maximum_thermal = 0.0
+ 
+-    def connect(self):
+-        try:
+-            if self.tn is not None:
+-                return
+-            print("Connecting...")
+-            self.tn = telnetlib.Telnet('localhost', '12345', 5)
+-            print("Connection Establised")
+-            self.is_connected  = True
+-        except Exception:
+-            print("Connection Failed")
+-            self.is_connected  = False
+-
+     def __read_txt_file(self, file_path):
+         try:
+             with open(file_path, 'r') as fd:
+@@ -123,33 +107,14 @@ def get_temperature(self):
+             temp = float(raw_temp)/1000
+             return float("{:.3f}".format(temp))
+         elif self.index == 7:
++            from swsscommon.swsscommon import DBConnector
++            temp = 0
+             try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write("do cpss-api call cpssDxChDiagDeviceTemperatureGet devNum 0".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"temperature=", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = float(rawtemp.decode().split("\r")[0])
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
+-
+-        elif self.index == 8:
+-            try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write(" ".encode('ascii') + b"\r\n")
+-                    self.tn.write("dbg xsmi register read device 0 portgroup 0 interface 1 address 0x8 register 0x8042 phydev 0x3".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"Value:", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = int(rawtemp.decode().rstrip().split("\t")[1],16) % 256 - 75
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
++                stateDB = DBConnector('STATE_DB', 0, True, '')
++                temp = int(stateDB.hget('ASIC_TEMPERATURE_INFO', 'temperature_0'))
++            except Exception as E:
++                print("get_temperature (MAC) failed, cause by {}".format(E))
++            return float("{:.3f}".format(temp))
+         else:
+             if self.get_presence():
+                 return float("{:.3f}".format(self.sfp_module.get_temperature()))
+@@ -170,8 +135,6 @@ def get_high_threshold(self):
+             return float("{:.3f}".format(90))
+         elif self.index == 7:
+             return float("{:.3f}".format(100))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(105))
+         else:
+             return float("{:.3f}".format(68))
+ 
+@@ -191,8 +154,6 @@ def get_caution2_threshold(self):
+             return float("{:.3f}".format(92))
+         elif self.index == 7:
+             return float("{:.3f}".format(105))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(108))
+         else:
+             return float("{:.3f}".format(69))
+ 
+@@ -215,8 +176,6 @@ def get_high_critical_threshold(self):
+             return float("{:.3f}".format(85))
+         elif self.index == 7:
+             return float("{:.3f}".format(108))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(110))
+         else:
+             return float("{:.3f}".format(70))
+ 
+@@ -244,7 +203,7 @@ def get_presence(self):
+             temp_file = "temp"
+             temp_file_path = os.path.join(self.SYSFS_THERMAL_DIR[self.index], temp_file)
+             return os.path.isfile(temp_file_path)
+-        elif self.index > 8:
++        elif self.index > 7:
+             return self.sfp_module.get_presence()
+         return True
+ 
+@@ -254,7 +213,7 @@ def get_status(self):
+         Returns:
+             A boolean value, True if device is operating properly, False if not
+         """
+-        if self.index > 6 and self.index < 9:
++        if self.index > 6 and self.index < 8:
+             return True
+         if not self.get_presence():
+             return False
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal_actions.py b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal_actions.py
+index 94149195017d..2f024d052b26 100755
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal_actions.py
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/sonic_platform/thermal_actions.py
+@@ -12,7 +12,7 @@
+ 
+ sonic_logger = logger.Logger('thermal_actions')
+ 
+-SENSORS_NUM = 6
++SENSORS_NUM = 5
+ 
+ TEMP_INFO = []
+ 
+@@ -21,8 +21,7 @@
+     1: 1,
+     2: 2,
+     3: 5,
+-    4: 7,
+-    5: 8
++    4: 7
+ }
+ 
+ COFF_KA = {
+@@ -31,16 +30,14 @@
+         1: 2.15,
+         2: 2.23,
+         3: 2.51,
+-        4: 1.6,
+-        5: 2.74
++        4: 1.6
+     },
+     'intake': {
+         0: 2.5,
+         1: 1.8,
+         2: 1.9,
+         3: 1.5,
+-        4: 1.1,
+-        5: 1.1
++        4: 1.1
+     }
+ }
+ 
+@@ -50,16 +47,14 @@
+         1: 72,
+         2: 78,
+         3: 126,
+-        4: 60,
+-        5: 188
++        4: 60
+     },
+     'intake': {
+         0: 100,
+         1: 44,
+         2: 52,
+         3: 35,
+-        4: 10,
+-        5: 16
++        4: 10
+     }
+ }
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es1227_54ts/utils/rst_button.py b/platform/marvell/sonic-platform-wistron/es1227_54ts/utils/rst_button.py
+index fe92a58586bc..3f47e8776115 100644
+--- a/platform/marvell/sonic-platform-wistron/es1227_54ts/utils/rst_button.py
++++ b/platform/marvell/sonic-platform-wistron/es1227_54ts/utils/rst_button.py
+@@ -1,5 +1,4 @@
+ import subprocess
+-import os
+ import time
+ from sonic_py_common import device_info
+ 
+@@ -27,19 +26,26 @@ def check_intr(self):
+ 
+     def restore_default(self):
+         version_info = device_info.get_sonic_version_info()
+-        os.system('rm /etc/sonic/config_db.json')
++        subprocess.run(["rm", "/etc/sonic/config_db.json"])
+         time.sleep(0.5)
+         image_ver=version_info['build_version']
+         path="/host/image-{}/platform/firsttime".format(image_ver)
+         cmd="touch {}".format(path)
+-        os.system(cmd)
++        subprocess.run(cmd.split())
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        cmd = "bash -c \"echo -e 'YourPaSsWoRd\\nYourPaSsWoRd' | passwd admin\""
+-        subprocess.check_call(cmd, shell=True)
++        cmd = ["passwd", "admin"]
++        try:
++            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++        except Exception as e:
++            print("restore_default failed: {}".format(e))
+ 
+ def main():
+     monitor = rst_button_monitor()
+@@ -53,7 +59,7 @@ def main():
+     monitor.restore_default()
+     time.sleep(2)
+ 
+-    os.system('reboot')
++    subprocess.run(["reboot"])
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/scripts/es2227_54ts-init.sh b/platform/marvell/sonic-platform-wistron/es2227_54ts/scripts/es2227_54ts-init.sh
+index 94689510aa99..8a4a58946432 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/scripts/es2227_54ts-init.sh
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/scripts/es2227_54ts-init.sh
+@@ -12,12 +12,12 @@ load_kernel_drivers() {
+     # Carefully control the load order here to ensure consistent i2c bus numbering
+     modprobe i2c_mv64xxx
+     modprobe i2c_dev
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_cpld.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_max31790.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_psu.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/mvcpss.ko
+-	modprobe optoe
+-	modprobe jc42
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_cpld.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_max31790.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_psu.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/mvcpss.ko
++    modprobe optoe
++    modprobe jc42
+ }
+ 
+ # - Main entry
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/chassis.py b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/chassis.py
+index 52f6813f3b81..2a08dbda2732 100644
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/chassis.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/chassis.py
+@@ -24,7 +24,7 @@
+ 
+ NUM_FANTRAY = 2
+ NUM_PSU = 2
+-NUM_THERMAL = 15
++NUM_THERMAL = 14
+ COPPER_PORT_START = 1
+ COPPER_PORT_END = 48
+ SFP_BASE = 49
+@@ -250,8 +250,6 @@ def get_change_event(self, timeout=0):
+                     change_event = True
+                     if cur_presence[port] == 1:
+                         port_dict[port + 1] = '1'
+-                        sfp = self._sfp_list[port]
+-                        sfp.apply_ea_value()
+                     else:
+                         port_dict[port + 1] = '0'
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/sfp.py b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/sfp.py
+index 1d2e91ccbdd1..be54683082a5 100644
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/sfp.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/sfp.py
+@@ -74,205 +74,6 @@ class Sfp(SfpOptoeBase):
+         53: 495,
+     }
+ 
+-    PORT_SFP_EA_VALUE = {
+-        'fiber': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                50: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                51: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                52: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                53: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                54: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-            },
+-        },
+-
+-        'copper': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                50: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                51: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                52: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                53: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                54: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                },
+-        },
+-    }
+     port_to_i2c_mapping = 0
+ 
+     def __init__(self, index, sfp_type):
+@@ -562,54 +363,6 @@ def is_replaceable(self):
+         else:
+             return False
+ 
+-    def is_copper_cable(self):
+-        import ast
+-        cable_info = self.get_transceiver_info()
+-        if cable_info is not None:
+-            compliance = ast.literal_eval(cable_info['specification_compliance'])
+-            if compliance['SFP+CableTechnology'] == 'Passive Cable':
+-                return True
+-
+-        return False
+-
+-    def apply_ea_value(self):
+-        import telnetlib
+-        tn = telnetlib.Telnet('localhost', '12345', 5)
+-        is_copper = self.is_copper_cable()
+-        port_name = self.get_name()
+-        speed_cmd = 'redis-cli -n 4 hget "PORT|{}"  "speed"'.format(port_name)
+-        fec_cmd = 'redis-cli -n 4 hget "PORT|{}"  "fec"'.format(port_name)
+-        sta_cmd = 'redis-cli -n 4 hget "PORT|{}"  "admin_status"'.format(port_name)
+-
+-        cmdstatus, admin_sta = cmd.getstatusoutput(sta_cmd)
+-        if admin_sta == 'down':
+-            return
+-
+-        cmdstatus, speed = cmd.getstatusoutput(speed_cmd)
+-        cmdstatus, fec_r = cmd.getstatusoutput(fec_cmd)
+-
+-        if fec_r == 'none':
+-            fec = 'disabled'
+-        elif fec_r == 'fc':
+-            fec = 'fc_fec'
+-        else:
+-            fec = 'rs_fec'
+-
+-        ea = self.PORT_SFP_EA_VALUE['copper' if is_copper else 'fiber'][speed][self.index]
+-        port_cmd = "interface range ethernet 0/{}".format(self.index - 1)
+-        intf_cmd = "speed {} mode {}".format(speed, '1000Base_X' if speed == '1000' else 'KR' if is_copper else 'SR_LR')
+-        fec_cmd = "fec {}".format(fec)
+-        ea_cmd = "serdes tx amplitude {} emph {} {} 0 0".format(ea['attn'], ea['post'], ea['pre'])
+-
+-        tn.write("config".encode('ascii') + b"\r\n")
+-        tn.write(port_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no speed".encode('ascii') + b"\r\n")
+-        tn.write(intf_cmd.encode('ascii') + b"\r\n")
+-        tn.write(fec_cmd.encode('ascii') + b"\r\n")
+-        tn.write(ea_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no shutdown".encode('ascii') + b"\r\n")
+-        tn.write("CLIexit".encode('ascii') + b"\r\n")
+-
+     def get_error_description(self):
+         """
+         Retrives the error descriptions of the SFP module
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal.py b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal.py
+index 45bd98982081..a92ed271c147 100644
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal.py
+@@ -9,7 +9,6 @@
+ 
+ import os
+ import os.path
+-import telnetlib
+ 
+ try:
+     from sonic_platform.sfp import Sfp
+@@ -33,12 +32,10 @@ class Thermal(ThermalBase):
+ 
+     def __init__(self, thermal_index):
+         self.index = thermal_index
+-        self.tn = None
+-        self.is_connected = False
+         self.fan = Fan(0, 0)
+         self.direction = self.fan.get_direction()
+-        if thermal_index >= 9:
+-            self.sfp_module = Sfp(49 + (thermal_index - 9), 'SFP')
++        if thermal_index >= 8:
++            self.sfp_module = Sfp(49 + (thermal_index - 8), 'SFP')
+ 
+         # Add thermal name
+         if self.direction == "exhaust":
+@@ -55,7 +52,6 @@ def __init__(self, thermal_index):
+         self.THERMAL_NAME_LIST.append("CPU Temp")
+         self.THERMAL_NAME_LIST.append("Dimm Temp")
+         self.THERMAL_NAME_LIST.append("MAC Temp")
+-        self.THERMAL_NAME_LIST.append("PHY Temp")
+ 
+         self.THERMAL_NAME_LIST.append("XCVR 1 Temp")
+         self.THERMAL_NAME_LIST.append("XCVR 2 Temp")
+@@ -67,18 +63,6 @@ def __init__(self, thermal_index):
+         self.minimum_thermal = 150.0
+         self.maximum_thermal = 0.0
+ 
+-    def connect(self):
+-        try:
+-            if self.tn is not None:
+-                return
+-            print("Connecting...")
+-            self.tn = telnetlib.Telnet('localhost', '12345', 5)
+-            print("Connection Establised")
+-            self.is_connected  = True
+-        except Exception:
+-            print("Connection Failed")
+-            self.is_connected  = False
+-
+     def __read_txt_file(self, file_path):
+         try:
+             with open(file_path, 'r') as fd:
+@@ -123,33 +107,14 @@ def get_temperature(self):
+             temp = float(raw_temp)/1000
+             return float("{:.3f}".format(temp))
+         elif self.index == 7:
++            from swsscommon.swsscommon import DBConnector
++            temp = 0
+             try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write("do cpss-api call cpssDxChDiagDeviceTemperatureGet devNum 0".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"temperature=", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = float(rawtemp.decode().split("\r")[0])
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
+-
+-        elif self.index == 8:
+-            try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write(" ".encode('ascii') + b"\r\n")
+-                    self.tn.write("dbg xsmi register read device 0 portgroup 0 interface 1 address 0x8 register 0x8042 phydev 0x3".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"Value:", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = int(rawtemp.decode().rstrip().split("\t")[1],16) % 256 - 75
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
++                stateDB = DBConnector('STATE_DB', 0, True, '')
++                temp = int(stateDB.hget('ASIC_TEMPERATURE_INFO', 'temperature_0'))
++            except Exception as E:
++                print("get_temperature (MAC) failed, cause by {}".format(E))
++            return float("{:.3f}".format(temp))
+         else:
+             if self.get_presence():
+                 return float("{:.3f}".format(self.sfp_module.get_temperature()))
+@@ -170,8 +135,6 @@ def get_high_threshold(self):
+             return float("{:.3f}".format(90))
+         elif self.index == 7:
+             return float("{:.3f}".format(100))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(105))
+         else:
+             return float("{:.3f}".format(68))
+ 
+@@ -191,8 +154,6 @@ def get_caution2_threshold(self):
+             return float("{:.3f}".format(92))
+         elif self.index == 7:
+             return float("{:.3f}".format(105))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(108))
+         else:
+             return float("{:.3f}".format(69))
+ 
+@@ -215,8 +176,6 @@ def get_high_critical_threshold(self):
+             return float("{:.3f}".format(85))
+         elif self.index == 7:
+             return float("{:.3f}".format(108))
+-        elif self.index == 8:
+-            return float("{:.3f}".format(110))
+         else:
+             return float("{:.3f}".format(70))
+ 
+@@ -244,7 +203,7 @@ def get_presence(self):
+             temp_file = "temp"
+             temp_file_path = os.path.join(self.SYSFS_THERMAL_DIR[self.index], temp_file)
+             return os.path.isfile(temp_file_path)
+-        elif self.index > 8:
++        elif self.index > 7:
+             return self.sfp_module.get_presence()
+         return True
+ 
+@@ -254,7 +213,7 @@ def get_status(self):
+         Returns:
+             A boolean value, True if device is operating properly, False if not
+         """
+-        if self.index > 6 and self.index < 9:
++        if self.index > 6 and self.index < 8:
+             return True
+         if not self.get_presence():
+             return False
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal_actions.py b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal_actions.py
+index 94149195017d..2f024d052b26 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal_actions.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/sonic_platform/thermal_actions.py
+@@ -12,7 +12,7 @@
+ 
+ sonic_logger = logger.Logger('thermal_actions')
+ 
+-SENSORS_NUM = 6
++SENSORS_NUM = 5
+ 
+ TEMP_INFO = []
+ 
+@@ -21,8 +21,7 @@
+     1: 1,
+     2: 2,
+     3: 5,
+-    4: 7,
+-    5: 8
++    4: 7
+ }
+ 
+ COFF_KA = {
+@@ -31,16 +30,14 @@
+         1: 2.15,
+         2: 2.23,
+         3: 2.51,
+-        4: 1.6,
+-        5: 2.74
++        4: 1.6
+     },
+     'intake': {
+         0: 2.5,
+         1: 1.8,
+         2: 1.9,
+         3: 1.5,
+-        4: 1.1,
+-        5: 1.1
++        4: 1.1
+     }
+ }
+ 
+@@ -50,16 +47,14 @@
+         1: 72,
+         2: 78,
+         3: 126,
+-        4: 60,
+-        5: 188
++        4: 60
+     },
+     'intake': {
+         0: 100,
+         1: 44,
+         2: 52,
+         3: 35,
+-        4: 10,
+-        5: 16
++        4: 10
+     }
+ }
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts/utils/rst_button.py b/platform/marvell/sonic-platform-wistron/es2227_54ts/utils/rst_button.py
+index fe92a58586bc..3f47e8776115 100644
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts/utils/rst_button.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts/utils/rst_button.py
+@@ -1,5 +1,4 @@
+ import subprocess
+-import os
+ import time
+ from sonic_py_common import device_info
+ 
+@@ -27,19 +26,26 @@ def check_intr(self):
+ 
+     def restore_default(self):
+         version_info = device_info.get_sonic_version_info()
+-        os.system('rm /etc/sonic/config_db.json')
++        subprocess.run(["rm", "/etc/sonic/config_db.json"])
+         time.sleep(0.5)
+         image_ver=version_info['build_version']
+         path="/host/image-{}/platform/firsttime".format(image_ver)
+         cmd="touch {}".format(path)
+-        os.system(cmd)
++        subprocess.run(cmd.split())
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        cmd = "bash -c \"echo -e 'YourPaSsWoRd\\nYourPaSsWoRd' | passwd admin\""
+-        subprocess.check_call(cmd, shell=True)
++        cmd = ["passwd", "admin"]
++        try:
++            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++        except Exception as e:
++            print("restore_default failed: {}".format(e))
+ 
+ def main():
+     monitor = rst_button_monitor()
+@@ -53,7 +59,7 @@ def main():
+     monitor.restore_default()
+     time.sleep(2)
+ 
+-    os.system('reboot')
++    subprocess.run(["reboot"])
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/modules/cpld_driver.patch b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/modules/cpld_driver.patch
+deleted file mode 100644
+index 248531974519..000000000000
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/modules/cpld_driver.patch
++++ /dev/null
+@@ -1,113 +0,0 @@
+-diff --git a/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.c b/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.c
+-index 213ca70..116ba9d 100755
+---- a/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.c
+-+++ b/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.c
+-@@ -150,7 +150,7 @@ static ssize_t cpld_read_psu_status(struct device *dev, struct device_attribute
+-     mutex_unlock(&list_lock);
+- 
+-     res = (val & (1 << bit)) >> bit;
+--    //0 : present 
+-+    //0 : present
+-     //1 : not present
+-     //0 : power on
+-     //1 : power off
+-@@ -1238,6 +1238,67 @@ static ssize_t poe_enable_write(struct device *dev, struct device_attribute *att
+-     return count;
+- }
+- 
+-+static ssize_t msci_ctl2_read(struct device *dev, struct device_attribute *attr, char *buf)
+-+{
+-+    int val = 0, res = 0, bit = 0, mask = 0;
+-+    unsigned char command = CPLD_MSCI_CTL2_REG;
+-+    struct i2c_client *client = to_i2c_client(dev);
+-+    struct sensor_device_attribute *sda = to_sensor_dev_attr(attr);
+-+
+-+    bit = sda->index;
+-+    mask = (0x1) << bit;
+-+
+-+    mutex_lock(&list_lock);
+-+
+-+    val = i2c_smbus_read_byte_data(client, command);
+-+    if (val < 0) {
+-+        mutex_unlock(&list_lock);
+-+        return val;
+-+    }
+-+
+-+    mutex_unlock(&list_lock);
+-+
+-+    res = (val & mask) >> bit;
+-+
+-+    return sprintf(buf, "%d\n", res);
+-+}
+-+
+-+static ssize_t msci_ctl2__write(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+-+{
+-+    struct i2c_client *client = to_i2c_client(dev);
+-+    struct sensor_device_attribute *sda = to_sensor_dev_attr(attr);
+-+    unsigned char command = CPLD_MSCI_CTL2_REG;
+-+    int val = 0, res = 0, bit = 0, mask = 0;
+-+
+-+    val = kstrtoint(buf, 10, &res);
+-+    if (val)
+-+        return val;
+-+
+-+    if (res < 0 || res > 1)
+-+        return -EINVAL;
+-+
+-+    bit = sda->index;
+-+    mask = (0x1) << bit;
+-+
+-+    mutex_lock(&list_lock);
+-+
+-+    val = i2c_smbus_read_byte_data(client, command);
+-+    if (val < 0) {
+-+        mutex_unlock(&list_lock);
+-+        return val;
+-+    }
+-+
+-+    val &= ~(mask);
+-+
+-+    val |= (res << bit);
+-+
+-+    i2c_smbus_write_byte_data(client, command, val);
+-+
+-+    mutex_unlock(&list_lock);
+-+
+-+    return count;
+-+}
+-+
+- static SENSOR_DEVICE_ATTR(board_rev, S_IRUGO, cpld_show_board_version, NULL, 0);
+- //static SENSOR_DEVICE_ATTR(board_id, S_IRUGO, cpld_show_board_id, NULL, 0);
+- static SENSOR_DEVICE_ATTR(cpld_rev, S_IRUGO, cpld_show_version, NULL, 0);
+-@@ -1440,6 +1501,8 @@ static SENSOR_DEVICE_ATTR(port_led_auto, S_IRUGO | S_IWUSR, port_led_auto_read,
+- 
+- static SENSOR_DEVICE_ATTR(poe_en_ctrl, S_IRUGO | S_IWUSR, poe_enable_read, poe_enable_write, 0);
+- 
+-+static SENSOR_DEVICE_ATTR(psu_vsense, S_IRUGO | S_IWUSR, msci_ctl2_read, msci_ctl2_write, PSU_VSENSE);
+-+static SENSOR_DEVICE_ATTR(psu_pwrgd, S_IRUGO, msci_ctl2_read, NULL, PSU_PWRGD);
+- /*
+- static SENSOR_DEVICE_ATTR(rst_mb_ioiexp, S_IRUGO | S_IWUSR, rst_ctrl_read, rst_ctrl_write, RST_MB_IOIEXP);
+- static SENSOR_DEVICE_ATTR(rst_phy0_5, S_IRUGO | S_IWUSR, rst_ctrl_read, rst_ctrl_write, RST_PHY0_5);
+-diff --git a/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.h b/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.h
+-index 46b7ec7..39746a7 100755
+---- a/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.h
+-+++ b/platform/marvell-arm64/sonic-platform-es2227-54ts-p/es2227_54ts_p/modules/wistron_cpld.h
+-@@ -86,6 +86,8 @@
+- #define CPLD_INT_CTL4_REG           0x3B
+- #define CPLD_MSCI_CTL_REG           0x3C
+- #define CPLD_PORT_LED_MANUAL_REG    0x3D
+-+#define CPLD_RESET_CTL3_REG         0x3E
+-+#define CPLD_MSCI_CTL2_REG          0x3F
+- 
+- static char* power_ctrl_str1[] = {
+-     "P1V2_OOB_EN", // 0
+-@@ -267,4 +269,9 @@ enum int_shift_bit {
+-     MB_MOD_PRE_INT = 20,
+- };
+- 
+-+enum msci_ctl2_shift_bit {
+-+    PSU_VSENSE = 0,
+-+    PSU_PWRGD = 1,
+-+};
+-+
+- #endif /* _WISTRON_SWITCH_CPLD_H */
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/scripts/es2227_54ts_p-init.sh b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/scripts/es2227_54ts_p-init.sh
+index 87ac8d131bfa..5742307e5ecc 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/scripts/es2227_54ts_p-init.sh
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/scripts/es2227_54ts_p-init.sh
+@@ -12,12 +12,12 @@ load_kernel_drivers() {
+     # Carefully control the load order here to ensure consistent i2c bus numbering
+     modprobe i2c_mv64xxx
+     modprobe i2c_dev
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_cpld.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_max31790.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/wistron_eeprom.ko
+-    insmod /usr/lib/modules/6.1.0-11-2-arm64/kernel/extra/mvcpss.ko
+-	modprobe optoe
+-	modprobe jc42
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_cpld.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_max31790.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/wistron_eeprom.ko
++    insmod /usr/lib/modules/$(uname -r)/kernel/extra/mvcpss.ko
++    modprobe optoe
++    modprobe jc42
+ }
+ 
+ # - Main entry
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/chassis.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/chassis.py
+index dba905b469f7..e4c8a6b4ae9d 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/chassis.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/chassis.py
+@@ -24,7 +24,7 @@
+ 
+ NUM_FANTRAY = 2
+ NUM_PSU = 2
+-NUM_THERMAL = 16
++NUM_THERMAL = 15
+ COPPER_PORT_START = 1
+ COPPER_PORT_END = 48
+ SFP_BASE = 49
+@@ -250,8 +250,6 @@ def get_change_event(self, timeout=0):
+                     change_event = True
+                     if cur_presence[port] == 1:
+                         port_dict[port + 1] = '1'
+-                        sfp = self._sfp_list[port]
+-                        sfp.apply_ea_value()
+                     else:
+                         port_dict[port + 1] = '0'
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/sfp.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/sfp.py
+index 1d2e91ccbdd1..be54683082a5 100644
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/sfp.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/sfp.py
+@@ -74,205 +74,6 @@ class Sfp(SfpOptoeBase):
+         53: 495,
+     }
+ 
+-    PORT_SFP_EA_VALUE = {
+-        'fiber': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 10,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                50: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                51: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                52: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                53: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-                54: {
+-                    'pre': 2,
+-                    'attn': 0,
+-                    'post': 8,
+-                    },
+-            },
+-        },
+-
+-        'copper': {
+-            '1000': {
+-                49: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                50: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                51: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                52: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                53: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-                54: {
+-                    'pre': 0,
+-                    'attn': 0,
+-                    'post': 0,
+-                    },
+-            },
+-            '10000': {
+-                49: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                50: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                51: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                52: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                53: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-                54: {
+-                    'pre': 1,
+-                    'attn': 8,
+-                    'post': 4,
+-                    },
+-            },
+-            '25000': {
+-                49: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                50: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                51: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                52: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                53: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                54: {
+-                    'pre': 8,
+-                    'attn': 8,
+-                    'post': 2,
+-                    },
+-                },
+-        },
+-    }
+     port_to_i2c_mapping = 0
+ 
+     def __init__(self, index, sfp_type):
+@@ -562,54 +363,6 @@ def is_replaceable(self):
+         else:
+             return False
+ 
+-    def is_copper_cable(self):
+-        import ast
+-        cable_info = self.get_transceiver_info()
+-        if cable_info is not None:
+-            compliance = ast.literal_eval(cable_info['specification_compliance'])
+-            if compliance['SFP+CableTechnology'] == 'Passive Cable':
+-                return True
+-
+-        return False
+-
+-    def apply_ea_value(self):
+-        import telnetlib
+-        tn = telnetlib.Telnet('localhost', '12345', 5)
+-        is_copper = self.is_copper_cable()
+-        port_name = self.get_name()
+-        speed_cmd = 'redis-cli -n 4 hget "PORT|{}"  "speed"'.format(port_name)
+-        fec_cmd = 'redis-cli -n 4 hget "PORT|{}"  "fec"'.format(port_name)
+-        sta_cmd = 'redis-cli -n 4 hget "PORT|{}"  "admin_status"'.format(port_name)
+-
+-        cmdstatus, admin_sta = cmd.getstatusoutput(sta_cmd)
+-        if admin_sta == 'down':
+-            return
+-
+-        cmdstatus, speed = cmd.getstatusoutput(speed_cmd)
+-        cmdstatus, fec_r = cmd.getstatusoutput(fec_cmd)
+-
+-        if fec_r == 'none':
+-            fec = 'disabled'
+-        elif fec_r == 'fc':
+-            fec = 'fc_fec'
+-        else:
+-            fec = 'rs_fec'
+-
+-        ea = self.PORT_SFP_EA_VALUE['copper' if is_copper else 'fiber'][speed][self.index]
+-        port_cmd = "interface range ethernet 0/{}".format(self.index - 1)
+-        intf_cmd = "speed {} mode {}".format(speed, '1000Base_X' if speed == '1000' else 'KR' if is_copper else 'SR_LR')
+-        fec_cmd = "fec {}".format(fec)
+-        ea_cmd = "serdes tx amplitude {} emph {} {} 0 0".format(ea['attn'], ea['post'], ea['pre'])
+-
+-        tn.write("config".encode('ascii') + b"\r\n")
+-        tn.write(port_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no speed".encode('ascii') + b"\r\n")
+-        tn.write(intf_cmd.encode('ascii') + b"\r\n")
+-        tn.write(fec_cmd.encode('ascii') + b"\r\n")
+-        tn.write(ea_cmd.encode('ascii') + b"\r\n")
+-        tn.write("no shutdown".encode('ascii') + b"\r\n")
+-        tn.write("CLIexit".encode('ascii') + b"\r\n")
+-
+     def get_error_description(self):
+         """
+         Retrives the error descriptions of the SFP module
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal.py
+index 981499656745..836d9381c856 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal.py
+@@ -9,7 +9,6 @@
+ 
+ import os
+ import os.path
+-import telnetlib
+ 
+ try:
+     from sonic_platform.sfp import Sfp
+@@ -32,10 +31,8 @@ class Thermal(ThermalBase):
+ 
+     def __init__(self, thermal_index):
+         self.index = thermal_index
+-        self.tn = None
+-        self.is_connected = False
+-        if thermal_index >= 10:
+-            self.sfp_module = Sfp(49 + (thermal_index - 10), 'SFP')
++        if thermal_index >= 9:
++            self.sfp_module = Sfp(49 + (thermal_index - 9), 'SFP')
+ 
+         # Add thermal name
+         self.THERMAL_NAME_LIST.append("XFMR Ambient")
+@@ -47,7 +44,6 @@ def __init__(self, thermal_index):
+         self.THERMAL_NAME_LIST.append("Dimm Temp")
+         self.THERMAL_NAME_LIST.append("PoE Temp")
+         self.THERMAL_NAME_LIST.append("MAC Temp")
+-        self.THERMAL_NAME_LIST.append("PHY Temp")
+ 
+         self.THERMAL_NAME_LIST.append("XCVR 1 Temp")
+         self.THERMAL_NAME_LIST.append("XCVR 2 Temp")
+@@ -59,18 +55,6 @@ def __init__(self, thermal_index):
+         self.minimum_thermal = 150.0
+         self.maximum_thermal = 0.0
+ 
+-    def connect(self):
+-        try:
+-            if self.tn is not None:
+-                return
+-            print("Connecting...")
+-            self.tn = telnetlib.Telnet('localhost', '12345', 5)
+-            print("Connection Establised")
+-            self.is_connected  = True
+-        except Exception:
+-            print("Connection Failed")
+-            self.is_connected  = False
+-
+     def __read_txt_file(self, file_path):
+         try:
+             with open(file_path, 'r') as fd:
+@@ -119,33 +103,14 @@ def get_temperature(self):
+             temp = float(raw_temp)
+             return float("{:.3f}".format(temp))
+         elif self.index == 8:
++            from swsscommon.swsscommon import DBConnector
++            temp = 0
+             try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write("do cpss-api call cpssDxChDiagDeviceTemperatureGet devNum 0".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"temperature=", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = float(rawtemp.decode().split("\r")[0])
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
+-
+-        elif self.index == 9:
+-            try:
+-                self.connect()
+-                if self.is_connected:
+-                    self.tn.write(" ".encode('ascii') + b"\r\n")
+-                    self.tn.write("dbg xsmi register read device 0 portgroup 0 interface 1 address 0x8 register 0x8042 phydev 0x3".encode('ascii') + b"\r\n")
+-                    _ = self.tn.read_until(b"Value:", 3)
+-                    rawtemp = self.tn.read_lazy()
+-                    temp = int(rawtemp.decode().rstrip().split("\t")[1],16) % 256 - 75
+-                else:
+-                    temp = 0
+-                return float("{:.3f}".format(temp))
+-            except:
+-                return float("{:.3f}".format(0))
++                stateDB = DBConnector('STATE_DB', 0, True, '')
++                temp = int(stateDB.hget('ASIC_TEMPERATURE_INFO', 'temperature_0'))
++            except Exception as E:
++                print("get_temperature (MAC) failed, cause by {}".format(E))
++            return float("{:.3f}".format(temp))
+         else:
+             if self.get_presence():
+                 return float("{:.3f}".format(self.sfp_module.get_temperature()))
+@@ -168,8 +133,6 @@ def get_high_threshold(self):
+             return float("{:.3f}".format(110))
+         elif self.index == 8:
+             return float("{:.3f}".format(100))
+-        elif self.index == 9:
+-            return float("{:.3f}".format(105))
+         else:
+             return float("{:.3f}".format(68))
+ 
+@@ -191,8 +154,6 @@ def get_caution2_threshold(self):
+             return float("{:.3f}".format(115))
+         elif self.index == 8:
+             return float("{:.3f}".format(105))
+-        elif self.index == 9:
+-            return float("{:.3f}".format(108))
+         else:
+             return float("{:.3f}".format(69))
+ 
+@@ -217,8 +178,6 @@ def get_high_critical_threshold(self):
+             return float("{:.3f}".format(120))
+         elif self.index == 8:
+             return float("{:.3f}".format(108))
+-        elif self.index == 9:
+-            return float("{:.3f}".format(110))
+         else:
+             return float("{:.3f}".format(70))
+ 
+@@ -245,7 +204,7 @@ def get_presence(self):
+             temp_file = "temp"
+             temp_file_path = os.path.join(self.SYSFS_THERMAL_DIR[self.index], temp_file)
+             return os.path.isfile(temp_file_path)
+-        elif self.index > 9:
++        elif self.index > 8:
+             return self.sfp_module.get_presence()
+ 
+         return True
+@@ -256,7 +215,7 @@ def get_status(self):
+         Returns:
+             A boolean value, True if device is operating properly, False if not
+         """
+-        if self.index > 6 and self.index < 10:
++        if self.index > 6 and self.index < 9:
+             return True
+         if not self.get_presence():
+             return False
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal_actions.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal_actions.py
+index 7f0347a3ede2..89f7d3ac7075 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal_actions.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/sonic_platform/thermal_actions.py
+@@ -12,7 +12,7 @@
+ 
+ sonic_logger = logger.Logger('thermal_actions')
+ 
+-SENSORS_NUM = 6
++SENSORS_NUM = 5
+ 
+ TEMP_INFO = []
+ 
+@@ -21,8 +21,7 @@
+     1: 1,
+     2: 2,
+     3: 5,
+-    4: 8,
+-    5: 9
++    4: 8
+ }
+ 
+ COFF_KA = {
+@@ -30,8 +29,7 @@
+     1: 2.15,
+     2: 2.23,
+     3: 2.51,
+-    4: 1.6,
+-    5: 2.74
++    4: 1.6
+ }
+ 
+ COFF_KB = {
+@@ -39,8 +37,7 @@
+     1: 72,
+     2: 78,
+     3: 126,
+-    4: 60,
+-    5: 188
++    4: 60
+ }
+ 
+ 
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_init.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_init.py
+index f4b9504512c0..f783e8849314 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_init.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_init.py
+@@ -44,8 +44,7 @@ def parse_keyword(keyword, string):  # James
+ 
+ def run_command(command):  # James
+     try:
+-        output = subprocess.check_output(
+-            command, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        output = subprocess.check_output(command.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # command, shell=True, stderr=subprocess.DEVNULL, universal_newlines=True)
+         # return output.strip()
+     except subprocess.CalledProcessError as e:
+@@ -77,8 +76,7 @@ def run_lldpcli_config_port_command(interface, enabled):
+         interface, enabled)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -92,8 +90,7 @@ def run_lldpcli_show_port_command(interface):
+     cmd = "lldpcli show in port %s de" % (interface)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -233,8 +230,7 @@ def main():
+ 
+     cmd = "sudo echo  %s >> %s" % (value, FILE_PATH)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+     except subprocess.CalledProcessError as e:
+         log.log_error("Error running run_power_redundant_cmd command:" + e)
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_lldp.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_lldp.py
+index 503faf90b475..44bff37d4e9d 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_lldp.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_cfg_lldp.py
+@@ -95,8 +95,7 @@ def run_lldpcli_config_port_command(interface, pri, req, alloc):
+         interface, pri, req, alloc)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -106,8 +105,7 @@ def run_lldpcli_config_port_command(interface, pri, req, alloc):
+ 
+ def run_command(command):
+     try:
+-        output = subprocess.check_output(
+-            command, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        output = subprocess.check_output(command.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+     except subprocess.CalledProcessError as e:
+         print("Command failed:")
+         print(e.output)
+@@ -204,8 +202,7 @@ def run_lldpcli_show_port_command(interface):
+     cmd = "lldpcli show in port %s de" % (interface)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -219,8 +216,7 @@ def run_lldpcli_init_port_command(interface, enabled):
+         interface, enabled)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -273,8 +269,7 @@ def poe_cfg():
+ 
+     cmd = "sudo echo  %s >> %s" % (value, FILE_PATH)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+     except subprocess.CalledProcessError as e:
+         log.log_error("Error running run_power_redundant_cmd command:" + e)
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_lldp.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_lldp.py
+index e81c3220dc8f..6af5feb2e2ee 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_lldp.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/poe_lldp.py
+@@ -95,8 +95,7 @@ def run_lldpcli_config_port_command(interface, pri, req, alloc):
+         interface, pri, req, alloc)
+     # print(cmd)
+     try:
+-        result = subprocess.check_output(
+-            cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+         # print(result.strip())
+         return result.strip()
+     except subprocess.CalledProcessError as e:
+@@ -106,8 +105,7 @@ def run_lldpcli_config_port_command(interface, pri, req, alloc):
+ 
+ def run_command(command):
+     try:
+-        output = subprocess.check_output(
+-            command, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
++        output = subprocess.check_output(command.split(), stderr=subprocess.STDOUT, universal_newlines=True)
+     except subprocess.CalledProcessError as e:
+         print("Command failed:")
+         print(e.output)
+diff --git a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/rst_button.py b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/rst_button.py
+index fe92a58586bc..3f47e8776115 100755
+--- a/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/rst_button.py
++++ b/platform/marvell/sonic-platform-wistron/es2227_54ts_p/utils/rst_button.py
+@@ -1,5 +1,4 @@
+ import subprocess
+-import os
+ import time
+ from sonic_py_common import device_info
+ 
+@@ -27,19 +26,26 @@ def check_intr(self):
+ 
+     def restore_default(self):
+         version_info = device_info.get_sonic_version_info()
+-        os.system('rm /etc/sonic/config_db.json')
++        subprocess.run(["rm", "/etc/sonic/config_db.json"])
+         time.sleep(0.5)
+         image_ver=version_info['build_version']
+         path="/host/image-{}/platform/firsttime".format(image_ver)
+         cmd="touch {}".format(path)
+-        os.system(cmd)
++        subprocess.run(cmd.split())
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        os.system('sync')
++        subprocess.run(["sync"])
+         time.sleep(0.5)
+-        cmd = "bash -c \"echo -e 'YourPaSsWoRd\\nYourPaSsWoRd' | passwd admin\""
+-        subprocess.check_call(cmd, shell=True)
++        cmd = ["passwd", "admin"]
++        try:
++            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++            p.stdin.write("YourPaSsWoRd\n".encode('utf-8'))
++            p.stdin.flush()
++        except Exception as e:
++            print("restore_default failed: {}".format(e))
+ 
+ def main():
+     monitor = rst_button_monitor()
+@@ -53,7 +59,7 @@ def main():
+     monitor.restore_default()
+     time.sleep(2)
+ 
+-    os.system('reboot')
++    subprocess.run(["reboot"])
+ 
+ 
+ if __name__ == '__main__':
