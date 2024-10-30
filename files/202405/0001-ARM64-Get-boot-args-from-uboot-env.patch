@@ -1,0 +1,35 @@
+From 0ab5a0b55b10a1a71a9ca528e15fe074bdc0f925 Mon Sep 17 00:00:00 2001
+From: nipunjoy <njoy@marvell.com>
+Date: Wed, 30 Oct 2024 04:58:36 +0000
+Subject: [PATCH] [ARM64] : Get boot args from uboot env
+
+Signed-off-by: nipunjoy <njoy@marvell.com>
+---
+ scripts/fast-reboot | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/fast-reboot b/scripts/fast-reboot
+index a235d196..907065c0 100755
+--- a/scripts/fast-reboot
++++ b/scripts/fast-reboot
+@@ -404,7 +404,16 @@ function setup_reboot_variables()
+         # Handle architectures supporting Device Tree
+         elif [ -f /sys/firmware/devicetree/base/chosen/bootargs ]; then
+             KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
+-            BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
++            SONIC_BOOTARGS="$(fw_printenv sonic_bootargs | cut -d '=' -f 2- )"
++            if [[ ! -z "${SONIC_BOOTARGS}" ]]; then
++                LINUX_BOOTARGS="$( fw_printenv linuxargs | cut -d '=' -f 2- )"
++                BAUDRATE="$( fw_printenv baudrate | cut -d '=' -f 2- )"
++                BOOT_OPTIONS="$(echo $SONIC_BOOTARGS | sed -e "s/\${baudrate}/$BAUDRATE/g")"
++                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e "s@\${linuxargs}@$LINUX_BOOTARGS@g")"
++                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
++            else
++                BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
++            fi
+             INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
+ 
+             # If initrd is a U-Boot uImage, remove the uImage header
+-- 
+2.25.1
+

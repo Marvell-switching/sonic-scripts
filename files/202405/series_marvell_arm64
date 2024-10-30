@@ -1,8 +1,10 @@
 20250.patch|sonic-buildimage
 0001-SAI-switch-create-timeout-WA.patch|src/sonic-sairedis
 3192.patch|src/sonic-utilities
+0001-ARM64-Get-boot-args-from-uboot-env.patch|src/sonic-utilities
 3135.patch|src/sonic-swss
 20493.patch|sonic-buildimage
 433.patch|src/sonic-linux-kernel
 1420.patch|src/sonic-sairedis
 19324.patch|sonic-buildimage
+0001-Marvell-ARM64-Remove-redundant-boot-arguments.patch|sonic-buildimage
