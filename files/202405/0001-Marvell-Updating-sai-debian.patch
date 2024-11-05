@@ -1,0 +1,32 @@
+From bc0476fdaf808be60dd211697088b4a1ab335195 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 5 Nov 2024 05:56:37 +0000
+Subject: [PATCH] [Marvell] Updating sai debian
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/sai.mk | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
+index 44c1f92e8..5c1c015e1 100644
+--- a/platform/marvell/sai.mk
++++ b/platform/marvell/sai.mk
+@@ -2,11 +2,11 @@
+ 
+ BRANCH = 202405
+ ifeq ($(CONFIGURED_ARCH),arm64)
+-MRVL_SAI_VERSION = 1.14.0-2
++MRVL_SAI_VERSION = 1.14.0-3
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+-MRVL_SAI_VERSION = 1.14.0-1
++MRVL_SAI_VERSION = 1.14.0-2
+ else
+-MRVL_SAI_VERSION = 1.14.0-1
++MRVL_SAI_VERSION = 1.14.0-2
+ endif
+ 
+ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
+-- 
+2.25.1
+

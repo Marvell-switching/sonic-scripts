@@ -4,3 +4,4 @@
 0001-Marvell-Falcone-3.2T-support.patch|sonic-buildimage
 1420.patch|src/sonic-sairedis
 19324.patch|sonic-buildimage
+0001-Marvell-Updating-sai-debian.patch|sonic-buildimage
