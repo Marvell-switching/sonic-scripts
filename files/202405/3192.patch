@@ -1,24 +1,36 @@
-From 66e17ee4276e0260dd674a841118f60054062603 Mon Sep 17 00:00:00 2001
+From 74cb1be78e96d7d1496a76fab865bf061e82ec84 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Tue, 5 Mar 2024 11:14:26 +0000
-Subject: [PATCH] [warm-reboot] Add support to pass extra kernel cmdline
- parameters
+Subject: [PATCH 1/2] Add support to pass extra kernel cmdline parameters
 
 Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- scripts/fast-reboot | 10 +++++++---
- 1 file changed, 7 insertions(+), 3 deletions(-)
+ scripts/fast-reboot | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
 
 diff --git a/scripts/fast-reboot b/scripts/fast-reboot
-index f265318aa2..8544c5ed56 100755
+index aef71d6c..2b99d771 100755
 --- a/scripts/fast-reboot
 +++ b/scripts/fast-reboot
-@@ -308,25 +308,29 @@ function setup_reboot_variables()
+@@ -380,27 +380,42 @@ function setup_reboot_variables()
+ {
+     # Kernel and initrd image
      HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
++    CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
      NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
      IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
-+    if [[ -f ${DEVPATH}/${PLATFORM}/installer.conf ]]; then
-+	    . ${DEVPATH}/${PLATFORM}/installer.conf
++    if [ "$NEXT_SONIC_IMAGE" = "$CURR_SONIC_IMAGE" ]; then
++        if [[ -f ${DEVPATH}/${PLATFORM}/installer.conf ]]; then
++            . ${DEVPATH}/${PLATFORM}/installer.conf
++        fi
++    else
++        tmp_dir=`mktemp -d`
++        mount -o ro $IMAGE_PATH/fs.squashfs $tmp_dir
++        if [[ -f $tmp_dir/${DEVPATH}/${PLATFORM}/installer.conf ]]; then
++            . $tmp_dir/${DEVPATH}/${PLATFORM}/installer.conf
++        fi
++        umount $tmp_dir
++        rm -rf $tmp_dir
 +    fi
 +
      if grep -q aboot_platform= /host/machine.conf; then
@@ -46,3 +58,6 @@ index f265318aa2..8544c5ed56 100755
              INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
  
              # If initrd is a U-Boot uImage, remove the uImage header
+-- 
+2.25.1
+

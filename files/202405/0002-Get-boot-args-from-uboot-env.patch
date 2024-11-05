@@ -1,28 +1,35 @@
-From 0ab5a0b55b10a1a71a9ca528e15fe074bdc0f925 Mon Sep 17 00:00:00 2001
-From: nipunjoy <njoy@marvell.com>
+From b7b62d33c916003718e501a21caa989d3fb8a186 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
 Date: Wed, 30 Oct 2024 04:58:36 +0000
-Subject: [PATCH] [ARM64] : Get boot args from uboot env
+Subject: [PATCH 2/2] Get boot args from uboot env
 
-Signed-off-by: nipunjoy <njoy@marvell.com>
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- scripts/fast-reboot | 11 ++++++++++-
- 1 file changed, 10 insertions(+), 1 deletion(-)
+ scripts/fast-reboot | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/scripts/fast-reboot b/scripts/fast-reboot
-index a235d196..907065c0 100755
+index 2b99d771..d9fabe80 100755
 --- a/scripts/fast-reboot
 +++ b/scripts/fast-reboot
-@@ -404,7 +404,16 @@ function setup_reboot_variables()
+@@ -415,7 +415,22 @@ function setup_reboot_variables()
          # Handle architectures supporting Device Tree
          elif [ -f /sys/firmware/devicetree/base/chosen/bootargs ]; then
              KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
 -            BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
-+            SONIC_BOOTARGS="$(fw_printenv sonic_bootargs | cut -d '=' -f 2- )"
++            # Fetch next_boot variable
++            SONIC_IMAGE_NAME="$( fw_printenv boot_next | cut -d '=' -f 2- )"
++            SUFFIX=""
++            if [[ ${SONIC_IMAGE_NAME} == "run sonic_image_2" ]]; then
++                SUFFIX="_old"
++            fi
++            SONIC_BOOTARGS="$(fw_printenv sonic_bootargs${SUFFIX} | cut -d '=' -f 2- )"
 +            if [[ ! -z "${SONIC_BOOTARGS}" ]]; then
-+                LINUX_BOOTARGS="$( fw_printenv linuxargs | cut -d '=' -f 2- )"
++                LINUX_BOOTARGS="$( fw_printenv linuxargs${SUFFIX} | cut -d '=' -f 2- )"
 +                BAUDRATE="$( fw_printenv baudrate | cut -d '=' -f 2- )"
 +                BOOT_OPTIONS="$(echo $SONIC_BOOTARGS | sed -e "s/\${baudrate}/$BAUDRATE/g")"
-+                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e "s@\${linuxargs}@$LINUX_BOOTARGS@g")"
++                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e "s@\${linuxargs$SUFFIX}@$LINUX_BOOTARGS@g")"
 +                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
 +            else
 +                BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
