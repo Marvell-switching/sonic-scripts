@@ -6,3 +6,4 @@
 19324.patch|sonic-buildimage
 0001-Marvell-ARM64-Remove-redundant-boot-arguments.patch|sonic-buildimage
 0001-Marvell-Updating-sai-debian.patch|sonic-buildimage
+20753.patch|sonic-buildimage
