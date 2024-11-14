@@ -8,6 +8,7 @@ BUILD_SAISERVER="N"
 BUILD_RPC="N"
 OTHER_BUILD_OPTIONS=""
 NO_CACHE="N"
+VERIFY_PATCHES="N"
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 # Set MIRROR to the public mirror for the build
@@ -23,7 +24,7 @@ print_usage()
 {
     echo "Usage:"
     echo ""
-    echo " $0 -b <branch> -p <platform> -a <arch> [-c <sonic-buildimage_commit>] [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>] [-s] [-r] [--mark_no_del_ws] [--no-cache] [--admin_password <password>] [--other_build_options <sonic_build_options>]"
+    echo " $0 -b <branch> -p <platform> -a <arch> [-c <sonic-buildimage_commit>] [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>] [-s] [-r] [--mark_no_del_ws] [--no-cache] [--admin_password <password>] [--other_build_options <sonic_build_options>] [--verify_patches]"
     echo ""
     echo "				-s : Build docker saiserver v2"
     echo "				-r : ENABLE_SYNCD_RPC=y"
@@ -32,6 +33,7 @@ print_usage()
     echo "				--mark_no_del_ws: Do not cleanup ws during cleanup"
     echo "				--admin_password: Set admin password"
     echo "				--other_build_options: Other sonic build options"
+    echo "				--verify_patches: Verify if patch apply is clean"
 }
 
 parse_arguments()
@@ -93,6 +95,10 @@ parse_arguments()
                 OTHER_BUILD_OPTIONS="$2"
                 shift # past argument
                 shift # past value
+                ;;
+            --verify_patches)
+                VERIFY_PATCHES="Y"
+                shift # past argument
                 ;;
 			-h|--help)
                 print_usage
@@ -340,6 +346,9 @@ main()
     clone_ws
 
     patch_ws
+    if [ "$VERIFY_PATCHES" == "Y" ]; then
+        exit 0
+    fi
 
     build_ws
     set +x

@@ -130,36 +130,21 @@ parse_arguments()
 
 apply_sonicbuildimage_patches()
 {
-	DRY_RUN=$1
-	RESULT=0
+	( set -e
 	cat series_${PLATFORM}_${ARCH}  | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
 do
 	echo $patch_file
 	pushd patches
 	wget --timeout=2 -c $WGET_PATH/$patch_file
 	popd
-	if [[ $DRY_RUN -eq 1 ]]; then
-		git apply --check patches/$patch_file
-	else
-		git am patches/$patch_file
-	fi
-	if [ $? -ne 0 ]; then
-		log ""
-		log "ERROR: Failed to apply patch $patch_file"
-		log ""
-		RESULT=1
-	fi
-done
-if [ $RESULT -ne 0 ]; then
-	exit 1
-fi
+	git am patches/$patch_file
+done)
 }
 
 apply_submodule_patches()
 {
-	DRY_RUN=$1
-	RESULT=0
 	CWD=`pwd`
+	( set -e
 	cat series_${PLATFORM}_${ARCH}  | grep -v sonic-buildimage | while read -r line
 do
 	patch=`echo $line | cut -f 1 -d'|'`
@@ -168,22 +153,9 @@ do
 	wget --timeout=2 -c $WGET_PATH/${patch}
 	popd
 	pushd ${dir}
-	if [[ $DRY_RUN -eq 1 ]]; then
-		git apply --check $CWD/patches/${patch}
-	else
-		git am $CWD/patches/${patch}
-	fi
-	if [ $? -ne 0 ]; then
-		log ""
-		log "ERROR: Failed to apply patch ${patch}"
-		log ""
-		RESULT=1
-	fi
+	git am $CWD/patches/${patch}
 	popd
-done
-if [ $RESULT -ne 0 ]; then
-	exit 1
-fi
+done)
 }
 
 apply_hwsku_changes()
@@ -226,29 +198,25 @@ main()
 		exit 1
 	fi
 
-	# Dry run apply patch
-	PATCH_FAIL=0
-	apply_sonicbuildimage_patches 1
+	# Apply patch
+	log "Apply sonicbuildimage patches"
+	apply_sonicbuildimage_patches
 	if [ $? -ne 0 ]; then
-		PATCH_FAIL=1
-	fi
-	apply_submodule_patches 1
-	if [ $? -ne 0 ]; then
-		PATCH_FAIL=1
-	fi
-	if [ $PATCH_FAIL -ne 0 ]; then
-		log ""
-		log "Failed patches might need porting to latest commit."
+		log "ERROR: Failed to apply sonicbuildimage patch"
 		exit 1
 	fi
-
-	# Apply patch
-	apply_sonicbuildimage_patches 0
 	git submodule update --init --recursive
+	log "Apply submodule patches"
 	# Apply submodule patches
-	apply_submodule_patches 0
+	apply_submodule_patches
+	if [ $? -ne 0 ]; then
+		log "ERROR: Failed to apply submodule patch"
+		exit 1
+	fi
+	log "Apply hwsku changes"
 	# Apply hwsku changes
 	apply_hwsku_changes
+	log "Patch script - DONE"
 }
 
 main $@
