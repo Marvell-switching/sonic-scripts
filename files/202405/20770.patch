@@ -1,15 +1,15 @@
-From bc0476fdaf808be60dd211697088b4a1ab335195 Mon Sep 17 00:00:00 2001
-From: Pavan Naregundi <pnaregundi@marvell.com>
-Date: Tue, 5 Nov 2024 05:56:37 +0000
-Subject: [PATCH] [Marvell] Updating sai debian
+From 6db6c4ac13ae5c9d875e9a5e043e18870540aa8d Mon Sep 17 00:00:00 2001
+From: Nipun Joy <njoy@marvell.com>
+Date: Tue, 12 Nov 2024 12:16:34 +0000
+Subject: [PATCH] [Marvell] Update Prestera SAI deb version
 
-Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+Signed-off-by: Nipun Joy <njoy@marvell.com>
 ---
  platform/marvell/sai.mk | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/platform/marvell/sai.mk b/platform/marvell/sai.mk
-index 44c1f92e8..5c1c015e1 100644
+index 44c1f92e8737..5c1c015e1269 100644
 --- a/platform/marvell/sai.mk
 +++ b/platform/marvell/sai.mk
 @@ -2,11 +2,11 @@
@@ -27,6 +27,3 @@ index 44c1f92e8..5c1c015e1 100644
  endif
  
  MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
--- 
-2.25.1
-

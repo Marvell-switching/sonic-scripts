@@ -1,6 +1,6 @@
-From 4a908173126c45e2f71740b160d7acf560a60ef2 Mon Sep 17 00:00:00 2001
+From bc7914aafe00fbca9c85931d70ba9d2ab0764750 Mon Sep 17 00:00:00 2001
 From: Keshav Gupta <keshavg@marvell.com>
-Date: Wed, 30 Oct 2024 14:51:51 +0000
+Date: Thu, 14 Nov 2024 05:51:10 +0000
 Subject: [PATCH] [Marvell][ARM64]: Remove redundant boot arguments
 
 Signed-off-by: Keshav Gupta <keshavg@marvell.com>
@@ -9,10 +9,10 @@ Signed-off-by: Keshav Gupta <keshavg@marvell.com>
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/platform/marvell/platform_arm64.conf b/platform/marvell/platform_arm64.conf
-index 4c55dd3ae..ee417e9cd 100644
+index 5c03da7f9..1192417b4 100644
 --- a/platform/marvell/platform_arm64.conf
 +++ b/platform/marvell/platform_arm64.conf
-@@ -222,7 +222,7 @@ prepare_boot_menu() {
+@@ -234,7 +234,7 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
  
      fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
@@ -21,10 +21,10 @@ index 4c55dd3ae..ee417e9cd 100644
      fw_setenv ${FW_ARG} sonic_bootargs_old "$sonic_bootargs_old" > /dev/null || true
      sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
      old_str="_old"
-@@ -237,7 +237,7 @@ prepare_boot_menu() {
-     fw_setenv ${FW_ARG} sonic_boot_load "$MMC_LOAD" > /dev/null
-     SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
-     SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
+@@ -254,7 +254,7 @@ prepare_boot_menu() {
+         SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+         SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
+     fi
 -    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs}'
 +    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
      fw_setenv ${FW_ARG} sonic_bootargs "$BOOTARGS" > /dev/null
