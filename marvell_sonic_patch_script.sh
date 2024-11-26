@@ -30,7 +30,7 @@ print_usage()
 {
 	log "Usage:"
 	log ""
-	log " bash $0 --branch <> --platform <marvell|innovium> --arch <amd64|arm64> --release-tag <>"
+	log " bash $0 --branch <> --platform <marvell|innovium|marvell-teralynx> --arch <amd64|arm64> --release-tag <>"
 	log ""
 	log ""
 }
@@ -53,6 +53,10 @@ pre_patch_help()
 	log "PLATFORM: innovium"
 	log "<<FOR INTEL>> make configure PLATFORM=innovium"
 	log "<<FOR INTEL>> make target/sonic-innovium.bin"
+	log ""
+	log "PLATFORM: marvell-teralynx"
+	log "<<FOR INTEL>> make configure PLATFORM=marvell-teralynx"
+	log "<<FOR INTEL>> make target/sonic-marvell-teralynx.bin"
 	log ""
 }
 
@@ -168,7 +172,7 @@ apply_hwsku_changes()
 			tar -C device/ -xzf prestera_hwsku.tgz
 		fi
 	fi
-	if [ "$PLATFORM" == "innovium" ]; then
+	if [ "$PLATFORM" == "innovium" ] || [ "$PLATFORM" == "marvell-teralynx" ]; then
 		# Download hwsku
 		wget -c --timeout=2 $WGET_PATH/teralynx_hwsku.tgz
 		if [ $? -eq 0 ]; then
