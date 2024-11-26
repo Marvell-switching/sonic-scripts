@@ -2,10 +2,9 @@
 0002-Get-boot-args-from-uboot-env.patch|src/sonic-utilities
 3135.patch|src/sonic-swss
 20493.patch|sonic-buildimage
-1420.patch|src/sonic-sairedis
 19324.patch|sonic-buildimage
 20753.patch|sonic-buildimage
 20250.patch|sonic-buildimage
-20770.patch|sonic-buildimage
 20767.patch|sonic-buildimage
+0001-Marvell-Add-support-for-AC5P-RD-board.patch|sonic-buildimage
 433.patch|src/sonic-linux-kernel
