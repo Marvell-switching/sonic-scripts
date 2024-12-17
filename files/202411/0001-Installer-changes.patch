@@ -1,0 +1,248 @@
+From 0c5101abd47604e629172efe37c2c059f6b534aa Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Tue, 17 Dec 2024 07:16:22 +0000
+Subject: [PATCH] Installer changes
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ installer/default_platform.conf      |  18 +++--
+ platform/marvell/platform_arm64.conf | 112 ++++++++-------------------
+ 2 files changed, 44 insertions(+), 86 deletions(-)
+
+diff --git a/installer/default_platform.conf b/installer/default_platform.conf
+index 85aeddb0e..04cae5995 100755
+--- a/installer/default_platform.conf
++++ b/installer/default_platform.conf
+@@ -35,7 +35,7 @@ create_partition()
+ {
+ 
+     # Install demo on same block device as ONIE
+-    if [ "$install_env" != "build" ]; then
++    if [ "$install_env" != "build" ] && [ -z "$blk_dev" ]; then
+         onie_dev=$(blkid | grep ONIE-BOOT | head -n 1 | awk '{print $1}' |  sed -e 's/:.*$//')
+         blk_dev=$(echo $onie_dev | sed -e 's/[1-9][0-9]*$//' | sed -e 's/\([0-9]\)\(p\)/\1/')
+ 
+@@ -154,13 +154,15 @@ create_demo_gpt_partition()
+     last_part=$(echo "$all_part" | tail -n 1 | awk '{print $1}')
+     # Find next available partition
+     demo_part=1
+-    echo "$all_part" > $tmpfifo &
+-    # Find the first available partition number
+-    while read -r used_part; do
+-        echo "Partition #$used_part is in use."
+-        if [ "$used_part" -ne "$demo_part" ]; then break; fi
+-        demo_part=`expr $demo_part + 1`
+-    done < $tmpfifo
++    if [ ! -z "$all_part" ]; then
++        echo "$all_part" > $tmpfifo &
++        # Find the first available partition number
++        while read -r used_part; do
++            echo "Partition #$used_part is in use."
++            if [ "$used_part" -ne "$demo_part" ]; then break; fi
++            demo_part=`expr $demo_part + 1`
++        done < $tmpfifo
++    fi
+     echo "Partition #$demo_part is available"
+ 
+     # Create new partition
+diff --git a/platform/marvell/platform_arm64.conf b/platform/marvell/platform_arm64.conf
+index 1192417b4..56d66817a 100644
+--- a/platform/marvell/platform_arm64.conf
++++ b/platform/marvell/platform_arm64.conf
+@@ -13,10 +13,6 @@ kernel_version=6.1.0-22-2-arm64
+ kernel_fname="/boot/vmlinuz-$kernel_version"
+ initrd_fname="/boot/initrd.img-$kernel_version"
+ fit_fname="/boot/sonic_arm64.fit"
+-demo_volume_label=SONiC-OS
+-
+-# global mount defines
+-demo_mnt=/tmp
+ 
+ if [ "$install_env" = "onie" ]; then
+     MACH_FILE="/etc/machine.conf"
+@@ -30,6 +26,7 @@ echo "Intalling SONiC from $install_env on Platform $PLATFORM"
+ PLATFORM_AC5X=0
+ PLATFORM_CN9131=0
+ PLATFORM_WISTRON=0
++disk_interface="mmc"
+ 
+ case $PLATFORM in
+     arm64-nokia_ixs7215_52xb-r0) PLATFORM_7215_A1=1;
+@@ -52,27 +49,23 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
+     initrd_addr=0x206000000
+ 
+     FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
+-    demo_part=2
+     mmc_bus="mmc0:0001"
+ elif [ $PLATFORM_7215_A1 -eq 1 ]; then
+     fit_addr=0x20000000
+     VAR_LOG=4096
+     FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
+-    demo_part=2
+     mmc_bus="mmc0:0001"
+ elif [ $PLATFORM_CN9131 -eq 1 ]; then
+     fdt_addr=0x1000000
+     fit_addr=0x8000000
+     initrd_addr=0x2000000
+-    demo_part=2
+     FW_ENV_DEFAULT='/dev/mtd1 0x1F0000 0x10000 0x10000'
+-    mmc_bus="mmc0:0001"
++    scsi_bus="1:0:0:0"
+ elif [ $PLATFORM_WISTRON -eq 1 ]; then
+     kernel_addr=0x7000000
+     fdt_addr=0x6f00000
+     fit_addr=0x20000000
+     initrd_addr=0xa00000
+-    demo_part=1
+     FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
+     mmc_bus="mmc0:0001"
+ else
+@@ -83,83 +76,45 @@ else
+     fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/armada-7020-comexpress.dtb"
+ 
+     FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
+-    demo_part=1
+     mmc_bus="mmc0:aaaa"
+ fi
+ 
+ # Skip VID Header in UBIFS
+ LINUX_MISC_CMD='apparmor=1 security=apparmor usbcore.autosuspend=-1'
+ 
+-#Get block device
+-#Default block device is eMMC, if not look for usb storage
++# Get block device
++# default_platform.conf will by default install SONIC on same block device as ONIE
++# This funtion looks to override SONIC install target disk, with optional eMMC or SCSI disk.
+ get_install_device()
+ {
+-    for i in 0 1 2 ; do
+-        if $(ls -l /sys/block/mmcblk$i/device 2>/dev/null | grep -q "$mmc_bus") ; then
+-            echo "/dev/mmcblk$i"
+-            blk_dev=/dev/mmcblk$i
+-            echo "Selected mmc $blk_dev"
+-            return 0
+-        fi
+-    done
+-
+-    echo "ERROR storage not found"
+-    return 1
+-}
+-
+-get_install_device
+-if [ $? -ne 0 ]; then
+-    echo "Error: Unable to detect $blk_dev $demo_dev"
+-    exit 1
+-fi
+-
+-demo_dev=${blk_dev}p${demo_part}
+-
+-remove_dev_partitions() {
+-    echo "Remove all existing partitions starting partnum: ${demo_part} from ${blk_dev}"
+-    local dev_to_install=${blk_dev}p
+-    for p in $(seq ${demo_part} 9) ; do
+-        if [[ -e ${dev_to_install}${p} ]]; then
+-            echo "Removing partition ${dev_to_install}${p}"
+-            sgdisk -d ${p} ${blk_dev} || true
+-        fi
+-    done
+-    partprobe ${blk_dev}
+-}
+-
+-create_demo_partition() {
+-    # SD CARD
+-    remove_dev_partitions
+-
+-    # Create sonic partition
+-    sgdisk --new ${demo_part}:: \
+-        --change-name=${demo_part}:${demo_volume_label} \
+-        --typecode=${demo_part}:8300 -p ${blk_dev}
+-
+-    partprobe
+-}
++    if [ ! -z "$mmc_bus" ]; then
++        for i in 0 1 2 ; do
++            if $(ls -l /sys/block/mmcblk$i/device 2>/dev/null | grep -q "$mmc_bus") ; then
++                echo "/dev/mmcblk$i"
++                blk_dev=/dev/mmcblk$i
++                disk_interface="mmc"
++                echo "Selected mmc $blk_dev"
++                return
++            fi
++        done
++    fi
+ 
+-create_partition() {
+-    get_install_device
+-    if [ $? -ne 0 ]; then
+-        echo "Error: Unable to detect $blk_dev $demo_dev"
+-        exit 1
++    if [ ! -z "$scsi_bus" ]; then
++        for i in a b c d ; do
++            if $(ls -l /sys/block/sd$i/device 2>/dev/null | grep -q "$scsi_bus") ; then
++                echo "/dev/sd$i"
++                blk_dev=/dev/sd$i
++                disk_interface="scsi"
++                echo "Selected disk $blk_dev"
++                return
++            fi
++        done
+     fi
+ 
+-    # Platform specific partition
+-    create_demo_partition
++    echo "Waring: Storage not found. Will try installing on the same disk as ONIE."
+ }
+ 
+-mount_partition() {
+-    # Make filesystem
+-    echo "demo label: $demo_volume_label. $demo_dev..."
+-    mkfs.ext4 -L $demo_volume_label $demo_dev
+-
+-    mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || {
+-        echo "Error: Unable to mount $demo_dev on $demo_mnt"
+-        exit 1
+-    }
+-}
++get_install_device
+ 
+ prepare_boot_menu() {
+     echo "Sync up cache ..."
+@@ -234,7 +189,8 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
+ 
+     fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+-    sonic_bootargs_old='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs_old}'
++    uuid=$(blkid | grep "SONiC-OS" | sed -ne 's/.* UUID=\"\([^"]*\)\".*/\1/p')
++    sonic_bootargs_old='setenv bootargs root=UUID='$uuid' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs_old}'
+     fw_setenv ${FW_ARG} sonic_bootargs_old "$sonic_bootargs_old" > /dev/null || true
+     sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
+     old_str="_old"
+@@ -245,8 +201,8 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} fit_addr $fit_addr > /dev/null
+     fw_setenv ${FW_ARG} fit_conf_name $fit_conf_name > /dev/null
+     fw_setenv ${FW_ARG} initrd_addr $initrd_addr > /dev/null
+-    MMC_LOAD='ext4load mmc 0:'$demo_part' $fit_addr $fit_name'
+-    fw_setenv ${FW_ARG} sonic_boot_load "$MMC_LOAD" > /dev/null
++    DISK_LOAD='ext4load '$disk_interface' 0:'$demo_part' $fit_addr $fit_name'
++    fw_setenv ${FW_ARG} sonic_boot_load "$DISK_LOAD" > /dev/null
+     if [ $PLATFORM_WISTRON -eq 1 ]; then
+         SONIC_BOOT_CMD='run release_i2c_bus; run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+         SONIC_BOOT_CMD_OLD='run release_i2c_bus; run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
+@@ -254,12 +210,12 @@ prepare_boot_menu() {
+         SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+         SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
+     fi
+-    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
++    BOOTARGS='setenv bootargs root=UUID='$uuid' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
+     fw_setenv ${FW_ARG} sonic_bootargs "$BOOTARGS" > /dev/null
+     fw_setenv ${FW_ARG} sonic_image_2 "$SONIC_BOOT_CMD_OLD" > /dev/null
+     fw_setenv ${FW_ARG} sonic_image_1 "$SONIC_BOOT_CMD" > /dev/null
+     fw_setenv ${FW_ARG} boot_next  'run sonic_image_1'> /dev/null
+-    fw_setenv ${FW_ARG} bootcmd 'run print_menu; usb start; test -n "$boot_once" && setenv do_boot_once "$boot_once" && setenv boot_once "" && saveenv && run do_boot_once; run boot_next' > /dev/null
++    fw_setenv ${FW_ARG} bootcmd 'run print_menu; usb start; scsi scan; test -n "$boot_once" && setenv do_boot_once "$boot_once" && setenv boot_once "" && saveenv && run do_boot_once; run boot_next' > /dev/null
+ 
+     echo "Installed SONiC base image SONiC-OS successfully"
+ }
+-- 
+2.25.1
+
