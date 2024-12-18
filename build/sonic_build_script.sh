@@ -134,7 +134,7 @@ parse_arguments()
         GIT_HUB_URL="https://github.com/sonic-net/sonic-buildimage.git"
     fi
 
-    if [ "${BUILD_PLATFORM}" == "marvell" ] | [ "${BUILD_PLATFORM}" == "marvell-arm64" ] | [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
+    if [ "${BUILD_PLATFORM}" == "marvell" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
         PLATFORM_SHORT_NAME="mrvl"
     fi
 
@@ -287,7 +287,7 @@ build_ws()
     else
         ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS
         check_error $? "configure"
-        if [ "${BUILD_PLATFORM}" == "marvell-arm64" ] | [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
+        if [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
             check_error $? "sonic-${BUILD_PLATFORM}.bin"
         else
@@ -315,7 +315,7 @@ build_ws()
 # TODO: Artifacts list can be improved
 copy_build_artifacts()
 {
-    if [ "${BRANCH}" == "202311" ] | [ "${BRANCH}" == "202305" ] | [ "${BRANCH}" == "202211" ]; then
+    if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
         DEBIAN="bullseye"
     else
         DEBIAN="bookworm"
@@ -324,7 +324,7 @@ copy_build_artifacts()
     mkdir -p $BUILD_ARTIFACTS_DIR
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
-    if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] | [ "${BUILD_PLATFORM}" == "marvell-arm64" ] | [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
+    if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
         cp target/sonic-${BUILD_PLATFORM}.bin $BUILD_ARTIFACTS_DIR
     else
         cp target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin $BUILD_ARTIFACTS_DIR
