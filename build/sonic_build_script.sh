@@ -14,7 +14,7 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 # Set MIRROR to the public mirror for the build
 MIRROR="publicmirror.azurecr.io"
 VERSION_CONTROL_COMPONENTS="deb,py2,py3,web,git,docker"
-REL_BUILD_TSTAMP=$(date +%s)
+REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
 
@@ -320,7 +320,18 @@ copy_build_artifacts()
     else
         DEBIAN="bookworm"
     fi
-    BUILD_ARTIFACTS_DIR=$ARTIFACTS_DIR/$BUILD_PLATFORM_ARCH/$BRANCH/$SONIC_SOURCE_DIR/
+
+    # Ensure that artifacts is a NFS mount, to avoid modifying permissions of local directories
+    if ! grep -s " ${ARTIFACTS_DIR} " /proc/mounts | grep -q "nfs"; then
+        echo "$ARTIFACTS_DIR is not an NFS mount. Copy to artifacts directory failed"
+        return 1
+    fi
+
+    BUILD_ARTIFACTS_DIR=${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/
+    # $ARTIFACTS_DIR is a shared mount across different Linux users.
+    # If any user creates a directory with read-only permissions all subsequent inner directory creation fails,
+    # to avoid such issues, set permissions before any copy.
+    sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
     mkdir -p $BUILD_ARTIFACTS_DIR
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
