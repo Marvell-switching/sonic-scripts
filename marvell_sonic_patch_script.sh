@@ -30,7 +30,7 @@ print_usage()
 {
 	log "Usage:"
 	log ""
-	log " bash $0 --branch <> --platform <marvell|innovium|marvell-teralynx> --arch <amd64|arm64> --release-tag <>"
+	log " bash $0 --branch <> --platform <marvell|marvell-prestera|innovium|marvell-teralynx> --arch <amd64|arm64> --release-tag <>"
 	log ""
 	log ""
 }
@@ -164,7 +164,7 @@ done)
 
 apply_hwsku_changes()
 {
-	if [ "$PLATFORM" == "marvell" ]; then
+	if [ "$PLATFORM" == "marvell" ] || [ "$PLATFORM" == "marvell-prestera" ]; then
 		# Download hwsku
 		wget --timeout=2 -c $WGET_PATH/prestera_hwsku.tgz
 		if [ $? -eq 0 ]; then
@@ -209,6 +209,7 @@ main()
 		log "ERROR: Failed to apply sonicbuildimage patch"
 		exit 1
 	fi
+	git submodule sync --recursive
 	git submodule update --init --recursive
 	log "Apply submodule patches"
 	# Apply submodule patches
