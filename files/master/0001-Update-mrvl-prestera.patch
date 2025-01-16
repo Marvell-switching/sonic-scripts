@@ -1,0 +1,20 @@
+From bd5e668dc2da8327d17b61339b591e9f4aaf63c3 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Thu, 16 Jan 2025 09:27:49 +0000
+Subject: [PATCH] Update mrvl-prestera
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-prestera/mrvl-prestera | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/mrvl-prestera b/platform/marvell-prestera/mrvl-prestera
+index f3735bec4..88f0532a0 160000
+--- a/platform/marvell-prestera/mrvl-prestera
++++ b/platform/marvell-prestera/mrvl-prestera
+@@ -1 +1 @@
+-Subproject commit f3735bec489c8475d2dcc0b0b5d5a810a6ee919e
++Subproject commit 88f0532a0e6c33d399dc69096da463ce4fcfa8d4
+-- 
+2.25.1
+

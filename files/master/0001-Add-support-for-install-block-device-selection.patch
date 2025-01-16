@@ -1,0 +1,49 @@
+From ed1693a4036c826014c332ecad669c558fdafb8f Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 15 Jan 2025 09:15:45 +0000
+Subject: [PATCH 1/2] Add support for install block device selection
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ installer/default_platform.conf | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/installer/default_platform.conf b/installer/default_platform.conf
+index 85aeddb0e..04cae5995 100755
+--- a/installer/default_platform.conf
++++ b/installer/default_platform.conf
+@@ -35,7 +35,7 @@ create_partition()
+ {
+ 
+     # Install demo on same block device as ONIE
+-    if [ "$install_env" != "build" ]; then
++    if [ "$install_env" != "build" ] && [ -z "$blk_dev" ]; then
+         onie_dev=$(blkid | grep ONIE-BOOT | head -n 1 | awk '{print $1}' |  sed -e 's/:.*$//')
+         blk_dev=$(echo $onie_dev | sed -e 's/[1-9][0-9]*$//' | sed -e 's/\([0-9]\)\(p\)/\1/')
+ 
+@@ -154,13 +154,15 @@ create_demo_gpt_partition()
+     last_part=$(echo "$all_part" | tail -n 1 | awk '{print $1}')
+     # Find next available partition
+     demo_part=1
+-    echo "$all_part" > $tmpfifo &
+-    # Find the first available partition number
+-    while read -r used_part; do
+-        echo "Partition #$used_part is in use."
+-        if [ "$used_part" -ne "$demo_part" ]; then break; fi
+-        demo_part=`expr $demo_part + 1`
+-    done < $tmpfifo
++    if [ ! -z "$all_part" ]; then
++        echo "$all_part" > $tmpfifo &
++        # Find the first available partition number
++        while read -r used_part; do
++            echo "Partition #$used_part is in use."
++            if [ "$used_part" -ne "$demo_part" ]; then break; fi
++            demo_part=`expr $demo_part + 1`
++        done < $tmpfifo
++    fi
+     echo "Partition #$demo_part is available"
+ 
+     # Create new partition
+-- 
+2.25.1
+

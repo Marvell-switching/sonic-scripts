@@ -1,0 +1,4 @@
+0001-Add-support-for-install-block-device-selection.patch|sonic-buildimage
+20860.patch|sonic-buildimage
+0001-Update-mrvl-prestera.patch|sonic-buildimage
+0001-marvell-prestera-rename.patch|src/sonic-linux-kernel
