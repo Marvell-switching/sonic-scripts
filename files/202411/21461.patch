@@ -1,16 +1,15 @@
-From 537238a6ac046cf0534e1a0a44535eff9f1978bb Mon Sep 17 00:00:00 2001
-From: Keshav Gupta <keshavg@marvell.com>
-Date: Tue, 17 Dec 2024 07:16:22 +0000
-Subject: [PATCH 1/2] Installer changes
+From ed1693a4036c826014c332ecad669c558fdafb8f Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 15 Jan 2025 09:15:45 +0000
+Subject: [PATCH 1/2] Add support for install block device selection
 
-Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- installer/default_platform.conf      |  18 +++--
- platform/marvell/platform_arm64.conf | 117 +++++++++------------------
- 2 files changed, 48 insertions(+), 87 deletions(-)
+ installer/default_platform.conf | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
 
 diff --git a/installer/default_platform.conf b/installer/default_platform.conf
-index 85aeddb0e..04cae5995 100755
+index 85aeddb0e1d2..04cae5995ac1 100755
 --- a/installer/default_platform.conf
 +++ b/installer/default_platform.conf
 @@ -35,7 +35,7 @@ create_partition()
@@ -45,8 +44,27 @@ index 85aeddb0e..04cae5995 100755
      echo "Partition #$demo_part is available"
  
      # Create new partition
+
+From a27dba2bf313c0dd6b547ae5dda1503446c89fd3 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 15 Jan 2025 09:28:33 +0000
+Subject: [PATCH 2/2] [Marvell-arm64] Installer changes to use default create
+ and mount partition
+
+Following things will change:
+ - Use implementation from default_platform.conf for create and mount partition.
+ - Add support to override block device for SONiC install by initialised in
+   'blk_dev'. If not initialised, default 'blk_dev' will be same disk as ONIE.
+ - Add support for SCSI based disk.
+ - Change to UUID to select the root in linuxargs.
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell/platform_arm64.conf | 118 +++++++++------------------
+ 1 file changed, 39 insertions(+), 79 deletions(-)
+
 diff --git a/platform/marvell/platform_arm64.conf b/platform/marvell/platform_arm64.conf
-index 1192417b4..ca4223ea7 100644
+index ee417e9cd3ac..0dae738a4e1d 100644
 --- a/platform/marvell/platform_arm64.conf
 +++ b/platform/marvell/platform_arm64.conf
 @@ -13,10 +13,6 @@ kernel_version=6.1.0-22-2-arm64
@@ -60,36 +78,39 @@ index 1192417b4..ca4223ea7 100644
  
  if [ "$install_env" = "onie" ]; then
      MACH_FILE="/etc/machine.conf"
-@@ -30,6 +26,7 @@ echo "Intalling SONiC from $install_env on Platform $PLATFORM"
+@@ -29,15 +25,20 @@ echo "Intalling SONiC from $install_env on Platform $PLATFORM"
+ 
  PLATFORM_AC5X=0
  PLATFORM_CN9131=0
- PLATFORM_WISTRON=0
++PLATFORM_7215_A1=0
 +disk_interface="mmc"
  
  case $PLATFORM in
      arm64-nokia_ixs7215_52xb-r0) PLATFORM_7215_A1=1;
-@@ -40,7 +37,8 @@ case $PLATFORM in
++		mmc_bus="mmc0:0001";
+ 		fdt_fname="/usr/lib/linux-image-${kernel_version}/marvell/7215-ixs-a1.dtb";
+ 		fit_conf_name="#conf_7215_a1";;
+     arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1;
++		mmc_bus="mmc0:0001";
+ 		fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/ac5-98dx35xx-rd.dtb";
  		fit_conf_name="#conf_ac5x";;
      arm64-marvell_rd98DX35xx_cn9131-r0) PLATFORM_CN9131=1;
++		mmc_bus="mmc0:0001";
  		fdt_fname="/boot/cn9131-db-comexpress.dtb";
--		fit_conf_name="#conf_cn9131";;
-+		fit_conf_name="#conf_cn9131";
-+                mmc_bus="mmc0:0001";;
-     arm64-wistron_es1227_54ts-r0|arm64-wistron_es2227_54ts-r0|arm64-wistron_es2227_54ts_p-r0) PLATFORM_WISTRON=1;
- 		fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/es1227-54ts.dtb";
- 		fit_conf_name="#conf_es1227";;
-@@ -52,27 +50,23 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
+ 		fit_conf_name="#conf_cn9131";;
+ esac
+@@ -48,21 +49,15 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
      initrd_addr=0x206000000
  
      FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
 -    demo_part=2
-     mmc_bus="mmc0:0001"
+-    mmc_bus="mmc0:0001"
  elif [ $PLATFORM_7215_A1 -eq 1 ]; then
      fit_addr=0x20000000
      VAR_LOG=4096
      FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
 -    demo_part=2
-     mmc_bus="mmc0:0001"
+-    mmc_bus="mmc0:0001"
  elif [ $PLATFORM_CN9131 -eq 1 ]; then
      fdt_addr=0x1000000
      fit_addr=0x8000000
@@ -97,17 +118,10 @@ index 1192417b4..ca4223ea7 100644
 -    demo_part=2
      FW_ENV_DEFAULT='/dev/mtd1 0x1F0000 0x10000 0x10000'
 -    mmc_bus="mmc0:0001"
-+    scsi_bus="1:0:0:0"
- elif [ $PLATFORM_WISTRON -eq 1 ]; then
-     kernel_addr=0x7000000
-     fdt_addr=0x6f00000
-     fit_addr=0x20000000
-     initrd_addr=0xa00000
--    demo_part=1
-     FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
-     mmc_bus="mmc0:0001"
  else
-@@ -83,83 +77,46 @@ else
+     fdt_addr=0x1000000
+     fit_addr=0x8000000
+@@ -71,83 +66,46 @@ else
      fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/armada-7020-comexpress.dtb"
  
      FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x100000'
@@ -199,7 +213,7 @@ index 1192417b4..ca4223ea7 100644
 +        done
      fi
  
--    # Platform specific partition
+-    # Platform specific partition 
 -    create_demo_partition
 +    echo "Waring: Storage not found. Will try installing on the same disk as ONIE."
  }
@@ -218,7 +232,7 @@ index 1192417b4..ca4223ea7 100644
  
  prepare_boot_menu() {
      echo "Sync up cache ..."
-@@ -234,7 +191,8 @@ prepare_boot_menu() {
+@@ -222,7 +180,8 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
  
      fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
@@ -228,7 +242,7 @@ index 1192417b4..ca4223ea7 100644
      fw_setenv ${FW_ARG} sonic_bootargs_old "$sonic_bootargs_old" > /dev/null || true
      sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
      old_str="_old"
-@@ -245,8 +203,9 @@ prepare_boot_menu() {
+@@ -233,16 +192,17 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} fit_addr $fit_addr > /dev/null
      fw_setenv ${FW_ARG} fit_conf_name $fit_conf_name > /dev/null
      fw_setenv ${FW_ARG} initrd_addr $initrd_addr > /dev/null
@@ -237,13 +251,8 @@ index 1192417b4..ca4223ea7 100644
 +    demo_part=$(sgdisk -p $blk_dev | grep -e "$demo_volume_label" | awk '{print $1}')
 +    DISK_LOAD=''$disk_scan' ext4load '$disk_interface' 0:'$demo_part' $fit_addr $fit_name'
 +    fw_setenv ${FW_ARG} sonic_boot_load "$DISK_LOAD" > /dev/null
-     if [ $PLATFORM_WISTRON -eq 1 ]; then
-         SONIC_BOOT_CMD='run release_i2c_bus; run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
-         SONIC_BOOT_CMD_OLD='run release_i2c_bus; run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
-@@ -254,12 +213,12 @@ prepare_boot_menu() {
-         SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
-         SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
-     fi
+     SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+     SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
 -    BOOTARGS='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
 +    BOOTARGS='setenv bootargs root=UUID='$uuid' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
      fw_setenv ${FW_ARG} sonic_bootargs "$BOOTARGS" > /dev/null
@@ -255,6 +264,3 @@ index 1192417b4..ca4223ea7 100644
  
      echo "Installed SONiC base image SONiC-OS successfully"
  }
--- 
-2.25.1
-

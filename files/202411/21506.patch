@@ -1,26 +1,18 @@
-From 8ffe47c009742c8f35465b25ba337180889b4909 Mon Sep 17 00:00:00 2001
-From: Keshav Gupta <keshavg@marvell.com>
-Date: Wed, 18 Dec 2024 04:36:03 +0000
-Subject: [PATCH 2/2] Add support for AC5P RD board
+From 93ab4c006ea0a49e4fcee2a2e52450c1f41f59ee Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 22 Jan 2025 09:44:59 +0530
+Subject: [PATCH] Add support for AC5P-RD
 
-Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- platform/marvell/mrvl-prestera          | 2 +-
  platform/marvell/one-image.mk           | 3 ++-
  platform/marvell/platform-marvell.mk    | 6 ++++++
- platform/marvell/platform_arm64.conf    | 5 ++++-
+ platform/marvell/platform_arm64.conf    | 4 ++++
  platform/marvell/sonic-platform-marvell | 2 +-
- 5 files changed, 14 insertions(+), 4 deletions(-)
+ 4 files changed, 13 insertions(+), 2 deletions(-)
 
-diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
-index f3735bec4..6ca0e4b18 160000
---- a/platform/marvell/mrvl-prestera
-+++ b/platform/marvell/mrvl-prestera
-@@ -1 +1 @@
--Subproject commit f3735bec489c8475d2dcc0b0b5d5a810a6ee919e
-+Subproject commit 6ca0e4b18ffe975cd06f0d7751cd701c4e0724b1
 diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
-index 47e0f7be9..f1831d93c 100644
+index be282e921..1aaa466f5 100644
 --- a/platform/marvell/one-image.mk
 +++ b/platform/marvell/one-image.mk
 @@ -12,7 +12,8 @@ ifeq ($(CONFIGURED_ARCH),arm64)
@@ -30,9 +22,9 @@ index 47e0f7be9..f1831d93c 100644
 -				$(AC5X_RD98DX35xxCN9131_PLATFORM)
 +				$(AC5X_RD98DX35xxCN9131_PLATFORM) \
 +				$(AC5P_RD98DX45xxCN9131_PLATFORM)
- $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES2227_PLATFORM)
- $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES2227_P_PLATFORM)
- $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES1227_PLATFORM)
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM)
 diff --git a/platform/marvell/platform-marvell.mk b/platform/marvell/platform-marvell.mk
 index eec94d18a..c550491e3 100644
 --- a/platform/marvell/platform-marvell.mk
@@ -58,28 +50,20 @@ index eec94d18a..c550491e3 100644
  
  AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx-x86_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
 diff --git a/platform/marvell/platform_arm64.conf b/platform/marvell/platform_arm64.conf
-index ca4223ea7..c4c15be8c 100644
+index 0dae738a4..cab2f42a4 100644
 --- a/platform/marvell/platform_arm64.conf
 +++ b/platform/marvell/platform_arm64.conf
-@@ -39,6 +39,10 @@ case $PLATFORM in
+@@ -41,6 +41,10 @@ case $PLATFORM in
+ 		mmc_bus="mmc0:0001";
  		fdt_fname="/boot/cn9131-db-comexpress.dtb";
- 		fit_conf_name="#conf_cn9131";
-                 mmc_bus="mmc0:0001";;
+ 		fit_conf_name="#conf_cn9131";;
 +    arm64-marvell_rd98DX45xx_cn9131-r0) PLATFORM_CN9131=1;
++                scsi_bus="1:0:0:0";
 +                fdt_fname="/boot/cn9131-db-comexpress.dtb";
-+                fit_conf_name="#conf_cn9131";
-+                scsi_bus="1:0:0:0";;
-     arm64-wistron_es1227_54ts-r0|arm64-wistron_es2227_54ts-r0|arm64-wistron_es2227_54ts_p-r0) PLATFORM_WISTRON=1;
- 		fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/es1227-54ts.dtb";
- 		fit_conf_name="#conf_es1227";;
-@@ -61,7 +65,6 @@ elif [ $PLATFORM_CN9131 -eq 1 ]; then
-     fit_addr=0x8000000
-     initrd_addr=0x2000000
-     FW_ENV_DEFAULT='/dev/mtd1 0x1F0000 0x10000 0x10000'
--    scsi_bus="1:0:0:0"
- elif [ $PLATFORM_WISTRON -eq 1 ]; then
-     kernel_addr=0x7000000
-     fdt_addr=0x6f00000
++                fit_conf_name="#conf_cn9131";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
 diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
 index f6224ee91..1489ce1e3 160000
 --- a/platform/marvell/sonic-platform-marvell
