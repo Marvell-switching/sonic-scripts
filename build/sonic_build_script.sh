@@ -24,7 +24,7 @@ print_usage()
 {
     echo "Usage:"
     echo ""
-    echo " $0 -b <branch> -p <platform> -a <arch> [-c <sonic-buildimage_commit>] [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>] [-s] [-r] [--mark_no_del_ws] [--no-cache] [--admin_password <password>] [--other_build_options <sonic_build_options>] [--verify_patches]"
+    echo " $0 -b <branch> -p <platform> -a <arch> [-c <sonic-buildimage_commit>] [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>] [-s] [-r] [--mark_no_del_ws] [--no-cache] [--admin_password <password>] [--other_build_options <sonic_build_options>] [--verify_patches] [--clean_dockers] [--clean_ws]"
     echo ""
     echo "				-s : Build docker saiserver v2"
     echo "				-r : ENABLE_SYNCD_RPC=y"
@@ -34,6 +34,8 @@ print_usage()
     echo "				--admin_password: Set admin password"
     echo "				--other_build_options: Other sonic build options"
     echo "				--verify_patches: Verify if patch apply is clean"
+    echo "				--clean_dockers: clean up build dockers"
+    echo "				--clean_ws: clean all previous created ws created by script in current directory(backup you local changes)"
 }
 
 parse_arguments()
@@ -100,7 +102,15 @@ parse_arguments()
                 VERIFY_PATCHES="Y"
                 shift # past argument
                 ;;
-			-h|--help)
+            --clean_dockers)
+                CLEAN_DOCKERS="Y"
+                shift # past argument
+                ;;
+            --clean_ws)
+                CLEAN_WS="Y"
+                shift # past argument
+                ;;
+            -h|--help)
                 print_usage
                 exit 1
                 ;;
@@ -154,7 +164,6 @@ parse_arguments()
 on_error()
 {
     cd $DIR
-    mv $SONIC_SOURCE_DIR $SONIC_SOURCE_DIR-err
     echo "\n\nBuild Error\n\n"
     exit 1
 }
@@ -172,44 +181,47 @@ check_free_space()
     local dir=$1
     local ALERT=$2
 
-    df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
-do
-    echo "$output"
-    usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
-    partition=$(echo "$output" | awk '{ print $2 }' )
-    if [ $usep -ge $ALERT ]; then
-        echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
-            ls -1  | grep "ABT-" | grep "-err" | while read -r dir_name;
-                do
-                    echo "Removing $dir_name"
-                    if [ ! -f $dir_name/no_del_ws ]; then
-                        sudo rm -rf $dir_name
-                    fi
-                done
-                # Check space again after removing errored build
-                df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output_new;
-            do
-                echo "$output_new"
-                usep=$(echo "$output_new" | awk '{ print $1}' | cut -d'%' -f1 )
-                if [ $usep -ge $ALERT ]; then
-                    # Remove build dirs
-                    ls -1  | grep "ABT-" | while read -r dir_name;
-                do
-                    echo "Removing $dir_name"
-                    if [ ! -f $dir_name/no_del_ws ]; then
-                        sudo rm -rf $dir_name
-                    fi
-                done
-                fi
-            done
-    fi
-done
+	if [ -v CLEAN_WS ]; then
+		df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
+	do
+		echo "$output"
+		usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
+		partition=$(echo "$output" | awk '{ print $2 }' )
+		if [ $usep -ge $ALERT ]; then
+			echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
+				ls -1  | grep "ABT-" | grep "-err" | while read -r dir_name;
+						do
+							echo "Removing $dir_name"
+							if [ ! -f $dir_name/no_del_ws ]; then
+								sudo rm -rf $dir_name
+							fi
+						done
+						# Check space again after removing errored build
+						df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output_new;
+					do
+						echo "$output_new"
+						usep=$(echo "$output_new" | awk '{ print $1}' | cut -d'%' -f1 )
+						if [ $usep -ge $ALERT ]; then
+							# Remove build dirs
+							ls -1  | grep "ABT-" | while read -r dir_name;
+						do
+							echo "Removing $dir_name"
+							if [ ! -f $dir_name/no_del_ws ]; then
+								sudo rm -rf $dir_name
+							fi
+						done
+						fi
+					done
+		fi
+	done
+	fi
 
 df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
 do
     usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
     if [ $usep -ge $ALERT ]; then
         echo "Not enough space. Please check build server to free space."
+        echo "Optionally you can use --clean_dockers or --clean_ws after pushing your local changes"
         exit 1
     fi
 done
@@ -217,8 +229,10 @@ done
 
 cleanup_server()
 {
-    # Remove all stopped containers
-    docker system prune -a --volumes -f
+    if [ -v CLEAN_DOCKERS ]; then
+        # Remove all stopped containers
+        docker system prune -a --volumes -f
+    fi
 
     # check for disk space and cleanup
     check_free_space . 65
