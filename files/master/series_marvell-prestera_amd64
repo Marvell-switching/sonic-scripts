@@ -1,6 +1,7 @@
+0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
+0002-buildimage-platform-marvell-remove.patch|sonic-buildimage
+0003-buildimage-platform-marvell-prestera-add.patch|sonic-buildimage
+0004-buildimage-Renaming-platform-marvell-to-platform-mar.patch|sonic-buildimage
+0005-buildimage-misc-Renaming-platform-marvell-to-marvell.patch|sonic-buildimage
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
-0001-Add-support-for-install-block-device-selection.patch|sonic-buildimage
-0002-Marvell-arm64-Installer-changes-to-use-default-creat.patch|sonic-buildimage
-20860.patch|sonic-buildimage
-0001-Update-mrvl-prestera.patch|sonic-buildimage
 0001-marvell-prestera-rename.patch|src/sonic-linux-kernel

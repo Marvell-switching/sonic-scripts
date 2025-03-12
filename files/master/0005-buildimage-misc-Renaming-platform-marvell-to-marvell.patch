@@ -1,0 +1,323 @@
+From 11605b445cd4850b1bb07978209293a0c4fc9ca8 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 10 Mar 2025 14:15:22 +0000
+Subject: [PATCH 5/6] buildimage: misc: Renaming platform marvell to
+ marvell-prestera
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../azure-pipelines-UpgrateVersion.yml         |  4 ++--
+ .azure-pipelines/azure-pipelines-build.yml     | 10 +++++-----
+ .../azure-pipelines-image-template.yml         |  2 +-
+ .azure-pipelines/build-template.yml            |  4 ++--
+ .azure-pipelines/official-build-cache.yml      |  4 ++--
+ README.md                                      | 18 +++++++++++-------
+ azure-pipelines.yml                            |  8 ++++----
+ .../platform_asic                              |  2 +-
+ .../arm64-marvell_rd98DX35xx-r0/platform_asic  |  2 +-
+ .../platform_asic                              |  2 +-
+ .../platform_asic                              |  2 +-
+ .../platform_asic                              |  2 +-
+ .../platform_asic                              |  2 +-
+ .../platform_asic                              |  2 +-
+ .../x86_64-marvell_rd98DX35xx-r0/platform_asic |  2 +-
+ .../arm64-nokia_ixs7215_52xb-r0/platform_asic  |  2 +-
+ .../armhf-nokia_ixs7215_52x-r0/platform_asic   |  2 +-
+ dockers/docker-orchagent/orchagent.sh          |  2 +-
+ .../sonic_py_common/device_info.py             |  2 +-
+ 19 files changed, 39 insertions(+), 35 deletions(-)
+
+diff --git a/.azure-pipelines/azure-pipelines-UpgrateVersion.yml b/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
+index b40a5d033..b0fafd57b 100644
+--- a/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
++++ b/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
+@@ -37,8 +37,8 @@ parameters:
+   - centec
+   - centec-arm64
+   - generic
+-  - marvell-armhf
+-  - marvell-arm64
++  - marvell-prestera-armhf
++  - marvell-prestera-arm64
+   - mellanox
+   - pensando
+   - nvidia-bluefield
+diff --git a/.azure-pipelines/azure-pipelines-build.yml b/.azure-pipelines/azure-pipelines-build.yml
+index 20d73b58d..faabc4300 100644
+--- a/.azure-pipelines/azure-pipelines-build.yml
++++ b/.azure-pipelines/azure-pipelines-build.yml
+@@ -94,23 +94,23 @@ jobs:
+           variables:
+             dbg_image: yes
+ 
+-        - name: marvell-armhf
++        - name: marvell-prestera-armhf
+           ${{ if not(parameters.qemuOrCrossBuild) }}:
+             pool: sonicbld-armhf
+           timeoutInMinutes: 2880
+           variables:
+-            PLATFORM_NAME: marvell
++            PLATFORM_NAME: marvell-prestera
+             PLATFORM_ARCH: armhf
+ 
+-        - name: marvell-arm64
++        - name: marvell-prestera-arm64
+           ${{ if not(parameters.qemuOrCrossBuild) }}:
+             pool: sonicbld-arm64
+           timeoutInMinutes: 2880
+           variables:
+-            PLATFORM_NAME: marvell
++            PLATFORM_NAME: marvell-prestera
+             PLATFORM_ARCH: arm64
+ 
+-        - name: marvell
++        - name: marvell-prestera
+ 
+         - name: mellanox
+           variables:
+diff --git a/.azure-pipelines/azure-pipelines-image-template.yml b/.azure-pipelines/azure-pipelines-image-template.yml
+index 36d0b657b..11214a0f3 100644
+--- a/.azure-pipelines/azure-pipelines-image-template.yml
++++ b/.azure-pipelines/azure-pipelines-image-template.yml
+@@ -36,7 +36,7 @@ jobs:
+       - script: |
+           [ -n "$OVERRIDE_BUILD_OPTIONS" ] && OVERRIDE_BUILD_OPTIONS=$(OVERRIDE_BUILD_OPTIONS)
+           BUILD_OPTIONS="$(BUILD_OPTIONS) $OVERRIDE_BUILD_OPTIONS"
+-          if [ -n "$(CACHE_MODE)" ] && echo $(PLATFORM_AZP) | grep -E -q "^(vs|broadcom|mellanox|marvell-armhf|marvell-arm64|vpp)$"; then
++          if [ -n "$(CACHE_MODE)" ] && echo $(PLATFORM_AZP) | grep -E -q "^(vs|broadcom|mellanox|marvell-prestera-armhf|marvell-prestera-arm64|vpp)$"; then
+             CACHE_OPTIONS="SONIC_DPKG_CACHE_METHOD=$(CACHE_MODE) SONIC_DPKG_CACHE_SOURCE=/nfs/dpkg_cache/$(PLATFORM_AZP)"
+             BUILD_OPTIONS="$BUILD_OPTIONS $CACHE_OPTIONS"
+           fi
+diff --git a/.azure-pipelines/build-template.yml b/.azure-pipelines/build-template.yml
+index 813126792..11efaaf9e 100644
+--- a/.azure-pipelines/build-template.yml
++++ b/.azure-pipelines/build-template.yml
+@@ -4,7 +4,7 @@ parameters:
+   values:
+   - broadcom
+   - centec-arm64
+-  - marvell-armhf
++  - marvell-prestera-armhf
+   - mellanox
+   - vs
+ 
+@@ -21,7 +21,7 @@ parameters:
+   values:
+   - brcm
+   - centec-arm64
+-  - marvell-armhf
++  - marvell-prestera-armhf
+   - mlnx
+   - vs
+ 
+diff --git a/.azure-pipelines/official-build-cache.yml b/.azure-pipelines/official-build-cache.yml
+index 0f7b34e9b..17e9f9520 100644
+--- a/.azure-pipelines/official-build-cache.yml
++++ b/.azure-pipelines/official-build-cache.yml
+@@ -45,9 +45,9 @@ stages:
+           variables:
+             docker_syncd_rpc_image: yes
+             platform_rpc: mlnx
+-        - name: marvell-armhf
++        - name: marvell-prestera-armhf
+           pool: sonicbld-armhf
+           timeoutInMinutes: 1200
+           variables:
+-            PLATFORM_NAME: marvell
++            PLATFORM_NAME: marvell-prestera
+             PLATFORM_ARCH: armhf
+diff --git a/README.md b/README.md
+index fad301935..92e5af579 100644
+--- a/README.md
++++ b/README.md
+@@ -3,6 +3,8 @@
+ [![Broadcom](https://dev.azure.com/mssonic/build/_apis/build/status/broadcom/Azure.sonic-buildimage.official.broadcom?branchName=master&label=Broadcom)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=138&branchName=master)
+ [![Centec](https://dev.azure.com/mssonic/build/_apis/build/status/centec/Azure.sonic-buildimage.official.centec?branchName=master&label=Centec)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=143&branchName=master)
+ [![Centec(arm64)](https://dev.azure.com/mssonic/build/_apis/build/status/centec/Azure.sonic-buildimage.official.centec-arm64?branchName=master&label=Centec-arm64)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=140&branchName=master)
++[![Marvell-Prestera(armhf)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell-prestera/Azure.sonic-buildimage.official.marvell-prestera-armhf?branchName=master&label=Marvell-Prestera-armhf)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=141&branchName=master)
++[![Marvell-Prestera(arm64)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell-prestera/Azure.sonic-buildimage.official.marvell-prestera-arm64?branchName=master&label=Marvell-Prestera-arm64)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=999&branchName=master)
+ [![Marvell-Teralynx](https://dev.azure.com/mssonic/build/_apis/build/status/innovium/Azure.sonic-buildimage.official.marvell-teralynx?branchName=master&label=Marvell-Teralynx)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=148&branchName=master)
+ [![Mellanox](https://dev.azure.com/mssonic/build/_apis/build/status/mellanox/Azure.sonic-buildimage.official.mellanox?branchName=master&label=Mellanox)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=139&branchName=master)
+ [![Marvell(armhf)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell/Azure.sonic-buildimage.official.marvell-armhf?branchName=master&label=Marvell-armhf)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=141&branchName=master)
+@@ -209,12 +211,12 @@ The supported ASIC vendors are:
+ 
+ * PLATFORM=barefoot
+ * PLATFORM=broadcom
+-* PLATFORM=marvell
++* PLATFORM=marvell-prestera
++* PLATFORM=marvell-teralynx
+ * PLATFORM=mellanox
+ * PLATFORM=centec
+ * PLATFORM=nephos
+ * PLATFORM=nvidia-bluefield
+-* PLATFORM=marvell-teralynx
+ * PLATFORM=vs
+ 
+ ## Usage for ARM Architecture
+@@ -235,8 +237,8 @@ make target/sonic-[ASIC_VENDER]-armhf.bin
+ _example:_
+ 
+ ```shell
+-make configure PLATFORM=marvell PLATFORM_ARCH=armhf
+-make target/sonic-marvell-armhf.bin
++make configure PLATFORM=marvell-prestera PLATFORM_ARCH=armhf
++make target/sonic-marvell-prestera-armhf.bin
+ ```
+ 
+ To build Arm32 bit for (ARMHF) Marvell platform on amd64 host for debian buster
+@@ -246,11 +248,11 @@ using cross-compilation, run the following commands:
+ # Execute make configure once to configure ASIC and ARCH for cross-compilation build
+ 
+ NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 \
+-make configure PLATFORM=marvell PLATFORM_ARCH=armhf
++make configure PLATFORM=marvell-prestera PLATFORM_ARCH=armhf
+ 
+ # Execute Arm32 build using cross-compilation environment
+ 
+-NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 make target/sonic-marvell-armhf.bin
++NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 make target/sonic-marvell-prestera-armhf.bin
+ ```
+ 
+ Running the above Arm32 build using cross-compilation instead of qemu emulator
+@@ -265,7 +267,7 @@ make configure PLATFORM=[ASIC_VENDOR] PLATFORM_ARCH=arm64
+ 
+ # example:
+ 
+-make configure PLATFORM=marvell PLATFORM_ARCH=arm64
++make configure PLATFORM=marvell-prestera PLATFORM_ARCH=arm64
+ ```
+ 
+  **NOTE**:
+@@ -374,6 +376,8 @@ on the SAI version for each SONiC release.
+     and Nephos switch ASIC (gzip tar archive)
+   * docker-syncd-mrvl-teralynx.gz: docker image for the daemon to sync database
+     and Marvell-Teralynx switch ASIC (gzip tar archive)
++  * docker-syncd-mrvl-prestera.gz: docker image for the daemon to sync database
++    and Marvell-Prestera switch ASIC (gzip tar archive)
+   * docker-sonic-p4.gz: docker image for all-in-one for p4 software switch
+     (gzip tar archive)
+   * docker-sonic-vs.gz: docker image for all-in-one for software virtual switch
+diff --git a/azure-pipelines.yml b/azure-pipelines.yml
+index d6eb20d31..ec8e28703 100644
+--- a/azure-pipelines.yml
++++ b/azure-pipelines.yml
+@@ -78,16 +78,16 @@ stages:
+           dbg_image: yes
+           docker_syncd_rpc_image: yes
+           platform_rpc: mlnx
+-      - name: marvell-arm64
++      - name: marvell-prestera-arm64
+         pool: sonicbld-arm64
+         variables:
+-           PLATFORM_NAME: marvell
++           PLATFORM_NAME: marvell-prestera
+            PLATFORM_ARCH: arm64
+-      - name: marvell-armhf
++      - name: marvell-prestera-armhf
+         pool: sonicbld-armhf
+         timeoutInMinutes: 1200
+         variables:
+-          PLATFORM_NAME: marvell
++          PLATFORM_NAME: marvell-prestera
+           PLATFORM_ARCH: armhf
+           INCLUDE_RESTAPI: y
+ 
+diff --git a/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic b/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
++++ b/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
++++ b/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
++++ b/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
++++ b/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
++++ b/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
++++ b/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
++++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic b/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
++++ b/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic b/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
+index a55475287..5cbe9d002 100644
+--- a/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
++++ b/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
+@@ -1 +1 @@
+-marvell
++marvell-prestera
+diff --git a/dockers/docker-orchagent/orchagent.sh b/dockers/docker-orchagent/orchagent.sh
+index b0d19823f..c442bba45 100755
+--- a/dockers/docker-orchagent/orchagent.sh
++++ b/dockers/docker-orchagent/orchagent.sh
+@@ -78,7 +78,7 @@ elif [ "$platform" == "pensando" ]; then
+         MAC_ADDRESS=$(ip link show eth0-midplane | grep ether | awk '{print $2}')
+     fi
+     ORCHAGENT_ARGS+="-m $MAC_ADDRESS"
+-elif [ "$platform" == "marvell" ]; then
++elif [ "$platform" == "marvell-prestera" ]; then
+     ORCHAGENT_ARGS+="-m $MAC_ADDRESS"
+     CREATE_SWITCH_TIMEOUT=`cat $HWSKU_DIR/sai.profile | grep "createSwitchTimeout" | cut -d'=' -f 2`
+     if [[ ! -z $CREATE_SWITCH_TIMEOUT ]]; then
+diff --git a/src/sonic-py-common/sonic_py_common/device_info.py b/src/sonic-py-common/sonic_py_common/device_info.py
+index 85d1d6222..a1ef81184 100644
+--- a/src/sonic-py-common/sonic_py_common/device_info.py
++++ b/src/sonic-py-common/sonic_py_common/device_info.py
+@@ -803,7 +803,7 @@ def get_system_mac(namespace=None, hostname=None):
+ 
+         (mac, err) = run_command(syseeprom_cmd)
+         hw_mac_entry_outputs.append((mac, err))
+-    elif (version_info['asic_type'] == 'marvell'):
++    elif (version_info['asic_type'] == 'marvell-prestera'):
+         # Try valid mac in eeprom, else fetch it from eth0
+         machine_key = "onie_machine"
+         machine_vars = get_machine_info()
+-- 
+2.25.1
+

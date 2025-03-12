@@ -1,145 +1,121 @@
-From 3a1948244dad08d5466415840d10785d7303f20c Mon Sep 17 00:00:00 2001
-From: ksridharan <ksridharan@marvell.com>
-Date: Mon, 24 Jun 2024 08:58:49 -0700
-Subject: [PATCH] Renaming platform/marvell to platform/marvell-prestera
+From 9f3451255eb9fef49fa4f86c6f3a1a97e3077110 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 10 Mar 2025 20:46:16 +0000
+Subject: [PATCH 4/6] buildimage: Renaming platform/marvell to
+ platform/marvell-prestera
 
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
- .../azure-pipelines-UpgrateVersion.yml        |  4 ++--
- .azure-pipelines/azure-pipelines-build.yml    | 10 ++++-----
- .../azure-pipelines-image-template.yml        |  2 +-
- .azure-pipelines/build-template.yml           |  4 ++--
- .azure-pipelines/official-build-cache.yml     |  4 ++--
- .gitmodules                                   | 14 ++++++------
- README.md                                     | 22 ++++++++++---------
- azure-pipelines.yml                           |  8 +++----
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../arm64-marvell_rd98DX35xx-r0/platform_asic |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../platform_asic                             |  2 +-
- .../arm64-nokia_ixs7215_52xb-r0/platform_asic |  2 +-
- .../armhf-nokia_ixs7215_52x-r0/platform_asic  |  2 +-
- dockers/docker-pde/syncd_init_common.sh       |  6 ++---
- .../docker-saiserver-mrvl-prestera.dep}       |  2 +-
- .../docker-saiserver-mrvl-prestera.mk}        |  4 ++--
- .../Dockerfile.j2                             |  4 ++--
- .../docker-saiserver-mrvl-prestera}/start.sh  |  0
- .../supervisord.conf                          |  0
- .../docker-syncd-mrvl-prestera-rpc.dep}       |  2 +-
- .../docker-syncd-mrvl-prestera-rpc.mk}        |  6 ++---
- .../99-syncd.conf                             |  0
- .../Dockerfile.j2                             | 14 ++++++------
- .../ptf_nn_agent.conf                         |  0
- .../docker-syncd-mrvl-prestera.dep}           |  2 +-
- .../docker-syncd-mrvl-prestera.mk}            |  4 ++--
- .../docker-syncd-mrvl-prestera}/Dockerfile.j2 |  4 ++--
- .../critical_processes                        |  0
- .../supervisord.conf                          |  0
- .../docker-syncd-mrvl-prestera}/syncd.sh      |  0
- .../libsaithrift-dev.dep                      |  0
- .../libsaithrift-dev.mk                       |  0
- .../mrvl-prestera                             |  0
- .../mrvl-prestera.dep                         |  0
- .../mrvl-prestera.mk                          |  0
- .../one-image.dep                             |  0
- .../one-image.mk                              |  8 +++----
- .../onie-image-arm64.conf                     |  0
- .../platform-marvell.dep                      |  0
- .../platform-marvell.mk                       |  0
- .../platform-nokia.dep                        |  0
- .../platform-nokia.mk                         |  0
- .../platform_arm64.conf                       |  0
- .../platform_armhf.conf                       |  0
- .../{marvell => marvell-prestera}/rules.dep   |  6 ++---
- .../{marvell => marvell-prestera}/rules.mk    | 10 ++++-----
- .../{marvell => marvell-prestera}/sai.dep     |  0
- platform/{marvell => marvell-prestera}/sai.mk |  0
- .../sonic-platform-marvell                    |  0
- .../7215-a1/modules/Makefile                  |  0
- .../modules/cn9130_cpu_thermal_sensor.c       |  0
- .../7215-a1/modules/nokia_7215_ixs_a1_cpld.c  |  0
- .../7215-a1/scripts/cpu_wdt.py                |  0
- .../7215-a1/scripts/nokia-7215-init.sh        |  0
- .../7215-a1/service/cpu_wdt.service           |  0
- .../7215-a1/service/nokia-7215init.service    |  0
- .../sonic-platform-nokia/7215-a1/setup.py     |  0
- .../7215-a1/sonic_platform/__init__.py        |  0
- .../7215-a1/sonic_platform/chassis.py         |  0
- .../7215-a1/sonic_platform/component.py       |  0
- .../7215-a1/sonic_platform/eeprom.py          |  0
- .../7215-a1/sonic_platform/fan.py             |  0
- .../7215-a1/sonic_platform/fan_drawer.py      |  0
- .../7215-a1/sonic_platform/platform.py        |  0
- .../7215-a1/sonic_platform/psu.py             |  0
- .../7215-a1/sonic_platform/sfp.py             |  0
- .../7215-a1/sonic_platform/sfp_event.py       |  0
- .../7215-a1/sonic_platform/test/README        |  0
- .../sonic_platform/test/test-chassis.py       |  0
- .../sonic_platform/test/test-component.py     |  0
- .../sonic_platform/test/test-eeprom.py        |  0
- .../7215-a1/sonic_platform/test/test-fan.py   |  0
- .../7215-a1/sonic_platform/test/test-psu.py   |  0
- .../7215-a1/sonic_platform/test/test-sfp.py   |  0
- .../sonic_platform/test/test-thermal.py       |  0
- .../sonic_platform/test/test-watchdog.py      |  0
- .../7215-a1/sonic_platform/thermal.py         |  0
- .../7215-a1/sonic_platform/thermal_actions.py |  0
- .../sonic_platform/thermal_conditions.py      |  0
- .../7215-a1/sonic_platform/thermal_infos.py   |  0
- .../7215-a1/sonic_platform/thermal_manager.py |  0
- .../7215-a1/sonic_platform/watchdog.py        |  0
- .../7215-a1/utils/sonic_ssd.py                |  0
- .../7215/scripts/cpu_wdt.py                   |  0
- .../7215/scripts/inband_mgmt.sh               |  0
- .../7215/scripts/nokia-7215_plt_setup.sh      |  0
- .../7215/scripts/nokia-7215init.sh            |  0
- .../7215/service/cpu_wdt.service              |  0
- .../service/fstrim.timer/timer-override.conf  |  0
- .../7215/service/nokia-7215init.service       |  0
- .../sonic-platform-nokia/7215/setup.py        |  0
- .../7215/sonic_platform/__init__.py           |  0
- .../7215/sonic_platform/chassis.py            |  0
- .../7215/sonic_platform/component.py          |  0
- .../7215/sonic_platform/eeprom.py             |  0
- .../7215/sonic_platform/fan.py                |  0
- .../7215/sonic_platform/fan_drawer.py         |  0
- .../7215/sonic_platform/platform.py           |  0
- .../7215/sonic_platform/psu.py                |  0
- .../7215/sonic_platform/sfp.py                |  0
- .../7215/sonic_platform/sfp_event.py          |  0
- .../7215/sonic_platform/test/README           |  0
- .../7215/sonic_platform/test/test-chassis.py  |  0
- .../sonic_platform/test/test-component.py     |  0
- .../7215/sonic_platform/test/test-eeprom.py   |  0
- .../7215/sonic_platform/test/test-fan.py      |  0
- .../7215/sonic_platform/test/test-psu.py      |  0
- .../7215/sonic_platform/test/test-sfp.py      |  0
- .../7215/sonic_platform/test/test-thermal.py  |  0
- .../7215/sonic_platform/test/test-watchdog.py |  0
- .../7215/sonic_platform/thermal.py            |  0
- .../7215/sonic_platform/thermal_actions.py    |  0
- .../7215/sonic_platform/thermal_conditions.py |  0
- .../7215/sonic_platform/thermal_infos.py      |  0
- .../7215/sonic_platform/thermal_manager.py    |  0
- .../7215/sonic_platform/watchdog.py           |  0
- .../sonic-platform-nokia/debian/changelog     |  0
- .../sonic-platform-nokia/debian/compat        |  0
- .../sonic-platform-nokia/debian/control       |  0
- .../sonic-platform-nokia/debian/rules         |  0
- .../sonic-platform-nokia-7215-a1.install      |  0
- .../sonic-platform-nokia-7215-a1.postinst     |  0
- .../debian/sonic-platform-nokia-7215.install  |  0
- .../debian/sonic-platform-nokia-7215.postinst |  0
- .../sonic_fit.its                             |  0
- .../sonic_py_common/device_info.py            |  2 +-
- 135 files changed, 86 insertions(+), 84 deletions(-)
+ .../docker-saiserver-mrvl-prestera.dep}            |  2 +-
+ .../docker-saiserver-mrvl-prestera.mk}             |  4 ++--
+ .../docker-saiserver-mrvl-prestera}/Dockerfile.j2  |  4 ++--
+ .../docker-saiserver-mrvl-prestera}/start.sh       |  0
+ .../supervisord.conf                               |  0
+ .../docker-syncd-mrvl-prestera-rpc.dep}            |  2 +-
+ .../docker-syncd-mrvl-prestera-rpc.mk}             |  6 +++---
+ .../docker-syncd-mrvl-prestera-rpc}/99-syncd.conf  |  0
+ .../docker-syncd-mrvl-prestera-rpc}/Dockerfile.j2  | 14 +++++++-------
+ .../ptf_nn_agent.conf                              |  0
+ .../docker-syncd-mrvl-prestera.dep}                |  2 +-
+ .../docker-syncd-mrvl-prestera.mk}                 |  4 ++--
+ .../docker-syncd-mrvl-prestera}/Dockerfile.j2      |  4 ++--
+ .../docker-syncd-mrvl-prestera}/critical_processes |  0
+ .../docker-syncd-mrvl-prestera}/supervisord.conf   |  0
+ .../docker-syncd-mrvl-prestera}/syncd.sh           |  0
+ .../libsaithrift-dev.dep                           |  0
+ .../libsaithrift-dev.mk                            |  0
+ .../mrvl-prestera.dep                              |  0
+ .../{marvell => marvell-prestera}/mrvl-prestera.mk |  0
+ .../{marvell => marvell-prestera}/one-image.dep    |  0
+ .../{marvell => marvell-prestera}/one-image.mk     |  8 ++++----
+ .../onie-image-arm64.conf                          |  0
+ .../platform-marvell.dep                           |  0
+ .../platform-marvell.mk                            |  0
+ .../platform-nokia.dep                             |  0
+ .../platform-nokia.mk                              |  0
+ .../platform_arm64.conf                            |  0
+ .../platform_armhf.conf                            |  0
+ platform/{marvell => marvell-prestera}/rules.dep   |  6 +++---
+ platform/{marvell => marvell-prestera}/rules.mk    | 10 +++++-----
+ platform/{marvell => marvell-prestera}/sai.dep     |  0
+ platform/{marvell => marvell-prestera}/sai.mk      |  0
+ .../sonic-platform-nokia/7215-a1/modules/Makefile  |  0
+ .../7215-a1/modules/cn9130_cpu_thermal_sensor.c    |  0
+ .../7215-a1/modules/nokia_7215_ixs_a1_cpld.c       |  0
+ .../7215-a1/scripts/cpu_wdt.py                     |  0
+ .../7215-a1/scripts/nokia-7215-init.sh             |  0
+ .../7215-a1/service/cpu_wdt.service                |  0
+ .../7215-a1/service/nokia-7215init.service         |  0
+ .../sonic-platform-nokia/7215-a1/setup.py          |  0
+ .../7215-a1/sonic_platform/__init__.py             |  0
+ .../7215-a1/sonic_platform/chassis.py              |  0
+ .../7215-a1/sonic_platform/component.py            |  0
+ .../7215-a1/sonic_platform/eeprom.py               |  0
+ .../7215-a1/sonic_platform/fan.py                  |  0
+ .../7215-a1/sonic_platform/fan_drawer.py           |  0
+ .../7215-a1/sonic_platform/platform.py             |  0
+ .../7215-a1/sonic_platform/psu.py                  |  0
+ .../7215-a1/sonic_platform/sfp.py                  |  0
+ .../7215-a1/sonic_platform/sfp_event.py            |  0
+ .../7215-a1/sonic_platform/test/README             |  0
+ .../7215-a1/sonic_platform/test/test-chassis.py    |  0
+ .../7215-a1/sonic_platform/test/test-component.py  |  0
+ .../7215-a1/sonic_platform/test/test-eeprom.py     |  0
+ .../7215-a1/sonic_platform/test/test-fan.py        |  0
+ .../7215-a1/sonic_platform/test/test-psu.py        |  0
+ .../7215-a1/sonic_platform/test/test-sfp.py        |  0
+ .../7215-a1/sonic_platform/test/test-thermal.py    |  0
+ .../7215-a1/sonic_platform/test/test-watchdog.py   |  0
+ .../7215-a1/sonic_platform/thermal.py              |  0
+ .../7215-a1/sonic_platform/thermal_actions.py      |  0
+ .../7215-a1/sonic_platform/thermal_conditions.py   |  0
+ .../7215-a1/sonic_platform/thermal_infos.py        |  0
+ .../7215-a1/sonic_platform/thermal_manager.py      |  0
+ .../7215-a1/sonic_platform/watchdog.py             |  0
+ .../7215-a1/utils/sonic_ssd.py                     |  0
+ .../sonic-platform-nokia/7215/scripts/cpu_wdt.py   |  0
+ .../7215/scripts/inband_mgmt.sh                    |  0
+ .../7215/scripts/nokia-7215_plt_setup.sh           |  0
+ .../7215/scripts/nokia-7215init.sh                 |  0
+ .../7215/service/cpu_wdt.service                   |  0
+ .../7215/service/fstrim.timer/timer-override.conf  |  0
+ .../7215/service/nokia-7215init.service            |  0
+ .../sonic-platform-nokia/7215/setup.py             |  0
+ .../7215/sonic_platform/__init__.py                |  0
+ .../7215/sonic_platform/chassis.py                 |  0
+ .../7215/sonic_platform/component.py               |  0
+ .../7215/sonic_platform/eeprom.py                  |  0
+ .../7215/sonic_platform/fan.py                     |  0
+ .../7215/sonic_platform/fan_drawer.py              |  0
+ .../7215/sonic_platform/platform.py                |  0
+ .../7215/sonic_platform/psu.py                     |  0
+ .../7215/sonic_platform/sfp.py                     |  0
+ .../7215/sonic_platform/sfp_event.py               |  0
+ .../7215/sonic_platform/test/README                |  0
+ .../7215/sonic_platform/test/test-chassis.py       |  0
+ .../7215/sonic_platform/test/test-component.py     |  0
+ .../7215/sonic_platform/test/test-eeprom.py        |  0
+ .../7215/sonic_platform/test/test-fan.py           |  0
+ .../7215/sonic_platform/test/test-psu.py           |  0
+ .../7215/sonic_platform/test/test-sfp.py           |  0
+ .../7215/sonic_platform/test/test-thermal.py       |  0
+ .../7215/sonic_platform/test/test-watchdog.py      |  0
+ .../7215/sonic_platform/thermal.py                 |  0
+ .../7215/sonic_platform/thermal_actions.py         |  0
+ .../7215/sonic_platform/thermal_conditions.py      |  0
+ .../7215/sonic_platform/thermal_infos.py           |  0
+ .../7215/sonic_platform/thermal_manager.py         |  0
+ .../7215/sonic_platform/watchdog.py                |  0
+ .../sonic-platform-nokia/debian/changelog          |  0
+ .../sonic-platform-nokia/debian/compat             |  0
+ .../sonic-platform-nokia/debian/control            |  0
+ .../sonic-platform-nokia/debian/rules              |  0
+ .../debian/sonic-platform-nokia-7215-a1.install    |  0
+ .../debian/sonic-platform-nokia-7215-a1.postinst   |  0
+ .../debian/sonic-platform-nokia-7215.install       |  0
+ .../debian/sonic-platform-nokia-7215.postinst      |  0
+ .../{marvell => marvell-prestera}/sonic_fit.its    |  0
+ 109 files changed, 33 insertions(+), 33 deletions(-)
  rename platform/{marvell/docker-saiserver-mrvl.dep => marvell-prestera/docker-saiserver-mrvl-prestera.dep} (82%)
  rename platform/{marvell/docker-saiserver-mrvl.mk => marvell-prestera/docker-saiserver-mrvl-prestera.mk} (89%)
  rename platform/{marvell/docker-saiserver-mrvl => marvell-prestera/docker-saiserver-mrvl-prestera}/Dockerfile.j2 (87%)
@@ -158,7 +134,6 @@ Subject: [PATCH] Renaming platform/marvell to platform/marvell-prestera
  rename platform/{marvell/docker-syncd-mrvl => marvell-prestera/docker-syncd-mrvl-prestera}/syncd.sh (100%)
  rename platform/{marvell => marvell-prestera}/libsaithrift-dev.dep (100%)
  rename platform/{marvell => marvell-prestera}/libsaithrift-dev.mk (100%)
- rename platform/{marvell => marvell-prestera}/mrvl-prestera (100%)
  rename platform/{marvell => marvell-prestera}/mrvl-prestera.dep (100%)
  rename platform/{marvell => marvell-prestera}/mrvl-prestera.mk (100%)
  rename platform/{marvell => marvell-prestera}/one-image.dep (100%)
@@ -174,7 +149,6 @@ Subject: [PATCH] Renaming platform/marvell to platform/marvell-prestera
  rename platform/{marvell => marvell-prestera}/rules.mk (70%)
  rename platform/{marvell => marvell-prestera}/sai.dep (100%)
  rename platform/{marvell => marvell-prestera}/sai.mk (100%)
- rename platform/{marvell => marvell-prestera}/sonic-platform-marvell (100%)
  rename platform/{marvell => marvell-prestera}/sonic-platform-nokia/7215-a1/modules/Makefile (100%)
  rename platform/{marvell => marvell-prestera}/sonic-platform-nokia/7215-a1/modules/cn9130_cpu_thermal_sensor.c (100%)
  rename platform/{marvell => marvell-prestera}/sonic-platform-nokia/7215-a1/modules/nokia_7215_ixs_a1_cpld.c (100%)
@@ -252,364 +226,11 @@ Subject: [PATCH] Renaming platform/marvell to platform/marvell-prestera
  rename platform/{marvell => marvell-prestera}/sonic-platform-nokia/debian/sonic-platform-nokia-7215.postinst (100%)
  rename platform/{marvell => marvell-prestera}/sonic_fit.its (100%)
 
-diff --git a/.azure-pipelines/azure-pipelines-UpgrateVersion.yml b/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
-index b40a5d03330b..b0fafd57b68f 100644
---- a/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
-+++ b/.azure-pipelines/azure-pipelines-UpgrateVersion.yml
-@@ -37,8 +37,8 @@ parameters:
-   - centec
-   - centec-arm64
-   - generic
--  - marvell-armhf
--  - marvell-arm64
-+  - marvell-prestera-armhf
-+  - marvell-prestera-arm64
-   - mellanox
-   - pensando
-   - nvidia-bluefield
-diff --git a/.azure-pipelines/azure-pipelines-build.yml b/.azure-pipelines/azure-pipelines-build.yml
-index 57819513073c..bd8e20712db0 100644
---- a/.azure-pipelines/azure-pipelines-build.yml
-+++ b/.azure-pipelines/azure-pipelines-build.yml
-@@ -86,23 +86,23 @@ jobs:
-           variables:
-             dbg_image: yes
- 
--        - name: marvell-armhf
-+        - name: marvell-prestera-armhf
-           ${{ if not(parameters.qemuOrCrossBuild) }}:
-             pool: sonicbld-armhf
-           timeoutInMinutes: 2880
-           variables:
--            PLATFORM_NAME: marvell
-+            PLATFORM_NAME: marvell-prestera
-             PLATFORM_ARCH: armhf
- 
--        - name: marvell-arm64
-+        - name: marvell-prestera-arm64
-           ${{ if not(parameters.qemuOrCrossBuild) }}:
-             pool: sonicbld-arm64
-           timeoutInMinutes: 2880
-           variables:
--            PLATFORM_NAME: marvell
-+            PLATFORM_NAME: marvell-prestera
-             PLATFORM_ARCH: arm64
- 
--        - name: marvell
-+        - name: marvell-prestera
- 
-         - name: mellanox
-           variables:
-diff --git a/.azure-pipelines/azure-pipelines-image-template.yml b/.azure-pipelines/azure-pipelines-image-template.yml
-index f934bf366484..1f90d97e365e 100644
---- a/.azure-pipelines/azure-pipelines-image-template.yml
-+++ b/.azure-pipelines/azure-pipelines-image-template.yml
-@@ -30,7 +30,7 @@ jobs:
-       - script: |
-           [ -n "$OVERRIDE_BUILD_OPTIONS" ] && OVERRIDE_BUILD_OPTIONS=$(OVERRIDE_BUILD_OPTIONS)
-           BUILD_OPTIONS="$(BUILD_OPTIONS) $OVERRIDE_BUILD_OPTIONS"
--          if [ -n "$(CACHE_MODE)" ] && echo $(PLATFORM_AZP) | grep -E -q "^(vs|broadcom|mellanox|marvell-armhf|marvell-arm64)$"; then
-+          if [ -n "$(CACHE_MODE)" ] && echo $(PLATFORM_AZP) | grep -E -q "^(vs|broadcom|mellanox|marvell-prestera-armhf|marvell-prestera-arm64)$"; then
-             CACHE_OPTIONS="SONIC_DPKG_CACHE_METHOD=$(CACHE_MODE) SONIC_DPKG_CACHE_SOURCE=/nfs/dpkg_cache/$(PLATFORM_AZP)"
-             BUILD_OPTIONS="$BUILD_OPTIONS $CACHE_OPTIONS"
-           fi
-diff --git a/.azure-pipelines/build-template.yml b/.azure-pipelines/build-template.yml
-index 813126792e69..11efaaf9e324 100644
---- a/.azure-pipelines/build-template.yml
-+++ b/.azure-pipelines/build-template.yml
-@@ -4,7 +4,7 @@ parameters:
-   values:
-   - broadcom
-   - centec-arm64
--  - marvell-armhf
-+  - marvell-prestera-armhf
-   - mellanox
-   - vs
- 
-@@ -21,7 +21,7 @@ parameters:
-   values:
-   - brcm
-   - centec-arm64
--  - marvell-armhf
-+  - marvell-prestera-armhf
-   - mlnx
-   - vs
- 
-diff --git a/.azure-pipelines/official-build-cache.yml b/.azure-pipelines/official-build-cache.yml
-index 0f7b34e9bd5b..17e9f95201dd 100644
---- a/.azure-pipelines/official-build-cache.yml
-+++ b/.azure-pipelines/official-build-cache.yml
-@@ -45,9 +45,9 @@ stages:
-           variables:
-             docker_syncd_rpc_image: yes
-             platform_rpc: mlnx
--        - name: marvell-armhf
-+        - name: marvell-prestera-armhf
-           pool: sonicbld-armhf
-           timeoutInMinutes: 1200
-           variables:
--            PLATFORM_NAME: marvell
-+            PLATFORM_NAME: marvell-prestera
-             PLATFORM_ARCH: armhf
-diff --git a/.gitmodules b/.gitmodules
-index f8d10f3af4ab..be65957c6d0b 100644
---- a/.gitmodules
-+++ b/.gitmodules
-@@ -118,12 +118,6 @@
- [submodule "src/sonic-dash-api"]
- 	path = src/sonic-dash-api
- 	url = https://github.com/sonic-net/sonic-dash-api.git
--[submodule "platform/marvell/mrvl-prestera"]
--	path = platform/marvell/mrvl-prestera
--	url = https://github.com/Marvell-switching/mrvl-prestera.git
--[submodule "platform/marvell/sonic-platform-marvell"]
--	path = platform/marvell/sonic-platform-marvell
--	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
- [submodule "src/sonic-stp"]
- 	path = src/sonic-stp
- 	url = https://github.com/sonic-net/sonic-stp
-@@ -132,4 +126,10 @@
- 	url = https://github.com/Marvell-switching/sonic-platform-marvell.git
- [submodule "platform/vpp"]
- 	path = platform/vpp
--	url = https://github.com/sonic-net/sonic-platform-vpp.git
-\ No newline at end of file
-+	url = https://github.com/sonic-net/sonic-platform-vpp.git
-+[submodule "platform/marvell-prestera/mrvl-prestera"]
-+	path = platform/marvell-prestera/mrvl-prestera
-+	url = https://github.com/Marvell-switching/mrvl-prestera.git
-+[submodule "platform/marvell-prestera/sonic-platform-marvell"]
-+	path = platform/marvell-prestera/sonic-platform-marvell
-+	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
-diff --git a/README.md b/README.md
-index 37406f0d67de..9a0a7ddb72c2 100644
---- a/README.md
-+++ b/README.md
-@@ -5,8 +5,8 @@
- [![Centec(arm64)](https://dev.azure.com/mssonic/build/_apis/build/status/centec/Azure.sonic-buildimage.official.centec-arm64?branchName=master&label=Centec-arm64)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=140&branchName=master)
- [![Marvell-Teralynx](https://dev.azure.com/mssonic/build/_apis/build/status/innovium/Azure.sonic-buildimage.official.marvell-teralynx?branchName=master&label=Marvell-Teralynx)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=148&branchName=master)
- [![Mellanox](https://dev.azure.com/mssonic/build/_apis/build/status/mellanox/Azure.sonic-buildimage.official.mellanox?branchName=master&label=Mellanox)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=139&branchName=master)
--[![Marvell(armhf)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell/Azure.sonic-buildimage.official.marvell-armhf?branchName=master&label=Marvell-armhf)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=141&branchName=master)
--[![Marvell(arm64)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell/Azure.sonic-buildimage.official.marvell-arm64?branchName=master&label=Marvell-arm64)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=999&branchName=master)
-+[![Marvell-Prestera(armhf)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell-prestera/Azure.sonic-buildimage.official.marvell-prestera-armhf?branchName=master&label=Marvell-Prestera-armhf)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=141&branchName=master)
-+[![Marvell-Prestera(arm64)](https://dev.azure.com/mssonic/build/_apis/build/status/marvell-prestera/Azure.sonic-buildimage.official.marvell-prestera-arm64?branchName=master&label=Marvell-Prestera-arm64)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=999&branchName=master)
- [![Nephos](https://dev.azure.com/mssonic/build/_apis/build/status/nephos/Azure.sonic-buildimage.official.nephos?branchName=master&label=Nephos)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=149&branchName=master)
- [![Nvidia-Bluefield](https://dev.azure.com/mssonic/build/_apis/build/status/nvidia/Azure.sonic-buildimage.official.nvidia-bluefield?branchName=master&label=Nvidia-Bluefield)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=1665&branchName=master)
- [![Pensando](https://dev.azure.com/mssonic/build/_apis/build/status/pensando/Azure.sonic-buildimage.official.pensando?branchName=master&label=Pensando)](https://dev.azure.com/mssonic/build/_build/latest?definitionId=1366&branchName=master)
-@@ -209,13 +209,13 @@ The supported ASIC vendors are:
- 
- * PLATFORM=barefoot
- * PLATFORM=broadcom
--* PLATFORM=marvell
-+* PLATFORM=marvell-prestera
-+* PLATFORM=marvell-teralynx
- * PLATFORM=mellanox
- * PLATFORM=cavium
- * PLATFORM=centec
- * PLATFORM=nephos
- * PLATFORM=nvidia-bluefield
--* PLATFORM=marvell-teralynx
- * PLATFORM=vs
- 
- ## Usage for ARM Architecture
-@@ -236,22 +236,22 @@ make target/sonic-[ASIC_VENDER]-armhf.bin
- _example:_
- 
- ```shell
--make configure PLATFORM=marvell PLATFORM_ARCH=armhf
--make target/sonic-marvell-armhf.bin
-+make configure PLATFORM=marvell-prestera PLATFORM_ARCH=armhf
-+make target/sonic-marvell-prestera-armhf.bin
- ```
- 
--To build Arm32 bit for (ARMHF) Marvell platform on amd64 host for debian buster
-+To build Arm32 bit for (ARMHF) Marvell Prestera platform on amd64 host for debian buster
- using cross-compilation, run the following commands:
- 
- ```shell
- # Execute make configure once to configure ASIC and ARCH for cross-compilation build
- 
- NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 \
--make configure PLATFORM=marvell PLATFORM_ARCH=armhf
-+make configure PLATFORM=marvell-prestera PLATFORM_ARCH=armhf
- 
- # Execute Arm32 build using cross-compilation environment
- 
--NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 make target/sonic-marvell-armhf.bin
-+NOJESSIE=1 NOSTRETCH=1 BLDENV=buster CROSS_BLDENV=1 make target/sonic-marvell-prestera-armhf.bin
- ```
- 
- Running the above Arm32 build using cross-compilation instead of qemu emulator
-@@ -266,7 +266,7 @@ make configure PLATFORM=[ASIC_VENDOR] PLATFORM_ARCH=arm64
- 
- # example:
- 
--make configure PLATFORM=marvell PLATFORM_ARCH=arm64
-+make configure PLATFORM=marvell-prestera PLATFORM_ARCH=arm64
- ```
- 
-  **NOTE**:
-@@ -375,6 +375,8 @@ on the SAI version for each SONiC release.
-     and Nephos switch ASIC (gzip tar archive)
-   * docker-syncd-mrvl-teralynx.gz: docker image for the daemon to sync database
-     and Marvell-Teralynx switch ASIC (gzip tar archive)
-+  * docker-syncd-mrvl-prestera.gz: docker image for the daemon to sync database
-+    and Marvell-Prestera switch ASIC (gzip tar archive)
-   * docker-sonic-p4.gz: docker image for all-in-one for p4 software switch
-     (gzip tar archive)
-   * docker-sonic-vs.gz: docker image for all-in-one for software virtual switch
-diff --git a/azure-pipelines.yml b/azure-pipelines.yml
-index d6eb20d31d77..ec8e28703515 100644
---- a/azure-pipelines.yml
-+++ b/azure-pipelines.yml
-@@ -78,16 +78,16 @@ stages:
-           dbg_image: yes
-           docker_syncd_rpc_image: yes
-           platform_rpc: mlnx
--      - name: marvell-arm64
-+      - name: marvell-prestera-arm64
-         pool: sonicbld-arm64
-         variables:
--           PLATFORM_NAME: marvell
-+           PLATFORM_NAME: marvell-prestera
-            PLATFORM_ARCH: arm64
--      - name: marvell-armhf
-+      - name: marvell-prestera-armhf
-         pool: sonicbld-armhf
-         timeoutInMinutes: 1200
-         variables:
--          PLATFORM_NAME: marvell
-+          PLATFORM_NAME: marvell-prestera
-           PLATFORM_ARCH: armhf
-           INCLUDE_RESTAPI: y
- 
-diff --git a/device/marvell/arm64-marvell_db98cx8580_16cd-r0/platform_asic b/device/marvell/arm64-marvell_db98cx8580_16cd-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/arm64-marvell_db98cx8580_16cd-r0/platform_asic
-+++ b/device/marvell/arm64-marvell_db98cx8580_16cd-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic b/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
-+++ b/device/marvell/arm64-marvell_db98cx8580_32cd-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
-+++ b/device/marvell/arm64-marvell_rd98DX35xx-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
-+++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/armhf-marvell_et6448m_52x-r0/platform_asic b/device/marvell/armhf-marvell_et6448m_52x-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/armhf-marvell_et6448m_52x-r0/platform_asic
-+++ b/device/marvell/armhf-marvell_et6448m_52x-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_db98cx8522_10cc-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_db98cx8540_16cd-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_db98cx8580_16cd-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8580_16cd-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_db98cx8580_16cd-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_db98cx8580_16cd-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic b/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/marvell/x86_64-marvell_slm5401_54x-r0/platform_asic b/device/marvell/x86_64-marvell_slm5401_54x-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/marvell/x86_64-marvell_slm5401_54x-r0/platform_asic
-+++ b/device/marvell/x86_64-marvell_slm5401_54x-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic b/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
-+++ b/device/nokia/arm64-nokia_ixs7215_52xb-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic b/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
-index a554752878b7..5cbe9d002a53 100644
---- a/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
-+++ b/device/nokia/armhf-nokia_ixs7215_52x-r0/platform_asic
-@@ -1 +1 @@
--marvell
-+marvell-prestera
-diff --git a/dockers/docker-pde/syncd_init_common.sh b/dockers/docker-pde/syncd_init_common.sh
-index 7a28d7208f01..06a4cee4f956 100755
---- a/dockers/docker-pde/syncd_init_common.sh
-+++ b/dockers/docker-pde/syncd_init_common.sh
-@@ -165,7 +165,7 @@ config_syncd_cavium()
-     done
- }
- 
--config_syncd_marvell()
-+config_syncd_marvell_prestera()
- {
-     CMD_ARGS+=" -p $HWSKU_DIR/sai.profile"
- 
-@@ -228,8 +228,8 @@ config_syncd()
-         config_syncd_cavium
-     elif [ "$SONIC_ASIC_TYPE" == "centec" ]; then
-         config_syncd_centec
--    elif [ "$SONIC_ASIC_TYPE" == "marvell" ]; then
--        config_syncd_marvell
-+    elif [ "$SONIC_ASIC_TYPE" == "marvell-prestera" ]; then
-+        config_syncd_marvell_prestera
-      elif [ "$SONIC_ASIC_TYPE" == "barefoot" ]; then
-          config_syncd_barefoot
-     elif [ "$SONIC_ASIC_TYPE" == "nephos" ]; then
 diff --git a/platform/marvell/docker-saiserver-mrvl.dep b/platform/marvell-prestera/docker-saiserver-mrvl-prestera.dep
 similarity index 82%
 rename from platform/marvell/docker-saiserver-mrvl.dep
 rename to platform/marvell-prestera/docker-saiserver-mrvl-prestera.dep
-index 3ded7bc916eb..5a01493bd23b 100644
+index 3ded7bc91..5a01493bd 100644
 --- a/platform/marvell/docker-saiserver-mrvl.dep
 +++ b/platform/marvell-prestera/docker-saiserver-mrvl-prestera.dep
 @@ -1,5 +1,5 @@
@@ -623,7 +244,7 @@ diff --git a/platform/marvell/docker-saiserver-mrvl.mk b/platform/marvell-preste
 similarity index 89%
 rename from platform/marvell/docker-saiserver-mrvl.mk
 rename to platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk
-index c6bd3e2ca1e7..88eb35940548 100644
+index c6bd3e2ca..88eb35940 100644
 --- a/platform/marvell/docker-saiserver-mrvl.mk
 +++ b/platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk
 @@ -1,7 +1,7 @@
@@ -640,7 +261,7 @@ diff --git a/platform/marvell/docker-saiserver-mrvl/Dockerfile.j2 b/platform/mar
 similarity index 87%
 rename from platform/marvell/docker-saiserver-mrvl/Dockerfile.j2
 rename to platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2
-index 1760fb872b92..21b0bcce8017 100644
+index 1760fb872..21b0bcce8 100644
 --- a/platform/marvell/docker-saiserver-mrvl/Dockerfile.j2
 +++ b/platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2
 @@ -15,13 +15,13 @@ RUN apt-get update              \
@@ -671,7 +292,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl-rpc.dep b/platform/marvell-prest
 similarity index 82%
 rename from platform/marvell/docker-syncd-mrvl-rpc.dep
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.dep
-index 3ab0dec8eb52..cb6ed4eebc39 100644
+index 3ab0dec8e..cb6ed4eeb 100644
 --- a/platform/marvell/docker-syncd-mrvl-rpc.dep
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.dep
 @@ -1,5 +1,5 @@
@@ -685,7 +306,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl-rpc.mk b/platform/marvell-preste
 similarity index 90%
 rename from platform/marvell/docker-syncd-mrvl-rpc.mk
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
-index bf4bb103635f..b8bf565d1cb8 100644
+index bf4bb1036..b8bf565d1 100644
 --- a/platform/marvell/docker-syncd-mrvl-rpc.mk
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
 @@ -1,7 +1,7 @@
@@ -715,7 +336,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2 b/platform/mar
 similarity index 74%
 rename from platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
-index 02d962d19cee..4e18df32a378 100644
+index 02d962d19..4e18df32a 100644
 --- a/platform/marvell/docker-syncd-mrvl-rpc/Dockerfile.j2
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
 @@ -1,18 +1,18 @@
@@ -773,7 +394,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl.dep b/platform/marvell-prestera/
 similarity index 82%
 rename from platform/marvell/docker-syncd-mrvl.dep
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera.dep
-index d3f213a2da84..9bb5f572a9ce 100644
+index d3f213a2d..9bb5f572a 100644
 --- a/platform/marvell/docker-syncd-mrvl.dep
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera.dep
 @@ -1,5 +1,5 @@
@@ -787,7 +408,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl.mk b/platform/marvell-prestera/d
 similarity index 85%
 rename from platform/marvell/docker-syncd-mrvl.mk
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
-index d4c990cfe426..177f9a10e524 100644
+index d4c990cfe..177f9a10e 100644
 --- a/platform/marvell/docker-syncd-mrvl.mk
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
 @@ -1,6 +1,6 @@
@@ -810,7 +431,7 @@ diff --git a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2 b/platform/marvell
 similarity index 87%
 rename from platform/marvell/docker-syncd-mrvl/Dockerfile.j2
 rename to platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2
-index a721a86428fa..a67a19a00b57 100755
+index a721a8642..a67a19a00 100755
 --- a/platform/marvell/docker-syncd-mrvl/Dockerfile.j2
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2
 @@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive
@@ -851,10 +472,6 @@ diff --git a/platform/marvell/libsaithrift-dev.mk b/platform/marvell-prestera/li
 similarity index 100%
 rename from platform/marvell/libsaithrift-dev.mk
 rename to platform/marvell-prestera/libsaithrift-dev.mk
-diff --git a/platform/marvell/mrvl-prestera b/platform/marvell-prestera/mrvl-prestera
-similarity index 100%
-rename from platform/marvell/mrvl-prestera
-rename to platform/marvell-prestera/mrvl-prestera
 diff --git a/platform/marvell/mrvl-prestera.dep b/platform/marvell-prestera/mrvl-prestera.dep
 similarity index 100%
 rename from platform/marvell/mrvl-prestera.dep
@@ -871,7 +488,7 @@ diff --git a/platform/marvell/one-image.mk b/platform/marvell-prestera/one-image
 similarity index 86%
 rename from platform/marvell/one-image.mk
 rename to platform/marvell-prestera/one-image.mk
-index be282e921abb..6adca07fbcde 100644
+index be282e921..6adca07fb 100644
 --- a/platform/marvell/one-image.mk
 +++ b/platform/marvell-prestera/one-image.mk
 @@ -1,11 +1,11 @@
@@ -922,7 +539,7 @@ diff --git a/platform/marvell/rules.dep b/platform/marvell-prestera/rules.dep
 similarity index 64%
 rename from platform/marvell/rules.dep
 rename to platform/marvell-prestera/rules.dep
-index a5bdbf59d16b..c31677b4ad91 100644
+index a5bdbf59d..c31677b4a 100644
 --- a/platform/marvell/rules.dep
 +++ b/platform/marvell-prestera/rules.dep
 @@ -1,6 +1,6 @@
@@ -939,7 +556,7 @@ diff --git a/platform/marvell/rules.mk b/platform/marvell-prestera/rules.mk
 similarity index 70%
 rename from platform/marvell/rules.mk
 rename to platform/marvell-prestera/rules.mk
-index 825d8d331a17..74792e9889b8 100644
+index 825d8d331..74792e988 100644
 --- a/platform/marvell/rules.mk
 +++ b/platform/marvell-prestera/rules.mk
 @@ -1,7 +1,7 @@
@@ -977,10 +594,6 @@ diff --git a/platform/marvell/sai.mk b/platform/marvell-prestera/sai.mk
 similarity index 100%
 rename from platform/marvell/sai.mk
 rename to platform/marvell-prestera/sai.mk
-diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell-prestera/sonic-platform-marvell
-similarity index 100%
-rename from platform/marvell/sonic-platform-marvell
-rename to platform/marvell-prestera/sonic-platform-marvell
 diff --git a/platform/marvell/sonic-platform-nokia/7215-a1/modules/Makefile b/platform/marvell-prestera/sonic-platform-nokia/7215-a1/modules/Makefile
 similarity index 100%
 rename from platform/marvell/sonic-platform-nokia/7215-a1/modules/Makefile
@@ -1285,16 +898,6 @@ diff --git a/platform/marvell/sonic_fit.its b/platform/marvell-prestera/sonic_fi
 similarity index 100%
 rename from platform/marvell/sonic_fit.its
 rename to platform/marvell-prestera/sonic_fit.its
-diff --git a/src/sonic-py-common/sonic_py_common/device_info.py b/src/sonic-py-common/sonic_py_common/device_info.py
-index 238ab8dcdfdc..fdfaba3e0002 100644
---- a/src/sonic-py-common/sonic_py_common/device_info.py
-+++ b/src/sonic-py-common/sonic_py_common/device_info.py
-@@ -803,7 +803,7 @@ def get_system_mac(namespace=None, hostname=None):
- 
-         (mac, err) = run_command(syseeprom_cmd)
-         hw_mac_entry_outputs.append((mac, err))
--    elif (version_info['asic_type'] == 'marvell'):
-+    elif (version_info['asic_type'] == 'marvell-prestera'):
-         # Try valid mac in eeprom, else fetch it from eth0
-         machine_key = "onie_machine"
-         machine_vars = get_machine_info()
+-- 
+2.25.1
+

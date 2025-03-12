@@ -1,0 +1,48 @@
+From 9783addd815f9ac6c2c74b49bd66b15fdc3a7c09 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 11 Mar 2025 06:43:39 +0000
+Subject: [PATCH 2/6] buildimage: platform/marvell remove
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .gitmodules                             | 6 ------
+ platform/marvell/mrvl-prestera          | 1 -
+ platform/marvell/sonic-platform-marvell | 1 -
+ 3 files changed, 8 deletions(-)
+ delete mode 160000 platform/marvell/mrvl-prestera
+ delete mode 160000 platform/marvell/sonic-platform-marvell
+
+diff --git a/.gitmodules b/.gitmodules
+index f8d10f3af..1da69e766 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -118,12 +118,6 @@
+ [submodule "src/sonic-dash-api"]
+ 	path = src/sonic-dash-api
+ 	url = https://github.com/sonic-net/sonic-dash-api.git
+-[submodule "platform/marvell/mrvl-prestera"]
+-	path = platform/marvell/mrvl-prestera
+-	url = https://github.com/Marvell-switching/mrvl-prestera.git
+-[submodule "platform/marvell/sonic-platform-marvell"]
+-	path = platform/marvell/sonic-platform-marvell
+-	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
+ [submodule "src/sonic-stp"]
+ 	path = src/sonic-stp
+ 	url = https://github.com/sonic-net/sonic-stp
+diff --git a/platform/marvell/mrvl-prestera b/platform/marvell/mrvl-prestera
+deleted file mode 160000
+index 88f0532a0..000000000
+--- a/platform/marvell/mrvl-prestera
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 88f0532a0e6c33d399dc69096da463ce4fcfa8d4
+diff --git a/platform/marvell/sonic-platform-marvell b/platform/marvell/sonic-platform-marvell
+deleted file mode 160000
+index f6224ee91..000000000
+--- a/platform/marvell/sonic-platform-marvell
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit f6224ee910e4a7cdb2cc7c245480ec4e21817a27
+-- 
+2.25.1
+
