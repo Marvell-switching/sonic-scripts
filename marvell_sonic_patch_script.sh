@@ -19,6 +19,14 @@
 CUR_DIR=$(basename `pwd`)
 LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
+err_cnt=0
+
+# VERIFY_PATCHES=Y may be selected by MRVL sonic_build_script.sh
+if [[ "$DEVEL" == "" || "$VERIFY_PATCHES" == "Y" ]]; then
+  PATCH_ERR_SKIP=
+else
+  PATCH_ERR_SKIP=Y
+fi
 
 log()
 {
@@ -40,9 +48,11 @@ pre_patch_help()
 	log "STEPS TO BUILD:"
 	log "git clone https://github.com/sonic-net/sonic-buildimage.git -b <sonic_branch>"
 	log "cd sonic-buildimage"
+	log "<<Apply patches using patch script for sonic-buildimage>>"
 	log "make init"
+	log "git submodule update --init --recursive (instead of make init)"
 	log ""
-	log "<<Apply patches using patch script>>"
+	log "<<Apply patches using patch script for submodules>>"
 	print_usage
 	log "PLATFORM: marvell"
 	log "<<FOR ARM64>> make configure PLATFORM=marvell PLATFORM_ARCH=arm64"
@@ -134,7 +144,6 @@ parse_arguments()
 
 apply_sonicbuildimage_patches()
 {
-	( set -e
 	cat series_${PLATFORM}_${ARCH}  | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
 do
 	echo $patch_file
@@ -142,13 +151,22 @@ do
 	wget --timeout=2 -c $WGET_PATH/$patch_file
 	popd
 	git am patches/$patch_file
-done)
+	ret=$?
+	if [ $ret -ne 0 ]; then
+        ((err_cnt++))
+		if [ "$PATCH_ERR_SKIP" == "" ]; then
+			log "PATCH ERROR: Failed to apply sonicbuildimage patches/$patch_file, abort"
+			return $ret
+		fi
+		log "PATCH ERROR: Failed to apply sonicbuildimage patches/$patch_file, skeep and continue"
+		git am --skip
+	fi
+done
 }
 
 apply_submodule_patches()
 {
 	CWD=`pwd`
-	( set -e
 	cat series_${PLATFORM}_${ARCH}  | grep -v sonic-buildimage | while read -r line
 do
 	patch=`echo $line | cut -f 1 -d'|'`
@@ -158,8 +176,18 @@ do
 	popd
 	pushd ${dir}
 	git am $CWD/patches/${patch}
+	ret=$?
+	if [ $ret -ne 0 ]; then
+        ((err_cnt++))
+		if [ "$PATCH_ERR_SKIP" == "" ]; then
+			log "PATCH ERROR: Failed to apply submodule $CWD/patches/${patch}, abort"
+			return $ret
+		fi
+		log "PATCH ERROR: Failed to apply submodule $CWD/patches/${patch}, skeep and continue"
+		git am --skip
+	fi
 	popd
-done)
+done
 }
 
 apply_hwsku_changes()
@@ -206,16 +234,18 @@ main()
 	log "Apply sonicbuildimage patches"
 	apply_sonicbuildimage_patches
 	if [ $? -ne 0 ]; then
-		log "ERROR: Failed to apply sonicbuildimage patch"
+		# log ERROR already printed
 		exit 1
 	fi
+
 	git submodule sync --recursive
 	git submodule update --init --recursive
+
 	log "Apply submodule patches"
 	# Apply submodule patches
 	apply_submodule_patches
 	if [ $? -ne 0 ]; then
-		log "ERROR: Failed to apply submodule patch"
+		# log ERROR already printed
 		exit 1
 	fi
 	log "Apply hwsku changes"
