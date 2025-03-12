@@ -279,8 +279,6 @@ clone_ws()
         git checkout $BRANCH_COMMIT
         check_error $? "git-checkout-commit"
     fi
-    make init
-    check_error $? "make_init"
     git log -1 > commit_log.txt
 
     if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
@@ -321,6 +319,13 @@ build_ws()
     fi
     if [[ ! -z ${ADMIN_PASSWORD} ]]; then
         BUILD_OPTIONS="${BUILD_OPTIONS} DEFAULT_PASSWORD=${ADMIN_PASSWORD}"
+    fi
+
+    # Check the init has already been done by marvell_sonic_patch_script.sh
+    if [ ! -d .git/modules/ ]; then
+        echo "make init" >> build_cmd.txt
+        make init
+        check_error $? "make_init"
     fi
 
     # Build Sonic
