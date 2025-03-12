@@ -238,6 +238,8 @@ main()
 		exit 1
 	fi
 
+	echo "make init" >> build_cmd.txt
+	make init
 	git submodule sync --recursive
 	git submodule update --init --recursive
 
