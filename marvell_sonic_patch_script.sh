@@ -196,8 +196,15 @@ apply_hwsku_changes()
 		# Download hwsku
 		wget --timeout=2 -c $WGET_PATH/prestera_hwsku.tgz
 		if [ $? -eq 0 ]; then
-			rm -fr device/marvell/x86_64-marvell_db* || true
-			tar -C device/ -xzf prestera_hwsku.tgz
+			if [ "$PLATFORM" == "marvell" ] || [ ${ARCH} == "amd64" ]; then
+				rm -fr device/marvell/x86_64-marvell_db* || true
+				tar -C device/ -xzf prestera_hwsku.tgz
+			else
+				tar -C device/ -xzf prestera_hwsku.tgz
+				rm -fr device/marvell/x86_64* || true
+				rm -fr device/wistron/x86_64* || true
+				# Don't rm device/nokia/x86_64*
+			fi
 		fi
 	fi
 	if [ "$PLATFORM" == "innovium" ] || [ "$PLATFORM" == "marvell-teralynx" ]; then
