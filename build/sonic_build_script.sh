@@ -9,6 +9,7 @@ BUILD_RPC="N"
 OTHER_BUILD_OPTIONS=""
 NO_CACHE="N"
 VERIFY_PATCHES="N"
+DEBIAN="bookworm"
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 # Set MIRROR to the public mirror for the build
@@ -24,18 +25,31 @@ print_usage()
 {
     echo "Usage:"
     echo ""
-    echo " $0 -b <branch> -p <platform> -a <arch> [-c <sonic-buildimage_commit>] [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>] [-s] [-r] [--mark_no_del_ws] [--no-cache] [--admin_password <password>] [--other_build_options <sonic_build_options>] [--verify_patches] [--clean_dockers] [--clean_ws]"
+    echo " $0 -b <branch> -p <platform> -a <arch>"
+    echo "   [-c <sonic-buildimage_commit>]"
+    echo "   [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>]"
+    echo "   [-s] [-r] [--mark_no_del_ws] [--no-cache]"
+    echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
+    echo "   [--verify_patches] [--clean_dockers] [--clean_ws] [--nop]"
     echo ""
-    echo "				-s : Build docker saiserver v2"
-    echo "				-r : ENABLE_SYNCD_RPC=y"
-    echo "				-c : checkout commit id"
-    echo "				--no-cache: Build without any pre cache"
-    echo "				--mark_no_del_ws: Do not cleanup ws during cleanup"
-    echo "				--admin_password: Set admin password"
-    echo "				--other_build_options: Other sonic build options"
-    echo "				--verify_patches: Verify if patch apply is clean"
-    echo "				--clean_dockers: clean up build dockers"
-    echo "				--clean_ws: clean all previous created ws created by script in current directory(backup you local changes)"
+    echo "    -s : Build docker saiserver v2"
+    echo "    -r : ENABLE_SYNCD_RPC=y"
+    echo "    -c : checkout commit id"
+    echo "    --no-cache: Build without any pre cache"
+    echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
+    echo "    --admin_password: Set admin password"
+    echo "    --other_build_options: Other sonic build options"
+    echo "    --verify_patches:    Apply patches, don't compile. Abort on failure"
+    echo "        export DEVEL=y   Ignore patch apply failures but continue"
+    echo "    --clean_dockers: clean up build dockers"
+echo """
+Example:
+./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
+  --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
+  -c 021569412
+./sonic_build_script.sh -b master -p marvell -a arm64 \\
+  --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r
+"""
 }
 
 parse_arguments()
@@ -163,14 +177,17 @@ parse_arguments()
 
 on_error()
 {
+    set +x
     cd $DIR
-    echo "\n\nBuild Error\n\n"
+    mv $SONIC_SOURCE_DIR $SONIC_SOURCE_DIR-err
+    echo -e "\n\n--- `date` --- Build Error ---------\n\n"
     exit 1
 }
 
 check_error()
 {
     if [ $1 -ne 0 ]; then
+        set +x
         echo "Error in building - $2"
         on_error
     fi
@@ -182,8 +199,8 @@ check_free_space()
     local ALERT=$2
 
 	if [ -v CLEAN_WS ]; then
-		df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
-	do
+	  df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
+	  do
 		echo "$output"
 		usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
 		partition=$(echo "$output" | awk '{ print $2 }' )
@@ -213,7 +230,7 @@ check_free_space()
 						fi
 					done
 		fi
-	done
+	  done
 	fi
 
 df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
@@ -241,7 +258,11 @@ cleanup_server()
 clone_ws()
 {
     # Clone the Sonic source code
-    SONIC_SOURCE_DIR=ABT-$BRANCH-$REL_BUILD_TSTAMP
+    if [ -z $BRANCH_COMMIT ]; then
+        SONIC_SOURCE_DIR=ABT-$BRANCH-$REL_BUILD_TSTAMP
+    else
+        SONIC_SOURCE_DIR=ABT-$BRANCH-$BRANCH_COMMIT
+    fi
     sudo rm -rf $SONIC_SOURCE_DIR
     mkdir $SONIC_SOURCE_DIR
     cd $SONIC_SOURCE_DIR
@@ -251,12 +272,22 @@ clone_ws()
     git clone -b $BRANCH $GIT_HUB_URL
     check_error $? "git-clone"
     cd sonic-buildimage
-    if [ -v BRANCH_COMMIT ]; then
+    echo "docker system prune -a --volumes -f" > build_cmd.txt
+    echo "git clone -b $BRANCH $GIT_HUB_URL" >> build_cmd.txt
+    if [[ -v BRANCH_COMMIT && $BRANCH_COMMIT != $BRANCH ]]; then
+        echo "git checkout $BRANCH_COMMIT" >> build_cmd.txt
         git checkout $BRANCH_COMMIT
+        check_error $? "git-checkout-commit"
     fi
     make init
     check_error $? "make_init"
     git log -1 > commit_log.txt
+
+    if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
+        DEBIAN="bullseye"
+    else
+        DEBIAN="bookworm"
+    fi
 }
 
 patch_ws()
@@ -264,6 +295,7 @@ patch_ws()
     if [ -v PATCH_SCRIPT_URL ]; then
         wget --timeout=2 -c $PATCH_SCRIPT_URL
         URL=${PATCH_SCRIPT_URL%marvell_sonic_patch_script.sh}
+        echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
     fi
@@ -293,18 +325,27 @@ build_ws()
 
     # Build Sonic
     echo $BUILD_OPTIONS > build_args.txt
+    echo "" >> build_cmd.txt
     if [ "$BUILD_PLATFORM_ARCH" == "amd64" ]; then
+        echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS" >> build_cmd.txt
         ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS
         check_error $? "configure"
+        echo "" >> build_cmd.txt
+        echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
         make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
         check_error $? "sonic-${BUILD_PLATFORM}.bin"
     else
+        echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS" >> build_cmd.txt
         ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS
         check_error $? "configure"
         if [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
+            echo "" >> build_cmd.txt
+            echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
             check_error $? "sonic-${BUILD_PLATFORM}.bin"
         else
+            echo "" >> build_cmd.txt
+            echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" >> build_cmd.txt
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
             check_error $? "sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin"
         fi
@@ -313,6 +354,7 @@ build_ws()
     # Build SAI Server
     if [ "$BUILD_SAISERVER" == "Y" ]; then
         if [ "$BUILD_PLATFORM_ARCH" != "armhf" ]; then
+            echo "make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz" >> build_cmd.txt
             make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz
             check_error $? "saiserver"
         fi
@@ -320,21 +362,15 @@ build_ws()
 
     local endTime=$SECONDS
     local elapsedseconds=$(( endTime - startTime ))
-    echo "***************************************************"
+    echo    "***************************************************"
     printf ' Build took - %dh:%dm:%ds\n' $((elapsedseconds/3600)) $((elapsedseconds%3600/60)) $((elapsedseconds%60))
-    echo "***************************************************"
+    echo -e "***************************************************\n\n"
 }
 
 # TODO: Enhance script to delete these artifacts periodically
 # TODO: Artifacts list can be improved
 copy_build_artifacts()
 {
-    if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
-        DEBIAN="bullseye"
-    else
-        DEBIAN="bookworm"
-    fi
-
     # Ensure that artifacts is a NFS mount, to avoid modifying permissions of local directories
     if ! grep -s " ${ARTIFACTS_DIR} " /proc/mounts | grep -q "nfs"; then
         echo "$ARTIFACTS_DIR is not an NFS mount. Copy to artifacts directory failed"
@@ -374,13 +410,22 @@ main()
     if [ "$VERIFY_PATCHES" == "Y" ]; then
         exit 0
     fi
-
+    if [ "${DEBIAN}" == "bookworm" ]; then
+        echo "export NOJESSIE=1"   >> build_cmd.txt
+        echo "export NOSTRETCH=1"  >> build_cmd.txt
+        echo "export NOBUSTER=1"   >> build_cmd.txt
+        echo "export NOBULLSEYE=1" >> build_cmd.txt
+        export NOJESSIE=1
+        export NOSTRETCH=1
+        export NOBUSTER=1
+        export NOBULLSEYE=1
+    fi
     build_ws
     set +x
 
     copy_build_artifacts
 
-    echo "\n\n Build Successful \n\n"
+    echo -e "\n\n Build Successful \n\n"
     exit 0
 }
 
