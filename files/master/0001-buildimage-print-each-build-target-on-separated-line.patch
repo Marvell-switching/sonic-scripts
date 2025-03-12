@@ -1,0 +1,52 @@
+From 6f1b72ebf04db514e49a390a34fec9ae45c228aa Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sun, 9 Mar 2025 12:47:20 +0000
+Subject: [PATCH 1/6] buildimage: print each build-target on separated line
+
+=== SUMMARY:
+Print each build-target on a separated line,
+so finally, there is a list of built targets like
+[ 01 ] [ target/debs/bookworm/libdashapi_1.0.0_arm64.deb-install ]
+[ 01 ] [ target/debs/bookworm/swss_1.0.0_arm64.deb ]
+[ 01 ] [ target/python-wheels/bookworm/sonic_bgpcfgd-1.0-py3-none-any.whl ]
+
+NOTE: An original update_screen.sh prints into the PREVIOUS line, so as result
+all targets are printed into one same line overriding the previous print.
+
+=== Why this is needed:
+- Good for understanding what is built and in which order
+- Easy to see which package-versions are used for current build
+  and to compare packages with previous builds
+
+== How it is done:
+Just use Double Carriage-Return in printf "\n\n" instead of single CR.
+
+== TEST:
+Build and see print like
+[ 01 ] [ target/debs/bookworm/libdashapi_1.0.0_arm64.deb-install ]
+[ 01 ] [ target/debs/bookworm/swss_1.0.0_arm64.deb ]
+[ 01 ] [ target/python-wheels/bookworm/sonic_bgpcfgd-1.0-py3-none-any.whl ]
+instead of single line
+[ 01 ] [ target/python-wheels/bookworm/sonic_bgpcfgd-1.0-py3-none-any.whl ]
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ update_screen.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/update_screen.sh b/update_screen.sh
+index af272843d..3531d01ad 100755
+--- a/update_screen.sh
++++ b/update_screen.sh
+@@ -21,7 +21,7 @@ function print_targets {
+ 
+ count=1
+ for i in $(cat ${target_list_file}); do
+-    printf "[ %02d ] [ %s ]\n" "${count}" "$i"
++    printf "[ %02d ] [ %s ]\n\n" "${count}" "$i"
+     ((count++))
+ done
+ }
+-- 
+2.25.1
+
