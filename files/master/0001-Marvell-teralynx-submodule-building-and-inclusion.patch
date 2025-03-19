@@ -1,0 +1,94 @@
+From ad260c08afd35b21b84f4710b13c91277c21c967 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Mon, 24 Feb 2025 19:47:13 -0800
+Subject: [PATCH] Marvell teralynx submodule building and inclusion in one
+ image
+
+- Creating git submodule for marvell teralynx driver code
+- Defining build receipy for buildindg mrvlteralynx debian
+- Including mrvlteralynx debian in SONIC_ONE_IMAGE
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ .gitmodules                                 | 3 +++
+ platform/marvell-teralynx/mrvl-teralynx     | 1 +
+ platform/marvell-teralynx/mrvl-teralynx.dep | 9 +++++++++
+ platform/marvell-teralynx/mrvl-teralynx.mk  | 9 +++++++++
+ platform/marvell-teralynx/one-image.mk      | 1 +
+ platform/marvell-teralynx/rules.mk          | 1 +
+ 6 files changed, 24 insertions(+)
+ create mode 160000 platform/marvell-teralynx/mrvl-teralynx
+ create mode 100644 platform/marvell-teralynx/mrvl-teralynx.dep
+ create mode 100644 platform/marvell-teralynx/mrvl-teralynx.mk
+
+diff --git a/.gitmodules b/.gitmodules
+index ba665b625d14..a64a3adbd49b 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -136,3 +136,6 @@
+ [submodule "platform/marvell-prestera/sonic-platform-marvell"]
+ 	path = platform/marvell-prestera/sonic-platform-marvell
+ 	url = https://github.com/Marvell-switching/sonic-platform-arm64.git
++[submodule "platform/marvell-teralynx/mrvl-teralynx"]
++	path = platform/marvell-teralynx/mrvl-teralynx
++	url = https://github.com/Marvell-switching/mrvl-teralynx.git
+diff --git a/platform/marvell-teralynx/mrvl-teralynx b/platform/marvell-teralynx/mrvl-teralynx
+new file mode 160000
+index 000000000000..3c265da04286
+--- /dev/null
++++ b/platform/marvell-teralynx/mrvl-teralynx
+@@ -0,0 +1 @@
++Subproject commit 3c265da04286347f687d88df17bc6373204a6c77
+diff --git a/platform/marvell-teralynx/mrvl-teralynx.dep b/platform/marvell-teralynx/mrvl-teralynx.dep
+new file mode 100644
+index 000000000000..7e19ecc6331b
+--- /dev/null
++++ b/platform/marvell-teralynx/mrvl-teralynx.dep
+@@ -0,0 +1,9 @@
++MPATH       := $($(MRVL_TERALYNX_DEB)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/mrvl-teralynx.mk $(PLATFORM_PATH)/mrvl-teralynx.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++SMDEP_FILES := $(addprefix $(MPATH)/,$(shell cd $(MPATH) && git ls-files))
++
++$(MRVL_TERALYNX_DEB)_CACHE_MODE  := GIT_CONTENT_SHA
++$(MRVL_TERALYNX_DEB)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(MRVL_TERALYNX_DEB)_DEP_FILES   := $(DEP_FILES)
++$(MRVL_TERALYNX_DEB)_SMDEP_FILES := $(SMDEP_FILES)
+diff --git a/platform/marvell-teralynx/mrvl-teralynx.mk b/platform/marvell-teralynx/mrvl-teralynx.mk
+new file mode 100644
+index 000000000000..a1deae974156
+--- /dev/null
++++ b/platform/marvell-teralynx/mrvl-teralynx.mk
+@@ -0,0 +1,9 @@
++# Marvell Teralynx platform package
++export MRVL_TERALYNX_VER = 1.0
++export MRVL_TERALYNX = mrvlteralynx_$(MRVL_TERALYNX_VER)_$(PLATFORM_ARCH)
++export MRVL_TERALYNX_DEB = $(MRVL_TERALYNX).deb
++
++$(MRVL_TERALYNX_DEB)_SRC_PATH = $(PLATFORM_PATH)/mrvl-teralynx
++$(MRVL_TERALYNX_DEB)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
++
++SONIC_DPKG_DEBS += $(MRVL_TERALYNX_DEB)
+diff --git a/platform/marvell-teralynx/one-image.mk b/platform/marvell-teralynx/one-image.mk
+index f62c9aecec31..5ff70a85f67e 100755
+--- a/platform/marvell-teralynx/one-image.mk
++++ b/platform/marvell-teralynx/one-image.mk
+@@ -11,5 +11,6 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(SMCI_SSE_T7132S_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(TL10_DBMVTX9180_PLATFORM)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_TERALYNX_DRV)
++$(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_TERALYNX_DEB)
+ $(SONIC_ONE_IMAGE)_DOCKERS  += $(SONIC_INSTALL_DOCKER_IMAGES)
+ SONIC_INSTALLERS += $(SONIC_ONE_IMAGE)
+diff --git a/platform/marvell-teralynx/rules.mk b/platform/marvell-teralynx/rules.mk
+index 3ba96af2f66b..5fab4684d11b 100755
+--- a/platform/marvell-teralynx/rules.mk
++++ b/platform/marvell-teralynx/rules.mk
+@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/one-image.mk
+ include $(PLATFORM_PATH)/docker-saiserver-mrvl-teralynx.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/python-saithrift.mk
++include $(PLATFORM_PATH)/mrvl-teralynx.mk
+ 
+ SONIC_ALL += $(SONIC_MRVL_TERALYNX_ONE_IMAGE) \
+              $(DOCKER_FPM) \
