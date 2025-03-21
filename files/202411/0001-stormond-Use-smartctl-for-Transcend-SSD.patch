@@ -1,0 +1,70 @@
+From 916dd4f2cc625165b19ed6fae03abfd9a1c26089 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Fri, 21 Mar 2025 09:29:15 +0530
+Subject: [PATCH] [stormond] Use smartctl for Transcend SSD
+
+Use 'smartctl' Transcend SSD instead of 'scopepro'.
+Scopepro utility is not present in debian repository and all funtionality
+of scopepro can also be supported using smartctl.
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ sonic_platform_base/sonic_storage/ssd.py | 21 +--------------------
+ 1 file changed, 1 insertion(+), 20 deletions(-)
+
+diff --git a/sonic_platform_base/sonic_storage/ssd.py b/sonic_platform_base/sonic_storage/ssd.py
+index 72ad7fb..7f34ca1 100644
+--- a/sonic_platform_base/sonic_storage/ssd.py
++++ b/sonic_platform_base/sonic_storage/ssd.py
+@@ -20,7 +20,6 @@ except ImportError as e:
+ SMARTCTL = "smartctl {} -a"
+ INNODISK = "iSmart -d {}"
+ VIRTIUM  = "SmartCmd -m {}"
+-TRANSCEND = "scopepro -all {}"
+ 
+ NOT_AVAILABLE = "N/A"
+ 
+@@ -53,8 +52,6 @@ MICRON_AVG_ERASE_COUNT_ID = 173
+ MICRON_PERC_LIFETIME_REMAIN_ID = 202
+ 
+ INTEL_MEDIA_WEAROUT_INDICATOR_ID = 233
+-TRANSCEND_HEALTH_ID = 169
+-TRANSCEND_TEMPERATURE_ID = 194
+ 
+ class SsdUtil(StorageCommon):
+     """
+@@ -87,7 +84,7 @@ class SsdUtil(StorageCommon):
+             "Swissbit"          : { "utility" : SMARTCTL, "parser" : self.parse_swissbit_info },
+             "Micron"            : { "utility" : SMARTCTL, "parser" : self.parse_micron_info },
+             "Intel"             : { "utility" : SMARTCTL, "parser" : self.parse_intel_info },
+-            "Transcend"         : { "utility" : TRANSCEND, "parser" : self.parse_transcend_info },
++            "Transcend"         : { "utility" : SMARTCTL, "parser" : self.parse_generic_ssd_info },
+         }
+ 
+         self.dev = diskdev
+@@ -362,22 +359,6 @@ class SsdUtil(StorageCommon):
+             health_raw = self.parse_id_number(INTEL_MEDIA_WEAROUT_INDICATOR_ID, self.vendor_ssd_info)
+             self.health = NOT_AVAILABLE if health_raw == NOT_AVAILABLE else str(100 - float(health_raw.split()[-1]))
+ 
+-    def parse_transcend_info(self):
+-        if self.vendor_ssd_info:
+-            self.model = self._parse_re('Model\s*:(.+?)\s*\n', self.vendor_ssd_info)
+-            self.serial = self._parse_re('Serial No\s*:(.+?)\s*\n', self.vendor_ssd_info)
+-            self.firmware = self._parse_re('FW Version\s*:(.+?)\s*\n', self.vendor_ssd_info)
+-            health_raw = self._parse_re('{}\s*(.+?)\n'.format(hex(TRANSCEND_HEALTH_ID).upper()[2:]), self.vendor_ssd_info) #169 -> A9
+-            if health_raw == NOT_AVAILABLE:
+-                self.health = NOT_AVAILABLE
+-            else:
+-                self.health = health_raw.split()[-1]
+-            temp_raw = self._parse_re('{}\s*(.+?)\n'.format(hex(TRANSCEND_TEMPERATURE_ID).upper()[2:]), self.vendor_ssd_info) #194 -> C2
+-            if temp_raw == NOT_AVAILABLE:
+-                self.temperature = NOT_AVAILABLE
+-            else:
+-                self.temperature = temp_raw.split()[-1]
+-
+     def fetch_vendor_ssd_info(self, diskdev, model):
+         self.vendor_ssd_info = self._execute_shell(self.vendor_ssd_utility[model]["utility"].format(diskdev))
+ 
+-- 
+2.25.1
+
