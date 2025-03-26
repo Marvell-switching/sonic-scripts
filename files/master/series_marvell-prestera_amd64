@@ -1,3 +1,2 @@
 0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
-0001-marvell-prestera-rename.patch|src/sonic-linux-kernel
