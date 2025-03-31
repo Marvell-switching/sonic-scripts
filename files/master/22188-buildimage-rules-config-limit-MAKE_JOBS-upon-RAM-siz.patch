@@ -1,0 +1,58 @@
+From c07b07cbe6dbad9c795a151db2951213aa300fdd Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 31 Mar 2025 09:40:12 +0000
+Subject: [PATCH 1/1] [buildimage] rules/config limit MAKE_JOBS upon RAM-size
+
+= SUMMARY
+Limit number of build-cores according to total ram-size
+
+= Why I did it
+Some packages (swss_1.0) require 1.2GB RAM per core-cpu single build.
+N-cores build requires N*1.2GB RAM.
+In case of Out-Of-Memory (OOM) the build fails on OOM-Killer.
+This means that number of cores used for build should be limited
+according to the Total RAM size present on the build machine.
+
+= How I did it
+Do not set SONIC_CONFIG_MAKE_JOBS directly upon `nproc` value
+but get total memory size from `free` utility and use it to account
+max-N core precesses.
+Set the SONIC_CONFIG_MAKE_JOBS with min(nproc, max-N)
+
+= How to test
+$ nproc
+$ free
+Calculate max-N = Mem:total(kB) / 1229(kB)
+Apply make sonic-target and check the printed value
+   "SONIC_CONFIG_MAKE_JOBS"          : "12"
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ rules/config | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/rules/config b/rules/config
+index 9ff97eb94..6e28f20bd 100644
+--- a/rules/config
++++ b/rules/config
+@@ -14,7 +14,16 @@ SONIC_CONFIG_BUILD_JOBS = 1
+ 
+ # SONIC_CONFIG_MAKE_JOBS - set number of parallel make jobs per package.
+ # Corresponding -j argument will be passed to make/dpkg commands that build separate packages
+-SONIC_CONFIG_MAKE_JOBS = $(shell nproc)
++#
++# Some packages (swss_1.0) require 1.2GB RAM per core-cpu single build.
++# N-cores require N*1.2GB RAM. To avoid Out-Of-Memory (OOM-Killer) build failure
++# check and limit number of build-cores according to total ram-size.
++CPU_CORES := $(shell nproc)
++TOTAL_MEM_KB := $(shell free -k | awk '/^Mem:/ {print $$2}')
++MEM_PER_CPU_KB := (1229 * 1024)
++CORES_WITH_MEM := $(shell echo $$(( $(TOTAL_MEM_KB) / $(MEM_PER_CPU_KB) )))
++MIN_CORES := $(shell echo $$(( $(CPU_CORES) < $(CORES_WITH_MEM) ? $(CPU_CORES) : $(CORES_WITH_MEM) )))
++SONIC_CONFIG_MAKE_JOBS = $(MIN_CORES)
+ 
+ # DEFAULT_BUILD_LOG_TIMESTAMP - add timestamp in build log
+ # Supported format: simple, none
+-- 
+2.25.1
+
