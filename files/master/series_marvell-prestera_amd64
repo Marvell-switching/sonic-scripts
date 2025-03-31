@@ -1,2 +1,3 @@
 0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
+22188-buildimage-rules-config-limit-MAKE_JOBS-upon-RAM-siz.patch|sonic-buildimage
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
