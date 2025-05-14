@@ -1,0 +1,21 @@
+From 098439d4d92efa78f2e5e7ae99d8f1d3b79f97cd Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 13 May 2025 12:01:33 +0000
+Subject: [PATCH 1/1] [submodule] sonic-platform-marvell add AC5P
+ marvell_rd98DX45xx_cn9131
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/sonic-platform-marvell | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/sonic-platform-marvell b/platform/marvell-prestera/sonic-platform-marvell
+index f6224ee91..1489ce1e3 160000
+--- a/platform/marvell-prestera/sonic-platform-marvell
++++ b/platform/marvell-prestera/sonic-platform-marvell
+@@ -1 +1 @@
+-Subproject commit f6224ee910e4a7cdb2cc7c245480ec4e21817a27
++Subproject commit 1489ce1e38b523b2d52ed2d234165f5343ee2298
+-- 
+2.25.1
+
