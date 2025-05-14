@@ -18,6 +18,7 @@ VERSION_CONTROL_COMPONENTS="deb,py2,py3,web,git,docker"
 REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
+DIR_PREFIX="ABU"
 
 #set -e
 
@@ -27,7 +28,8 @@ print_usage()
     echo ""
     echo " $0 -b <branch> -p <platform> -a <arch>"
     echo "   [-c <sonic-buildimage_commit>]"
-    echo "   [--patch_script <http_path_of_patch_script>] [--url <sonic-buildimage_url>]"
+    echo "   [--patch_script <http or full_local path_of_patch_script>]"
+    echo "   [--url <sonic-buildimage_url>]"
     echo "   [-s] [-r] [--mark_no_del_ws] [--no-cache]"
     echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
     echo "   [--verify_patches] [--clean_dockers] [--clean_ws]"
@@ -49,6 +51,8 @@ Example:
   -c 021569412
 ./sonic_build_script.sh -b master -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r
+./sonic_build_script.sh -b master -p marvell -a arm64 \\
+  --patch_script /wrk/sonic-scripts/marvell_sonic_patch_script.sh -r
 """
 }
 
@@ -160,18 +164,22 @@ parse_arguments()
 
     if [ "${BUILD_PLATFORM}" == "marvell" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
         PLATFORM_SHORT_NAME="mrvl"
+        DIR_PREFIX="ABM"
     fi
 
     if [ "$BUILD_PLATFORM" == "innovium" ]; then
         PLATFORM_SHORT_NAME="invm"
+        DIR_PREFIX="ABI"
     fi
 
     if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
         PLATFORM_SHORT_NAME="mrvl-teralynx"
+        DIR_PREFIX="ABT"
     fi
 
     if [ "$BUILD_PLATFORM" == "marvell-prestera" ]; then
         PLATFORM_SHORT_NAME="mrvl-prestera"
+        DIR_PREFIX="ABP"
     fi
 }
 
@@ -190,6 +198,29 @@ check_error()
         set +x
         echo "Error in building - $2"
         on_error
+    else
+        echo -e "\n--------- $2   passed ---------\n\n\n"
+    fi
+}
+
+check_error_with_retry()
+{
+    set +x
+    if [ $1 -ne 0 ]; then
+        sync
+        echo 3 | sudo tee /proc/sys/vm/drop_caches
+        echo -e "\n----------------------------------------------------------------------"
+        echo "Error in building $2, going to retry in 30 sec (to abort press CTRL-C)"
+        sleep 10
+        echo "Error in building $2, going to retry in 20 sec (to abort press CTRL-C)"
+        sleep 10
+        echo "Error in building $2, going to retry in 10 sec (to abort press CTRL-C)"
+        sleep 10
+        echo "----------------------------------------------------------------------"
+        echo -e "     Retry build $2 started \n\n"
+        export SONIC_BUILD_JOBS=1
+        eval "$3"
+        check_error $? $2
     fi
 }
 
@@ -206,7 +237,7 @@ check_free_space()
 		partition=$(echo "$output" | awk '{ print $2 }' )
 		if [ $usep -ge $ALERT ]; then
 			echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
-				ls -1  | grep "ABT-" | grep "-err" | while read -r dir_name;
+				ls -1  | grep "${DIR_PREFIX}-" | grep "-err" | while read -r dir_name;
 						do
 							echo "Removing $dir_name"
 							if [ ! -f $dir_name/no_del_ws ]; then
@@ -220,7 +251,7 @@ check_free_space()
 						usep=$(echo "$output_new" | awk '{ print $1}' | cut -d'%' -f1 )
 						if [ $usep -ge $ALERT ]; then
 							# Remove build dirs
-							ls -1  | grep "ABT-" | while read -r dir_name;
+							ls -1  | grep "${DIR_PREFIX}-" | while read -r dir_name;
 						do
 							echo "Removing $dir_name"
 							if [ ! -f $dir_name/no_del_ws ]; then
@@ -259,9 +290,9 @@ clone_ws()
 {
     # Clone the Sonic source code
     if [ -z $BRANCH_COMMIT ]; then
-        SONIC_SOURCE_DIR=ABT-$BRANCH-$REL_BUILD_TSTAMP
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP
     else
-        SONIC_SOURCE_DIR=ABT-$BRANCH-$BRANCH_COMMIT
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-$BRANCH_COMMIT
     fi
     sudo rm -rf $SONIC_SOURCE_DIR
     mkdir $SONIC_SOURCE_DIR
@@ -294,8 +325,17 @@ clone_ws()
 patch_ws()
 {
     if [ -v PATCH_SCRIPT_URL ]; then
-        wget --timeout=2 -c $PATCH_SCRIPT_URL
+        if [[ "$PATCH_SCRIPT_URL" == *:* ]]; then
+            isUrl=1
+        else
+            isUrl=
+        fi
         URL=${PATCH_SCRIPT_URL%marvell_sonic_patch_script.sh}
+        if [ "$isUrl" = "1" ]; then
+            wget --timeout=2 -c $PATCH_SCRIPT_URL
+        else
+            cp $PATCH_SCRIPT_URL .
+        fi
         echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
@@ -329,6 +369,8 @@ build_ws()
         echo "make init" >> build_cmd.txt
         make init
         check_error $? "make_init"
+        # Fetch/expose advanced submodule hashes which are not taken by "make init"
+        git submodule foreach --recursive 'git fetch --all'
     fi
 
     # Build Sonic
@@ -340,8 +382,10 @@ build_ws()
         check_error $? "configure"
         echo "" >> build_cmd.txt
         echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
+        sync
+        echo 3 | sudo tee /proc/sys/vm/drop_caches
         make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
-        check_error $? "sonic-${BUILD_PLATFORM}.bin"
+        check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
     else
         echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS" >> build_cmd.txt
         ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS
@@ -349,13 +393,17 @@ build_ws()
         if [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
             echo "" >> build_cmd.txt
             echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
+            sync
+            echo 3 | sudo tee /proc/sys/vm/drop_caches
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
-            check_error $? "sonic-${BUILD_PLATFORM}.bin"
+            check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
         else
             echo "" >> build_cmd.txt
             echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" >> build_cmd.txt
+            sync
+            echo 3 | sudo tee /proc/sys/vm/drop_caches
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
-            check_error $? "sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin"
+            check_error_with_retry $? "sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin"
         fi
     fi
 
@@ -390,8 +438,15 @@ copy_build_artifacts()
     # $ARTIFACTS_DIR is a shared mount across different Linux users.
     # If any user creates a directory with read-only permissions all subsequent inner directory creation fails,
     # to avoid such issues, set permissions before any copy.
-    sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
+    # Caution: depending upon network the recursive -R for whole ARTIFACTS_DIR became blocking
+    if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
+        sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
+    fi
     mkdir -p $BUILD_ARTIFACTS_DIR
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/ 2>&-
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/ 2>&-
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/ 2>&-
+
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
     if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
@@ -409,8 +464,9 @@ copy_build_artifacts()
 main()
 {
     parse_arguments $@
+    # Shell-script DEBUG setting
+    #set -x
 
-    set -x
     cleanup_server
 
     clone_ws

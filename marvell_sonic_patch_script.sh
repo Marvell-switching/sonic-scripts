@@ -142,13 +142,24 @@ parse_arguments()
 	fi
 }
 
+wget_cp()
+{
+    if [[ "$1" == *:* ]]; then
+        # Is URL - use wget
+        wget --timeout=2 -c $1
+    else
+        # Dir or File is on local path
+        cp -r $1 .
+    fi
+}
+
 apply_sonicbuildimage_patches()
 {
 	cat series_${PLATFORM}_${ARCH}  | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
 do
 	echo $patch_file
 	pushd patches
-	wget --timeout=2 -c $WGET_PATH/$patch_file
+	wget_cp $WGET_PATH/$patch_file
 	popd
 	git am patches/$patch_file
 	ret=$?
@@ -172,7 +183,7 @@ do
 	patch=`echo $line | cut -f 1 -d'|'`
 	dir=`echo $line | cut -f 2 -d'|'`
 	pushd patches
-	wget --timeout=2 -c $WGET_PATH/${patch}
+	wget_cp $WGET_PATH/${patch}
 	popd
 	pushd ${dir}
 	git am $CWD/patches/${patch}
@@ -194,7 +205,7 @@ apply_hwsku_changes()
 {
 	if [ "$PLATFORM" == "marvell" ] || [ "$PLATFORM" == "marvell-prestera" ]; then
 		# Download hwsku
-		wget --timeout=2 -c $WGET_PATH/prestera_hwsku.tgz
+		wget_cp $WGET_PATH/prestera_hwsku.tgz
 		if [ $? -eq 0 ]; then
 			if [ "$PLATFORM" == "marvell" ] || [ ${ARCH} == "amd64" ]; then
 				rm -fr device/marvell/x86_64-marvell_db* || true
@@ -209,7 +220,7 @@ apply_hwsku_changes()
 	fi
 	if [ "$PLATFORM" == "innovium" ] || [ "$PLATFORM" == "marvell-teralynx" ]; then
 		# Download hwsku
-		wget -c --timeout=2 $WGET_PATH/teralynx_hwsku.tgz
+		wget_cp $WGET_PATH/teralynx_hwsku.tgz
 		if [ $? -eq 0 ]; then
 			rm -fr device/celestica/x86_64-cel_midstone-r0 || true
 			rm -fr device/wistron || true
@@ -231,7 +242,7 @@ main()
 	[ -d patches ] || mkdir patches
 
 	# wget patch series file
-	wget --timeout=2 -c $WGET_PATH/series_${PLATFORM}_${ARCH}
+	wget_cp $WGET_PATH/series_${PLATFORM}_${ARCH}
 	if [ ! -f series_${PLATFORM}_${ARCH} ]; then
 		log "ERROR: Series file series_${PLATFORM}_${ARCH} not found"
 		exit 1
