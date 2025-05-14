@@ -2,3 +2,4 @@
 0001-marvell-prestera-rename-orchagent.patch|sonic-buildimage
 0001-platform-marvell-prestera-fw_setenv-with-without-f.patch|sonic-buildimage
 21506-submodule-sonic-platform-marvell-add-AC5P-marvell_rd.patch|sonic-buildimage
+21506-add-AC5P-marvell_rd98DX45xx_cn9131.patch|sonic-buildimage
