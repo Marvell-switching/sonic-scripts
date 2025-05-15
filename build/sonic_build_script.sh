@@ -468,7 +468,6 @@ main()
     # Shell-script DEBUG setting
     # set -x
 
-
     cleanup_server
 
     clone_ws
