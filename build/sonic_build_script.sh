@@ -20,6 +20,7 @@ CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
 DIR_PREFIX="ABU"
 
+# Script-debug/trace option "-e"
 #set -e
 
 print_usage()
@@ -465,7 +466,8 @@ main()
 {
     parse_arguments $@
     # Shell-script DEBUG setting
-    #set -x
+    # set -x
+
 
     cleanup_server
 
