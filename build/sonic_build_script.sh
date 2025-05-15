@@ -18,6 +18,7 @@ VERSION_CONTROL_COMPONENTS="deb,py2,py3,web,git,docker"
 REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
+DIR_PREFIX="ABU"
 
 # Script-debug/trace option "-e"
 #set -e
@@ -164,18 +165,22 @@ parse_arguments()
 
     if [ "${BUILD_PLATFORM}" == "marvell" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
         PLATFORM_SHORT_NAME="mrvl"
+        DIR_PREFIX="ABM"
     fi
 
     if [ "$BUILD_PLATFORM" == "innovium" ]; then
         PLATFORM_SHORT_NAME="invm"
+        DIR_PREFIX="ABI"
     fi
 
     if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
         PLATFORM_SHORT_NAME="mrvl-teralynx"
+        DIR_PREFIX="ABT"
     fi
 
     if [ "$BUILD_PLATFORM" == "marvell-prestera" ]; then
         PLATFORM_SHORT_NAME="mrvl-prestera"
+        DIR_PREFIX="ABP"
     fi
 }
 
@@ -233,7 +238,7 @@ check_free_space()
 		partition=$(echo "$output" | awk '{ print $2 }' )
 		if [ $usep -ge $ALERT ]; then
 			echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
-				ls -1  | grep "ABT-" | grep "-err" | while read -r dir_name;
+				ls -1  | grep "${DIR_PREFIX}-" | grep "-err" | while read -r dir_name;
 						do
 							echo "Removing $dir_name"
 							if [ ! -f $dir_name/no_del_ws ]; then
@@ -247,7 +252,7 @@ check_free_space()
 						usep=$(echo "$output_new" | awk '{ print $1}' | cut -d'%' -f1 )
 						if [ $usep -ge $ALERT ]; then
 							# Remove build dirs
-							ls -1  | grep "ABT-" | while read -r dir_name;
+							ls -1  | grep "${DIR_PREFIX}-" | while read -r dir_name;
 						do
 							echo "Removing $dir_name"
 							if [ ! -f $dir_name/no_del_ws ]; then
@@ -286,9 +291,9 @@ clone_ws()
 {
     # Clone the Sonic source code
     if [ -z $BRANCH_COMMIT ]; then
-        SONIC_SOURCE_DIR=ABT-$BRANCH-$REL_BUILD_TSTAMP
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP
     else
-        SONIC_SOURCE_DIR=ABT-$BRANCH-$BRANCH_COMMIT
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-$BRANCH_COMMIT
     fi
     sudo rm -rf $SONIC_SOURCE_DIR
     mkdir $SONIC_SOURCE_DIR
@@ -434,8 +439,15 @@ copy_build_artifacts()
     # $ARTIFACTS_DIR is a shared mount across different Linux users.
     # If any user creates a directory with read-only permissions all subsequent inner directory creation fails,
     # to avoid such issues, set permissions before any copy.
-    sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
+    # Caution: depending upon network the recursive -R for whole ARTIFACTS_DIR became blocking
+    if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
+        sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
+    fi
     mkdir -p $BUILD_ARTIFACTS_DIR
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/ 2>&-
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/ 2>&-
+    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/ 2>&-
+
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
     if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
@@ -455,6 +467,7 @@ main()
     parse_arguments $@
     # Shell-script DEBUG setting
     # set -x
+
 
     cleanup_server
 
