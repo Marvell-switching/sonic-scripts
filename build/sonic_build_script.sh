@@ -10,6 +10,7 @@ BUILD_RPC="N"
 OTHER_BUILD_OPTIONS=""
 NO_CACHE="N"
 VERIFY_PATCHES="N"
+PATCHING_CONFIG_AND_STOP="N"
 DEBIAN="bookworm"
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
@@ -40,6 +41,8 @@ print_usage()
     echo "    -s : Build docker saiserver v2"
     echo "    -r : ENABLE_SYNCD_RPC=y"
     echo "    -c : checkout commit id"
+    echo "    -C : clone, patching, make-CONFIGURE and exit before full make"
+    echo "                             (for inspection and re-config)"
     echo "    --no-cache: Build without any pre cache"
     echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
     echo "    --admin_password: Set admin password"
@@ -83,6 +86,10 @@ parse_arguments()
                 BRANCH_COMMIT="$2"
                 shift # past argument
                 shift # past value
+                ;;
+            -C)
+                PATCHING_CONFIG_AND_STOP="Y"
+                shift # past argument
                 ;;
             -s|--saiserver)
                 BUILD_SAISERVER="Y"
@@ -424,6 +431,9 @@ build_ws()
         echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
         sync
         echo 3 | sudo tee /proc/sys/vm/drop_caches
+        if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
+            exit 0
+        fi
         make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
         check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
     else
@@ -435,6 +445,9 @@ build_ws()
             echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
             sync
             echo 3 | sudo tee /proc/sys/vm/drop_caches
+            if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
+                exit 0
+            fi
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
             check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
         else
@@ -442,6 +455,9 @@ build_ws()
             echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" >> build_cmd.txt
             sync
             echo 3 | sudo tee /proc/sys/vm/drop_caches
+            if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
+                exit 0
+            fi
             make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
             check_error_with_retry $? "sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin"
         fi
