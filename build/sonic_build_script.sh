@@ -4,6 +4,7 @@
 # NOTE: Change CACHE_DIR and ARTIFACTS_DIR as per your requirement.
 
 # arguments
+INPUT=$@
 BUILD_SAISERVER="N"
 BUILD_RPC="N"
 OTHER_BUILD_OPTIONS=""
@@ -31,6 +32,7 @@ print_usage()
     echo "   [-c <sonic-buildimage_commit>]"
     echo "   [--patch_script <http or full_local path_of_patch_script>]"
     echo "   [--url <sonic-buildimage_url>]"
+    echo "   [--SAI <url full path to mrvllibsai_*.deb>]"
     echo "   [-s] [-r] [--mark_no_del_ws] [--no-cache]"
     echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
     echo "   [--verify_patches] [--clean_dockers] [--clean_ws]"
@@ -50,10 +52,11 @@ Example:
 ./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
   -c 021569412
-./sonic_build_script.sh -b master -p marvell -a arm64 \\
+./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r
-./sonic_build_script.sh -b master -p marvell -a arm64 \\
-  --patch_script /wrk/sonic-scripts/marvell_sonic_patch_script.sh -r
+./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
+  --patch_script /wrk/sonic-scripts/marvell_sonic_patch_script.sh -r \\
+  --SAI http://10.2.141.103:8080/mrvllibsai/mrvllibsai_1.16.1-1_arm64.deb
 """
 }
 
@@ -104,6 +107,11 @@ parse_arguments()
                 ;;
             --url)
                 GIT_HUB_URL="$2"
+                shift # past argument
+                shift # past value
+                ;;
+            --SAI)
+                SAI_URL_PATH="$2"
                 shift # past argument
                 shift # past value
                 ;;
@@ -323,6 +331,32 @@ clone_ws()
     fi
 }
 
+patch_sai_url_path()
+{
+    # Handle input --SAI $SAI_URL_PATH like
+    # --SAI http://10.2.141.103:8080/mrvllibsai/mrvllibsai_1.16.1-1_arm64.deb
+
+    # Check url file availability
+    wget --timeout=2 --spider $SAI_URL_PATH
+    check_error $? "SAI-URL check"
+
+    SAI_MK_FILE=platform/marvell-prestera/sai.mk
+    SAI_DEB_URL=$(dirname "$SAI_URL_PATH")
+    SAI_DEB_FILE=$(basename "$SAI_URL_PATH")
+
+    # Escape ampersands for sed
+    safe_url_path=${SAI_DEB_URL//&/\\&}
+    safe_file_name=${SAI_DEB_FILE//&/\\&}
+
+    # Use '|' as the sed delimiter to avoid escaping '/'
+    sed -i -E \
+        -e "s|^MRVL_SAI_URL_PREFIX *=.*|MRVL_SAI_URL_PREFIX = $safe_url_path|" \
+        -e "s|^MRVL_SAI *=.*|MRVL_SAI = $safe_file_name|" \
+        "$SAI_MK_FILE" >/dev/null 2>&1
+
+    check_error $? "SAI-URL patching"
+}
+
 patch_ws()
 {
     if [ -v PATCH_SCRIPT_URL ]; then
@@ -340,6 +374,10 @@ patch_ws()
         echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
+
+        if ! [ -z "${SAI_URL_PATH}" ]; then
+            patch_sai_url_path
+        fi
     fi
 }
 
@@ -375,7 +413,8 @@ build_ws()
     fi
 
     # Build Sonic
-    echo $BUILD_OPTIONS > build_args.txt
+    echo -e "$INPUT\n" > build_args.txt
+    echo $BUILD_OPTIONS >> build_args.txt
     echo "" >> build_cmd.txt
     if [ "$BUILD_PLATFORM_ARCH" == "amd64" ]; then
         echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS" >> build_cmd.txt
