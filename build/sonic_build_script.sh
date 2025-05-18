@@ -347,7 +347,7 @@ patch_sai_url_path()
     wget --timeout=2 --spider $SAI_URL_PATH
     check_error $? "SAI-URL check"
 
-    SAI_MK_FILE=platform/marvell-prestera/sai.mk
+    SAI_MK_FILE=platform/${BUILD_PLATFORM}/sai.mk
     SAI_DEB_URL=$(dirname "$SAI_URL_PATH")
     SAI_DEB_FILE=$(basename "$SAI_URL_PATH")
 
@@ -358,8 +358,8 @@ patch_sai_url_path()
     # Use '|' as the sed delimiter to avoid escaping '/'
     sed -i -E \
         -e "s|^MRVL_SAI_URL_PREFIX *=.*|MRVL_SAI_URL_PREFIX = $safe_url_path|" \
-        -e "s|^MRVL_SAI *=.*|MRVL_SAI = $safe_file_name|" \
-        "$SAI_MK_FILE" >/dev/null 2>&1
+        -e "s|^MRVL_SAI *=.*|MRVL_SAI = ${safe_file_name}|" \
+        "${SAI_MK_FILE}" >/dev/null 2>&1
 
     check_error $? "SAI-URL patching"
 }
