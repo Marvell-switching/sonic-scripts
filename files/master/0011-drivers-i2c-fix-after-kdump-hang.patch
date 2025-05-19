@@ -1,0 +1,117 @@
+From bd0173cd528331483d465b87c5c21183feddbea9 Mon Sep 17 00:00:00 2001
+From: Elad Nachman <enachman@marvell.com>
+Date: Sun, 18 May 2025 14:02:58 +0000
+Subject: [PATCH] drivers: i2c: fix after kdump hang
+
+Signed-off-by: Elad Nachman <enachman@marvell.com>
+---
+ patch/0018-i2c-mv64xxx-kdump-sonic.patch | 84 ++++++++++++++++++++++++
+ patch/series                             |  1 +
+ 2 files changed, 85 insertions(+)
+ create mode 100644 patch/0018-i2c-mv64xxx-kdump-sonic.patch
+
+diff --git a/patch/0018-i2c-mv64xxx-kdump-sonic.patch b/patch/0018-i2c-mv64xxx-kdump-sonic.patch
+new file mode 100644
+index 0000000..f718aad
+--- /dev/null
++++ b/patch/0018-i2c-mv64xxx-kdump-sonic.patch
+@@ -0,0 +1,84 @@
++diff --git a/drivers/i2c/busses/i2c-mv64xxx.c b/drivers/i2c/busses/i2c-mv64xxx.c
++index a5d82b43bc..9b9684ea9c 100644
++--- a/drivers/i2c/busses/i2c-mv64xxx.c
+++++ b/drivers/i2c/busses/i2c-mv64xxx.c
++@@ -159,5 +159,7 @@ struct mv64xxx_i2c_data {
++ 	struct pinctrl_state *i2c_mpp_state;
++ 	struct pinctrl_state *i2c_gpio_state;
+++	bool   during_init;
+++	int    cnt_irqs_during_init;
++ };
++ 
++ static struct mv64xxx_i2c_regs mv64xxx_i2c_regs_mv64xxx = {
++@@ -225,7 +227,6 @@ mv64xxx_i2c_hw_init(struct mv64xxx_i2c_data *drv_data)
++ 		writel(0, drv_data->reg_base +
++ 			MV64XXX_I2C_REG_BRIDGE_INTR_MASK);
++ 	}
++-
++ 	writel(0, drv_data->reg_base + drv_data->reg_offsets.soft_reset);
++ 	writel(MV64XXX_I2C_BAUD_DIV_M(drv_data->freq_m) | MV64XXX_I2C_BAUD_DIV_N(drv_data->freq_n),
++ 		drv_data->reg_base + drv_data->reg_offsets.clock);
++@@ -574,11 +575,28 @@ static irqreturn_t
++ mv64xxx_i2c_intr(int irq, void *dev_id)
++ {
++ 	struct mv64xxx_i2c_data	*drv_data = dev_id;
++-	u32		status;
+++	u32		status, cntl_bits;
++ 	irqreturn_t	rc = IRQ_NONE;
++ 
++ 	spin_lock(&drv_data->lock);
++ 
+++	if (drv_data->during_init) {
+++		rc = IRQ_HANDLED;
+++		drv_data->cnt_irqs_during_init++;
+++		if (drv_data->cnt_irqs_during_init > 100) {
+++			cntl_bits = readl(drv_data->reg_base + drv_data->reg_offsets.control);
+++			writel(cntl_bits & (~0x40),
+++			       drv_data->reg_base + drv_data->reg_offsets.control);
+++			udelay(5);
+++			writel(cntl_bits | 0x40,
+++			       drv_data->reg_base + drv_data->reg_offsets.control);
+++			drv_data->cnt_irqs_during_init = 0;
+++		}
+++		spin_unlock(&drv_data->lock);
+++
+++		return rc;
+++	}
+++
++ 	if (drv_data->offload_enabled)
++ 		rc = mv64xxx_i2c_intr_offload(drv_data);
++ 
++@@ -1167,6 +1185,14 @@ mv64xxx_i2c_probe(struct platform_device *pd)
++ 			goto exit_disable_pm;
++ 	}
++ 
+++	dev_info(&drv_data->adapter.dev, "Starting i2c irq init...\n");
+++	drv_data->during_init = true;
+++	if ((rc = i2c_add_numbered_adapter(&drv_data->adapter)) != 0) {
+++		dev_err(&drv_data->adapter.dev,
+++			"mv64xxx: Can't add i2c adapter, rc: %d\n", -rc);
+++		goto exit_free_irq;
+++	}
+++	mdelay(20);
++ 	rc = request_irq(drv_data->irq, mv64xxx_i2c_intr, 0,
++ 			 MV64XXX_I2C_CTLR_NAME, drv_data);
++ 	if (rc) {
++@@ -1174,12 +1200,14 @@ mv64xxx_i2c_probe(struct platform_device *pd)
++ 			"mv64xxx: Can't register intr handler irq%d: %d\n",
++ 			drv_data->irq, rc);
++ 		goto exit_disable_pm;
++-	} else if ((rc = i2c_add_numbered_adapter(&drv_data->adapter)) != 0) {
++-		dev_err(&drv_data->adapter.dev,
++-			"mv64xxx: Can't add i2c adapter, rc: %d\n", -rc);
++-		goto exit_free_irq;
++ 	}
++ 
+++	rc = readl(drv_data->reg_base + drv_data->reg_offsets.status);
+++	if (rc != MV64XXX_I2C_STATUS_NO_STATUS) {
+++		/* leftover state from previous run, wait for completion: */
+++		mdelay(99);
+++	}
+++	drv_data->during_init = false;
++ 	return 0;
++ 
++ exit_free_irq:
+diff --git a/patch/series b/patch/series
+index 407b21d..c857b28 100755
+--- a/patch/series
++++ b/patch/series
+@@ -183,6 +183,7 @@ cisco-npu-disable-other-bars.patch
+ 0015-arm64-dts-marvell-Add-Supermicro-SSE-G3748-board.patch
+ 0016-arm64-dts-marvell-Add-Wistron-ES-1227-54TS-board.patch
+ 0017-Extend-driver-to-support-XMC-XM25QH256C-device.patch
++0018-i2c-mv64xxx-kdump-sonic.patch
+ 
+ # amd-pensando elba support
+ 0000-Add-support-for-the-TI-TPS53659.patch
+-- 
+2.25.1
+
