@@ -338,6 +338,36 @@ clone_ws()
     fi
 }
 
+# commit_id_*
+# Function 1: Get and save upstream commit ID
+# Function 2: Generate custom COMMIT_ID_STR and update files with sed
+commit_id_get_upstream()
+{
+    export UPSTREAM_ID="$(git rev-parse --short HEAD)"
+}
+
+commit_id_update()
+{
+    if [[ -z "$UPSTREAM_ID" ]]; then
+        return 0
+    fi
+    VER_SH_1=build_debian.sh
+    VER_SH_2=platform/vs/sonic-version/build_sonic_version.sh
+    HEAD_ID="$(git rev-parse --short HEAD)"
+    PATCH_COUNT="$(git rev-list --count ${UPSTREAM_ID}..HEAD)"
+    export COMMIT_ID_STR="${UPSTREAM_ID} + ${PATCH_COUNT} mrvl-patches"
+
+    for ver_file in ${VER_SH_1} ${VER_SH_2}; do
+        if [[ ! -f "$ver_file" ]]; then
+            echo "Warning: $ver_file not found for version updated"
+            continue
+        fi
+        sed -i -E "s|^(export commit_id=).*|\1\"${COMMIT_ID_STR}\"|"  "$ver_file"
+        echo "Force commit_id: $COMMIT_ID_STR  in file $ver_file"
+    done
+    echo ""
+}
+
 patch_sai_url_path()
 {
     # Handle input --SAI $SAI_URL_PATH like
@@ -378,9 +408,11 @@ patch_ws()
         else
             cp $PATCH_SCRIPT_URL .
         fi
+        commit_id_get_upstream
         echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
+        commit_id_update
 
         if ! [ -z "${SAI_URL_PATH}" ]; then
             patch_sai_url_path
@@ -475,9 +507,13 @@ build_ws()
     set +x
     local endTime=$SECONDS
     local elapsedseconds=$(( endTime - startTime ))
-    echo    "***************************************************"
+    echo   "***************************************************"
     printf ' Build took - %dh:%dm:%ds\n' $((elapsedseconds/3600)) $((elapsedseconds%3600/60)) $((elapsedseconds%60))
-    echo -e "***************************************************\n\n"
+    echo   "***************************************************"
+    cat fsroot-marvell-prestera/etc/sonic/sonic_version.yml 2>/dev/null
+    echo ""
+    echo "" >> commit_log.txt
+    cat fsroot-marvell-prestera/etc/sonic/sonic_version.yml >> commit_log.txt
 }
 
 # TODO: Enhance script to delete these artifacts periodically
