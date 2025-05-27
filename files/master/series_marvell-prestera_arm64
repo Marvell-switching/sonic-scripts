@@ -4,6 +4,8 @@
 21506-submodule-sonic-platform-marvell-add-AC5P-marvell_rd.patch|sonic-buildimage
 21506-add-AC5P-marvell_rd98DX45xx_cn9131.patch|sonic-buildimage
 0002-platform-prestera-fix-support-for-AC5P-RD-mmcblk.patch|sonic-buildimage
+20250-master-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
+20250-master-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
 0011-arm64-kdump-support-Install-kdump-utils-for-either-a.patch|sonic-buildimage
 0011-arm64-kdump-support-add-support-in-kdump-config.patch|src/sonic-utilities
 0011-drivers-i2c-fix-after-kdump-hang.patch|src/sonic-linux-kernel
