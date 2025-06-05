@@ -5,3 +5,4 @@
 0002-platform-prestera-fix-support-for-AC5P-RD-mmcblk.patch|sonic-buildimage
 20250-master-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
 20250-master-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
+0001-buildimage-marvell-prestera-sai-version-1.16.1-1.patch|sonic-buildimage
