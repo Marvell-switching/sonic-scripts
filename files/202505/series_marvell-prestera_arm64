@@ -1,0 +1,8 @@
+0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
+0001-platform-marvell-prestera-fw_setenv-with-without-f.patch|sonic-buildimage
+21506-submodule-sonic-platform-marvell-add-AC5P-marvell_rd.patch|sonic-buildimage
+21506-add-AC5P-marvell_rd98DX45xx_cn9131.patch|sonic-buildimage
+0002-platform-prestera-fix-support-for-AC5P-RD-mmcblk.patch|sonic-buildimage
+20250-master-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
+20250-master-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
+0001-buildimage-marvell-prestera-sai-version-1.16.1-1.patch|sonic-buildimage
