@@ -1,1 +1,94 @@
-../master/20250-master-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch
+From 6febfaa8a18ed8551080b9c1eed3f2d9a8e8f756 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Fri, 23 May 2025 18:25:45 +0300
+Subject: [PATCH 1/1] Add Wistron platform ES1227-54TS and ES2227-54TS
+
+Add Wistron platform ES1227-54TS and ES2227-54TS into
+    platform/marvell-prestera/one-image.mk
+    platform/marvell-prestera/platform_arm64.conf
+merged with predecessor AC5P.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/one-image.mk        |  3 +++
+ platform/marvell-prestera/platform_arm64.conf | 22 ++++++++++++++++---
+ 2 files changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell-prestera/one-image.mk b/platform/marvell-prestera/one-image.mk
+index 4d1b87ea2..6a50fee19 100644
+--- a/platform/marvell-prestera/one-image.mk
++++ b/platform/marvell-prestera/one-image.mk
+@@ -14,6 +14,9 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+ 				$(AC5X_RD98DX35xx_PLATFORM) \
+ 				$(AC5X_RD98DX35xxCN9131_PLATFORM) \
+ 				$(AC5P_RD98DX45xxCN9131_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES2227_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES2227_P_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_ES1227_PLATFORM)
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM)
+diff --git a/platform/marvell-prestera/platform_arm64.conf b/platform/marvell-prestera/platform_arm64.conf
+index 2df8a4974..9d40c1000 100644
+--- a/platform/marvell-prestera/platform_arm64.conf
++++ b/platform/marvell-prestera/platform_arm64.conf
+@@ -28,6 +28,7 @@ echo "Intalling SONiC from $install_env on Platform $PLATFORM"
+ PLATFORM_AC5X=0
+ PLATFORM_CN9131=0
+ PLATFORM_7215_A1=0
++PLATFORM_WISTRON=0
+ disk_interface="mmc"
+ 
+ case $PLATFORM in
+@@ -51,6 +52,10 @@ case $PLATFORM in
+         fi
+         fdt_fname="/boot/cn9131-db-comexpress.dtb";
+         fit_conf_name="#conf_cn9131";;
++    arm64-wistron_es1227_54ts-r0|arm64-wistron_es2227_54ts-r0|arm64-wistron_es2227_54ts_p-r0) PLATFORM_WISTRON=1;
++        mmc_bus="mmc0:0001";
++        fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/es1227-54ts.dtb";
++        fit_conf_name="#conf_es1227";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
+@@ -69,6 +74,12 @@ elif [ $PLATFORM_CN9131 -eq 1 ]; then
+     fit_addr=0x8000000
+     initrd_addr=0x2000000
+     FW_ENV_DEFAULT='/dev/mtd1 0x1F0000 0x10000 0x10000'
++elif [ $PLATFORM_WISTRON -eq 1 ]; then
++    kernel_addr=0x7000000
++    fdt_addr=0x6f00000
++    fit_addr=0x20000000
++    initrd_addr=0xa00000
++    FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
+ else
+     fdt_addr=0x1000000
+     fit_addr=0x8000000
+@@ -244,7 +255,7 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} sonic_version_1 $demo_volume_revision_label > /dev/null
+     BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
+     BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
+-    BOOT3='echo " > Boot3: ONIE - run onie_boot";echo;'
++    BOOT3='echo " > Boot3: ONIE - run onie_bootcmd";echo;'
+     BORDER='echo "---------------------------------------------------";echo;'
+     fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
+ 
+@@ -264,8 +275,13 @@ prepare_boot_menu() {
+     demo_part=$(sgdisk -p $blk_dev | grep -e "$demo_volume_label" | awk '{print $1}')
+     DISK_LOAD=''$disk_scan' ext4load '$disk_interface' 0:'$demo_part' $fit_addr $fit_name'
+     fw_setenv ${FW_ARG} sonic_boot_load "$DISK_LOAD" > /dev/null
+-    SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
+-    SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
++    if [ $PLATFORM_WISTRON -eq 1 ]; then
++        SONIC_BOOT_CMD='run release_i2c_bus; run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
++        SONIC_BOOT_CMD_OLD='run release_i2c_bus; run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
++    else
++        SONIC_BOOT_CMD='run sonic_bootargs; run sonic_boot_load; bootm $fit_addr${fit_conf_name}'
++        SONIC_BOOT_CMD_OLD='run sonic_bootargs_old; run sonic_boot_load_old; bootm $fit_addr${fit_conf_name}'
++    fi
+     BOOTARGS='setenv bootargs root=UUID='$uuid' rw rootwait panic=1 console=ttyS0,${baudrate} ${linuxargs}'
+     fw_setenv ${FW_ARG} sonic_bootargs "$BOOTARGS" > /dev/null
+     fw_setenv ${FW_ARG} sonic_image_2 "$SONIC_BOOT_CMD_OLD" > /dev/null
+-- 
+2.25.1
+

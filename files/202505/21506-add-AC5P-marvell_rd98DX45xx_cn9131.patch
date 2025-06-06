@@ -1,1 +1,69 @@
-../master/21506-add-AC5P-marvell_rd98DX45xx_cn9131.patch
+From 93ab4c006ea0a49e4fcee2a2e52450c1f41f59ee Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Wed, 22 Jan 2025 09:44:59 +0530
+Subject: [PATCH] Add support for AC5P-RD
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-prestera/one-image.mk           | 3 ++-
+ platform/marvell-prestera/platform-marvell.mk    | 6 ++++++
+ platform/marvell-prestera/platform_arm64.conf    | 4 ++++
+ platform/marvell-prestera/sonic-platform-marvell | 2 +-
+ 4 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-prestera/one-image.mk b/platform/marvell-prestera/one-image.mk
+index be282e921..1aaa466f5 100644
+--- a/platform/marvell-prestera/one-image.mk
++++ b/platform/marvell-prestera/one-image.mk
+@@ -12,7 +12,8 @@ ifeq ($(CONFIGURED_ARCH),arm64)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+ 				$(AC5X_RD98DX35xx_PLATFORM) \
+-				$(AC5X_RD98DX35xxCN9131_PLATFORM)
++				$(AC5X_RD98DX35xxCN9131_PLATFORM) \
++				$(AC5P_RD98DX45xxCN9131_PLATFORM)
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM)
+diff --git a/platform/marvell-prestera/platform-marvell.mk b/platform/marvell-prestera/platform-marvell.mk
+index eec94d18a..c550491e3 100644
+--- a/platform/marvell-prestera/platform-marvell.mk
++++ b/platform/marvell-prestera/platform-marvell.mk
+@@ -2,6 +2,7 @@
+ 
+ AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION = 1.0
+ AC5X_RD98DX35xxCN9131_PLATFORM_MODULE_VERSION = 1.0
++AC5P_RD98DX45xxCN9131_PLATFORM_MODULE_VERSION = 1.0
+ FALCON_PLATFORM_MODULE_VERSION = 1.0
+ 
+ ifeq ($(CONFIGURED_ARCH),arm64)
+@@ -16,6 +17,11 @@ AC5X_RD98DX35xxCN9131_PLATFORM = sonic-platform-rd98dx35xx-cn9131_$(AC5X_RD98DX3
+ $(AC5X_RD98DX35xxCN9131_PLATFORM)_PLATFORM = arm64-marvell_rd98DX35xx_cn9131-r0
+ $(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(AC5X_RD98DX35xxCN9131_PLATFORM)))
+ 
++AC5P_RD98DX45xxCN9131_PLATFORM = sonic-platform-rd98dx45xx-cn9131_$(AC5P_RD98DX45xxCN9131_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
++$(AC5P_RD98DX45xxCN9131_PLATFORM)_PLATFORM = arm64-marvell_rd98DX45xx_cn9131-r0
++$(eval $(call add_extra_package,$(AC5X_RD98DX35xx_PLATFORM),$(AC5P_RD98DX45xxCN9131_PLATFORM)))
++
++
+ else ifeq ($(CONFIGURED_ARCH),amd64)
+ 
+ AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx-x86_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
+diff --git a/platform/marvell-prestera/platform_arm64.conf b/platform/marvell-prestera/platform_arm64.conf
+index 0dae738a4..cab2f42a4 100644
+--- a/platform/marvell-prestera/platform_arm64.conf
++++ b/platform/marvell-prestera/platform_arm64.conf
+@@ -41,6 +41,10 @@ case $PLATFORM in
+ 		mmc_bus="mmc0:0001";
+ 		fdt_fname="/boot/cn9131-db-comexpress.dtb";
+ 		fit_conf_name="#conf_cn9131";;
++    arm64-marvell_rd98DX45xx_cn9131-r0) PLATFORM_CN9131=1;
++                scsi_bus="1:0:0:0";
++                fdt_fname="/boot/cn9131-db-comexpress.dtb";
++                fit_conf_name="#conf_cn9131";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
+-- 
+2.25.1
+
