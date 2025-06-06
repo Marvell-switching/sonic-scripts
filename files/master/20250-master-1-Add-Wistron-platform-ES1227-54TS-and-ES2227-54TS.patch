@@ -49117,7 +49117,7 @@ index f3ff5ac7c..e0f4da853 100644
          };
 +	kernel_es1227 {
 +            description = "Linux Kernel";
-+            data = /incbin/("/boot/vmlinuz-6.1.0-22-2-arm64");
++            data = /incbin/("/boot/vmlinuz-6.1.0-29-2-arm64");
 +            type = "kernel";
 +            arch = "arm64";
 +            os = "linux";
@@ -49130,7 +49130,7 @@ index f3ff5ac7c..e0f4da853 100644
 +        };
 +        ramdisk_es1227 {
 +            description = "ramdisk";
-+            data = /incbin/("/boot/initrd.img-6.1.0-22-2-arm64");
++            data = /incbin/("/boot/initrd.img-6.1.0-29-2-arm64");
 +            type = "ramdisk";
 +            arch = "arm64";
 +            os = "linux";
@@ -49141,7 +49141,7 @@ index f3ff5ac7c..e0f4da853 100644
 +        };
 +        fdt_es1227 {
 +            description = "Flattened Device Tree blob for Wistron ES1227";
-+            data = /incbin/("/usr/lib/linux-image-6.1.0-22-2-arm64/marvell/es1227-54ts.dtb");
++            data = /incbin/("/usr/lib/linux-image-6.1.0-29-2-arm64/marvell/es1227-54ts.dtb");
 +            type = "flat_dt";
 +            arch = "arm64";
 +            compression = "none";
