@@ -1,3 +1,4 @@
 0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
 0001-platform-marvell-prestera-fw_setenv-with-without-f.patch|sonic-buildimage
 0001-buildimage-marvell-prestera-sai-version-1.16.1-1.patch|sonic-buildimage
+0011-utilities-Nokia7215-WA-no-SAI-start-on-config-reload.patch|src/sonic-utilities

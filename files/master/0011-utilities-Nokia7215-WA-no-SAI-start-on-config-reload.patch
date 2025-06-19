@@ -1,0 +1,56 @@
+From 7e76e20c77aa0eb38f42dfe7c4d436e3c8dbd03f Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 17 Jun 2025 13:35:55 +0300
+Subject: [PATCH 1/1] [utilities] Nokia7215:WA: no SAI start on config-reload
+ command
+
+https://github.com/sonic-net/sonic-buildimage/issues/22994
+config reload command doesn't start SAI on branch master/202505 on board Nokia-7215/AC3
+
+Current WORKAROUND:
+add "restart swss" at the end of "reload" command handling in file
+
+[src/sonic-utilities/]config/main.py
+On board: /usr/local/lib/python3.11/dist-packages/config/main.py
+
+======================================================================
+Description of the bug
+
+Marvell SAI starting is never achieved on command "config reload -y".
+Last worked - branch 202411, stopped to work properly on branch master and branch 202505.
+Platform: marvell-prestera, ARCH=armhf, board Nokia-7215(AC3)
+
+Problem suspect -- orchestration synchronization on STOP service.
+
+Observations are:
+- Both swss and syncd containers are Up/Running but SAI is not achieved
+   not started (according to syslog).
+- apply "systemctl restart swss" fixes the problem
+- apply "systemctl restart sonic.target"
+   (which is last part of "config reload" implementation) is always FAIL
+- Manual Stop sequence (with sleeps) emulating "stop sonic.target"
+   followed by "start sonic.target" is OK!
+- The "config reload" has also DB-config and migration processing which
+   also cause problem
+---
+ config/main.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/config/main.py b/config/main.py
+index 0a5b1e32..5340ee1c 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -1039,6 +1039,10 @@ def _restart_services():
+         time.sleep(1)
+     except subprocess.CalledProcessError as err:
+         pass
++
++    # ARMHF/Nokia-7215: SAI never started by syncd. WA force restart swss (with syncd)
++    clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
++
+     # Reload Monit configuration to pick up new hostname in case it changed
+     click.echo("Reloading Monit configuration ...")
+     clicommon.run_command(['sudo', 'monit', 'reload'])
+-- 
+2.25.1
+
