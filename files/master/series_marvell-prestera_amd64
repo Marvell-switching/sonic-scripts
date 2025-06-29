@@ -2,3 +2,4 @@
 0001-sonic_installer-add-sync-before-migration.patch|src/sonic-utilities
 0001-Falcon-usb-disk-hung_task-WA.patch|sonic-buildimage
 0001-buildimage-marvell-prestera-sai-version-1.16.1-1.patch|sonic-buildimage
+0001-Remove-unsupported-marvell-board-x86_64-marvell_rd98.patch|sonic-buildimage
