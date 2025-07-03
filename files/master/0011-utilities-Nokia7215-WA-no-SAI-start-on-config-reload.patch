@@ -1,11 +1,11 @@
-From 7e76e20c77aa0eb38f42dfe7c4d436e3c8dbd03f Mon Sep 17 00:00:00 2001
+From 301d7fd539ab26fd3c4ee83bb51478578a081a94 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
-Date: Tue, 17 Jun 2025 13:35:55 +0300
+Date: Thu, 3 Jul 2025 11:35:31 +0300
 Subject: [PATCH 1/1] [utilities] Nokia7215:WA: no SAI start on config-reload
- command
 
 https://github.com/sonic-net/sonic-buildimage/issues/22994
-config reload command doesn't start SAI on branch master/202505 on board Nokia-7215/AC3
+Config reload command doesn't start SAI on branch master/202505 on board Nokia-7215/AC3
+Same/similar is for load minigraph command
 
 Current WORKAROUND:
 add "restart swss" at the end of "reload" command handling in file
@@ -32,25 +32,29 @@ Observations are:
    followed by "start sonic.target" is OK!
 - The "config reload" has also DB-config and migration processing which
    also cause problem
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
- config/main.py | 4 ++++
- 1 file changed, 4 insertions(+)
+ config/main.py | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 diff --git a/config/main.py b/config/main.py
-index 0a5b1e32..5340ee1c 100644
+index 0a5b1e32..6338cd04 100644
 --- a/config/main.py
 +++ b/config/main.py
-@@ -1039,6 +1039,10 @@ def _restart_services():
-         time.sleep(1)
-     except subprocess.CalledProcessError as err:
-         pass
-+
-+    # ARMHF/Nokia-7215: SAI never started by syncd. WA force restart swss (with syncd)
-+    clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
-+
-     # Reload Monit configuration to pick up new hostname in case it changed
+@@ -1043,6 +1043,12 @@ def _restart_services():
      click.echo("Reloading Monit configuration ...")
      clicommon.run_command(['sudo', 'monit', 'reload'])
+ 
++    # ARMHF/Nokia-7215: SAI never started by syncd. WA force restart swss (with syncd)
++    time.sleep(10)
++    clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss'])
++    clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd'])
++    clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
++
+ def _per_namespace_swss_ready(service_name):
+     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
+     if out.strip() != "active":
 -- 
 2.25.1
 
