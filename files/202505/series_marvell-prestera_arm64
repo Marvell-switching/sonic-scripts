@@ -6,6 +6,8 @@
 20250-master-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
 20250-master-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch|sonic-buildimage
 0001-buildimage-marvell-prestera-sai-version-1.16.1-1.patch|sonic-buildimage
+0011-utilities-Nokia7215-WA-no-SAI-start-on-config-reload.patch|src/sonic-utilities
+0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch|src/sonic-utilities
 0018-kdrivers-i2c-fix-after-kdump-crash.patch|src/sonic-linux-kernel
 0019-kdrivers-irqchip-irq-mvebu-gicp-clear-pending.patch|src/sonic-linux-kernel
 0020-arm64-kdump-support-add-support-in-kdump-config.patch|src/sonic-utilities
