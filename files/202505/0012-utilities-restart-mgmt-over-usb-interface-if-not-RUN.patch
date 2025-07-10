@@ -51,7 +51,7 @@ index e3b2c44e..a2ba6eb5 100644
 +        return
 +    if 'usb' not in os.path.realpath(f"/sys/class/net/{iface}/device"):
 +        return
-+   try:
++    try:
 +        with open(f"/sys/class/net/{iface}/operstate") as f:
 +            operstate = f.read().strip()
 +        if operstate == "up":
