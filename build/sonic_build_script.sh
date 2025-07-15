@@ -572,10 +572,12 @@ main()
         echo "export NOSTRETCH=1"  >> build_cmd.txt
         echo "export NOBUSTER=1"   >> build_cmd.txt
         echo "export NOBULLSEYE=1" >> build_cmd.txt
+        echo "export SONIC_IMAGE_VERSION=${SONIC_SOURCE_DIR}" >> build_cmd.txt
         export NOJESSIE=1
         export NOSTRETCH=1
         export NOBUSTER=1
         export NOBULLSEYE=1
+        export SONIC_IMAGE_VERSION=${SONIC_SOURCE_DIR}
     fi
     build_ws
     set +x
