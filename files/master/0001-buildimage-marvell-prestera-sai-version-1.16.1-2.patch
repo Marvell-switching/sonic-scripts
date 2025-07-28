@@ -1,7 +1,7 @@
 From 9ca11153b3a4e82043f87ab80cb2fc564781fc54 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Thu, 5 Jun 2025 22:04:39 +0300
-Subject: [PATCH] [buildimage] marvell-prestera sai version 1.16.1-1
+Subject: [PATCH] [buildimage] marvell-prestera sai version 1.16.1-2
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 
@@ -14,13 +14,13 @@ index 2191d415e..0ecbda7f6 100644
  BRANCH = master
  ifeq ($(CONFIGURED_ARCH),arm64)
 -MRVL_SAI_VERSION = 1.15.1-1
-+MRVL_SAI_VERSION = 1.16.1-1
++MRVL_SAI_VERSION = 1.16.1-2
  else ifeq ($(CONFIGURED_ARCH),armhf)
 -MRVL_SAI_VERSION = 1.15.1-1
-+MRVL_SAI_VERSION = 1.16.1-1
++MRVL_SAI_VERSION = 1.16.1-2
  else
 -MRVL_SAI_VERSION = 1.15.1-1
-+MRVL_SAI_VERSION = 1.16.1-1
++MRVL_SAI_VERSION = 1.16.1-2
  endif
  
  MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
