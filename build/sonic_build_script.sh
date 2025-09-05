@@ -221,16 +221,31 @@ check_error()
 
 check_error_with_retry()
 {
-    set +x
-    if [ $1 -ne 0 ]; then
+    n=0
+    res=$1
+    #set +x
+    if [[ $res -ne 0 && $SONIC_BUILD_JOBS -ge 1 ]]; then
         sync
         echo 3 | sudo tee /proc/sys/vm/drop_caches
+        ((n=n+1))
+        echo -e "\n--SONIC_BUILD_JOBS=$SONIC_BUILD_JOBS --------------------------------------------------"
+        echo "Error in building $2, going to retry-$n in 20 sec (to abort press CTRL-C)"
+        sleep 10
+        echo "Error in building $2, going to retry-$n in 10 sec (to abort press CTRL-C)"
+        sleep 10
+        echo "----------------------------------------------------------------------"
+        echo -e "     Retry build $2 started \n\n"
+        eval "$3"
+        res=$?
+    fi
+    if [ $res -ne 0 ]; then
+        sync
+        echo 3 | sudo tee /proc/sys/vm/drop_caches
+        ((n=n+1))
         echo -e "\n----------------------------------------------------------------------"
-        echo "Error in building $2, going to retry in 30 sec (to abort press CTRL-C)"
+        echo "Error in building $2, going to retry-$n in 20 sec (to abort press CTRL-C)"
         sleep 10
-        echo "Error in building $2, going to retry in 20 sec (to abort press CTRL-C)"
-        sleep 10
-        echo "Error in building $2, going to retry in 10 sec (to abort press CTRL-C)"
+        echo "Error in building $2, going to retry-$n in 10 sec (to abort press CTRL-C)"
         sleep 10
         echo "----------------------------------------------------------------------"
         echo -e "     Retry build $2 started \n\n"
