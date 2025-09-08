@@ -22,6 +22,24 @@ CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
 DIR_PREFIX="ABU"
 
+# Determine "wrong" architecture sub-string vs MACHINE_ARCH
+MACHINE_ARCH=$(uname -m)
+case "$MACHINE_ARCH" in
+    x86_64|i386|i686)
+        ARCH_WRONG_SSTR="arm"
+        ;;
+    aarch64|armv7l|armv8l)
+        ARCH_WRONG_SSTR="amd"
+        ;;
+    *)
+        ARCH_WRONG_SSTR="UNKNOWN"
+        ;;
+esac
+if [[ "$INPUT" == *"$ARCH_WRONG_SSTR"* ]]; then
+    echo "Wrong input. Only NATIVE-ARCH build supported. Check arm vs amd"
+    exit 1
+fi
+
 # Script-debug/trace option "-e"
 #set -e
 
