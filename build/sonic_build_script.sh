@@ -560,17 +560,15 @@ copy_build_artifacts()
     fi
 
     BUILD_ARTIFACTS_DIR=${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/
+    echo "Copy artifacts to ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/ ..."
     # $ARTIFACTS_DIR is a shared mount across different Linux users.
     # If any user creates a directory with read-only permissions all subsequent inner directory creation fails,
     # to avoid such issues, set permissions before any copy.
     # Caution: depending upon network the recursive -R for whole ARTIFACTS_DIR became blocking
-    if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
-        sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
-    fi
-    mkdir -p $BUILD_ARTIFACTS_DIR
-    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/ 2>&-
-    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/ 2>&-
-    sudo chmod -R 777 ${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/ 2>&-
+    #if [ "$BUILD_PLATFORM" == "marvell-teralynx" ]; then
+    #    sudo chmod -R 777 ${ARTIFACTS_DIR} 2>&-
+    #fi
+    sudo mkdir -p -m 777 $BUILD_ARTIFACTS_DIR  2>&-
 
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
@@ -584,6 +582,7 @@ copy_build_artifacts()
     if [ "$BUILD_SAISERVER" == "Y" ]; then
         cp target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz $BUILD_ARTIFACTS_DIR
     fi
+    echo "                           copy artifacts done"
 }
 
 main()
