@@ -4,3 +4,4 @@
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch|src/sonic-utilities
 0001-Remove-unsupported-marvell-board-x86_64-marvell_rd98.patch|sonic-buildimage
 0051-platform-prestera-Falcon12.8T-32x100G-profile-sfp.patch|platform/marvell-prestera/sonic-platform-marvell
+0053-platform-marvell-prestera-mrvl-prestera-k6.12-mvcpss.patch|platform/marvell-prestera/mrvl-prestera
