@@ -2,4 +2,12 @@
 0001-platform-marvell-prestera-fw_setenv-with-without-f.patch|sonic-buildimage
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch|src/sonic-utilities
 0001-Remove-unsupported-marvell-board-x86_64-marvell_rd98.patch|sonic-buildimage
+21506-submodule-sonic-platform-marvell-add-AC5P-marvell_rd.patch|sonic-buildimage
+21506-add-AC5P-marvell_rd98DX45xx_cn9131.patch|sonic-buildimage
+0002-platform-prestera-fix-support-for-AC5P-RD-mmcblk.patch|sonic-buildimage
+0052-platform-marvell-prestera-sonic-platform-nokia-rules7215.patch|sonic-buildimage
 0053-platform-marvell-prestera-mrvl-prestera-k6.12-mvcpss.patch|platform/marvell-prestera/mrvl-prestera
+0051-platform-prestera-Falcon12.8T-32x100G-profile-sfp.patch|platform/marvell-prestera/sonic-platform-marvell
+0054-sonic-platform-marvell-rules-rd98dx45xx-rm.patch|platform/marvell-prestera/sonic-platform-marvell
+0055-sonic-platform-marvell-rules-for-trixie.patch|platform/marvell-prestera/sonic-platform-marvell
+0056-sonic-platform-marvell-rules-rd98dx45xx-add.patch|platform/marvell-prestera/sonic-platform-marvell
