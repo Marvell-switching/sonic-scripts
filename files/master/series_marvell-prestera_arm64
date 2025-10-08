@@ -9,4 +9,10 @@
 0020-arm64-kdump-support-add-support-in-kdump-config.patch|src/sonic-utilities
 0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch|sonic-buildimage
 0001-Remove-unsupported-marvell-board-x86_64-marvell_rd98.patch|sonic-buildimage
+0052-platform-marvell-prestera-sonic-platform-nokia-rules7215.patch|sonic-buildimage
 0053-platform-marvell-prestera-mrvl-prestera-k6.12-mvcpss.patch|platform/marvell-prestera/mrvl-prestera
+0051-platform-prestera-Falcon12.8T-32x100G-profile-sfp.patch|platform/marvell-prestera/sonic-platform-marvell
+0054-sonic-platform-marvell-rules-rd98dx45xx-rm.patch|platform/marvell-prestera/sonic-platform-marvell
+0055-sonic-platform-marvell-rules-for-trixie.patch|platform/marvell-prestera/sonic-platform-marvell
+0056-sonic-platform-marvell-rules-rd98dx45xx-add.patch|platform/marvell-prestera/sonic-platform-marvell
+0057-sonic-platform-wistron-rules-for-trixie.patch|sonic-buildimage
