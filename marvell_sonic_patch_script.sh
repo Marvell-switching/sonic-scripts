@@ -155,8 +155,8 @@ wget_cp()
 
 apply_sonicbuildimage_patches()
 {
-	cat series_${PLATFORM}_${ARCH} | grep -v '^#' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
-do
+ cat series_${PLATFORM}_${ARCH} | grep -v -E '^#|^$' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
+ do
 	echo $patch_file
 	pushd patches
 	wget_cp $WGET_PATH/$patch_file
@@ -172,14 +172,14 @@ do
 		log "PATCH ERROR: Failed to apply sonicbuildimage patches/$patch_file, skeep and continue"
 		git am --skip
 	fi
-done
+ done
 }
 
 apply_submodule_patches()
 {
 	CWD=`pwd`
-	cat series_${PLATFORM}_${ARCH} | grep -v '^#' | grep -v sonic-buildimage | while read -r line
-do
+ cat series_${PLATFORM}_${ARCH} | grep -v -E '^#|^$' | grep -v sonic-buildimage | while read -r line
+ do
 	patch=`echo $line | cut -f 1 -d'|'`
 	dir=`echo $line | cut -f 2 -d'|'`
 	pushd patches
@@ -198,7 +198,7 @@ do
 		git am --skip
 	fi
 	popd
-done
+ done
 }
 
 apply_hwsku_changes()

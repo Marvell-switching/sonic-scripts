@@ -11,7 +11,8 @@ OTHER_BUILD_OPTIONS=""
 NO_CACHE="N"
 VERIFY_PATCHES="N"
 PATCHING_CONFIG_AND_STOP="N"
-DEBIAN="bookworm"
+# l_ -- local to avoid potential collision with sonic-buildimage project rules
+l_DEBIAN="bookworm"
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 # Set MIRROR to the public mirror for the build
@@ -21,6 +22,7 @@ REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR=/sonic-artifacts
 DIR_PREFIX="ABU"
+ENABLE_DOCKER_BASE_PULL_YN="ENABLE_DOCKER_BASE_PULL=y"
 
 # Determine "wrong" architecture sub-string vs MACHINE_ARCH
 MACHINE_ARCH=$(uname -m)
@@ -78,6 +80,7 @@ Example:
 ./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
   --patch_script /wrk/sonic-scripts/marvell_sonic_patch_script.sh -r \\
   --SAI http://10.2.141.103:8080/mrvllibsai/mrvllibsai_1.16.1-1_arm64.deb
+./sonic_build_script.sh -b trixie -p marvell-prestera -a arm64 ........ -r
 """
 }
 
@@ -215,6 +218,16 @@ parse_arguments()
         PLATFORM_SHORT_NAME="mrvl-prestera"
         DIR_PREFIX="ABP"
     fi
+
+    # TRIXIE overrides
+    if [ "${BRANCH}" == "trixie" ]; then
+        GIT_HUB_URL="https://github.com/saiarcot895/sonic-buildimage.git"
+        GIT_BRANCH_PARAM="--single-branch"
+        l_DEBIAN="trixie"
+        ENABLE_DOCKER_BASE_PULL_YN=""
+        NO_CACHE=Y
+        echo -e "\n TRIXIE-build force: no ENABLE_DOCKER_BASE_PULL and no-cache. Size ~49G\n"
+    fi
 }
 
 on_error()
@@ -349,14 +362,14 @@ clone_ws()
     if [ -v NO_DEL_WS ]; then
         touch no_del_ws
     fi
-    git clone -b $BRANCH $GIT_HUB_URL
+    git clone -b $BRANCH $GIT_BRANCH_PARAM $GIT_HUB_URL
     check_error $? "git-clone"
     cd sonic-buildimage
     echo "##Only if needed - clear caches to free disk space:" > build_cmd.txt
     echo "##   docker system prune -a --volumes -f" >> build_cmd.txt
     echo "##   sudo rm -rf /var/cache/sonic-mrvl/"  >> build_cmd.txt
     echo "##OR use --clean_dockers option"   >> build_cmd.txt
-    echo "git clone -b $BRANCH $GIT_HUB_URL" >> build_cmd.txt
+    echo "git clone -b $BRANCH $GIT_BRANCH_PARAM $GIT_HUB_URL" >> build_cmd.txt
     if [[ -v BRANCH_COMMIT && $BRANCH_COMMIT != $BRANCH ]]; then
         echo "git checkout $BRANCH_COMMIT" >> build_cmd.txt
         git checkout $BRANCH_COMMIT
@@ -365,9 +378,8 @@ clone_ws()
     git log -1 > commit_log.txt
 
     if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
-        DEBIAN="bullseye"
-    else
-        DEBIAN="bookworm"
+        #override
+        l_DEBIAN="bullseye"
     fi
 }
 
@@ -488,53 +500,41 @@ build_ws()
     echo -e "$INPUT\n" > build_args.txt
     echo $BUILD_OPTIONS >> build_args.txt
     echo "" >> build_cmd.txt
+
     if [ "$BUILD_PLATFORM_ARCH" == "amd64" ]; then
-        echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS" >> build_cmd.txt
-        ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS
-        check_error $? "configure"
-        echo "" >> build_cmd.txt
-        echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
-        sync
-        echo 3 | sudo tee /proc/sys/vm/drop_caches
-        if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
-            exit 0
-        fi
-        make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
-        check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
+        PLATFORM_ARCH_PARAM=""
     else
-        echo "ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS" >> build_cmd.txt
-        ENABLE_DOCKER_BASE_PULL=y make configure PLATFORM=${BUILD_PLATFORM} PLATFORM_ARCH=${BUILD_PLATFORM_ARCH} $BUILD_OPTIONS
-        check_error $? "configure"
-        if [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
-            echo "" >> build_cmd.txt
-            echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin" >> build_cmd.txt
-            sync
-            echo 3 | sudo tee /proc/sys/vm/drop_caches
-            if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
-                exit 0
-            fi
-            make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin
-            check_error_with_retry $? "sonic-${BUILD_PLATFORM}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}.bin"
-        else
-            echo "" >> build_cmd.txt
-            echo "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" >> build_cmd.txt
-            sync
-            echo 3 | sudo tee /proc/sys/vm/drop_caches
-            if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
-                exit 0
-            fi
-            make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
-            check_error_with_retry $? "sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin" "make $BUILD_OPTIONS target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin"
-        fi
+        PLATFORM_ARCH_PARAM="PLATFORM_ARCH=${BUILD_PLATFORM_ARCH}"
     fi
 
+    # make configure
+    echo "${ENABLE_DOCKER_BASE_PULL_YN} make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS ${PLATFORM_ARCH_PARAM}" >> build_cmd.txt
+    eval "${ENABLE_DOCKER_BASE_PULL_YN} make configure PLATFORM=${BUILD_PLATFORM} $BUILD_OPTIONS ${PLATFORM_ARCH_PARAM}"
+    check_error $? "configure"
+    echo "" >> build_cmd.txt
+
+    # make target
+    if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
+        TARGET_FILE=sonic-${BUILD_PLATFORM}.bin
+        TARGET=target/sonic-${BUILD_PLATFORM}.bin
+    else
+        TARGET_FILE=sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
+        TARGET=target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin
+    fi
+    echo "make $BUILD_OPTIONS ${TARGET}" >> build_cmd.txt
+    sync
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
+    if [ "$PATCHING_CONFIG_AND_STOP" == "Y" ]; then
+        exit 0
+    fi
+    make $BUILD_OPTIONS ${TARGET}
+    check_error_with_retry $? "${TARGET_FILE}" "make $BUILD_OPTIONS ${TARGET}"
+
     # Build SAI Server
-    if [ "$BUILD_SAISERVER" == "Y" ]; then
-        if [ "$BUILD_PLATFORM_ARCH" != "armhf" ]; then
-            echo "make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz" >> build_cmd.txt
-            make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz
-            check_error $? "saiserver"
-        fi
+    if [ "$BUILD_SAISERVER" == "Y" ] && [ "$BUILD_PLATFORM_ARCH" != "armhf" ]; then
+        echo "make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz" >> build_cmd.txt
+              make $BUILD_OPTIONS SAITHRIFT_V2=y target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz
+        check_error $? "saiserver"
     fi
 
     set +x
@@ -572,13 +572,9 @@ copy_build_artifacts()
 
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
-    if [ "${BUILD_PLATFORM_ARCH}" == "amd64" ] || [ "${BUILD_PLATFORM}" == "marvell-arm64" ] || [ "${BUILD_PLATFORM}" == "marvell-armhf" ]; then
-        cp target/sonic-${BUILD_PLATFORM}.bin $BUILD_ARTIFACTS_DIR
-    else
-        cp target/sonic-${BUILD_PLATFORM}-${BUILD_PLATFORM_ARCH}.bin $BUILD_ARTIFACTS_DIR
-    fi
-    cp target/debs/${DEBIAN}/swss-dbg_1.0.0_*.deb $BUILD_ARTIFACTS_DIR
-    cp target/debs/${DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
+    cp ${TARGET} $BUILD_ARTIFACTS_DIR
+    cp target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb $BUILD_ARTIFACTS_DIR
+    cp target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
     if [ "$BUILD_SAISERVER" == "Y" ]; then
         cp target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz $BUILD_ARTIFACTS_DIR
     fi
@@ -599,7 +595,7 @@ main()
     if [ "$VERIFY_PATCHES" == "Y" ]; then
         exit 0
     fi
-    if [ "${DEBIAN}" == "bookworm" ]; then
+    if [ "${l_DEBIAN}" == "bookworm" ] ||  [ "${l_DEBIAN}" == "trixie" ]; then
         echo "export NOJESSIE=1"   >> build_cmd.txt
         echo "export NOSTRETCH=1"  >> build_cmd.txt
         echo "export NOBUSTER=1"   >> build_cmd.txt
@@ -610,6 +606,12 @@ main()
         export NOBUSTER=1
         export NOBULLSEYE=1
         #export SONIC_IMAGE_VERSION=${SONIC_SOURCE_DIR}
+        if [ "${l_DEBIAN}" == "trixie" ]; then
+            echo "export NOBOOKWORM=0" >> build_cmd.txt
+            echo "export NOTRIXIE=0" >> build_cmd.txt
+            export NOBOOKWORM=0
+            export NOTRIXIE=0
+        fi
     fi
     build_ws
     set +x
