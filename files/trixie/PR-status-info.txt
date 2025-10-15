@@ -1,0 +1,6 @@
+# This file contains link and status to a x.patches which
+# are PR-ed into SONiC (non-Marvell) gitHub
+# A patch-info to be added here when Pull-Request is posted
+# and removed from here, from directory and from series_marvell*
+# when the patch is merged to community.
+

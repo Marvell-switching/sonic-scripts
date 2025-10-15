@@ -1,0 +1,51 @@
+From a409dc1c9842782bf6406f2486f8757e93f0f17c Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sun, 5 Oct 2025 16:19:26 +0300
+Subject: [PATCH 1/1] Falcon-12.8T FALCON32x100G profile
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ db98cx8580-32cd/sonic_platform/chassis.py   | 1 +
+ db98cx8580-32cd/sonic_platform/sfp.py       | 1 +
+ db98cx8580-32cd/sonic_platform/sfp_event.py | 1 +
+ 3 files changed, 3 insertions(+)
+
+diff --git a/db98cx8580-32cd/sonic_platform/chassis.py b/db98cx8580-32cd/sonic_platform/chassis.py
+index 76ae775..19fc06a 100644
+--- a/db98cx8580-32cd/sonic_platform/chassis.py
++++ b/db98cx8580-32cd/sonic_platform/chassis.py
+@@ -64,6 +64,7 @@ profile_48x25G_8x100G = {
+ sfputil_profiles = {
+  "FC12_8T-DB":profile_12_8_db,
+  "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32x100G":profile_32x25G,
+  "FALCON32X25G":profile_32x25G
+ }
+ 
+diff --git a/db98cx8580-32cd/sonic_platform/sfp.py b/db98cx8580-32cd/sonic_platform/sfp.py
+index 3e699a0..fbd1eeb 100644
+--- a/db98cx8580-32cd/sonic_platform/sfp.py
++++ b/db98cx8580-32cd/sonic_platform/sfp.py
+@@ -64,6 +64,7 @@ profile_48x25G_8x100G = {
+ sfputil_profiles = {
+  "FC12_8T-DB":profile_12_8_db,
+  "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32x100G":profile_32x25G,
+  "FALCON32X25G":profile_32x25G
+ }
+ 
+diff --git a/db98cx8580-32cd/sonic_platform/sfp_event.py b/db98cx8580-32cd/sonic_platform/sfp_event.py
+index f016a24..f030957 100644
+--- a/db98cx8580-32cd/sonic_platform/sfp_event.py
++++ b/db98cx8580-32cd/sonic_platform/sfp_event.py
+@@ -55,6 +55,7 @@ profile_48x25G_8x100G = {
+ sfputil_profiles = {
+  "FC12_8T-DB":profile_12_8_db,
+  "FC48x25G8x100GR4":profile_48x25G_8x100G,
++ "FALCON32x100G":profile_32x25G,
+  "FALCON32X25G":profile_32x25G
+ }
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,163 @@
+From 0ecb149aacde24a81074916215b9cc46bbba16ab Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Wed, 15 Oct 2025 18:14:27 +0300
+Subject: [PATCH 1/1] drivers: restore-legacy-I2C_COMPAT-i2c-adapter
+
+Restore legacy CONFIG_I2C_COMPAT code for 'i2c-adapter'
+used by hundreds of SONiC user-space points.
+In K6.12 I2C_COMPAT is not defined in drivers/i2c/Kconfig
+but is explicitly added/defined in i2c-core-base.c
+
+NOTE: The patch is added by Marvell but used by all platforms
+       and therefore added into generic kernel code.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ ...estore-legacy-I2C_COMPAT-i2c-adapter.patch | 109 ++++++++++++++++++
+ patches-sonic/series                          |   6 +-
+ 2 files changed, 110 insertions(+), 5 deletions(-)
+ create mode 100644 patches-sonic/0022-drivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch
+
+diff --git a/patches-sonic/0022-drivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch b/patches-sonic/0022-drivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch
+new file mode 100644
+index 0000000..f1e110b
+--- /dev/null
++++ b/patches-sonic/0022-drivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch
+@@ -0,0 +1,109 @@
++From dae3588eb277bc9e78340b10ee7f1433f46909d3 Mon Sep 17 00:00:00 2001
++From: Yan Markman <ymarkman@marvell.com>
++Date: Wed, 15 Oct 2025 18:03:09 +0300
++Subject: [PATCH 1/1] drivers: restore legacy I2C_COMPAT i2c-adapter
++
++Restore legacy CONFIG_I2C_COMPAT code for 'i2c-adapter'
++used by hundreds of SONiC user-space points.
++In K6.12 I2C_COMPAT is not defined in drivers/i2c/Kconfig
++but is explicitly added/defined in i2c-core-base.c
++
++Signed-off-by: Yan Markman <ymarkman@marvell.com>
++---
++ drivers/i2c/i2c-core-base.c | 38 +++++++++++++++++++++++++++++++++++++
++ 1 file changed, 38 insertions(+)
++
++diff --git a/drivers/i2c/i2c-core-base.c b/drivers/i2c/i2c-core-base.c
++index 75d30861f..a53db8ab6 100644
++--- a/drivers/i2c/i2c-core-base.c
+++++ b/drivers/i2c/i2c-core-base.c
++@@ -45,6 +45,13 @@
++ 
++ #include "i2c-core.h"
++ 
+++/* Restore legacy CONFIG_I2C_COMPAT code for 'i2c-adapter'
+++ * used by hundreds of SONiC user-space points.
+++ * In K6.12 I2C_COMPAT is not defined in drivers/i2c/Kconfig
+++ * but is explicitly added/defined in this i2c-core-base.c
+++ */
+++#define CONFIG_I2C_COMPAT
+++
++ #define CREATE_TRACE_POINTS
++ #include <trace/events/i2c.h>
++ 
++@@ -1395,6 +1402,10 @@ struct i2c_adapter *i2c_verify_adapter(struct device *dev)
++ }
++ EXPORT_SYMBOL(i2c_verify_adapter);
++ 
+++#ifdef CONFIG_I2C_COMPAT
+++static struct class_compat *i2c_adapter_compat_class;
+++#endif
+++
++ static void i2c_scan_static_board_info(struct i2c_adapter *adapter)
++ {
++ 	struct i2c_devinfo	*devinfo;
++@@ -1578,6 +1589,14 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
++ 
++ 	dev_dbg(&adap->dev, "adapter [%s] registered\n", adap->name);
++ 
+++#ifdef CONFIG_I2C_COMPAT
+++	res = class_compat_create_link(i2c_adapter_compat_class, &adap->dev,
+++				       adap->dev.parent);
+++	if (res)
+++		dev_warn(&adap->dev,
+++			 "Failed to create compatibility class link\n");
+++#endif
+++
++ 	/* create pre-declared device nodes */
++ 	of_i2c_register_devices(adap);
++ 	i2c_acpi_install_space_handler(adap);
++@@ -1784,6 +1803,11 @@ void i2c_del_adapter(struct i2c_adapter *adap)
++ 	device_for_each_child(&adap->dev, NULL, __unregister_client);
++ 	device_for_each_child(&adap->dev, NULL, __unregister_dummy);
++ 
+++#ifdef CONFIG_I2C_COMPAT
+++	class_compat_remove_link(i2c_adapter_compat_class, &adap->dev,
+++				 adap->dev.parent);
+++#endif
+++
++ 	/* device name is gone after device_unregister */
++ 	dev_dbg(&adap->dev, "adapter [%s] unregistered\n", adap->name);
++ 
++@@ -2092,6 +2116,13 @@ static int __init i2c_init(void)
++ 
++ 	i2c_debugfs_root = debugfs_create_dir("i2c", NULL);
++ 
+++#ifdef CONFIG_I2C_COMPAT
+++	i2c_adapter_compat_class = class_compat_register("i2c-adapter");
+++	if (!i2c_adapter_compat_class) {
+++		retval = -ENOMEM;
+++		goto bus_err;
+++	}
+++#endif
++ 	retval = i2c_add_driver(&dummy_driver);
++ 	if (retval)
++ 		goto class_err;
++@@ -2104,6 +2135,10 @@ static int __init i2c_init(void)
++ 	return 0;
++ 
++ class_err:
+++#ifdef CONFIG_I2C_COMPAT
+++	class_compat_unregister(i2c_adapter_compat_class);
+++bus_err:
+++#endif
++ 	is_registered = false;
++ 	bus_unregister(&i2c_bus_type);
++ 	return retval;
++@@ -2116,6 +2151,9 @@ static void __exit i2c_exit(void)
++ 	if (IS_ENABLED(CONFIG_OF_DYNAMIC))
++ 		WARN_ON(of_reconfig_notifier_unregister(&i2c_of_notifier));
++ 	i2c_del_driver(&dummy_driver);
+++#ifdef CONFIG_I2C_COMPAT
+++	class_compat_unregister(i2c_adapter_compat_class);
+++#endif
++ 	debugfs_remove_recursive(i2c_debugfs_root);
++ 	bus_unregister(&i2c_bus_type);
++ 	tracepoint_synchronize_unregister();
++-- 
++2.25.1
++
+diff --git a/patches-sonic/series b/patches-sonic/series
+index ae78344..2f49f2f 100644
+--- a/patches-sonic/series
++++ b/patches-sonic/series
+@@ -161,12 +161,7 @@ cisco-npu-disable-other-bars.patch
+ #
+ # Marvell platform patches for 6.1 kernel
+ 0001-armhf_secondary_boot_online.patch
+-#0002-arm64-dts-Update-cache-properties-for-marvell.patch # Upstreamed
+-#0003-arm64-dts-marvell-Add-NAND-flash-controller-to-AC5.patch # Upstreamed
+-#0004-arm64-dts-ac5-add-mmc-node-and-clock.patch # Upstreamed
+ 0005-dts-ac5-marvell-Add-switching-watchdog-node.patch
+-#0006-mmc-xenon-Add-ac5-support-via-bounce-buffer.patch # Upstreamed
+-#0007-usb-ehci-Add-support-for-ac5.patch # Upstreamed but no 64-bit, so the next 0007
+ 0007-usb-ehci-Add-support-for-ac5-with-DMA-mask-64-bit.patch
+ 0008-mv6xxx-Fix-i2c-lock-due-to-arb-loss.patch
+ 0009-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
+@@ -177,6 +172,7 @@ cisco-npu-disable-other-bars.patch
+ 0017-Extend-driver-to-support-XMC-XM25QH256C-device.patch
+ 0018-drivers-i2c-fix-after-kdump-crash.patch
+ 0019-irqchip-mvebu-gicp-Clear-pending-interrupts-on-init.patch
++0022-drivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch
+ 
+ # amd-pensando elba support
+ # TODO(trixie): update for current version
+-- 
+2.34.1
+
