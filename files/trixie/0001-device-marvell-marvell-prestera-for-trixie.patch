@@ -1,7 +1,9 @@
-From 2e93d65e6f121984fdaba8a4a28522ec6553b0a5 Mon Sep 17 00:00:00 2001
+From 3a5c45a9b04b8a781cf0d4b87ccd4dcb99e9f0fb Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Mon, 13 Oct 2025 13:59:29 +0300
-Subject: [PATCH 1/1] device: marvell-prestera update
+Subject: [PATCH 1/6] device [marvell] marvell-prestera for trixie
+
+device/marvell-prestera update required for trixie
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
@@ -51,8 +53,8 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  .../rd98DX35xx_cn9131/sai.profile             |    1 +
  .../default_sku                               |    1 +
  .../installer.conf                            |    1 +
- .../platform_asic                             |    1 +
- .../pmon_daemon_control.json                  |    8 +
+ .../platform_asic                             |    0
+ .../pmon_daemon_control.json                  |    0
  ...-ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.md5 |    1 +
  ...ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.xml} | 1181 +++++++------
  ...-AC5P-XL-RD-32x1G-16x5G-4x50G-2x400GR8.md5 |    1 +
@@ -68,7 +70,7 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  .../rd98DX45xx_cn9131/profile.ini             |    1 +
  .../rd98DX45xx_cn9131}/qos.json.j2            |    0
  .../rd98DX45xx_cn9131/sai.profile             |    4 +
- .../system_health_monitoring_config.json      |   10 +
+ .../system_health_monitoring_config.json      |    0
  .../ASK-Board-F2T_48x25G-8x100G.md5           |    2 +-
  .../ASK-Board-F2T_48x25G-8x100G.xml           |   20 +-
  .../ASK-L1-F2T_48x25G-8x100G.md5              |    2 +-
@@ -201,6 +203,10 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  .../db98cx8580_32cd/port_config.ini           |   58 -
  .../db98cx8580_32cd/sai.profile               |    4 -
  .../installer.conf                            |    1 +
+ .../x86_64-marvell_rd98DX35xx-r0/default_sku  |    1 -
+ .../installer.conf                            |    1 -
+ .../plugins/eeprom.py                         |   13 -
+ .../x86_64-marvell_rd98DX35xx-r0/rd98DX35xx   |    1 -
  .../Nokia-7215/ASK-Board-M0-48x1G-4x10G.md5   |    2 +-
  .../Nokia-7215/ASK-Board-M0-48x1G-4x10G.xml   |    8 +-
  .../Nokia-7215/ASK-L1-M0-D0-48x1G-4x10G.md5   |    2 +-
@@ -217,7 +223,7 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  .../Nokia-7215/profile.ini.inband             |    2 +
  .../Nokia-7215/profile.ini.noinband           |    1 +
  .../Nokia-7215/sai.profile                    |    1 +
- 212 files changed, 9591 insertions(+), 5677 deletions(-)
+ 216 files changed, 9572 insertions(+), 5693 deletions(-)
  create mode 120000 device/marvell/arm64-marvell_rd98DX35xx-r0/AC5XRD
  create mode 100644 device/marvell/arm64-marvell_rd98DX35xx-r0/AC5XRD32x1G6x25G/ASK-Board-ac5x-rd-32x1G-6x25G.md5
  create mode 100644 device/marvell/arm64-marvell_rd98DX35xx-r0/AC5XRD32x1G6x25G/ASK-Board-ac5x-rd-32x1G-6x25G.xml
@@ -255,8 +261,8 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  mode change 100644 => 120000 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/SAI-AC5X-RD-32x1G-16x2_5G-6x25G.xml
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/default_sku
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/installer.conf
- create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic
- create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json
+ rename device/marvell/{x86_64-marvell_rd98DX35xx-r0 => arm64-marvell_rd98DX45xx_cn9131-r0}/platform_asic (100%)
+ rename device/marvell/{x86_64-marvell_rd98DX35xx-r0 => arm64-marvell_rd98DX45xx_cn9131-r0}/pmon_daemon_control.json (100%)
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/ASK-Board-ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.md5
  rename device/marvell/{x86_64-marvell_db98cx8514_10cc-r0/db98cx8514_10cc/ASK-Board-F2T_48x25G-8x100G.xml => arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/ASK-Board-ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.xml} (73%)
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/ASK-L1-AC5P-XL-RD-32x1G-16x5G-4x50G-2x400GR8.md5
@@ -272,7 +278,7 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/profile.ini
  rename device/marvell/{x86_64-marvell_db98cx8514_10cc-r0/db98cx8514_10cc => arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131}/qos.json.j2 (100%)
  create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/sai.profile
- create mode 100644 device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json
+ rename device/marvell/{x86_64-marvell_rd98DX35xx-r0 => arm64-marvell_rd98DX45xx_cn9131-r0}/system_health_monitoring_config.json (100%)
  rename device/marvell/{x86_64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd => x86_64-marvell_db98cx8514_10cc-r0/F2T48x25G8x100G}/buffers.json.j2 (100%)
  rename device/marvell/{x86_64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd => x86_64-marvell_db98cx8514_10cc-r0/F2T48x25G8x100G}/qos.json.j2 (100%)
  create mode 100644 device/marvell/x86_64-marvell_db98cx8514_10cc-r0/F2T80x25G/buffers.json.j2
@@ -320,6 +326,10 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  delete mode 100644 device/marvell/x86_64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd/port_config.ini
  delete mode 100644 device/marvell/x86_64-marvell_db98cx8580_32cd-r0/db98cx8580_32cd/sai.profile
  create mode 100644 device/marvell/x86_64-marvell_db98cx8580_32cd-r0/installer.conf
+ delete mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
+ delete mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
+ delete mode 100644 device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
+ delete mode 120000 device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
  create mode 100644 device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/port_config.ini.inband
  create mode 100644 device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/port_config.ini.noinband
  create mode 100644 device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/profile.ini.inband
@@ -9559,27 +9569,14 @@ index 000000000..304a98aa1
 +++ b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/installer.conf
 @@ -0,0 +1 @@
 +ONIE_PLATFORM_EXTRA_CMDLINE_LINUX="default_hugepagesz=32M hugepages=4 pci=noaer"
-diff --git a/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic
-new file mode 100644
-index 000000000..5cbe9d002
---- /dev/null
-+++ b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic
-@@ -0,0 +1 @@
-+marvell-prestera
-diff --git a/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json
-new file mode 100644
-index 000000000..39deb88be
---- /dev/null
-+++ b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json
-@@ -0,0 +1,8 @@
-+{
-+    "skip_ledd": true,
-+    "skip_pcied": true,
-+    "skip_thermalctld": true,
-+    "skip_psud": true,
-+    "skip_xcvrd": true,
-+    "skip_syseepromd": true
-+}
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic
+similarity index 100%
+rename from device/marvell/x86_64-marvell_rd98DX35xx-r0/platform_asic
+rename to device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/platform_asic
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json
+similarity index 100%
+rename from device/marvell/x86_64-marvell_rd98DX35xx-r0/pmon_daemon_control.json
+rename to device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/pmon_daemon_control.json
 diff --git a/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/ASK-Board-ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.md5 b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/rd98DX45xx_cn9131/ASK-Board-ac5p-xl-rd-32x1G-16x5G-4x50G-2x400GR8.md5
 new file mode 100644
 index 000000000..52fe720e5
@@ -14031,22 +14028,10 @@ index 000000000..bb0c44fe3
 +hwId=AC5PRD
 +switchProfile=/usr/share/sonic/hwsku/SAI-AC5P-XL-RD-32x1G-16x5G-4x50G-2x400GR8.xml
 +SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/profile.ini
-diff --git a/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json
-new file mode 100644
-index 000000000..79c17103b
---- /dev/null
-+++ b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json
-@@ -0,0 +1,10 @@
-+{
-+    "services_to_ignore": [],
-+    "devices_to_ignore": [
-+        "asic",
-+        "psu.temperature",
-+        "fan",
-+        "psu"
-+    ],
-+    "user_defined_checkers": []
-+}
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json b/device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json
+similarity index 100%
+rename from device/marvell/x86_64-marvell_rd98DX35xx-r0/system_health_monitoring_config.json
+rename to device/marvell/arm64-marvell_rd98DX45xx_cn9131-r0/system_health_monitoring_config.json
 diff --git a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/F2T48x25G8x100G/ASK-Board-F2T_48x25G-8x100G.md5 b/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/F2T48x25G8x100G/ASK-Board-F2T_48x25G-8x100G.md5
 index f5e1907fd..b10724c23 100644
 --- a/device/marvell/x86_64-marvell_db98cx8514_10cc-r0/F2T48x25G8x100G/ASK-Board-F2T_48x25G-8x100G.md5
@@ -23455,6 +23440,47 @@ index 000000000..f514d313b
 +++ b/device/marvell/x86_64-marvell_db98cx8580_32cd-r0/installer.conf
 @@ -0,0 +1 @@
 +ONIE_PLATFORM_EXTRA_CMDLINE_LINUX=i"pcie_aspm=off intel_iommu=off"
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku b/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
+deleted file mode 100644
+index ce1567b48..000000000
+--- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/default_sku
++++ /dev/null
+@@ -1 +0,0 @@
+-rd98DX35xx t1
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf b/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
+deleted file mode 100644
+index c3c465bb9..000000000
+--- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/installer.conf
++++ /dev/null
+@@ -1 +0,0 @@
+-ONIE_PLATFORM_EXTRA_CMDLINE_LINUX=""
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py b/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
+deleted file mode 100644
+index c99cf62da..000000000
+--- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/plugins/eeprom.py
++++ /dev/null
+@@ -1,13 +0,0 @@
+-#!/usr/bin/env python
+-
+-try:
+-    from sonic_eeprom import eeprom_tlvinfo
+-except ImportError as e:
+-    raise ImportError (str(e) + "- required module not found")
+-
+-
+-class board(eeprom_tlvinfo.TlvInfoDecoder):
+-
+-    def __init__(self, name, path, cpld_root, ro):
+-        self.eeprom_path = "/sys/bus/i2c/devices/2-0050/eeprom"
+-        super(board, self).__init__(self.eeprom_path, 0, '', True)
+diff --git a/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx b/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
+deleted file mode 120000
+index d241dbe47..000000000
+--- a/device/marvell/x86_64-marvell_rd98DX35xx-r0/rd98DX35xx
++++ /dev/null
+@@ -1 +0,0 @@
+-../arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/
+\ No newline at end of file
 diff --git a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/ASK-Board-M0-48x1G-4x10G.md5 b/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/ASK-Board-M0-48x1G-4x10G.md5
 index 67c577bbc..9db80ae2e 100644
 --- a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/ASK-Board-M0-48x1G-4x10G.md5
