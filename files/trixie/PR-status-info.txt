@@ -4,3 +4,13 @@
 # and removed from here, from directory and from series_marvell*
 # when the patch is merged to community.
 
+https://github.com/yanmarkman/sonic-buildimage/tree/trixie
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-1-marvell-prestera-for-Nokia
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-2-marvell-prestera-for-Nokia
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-3-marvell-prestera-for-Nokia
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-4-marvell-prestera-for-Nokia
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-5-marvell-prestera-for-Nokia
+https://github.com/yanmarkman/sonic-buildimage/tree/ym-trixie-6-marvell-prestera-for-Nokia
+
+https://github.com/sonic-net/sonic-buildimage/pull/24278 -- for 1
+

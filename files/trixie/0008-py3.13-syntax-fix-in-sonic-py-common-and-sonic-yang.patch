@@ -1,0 +1,79 @@
+From 133178454d4f67398256ec39bc73cc94cd1d3d0d Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sun, 19 Oct 2025 01:42:53 +0300
+Subject: [PATCH 1/1] py3.13 syntax fix in sonic-py-common and sonic-yang-mgmt
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ src/sonic-py-common/sonic_py_common/port_util.py | 14 +++++++-------
+ src/sonic-yang-mgmt/sonic_yang_ext.py            |  2 +-
+ src/sonic-yang-mgmt/sonic_yang_path.py           |  4 ++--
+ 3 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/sonic-py-common/sonic_py_common/port_util.py b/src/sonic-py-common/sonic_py_common/port_util.py
+index cb79be274..6332ef834 100644
+--- a/src/sonic-py-common/sonic_py_common/port_util.py
++++ b/src/sonic-py-common/sonic_py_common/port_util.py
+@@ -5,17 +5,17 @@ from swsscommon import swsscommon
+ import re
+ 
+ 
+-SONIC_ETHERNET_RE_PATTERN = "^Ethernet(\d+)$"
++SONIC_ETHERNET_RE_PATTERN = r"^Ethernet(\d+)$"
+ """
+ Ethernet-BP refers to BackPlane interfaces
+ in multi-asic platform.
+ """
+-SONIC_ETHERNET_BP_RE_PATTERN = "^Ethernet-BP(\d+)$"
+-SONIC_VLAN_RE_PATTERN = "^Vlan(\d+)$"
+-SONIC_PORTCHANNEL_RE_PATTERN = "^PortChannel(\d+)$"
+-SONIC_MGMT_PORT_RE_PATTERN = "^eth(\d+)$"
+-SONIC_ETHERNET_IB_RE_PATTERN = "^Ethernet-IB(\d+)$"
+-SONIC_ETHERNET_REC_RE_PATTERN = "^Ethernet-Rec(\d+)$"
++SONIC_ETHERNET_BP_RE_PATTERN = r"^Ethernet-BP(\d+)$"
++SONIC_VLAN_RE_PATTERN = r"^Vlan(\d+)$"
++SONIC_PORTCHANNEL_RE_PATTERN = r"^PortChannel(\d+)$"
++SONIC_MGMT_PORT_RE_PATTERN = r"^eth(\d+)$"
++SONIC_ETHERNET_IB_RE_PATTERN = r"^Ethernet-IB(\d+)$"
++SONIC_ETHERNET_REC_RE_PATTERN = r"^Ethernet-Rec(\d+)$"
+ 
+ class BaseIdx:
+     ethernet_base_idx = 1
+diff --git a/src/sonic-yang-mgmt/sonic_yang_ext.py b/src/sonic-yang-mgmt/sonic_yang_ext.py
+index c94aeee66..30de8c32c 100644
+--- a/src/sonic-yang-mgmt/sonic_yang_ext.py
++++ b/src/sonic-yang-mgmt/sonic_yang_ext.py
+@@ -442,7 +442,7 @@ class SonicYangExtMixin(SonicYangPathMixin):
+                 table (str): config DB table, this table is being translated.
+ 
+             Returns:
+-                 leafDict (dict): dict with leaf(s) information for List\Container
++                 leafDict (dict): dict with leaf(s) information for List/Container
+                     corresponding to config DB table.
+         '''
+         leafDict = dict()
+diff --git a/src/sonic-yang-mgmt/sonic_yang_path.py b/src/sonic-yang-mgmt/sonic_yang_path.py
+index 5cf672326..a17dc0442 100644
+--- a/src/sonic-yang-mgmt/sonic_yang_path.py
++++ b/src/sonic-yang-mgmt/sonic_yang_path.py
+@@ -406,7 +406,7 @@ class SonicYangPathMixin:
+         token = token[idx:]
+ 
+         # Use regex to extract our keys and values
+-        key_value_pattern = "\[([^=]+)='([^']*)'\]"
++        key_value_pattern = r"\[([^=]+)='([^']*)'\]"
+         matches = re.findall(key_value_pattern, token)
+         kv = dict()
+         for item in matches:
+@@ -496,7 +496,7 @@ class SonicYangPathMixin:
+             #   path: /VLAN/Vlan1000/dhcp_servers
+             if configdb is None or len(leaf_list_tokens) == 1:
+                 return [leaf_list_name]
+-            leaf_list_pattern = "^[^\[]+(?:\[\.='([^']*)'\])?$"
++            leaf_list_pattern = r"^[^\[]+(?:\[\.='([^']*)'\])?$"
+             leaf_list_regex = re.compile(leaf_list_pattern)
+             match = leaf_list_regex.match(token)
+             # leaf_list_name = match.group(1)
+-- 
+2.34.1
+

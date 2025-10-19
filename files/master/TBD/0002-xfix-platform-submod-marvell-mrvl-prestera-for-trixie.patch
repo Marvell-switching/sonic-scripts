@@ -1,0 +1,448 @@
+From 857297d0d46ec40976094799febc102b53f48191 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 16 Oct 2025 21:20:44 +0300
+Subject: [PATCH 1/1] driver mvcpss.ko source adjust for Kernel-6.12 extra
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../linuxNoKernelModule/drivers/ethDriver.c   | 53 +++++++++--------
+ .../drivers/ethOpsDriver.c                    |  6 +-
+ .../drivers/mbusResources.c                   |  2 +
+ .../linuxNoKernelModule/drivers/saiMod.c      |  5 ++
+ .../linuxNoKernelModule/drivers/ethDriver.c   | 58 +++++++++++--------
+ .../drivers/ethOpsDriver.c                    |  6 +-
+ .../drivers/mbusResources.c                   |  2 +
+ .../linuxNoKernelModule/drivers/saiMod.c      |  5 ++
+ 8 files changed, 83 insertions(+), 54 deletions(-)
+
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+index 5666ed5..c2294c0 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+@@ -1382,12 +1382,13 @@ EXPORT_SYMBOL(mvppnd_register_hooks);
+ static void print_dsa(const char *netdev, const char *dir, u8 *dsa)
+ {
+ 	char buf[1024];
++	size_t n = 0;
+ 
+ 	memset(buf, 0, sizeof(buf));
+-	snprintf(buf, PAGE_SIZE, "%s %s:", dir, netdev);
+-	snprintf(buf, PAGE_SIZE,
++	n += snprintf(buf + n, PAGE_SIZE, "%s %s:", dir, netdev);
++	n += snprintf(buf + n, PAGE_SIZE,
+ 		 "%s %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+ 
+@@ -1768,11 +1769,12 @@ static ssize_t mvppnd_show_rx_queues(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_rx_queues);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	strcpy(buf, "");
+ 
+ 	for (i = 0; i < NUM_OF_RX_QUEUES; i++) {
+-		snprintf(buf, PAGE_SIZE, "%s[%c%d] 0x%x, %ld/%ld\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE, "[%c%d] 0x%x, %ld/%ld\n",
+ 			 ppdev->rx_queues[i] ? '*' : ' ', i,
+ 			 mvppnd_read_rx_first_desc(ppdev, i),
+ 			 ppdev->rx_queues[i] ?
+@@ -1845,9 +1847,10 @@ static ssize_t mvppnd_show_tx_queue(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_tx_queue);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < NUM_OF_TX_QUEUES; i++) {
+-		snprintf(buf, PAGE_SIZE, "%s[%c%d] %d, 0x%x\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE, "[%c%d] %d, 0x%x\n",
+ 			 (i == ppdev->tx_queue_num) ? '*' : ' ', i,
+ 			 mvppnd_queue_enabled(ppdev, REG_ADDR_TX_QUEUE_CMD, i) ?
+ 			 1 : 0, mvppnd_read_tx_first_desc(ppdev, i));
+@@ -1896,6 +1899,7 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 						attr_atu_win);
+ 	u32 addr;
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	snprintf(buf, PAGE_SIZE, "%s%-8s\t%-8s\t%-8s\t%-8s\t%-8s\t%-8s\t%-8s\n",
+ 		 "                   ", "ctrl1", "ctrl2", "low-base",
+@@ -1904,9 +1908,9 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 	if (ppdev->pdev.pdev->device != PCI_DEVICE_ID_ALDRIN2) {
+ 		for (i = 0; i < NUM_OF_ATU_WINDOWS; i++) {
+ 			addr = ATU_OFFS + i * 0x0200;
+-			snprintf(buf, PAGE_SIZE,
+-				"%s[%c%d] (0x%x) out: 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+-				buf, (i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
++			n += snprintf(buf + n, PAGE_SIZE,
++				"[%c%d] (0x%x) out: 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
++				(i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0000),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0004),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0008),
+@@ -1915,9 +1919,9 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0014),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0018));
+ 			addr += 0x0100; /* Now inbound */
+-			snprintf(buf, PAGE_SIZE,
+-				"%s[%c%d] (0x%x) in : 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+-				buf, (i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
++			n += snprintf(buf + n, PAGE_SIZE,
++				"[%c%d] (0x%x) in : 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
++				(i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0000),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0004),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0008),
+@@ -1972,10 +1976,11 @@ static ssize_t mvppnd_show_mg_win(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_mg_win);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < NUM_OF_MG_WINDOWS; i++) {
+-		snprintf(buf, PAGE_SIZE,
+-			 "%s[%c%d] 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE,
++			 "[%c%d] 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+ 			 mvppnd_is_our_win(ppdev, i) ?  '*' : ' ', i,
+ 			 mvppnd_read_reg(ppdev, REG_ADDR_MG_BASE_ADDR + i *
+ 					 REG_ADDR_MG_BASE_ADDR_OFFSET_FORMULA),
+@@ -2087,23 +2092,24 @@ static ssize_t mvppnd_show_dsa(struct kobject *kobj,
+ 		container_of(attr, struct mvppnd_switch_flow, attr_tx_dsa);
+ 	unsigned int dsa[DSA_SIZE];
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < DSA_SIZE; i++)
+ 		dsa[i] = flow->config_tx_dsa[i];
+ 
+-	snprintf(buf, PAGE_SIZE,
++	n += snprintf(buf + n, PAGE_SIZE,
+ 		 "%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x\n",
+ 		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6], dsa[7],
+ 		 dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13], dsa[14],
+ 		 dsa[15]);
+-	snprintf(buf, PAGE_SIZE,
+-		 "%s%.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x\n",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++	n += snprintf(buf + n, PAGE_SIZE,
++		 "%.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x\n",
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+-	snprintf(buf, PAGE_SIZE,
+-		 "%s%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x\n",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++	n += snprintf(buf + n, PAGE_SIZE,
++		 "%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x\n",
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+ 
+@@ -2177,6 +2183,7 @@ static ssize_t mvppnd_show_rx_ring_size(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_rx_ring_size);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	strcpy(buf, "");
+ 
+@@ -2184,7 +2191,7 @@ static ssize_t mvppnd_show_rx_ring_size(struct kobject *kobj,
+ 		if (!ppdev->rx_queues[i])
+ 			continue;
+ 
+-		sprintf(buf, "%s[%d] %ld\n", buf, i, ppdev->rx_rings_size[i]);
++		n += sprintf(buf + n, "[%d] %ld\n", i, ppdev->rx_rings_size[i]);
+ 	}
+ 
+ 	return strlen(buf);
+@@ -2262,10 +2269,10 @@ static ssize_t mvppnd_show_driver_statistics(struct kobject *kobj,
+ 	static unsigned long last_jiffies;
+ 	int i;
+ 	char lstr[96];
+-
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i <= STATS_LAST; i++)
+-		sprintf(buf, "%s%s: %ld\n", buf, mvppnd_get_stat_desc(i),
++		n += snprintf(buf + n, PAGE_SIZE, "%s: %ld\n", mvppnd_get_stat_desc(i),
+ 			mvppnd_get_stat(ppdev, i, last_jiffies));
+ 	last_jiffies = jiffies;
+ 	/* debug counters - either last + max or incrementing counters: */
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
+index 1d5b4e5..8a220d0 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
+@@ -181,16 +181,16 @@ static void print_buf(const char *title, const unsigned char *data, size_t len)
+ 	size_t sz;
+ 	char *b;
+ 	int i;
+-
++	size_t n = 0;
+ 	sz = (len * 3) + 4 + strlen(title) + 1 + 1;
+ 
+ 	b = kmalloc(sz, GFP_KERNEL);
+ 	if (!b)
+ 		return;
+ 
+-	sprintf(b, "len %ld:", len);
++	n += sprintf(b, "len %ld:", len);
+ 	for (i = 0; i < len; i++)
+-		sprintf(b, "%s %.2x", b, data[i]);
++		n += sprintf(b, " %.2x", data[i]);
+ 	pr_info("%s: %s\n", title, b);
+ 
+ 	/*
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
+index 74914bb..83e06cd 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
+@@ -272,8 +272,10 @@ int mvGetSip6ResourceInfo(int resource, int device, struct mv_resource_info *res
+ 
+ int mvGetDeviceId(void)
+ {
++#ifdef __aarch64__
+ 	struct resource *dev_id_reg_res;
+ 	void *dev_id_reg;
++#endif
+ 	unsigned int dev_id = 0;
+ 
+ 	struct device_node *root;
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
+index 6224df0..f138473 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
+@@ -93,6 +93,11 @@ struct dsa_128bit_var {
+     u64 high, low;
+ };
+ 
++int sflow_register_nf(struct sflow_config *add);
++void sflow_unregister_nf(struct sflow_config *del);
++int vlantag_register_nf(struct vlan_tag_config *add);
++void vlantag_unregister_nf(struct vlan_tag_config *del);
++
+ /*
+  * Sflow DSA tags:
+  * CPSS CPUCode Ingress - CPSS_HAL_CTRLPKT_CPU_CODE_SAMPLE_USER_DEFINE_0 to
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+index 1204db1..e9921f2 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+@@ -1492,12 +1492,13 @@ EXPORT_SYMBOL(mvppnd_register_hooks);
+ static void print_dsa(const char *netdev, const char *dir, u8 *dsa)
+ {
+ 	char buf[1024];
++	size_t n = 0;
+ 
+ 	memset(buf, 0, sizeof(buf));
+-	snprintf(buf, PAGE_SIZE, "%s %s:", dir, netdev);
+-	snprintf(buf, PAGE_SIZE,
++	n += snprintf(buf + n, PAGE_SIZE, "%s %s:", dir, netdev);
++	n += snprintf(buf + n, PAGE_SIZE,
+ 		 "%s %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+ 
+@@ -1878,11 +1879,12 @@ static ssize_t mvppnd_show_rx_queues(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_rx_queues);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	strcpy(buf, "");
+ 
+ 	for (i = 0; i < NUM_OF_RX_QUEUES; i++) {
+-		snprintf(buf, PAGE_SIZE, "%s[%c%d] 0x%x, %ld/%ld\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE, "[%c%d] 0x%x, %ld/%ld\n",
+ 			 ppdev->rx_queues[i] ? '*' : ' ', i,
+ 			 mvppnd_read_rx_first_desc(ppdev, i),
+ 			 ppdev->rx_queues[i] ?
+@@ -1955,9 +1957,10 @@ static ssize_t mvppnd_show_tx_queue(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_tx_queue);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < NUM_OF_TX_QUEUES; i++) {
+-		snprintf(buf, PAGE_SIZE, "%s[%c%d] %d, 0x%x\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE, "[%c%d] %d, 0x%x\n",
+ 			 (i == ppdev->tx_queue_num) ? '*' : ' ', i,
+ 			 mvppnd_queue_enabled(ppdev, REG_ADDR_TX_QUEUE_CMD, i) ?
+ 			 1 : 0, mvppnd_read_tx_first_desc(ppdev, i));
+@@ -2006,6 +2009,7 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 						attr_atu_win);
+ 	u32 addr;
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	snprintf(buf, PAGE_SIZE, "%s%-8s\t%-8s\t%-8s\t%-8s\t%-8s\t%-8s\t%-8s\n",
+ 		 "                   ", "ctrl1", "ctrl2", "low-base",
+@@ -2014,9 +2018,9 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 	if (ppdev->pdev.pdev->device != PCI_DEVICE_ID_ALDRIN2) {
+ 		for (i = 0; i < NUM_OF_ATU_WINDOWS; i++) {
+ 			addr = ATU_OFFS + i * 0x0200;
+-			snprintf(buf, PAGE_SIZE,
+-				"%s[%c%d] (0x%x) out: 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+-				buf, (i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
++			n += snprintf(buf + n, PAGE_SIZE,
++				"[%c%d] (0x%x) out: 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
++				(i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0000),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0004),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0008),
+@@ -2025,9 +2029,9 @@ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0014),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0018));
+ 			addr += 0x0100; /* Now inbound */
+-			snprintf(buf, PAGE_SIZE,
+-				"%s[%c%d] (0x%x) in : 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+-				buf, (i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
++			n += snprintf(buf + n, PAGE_SIZE,
++				"[%c%d] (0x%x) in : 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
++				(i == ppdev->pdev.atu_win ? '*' : ' '), i, addr,
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0000),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0004),
+ 				ioread32(ppdev->pdev.bar0 + addr + 0x0008),
+@@ -2082,10 +2086,11 @@ static ssize_t mvppnd_show_mg_win(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_mg_win);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < NUM_OF_MG_WINDOWS; i++) {
+-		snprintf(buf, PAGE_SIZE,
+-			 "%s[%c%d] 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n", buf,
++		n += snprintf(buf + n, PAGE_SIZE,
++			 "[%c%d] 0x%-8x\t0x%-8x\t0x%-8x\t0x%-8x\n",
+ 			 mvppnd_is_our_win(ppdev, i) ?  '*' : ' ', i,
+ 			 mvppnd_read_reg(ppdev, REG_ADDR_MG_BASE_ADDR + i *
+ 					 REG_ADDR_MG_BASE_ADDR_OFFSET_FORMULA),
+@@ -2199,23 +2204,24 @@ static ssize_t mvppnd_show_dsa(struct kobject *kobj,
+ 		container_of(attr, struct mvppnd_switch_flow, attr_tx_dsa);
+ 	unsigned int dsa[DSA_SIZE];
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	for (i = 0; i < DSA_SIZE; i++)
+ 		dsa[i] = flow->config_tx_dsa[i];
+ 
+-	snprintf(buf, PAGE_SIZE,
++	n += snprintf(buf + n, PAGE_SIZE,
+ 		 "%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x%.2x\n",
+ 		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6], dsa[7],
+ 		 dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13], dsa[14],
+ 		 dsa[15]);
+-	snprintf(buf, PAGE_SIZE,
+-		 "%s%.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x\n",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++	n += snprintf(buf + n, PAGE_SIZE,
++		 "%.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x %.2x%.2x%.2x%.2x\n",
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+-	snprintf(buf, PAGE_SIZE,
+-		 "%s%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x\n",
+-		 buf, dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
++	n += snprintf(buf + n, PAGE_SIZE,
++		 "%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x\n",
++		 dsa[0], dsa[1], dsa[2], dsa[3], dsa[4], dsa[5], dsa[6],
+ 		 dsa[7], dsa[8], dsa[9], dsa[10], dsa[11], dsa[12], dsa[13],
+ 		 dsa[14], dsa[15]);
+ 
+@@ -2289,6 +2295,7 @@ static ssize_t mvppnd_show_rx_ring_size(struct kobject *kobj,
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_rx_ring_size);
+ 	int i;
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+ 	strcpy(buf, "");
+ 
+@@ -2296,7 +2303,7 @@ static ssize_t mvppnd_show_rx_ring_size(struct kobject *kobj,
+ 		if (!ppdev->rx_queues[i])
+ 			continue;
+ 
+-		sprintf(buf, "%s[%d] %ld\n", buf, i, ppdev->rx_rings_size[i]);
++		n += sprintf(buf + n, "[%d] %ld\n", i, ppdev->rx_rings_size[i]);
+ 	}
+ 
+ 	return strlen(buf);
+@@ -2374,11 +2381,12 @@ static ssize_t mvppnd_show_driver_statistics(struct kobject *kobj,
+ 	static unsigned long last_jiffies;
+ 	int i;
+ 	char lstr[96];
++	size_t n = 0; /* show comes with fresh (len=0) buffer */
+ 
+-
+-	for (i = 0; i <= STATS_LAST; i++)
+-		sprintf(buf, "%s%s: %ld\n", buf, mvppnd_get_stat_desc(i),
+-			mvppnd_get_stat(ppdev, i, last_jiffies));
++	for (i = 0; i <= STATS_LAST; i++) {
++		n += snprintf(buf + n, PAGE_SIZE, "%s: %ld\n", mvppnd_get_stat_desc(i),
++			      mvppnd_get_stat(ppdev, i, last_jiffies));
++	}
+ 	last_jiffies = jiffies;
+ 	/* debug counters - either last + max or incrementing counters: */
+ 	/* how much budget did we get from the kernel */
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
+index 1d5b4e5..8a220d0 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethOpsDriver.c
+@@ -181,16 +181,16 @@ static void print_buf(const char *title, const unsigned char *data, size_t len)
+ 	size_t sz;
+ 	char *b;
+ 	int i;
+-
++	size_t n = 0;
+ 	sz = (len * 3) + 4 + strlen(title) + 1 + 1;
+ 
+ 	b = kmalloc(sz, GFP_KERNEL);
+ 	if (!b)
+ 		return;
+ 
+-	sprintf(b, "len %ld:", len);
++	n += sprintf(b, "len %ld:", len);
+ 	for (i = 0; i < len; i++)
+-		sprintf(b, "%s %.2x", b, data[i]);
++		n += sprintf(b, " %.2x", data[i]);
+ 	pr_info("%s: %s\n", title, b);
+ 
+ 	/*
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
+index 74914bb..83e06cd 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/mbusResources.c
+@@ -272,8 +272,10 @@ int mvGetSip6ResourceInfo(int resource, int device, struct mv_resource_info *res
+ 
+ int mvGetDeviceId(void)
+ {
++#ifdef __aarch64__
+ 	struct resource *dev_id_reg_res;
+ 	void *dev_id_reg;
++#endif
+ 	unsigned int dev_id = 0;
+ 
+ 	struct device_node *root;
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
+index 5da1f7c..0ce6a23 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/saiMod.c
+@@ -95,6 +95,11 @@ struct dsa_128bit_var {
+     u64 high, low;
+ };
+ 
++int sflow_register_nf(struct sflow_config *add);
++void sflow_unregister_nf(struct sflow_config *del);
++int vlantag_register_nf(struct vlan_tag_config *add);
++void vlantag_unregister_nf(struct vlan_tag_config *del);
++
+ /*
+  * Sflow DSA tags:
+  * CPSS CPUCode Ingress - CPSS_HAL_CTRLPKT_CPU_CODE_SAMPLE_USER_DEFINE_0 to
+-- 
+2.34.1
+
