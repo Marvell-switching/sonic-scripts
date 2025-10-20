@@ -1,8 +1,11 @@
-From b71b2ab046397f0e5f1d7da409ce28314d581a1a Mon Sep 17 00:00:00 2001
+From df869a9897a0e935c9288d167f7cab0872f5255d Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Sat, 27 Sep 2025 20:17:36 +0300
-Subject: [PATCH 1/1] platform/marvell-prestera/sonic-platform-nokia: rules and
- 7215
+Subject: [PATCH 6/6] platform [marvell-prestera][nokia] debian/rules and
+ 7215-a1 for trixie
+
+NOKIA board 7215-a1
+Adjust debian/rules and Kernel-module source for TRIXIE
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---

@@ -1,18 +1,17 @@
-From 93ab4c006ea0a49e4fcee2a2e52450c1f41f59ee Mon Sep 17 00:00:00 2001
+From b0ccad69ccfe484478861900a32946abec022cd3 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Wed, 22 Jan 2025 09:44:59 +0530
-Subject: [PATCH] Add support for AC5P-RD
+Subject: [PATCH 4/6] platform [marvell] prestera - support AC5P-RD
 
 Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
 ---
- platform/marvell-prestera/one-image.mk           | 3 ++-
- platform/marvell-prestera/platform-marvell.mk    | 6 ++++++
- platform/marvell-prestera/platform_arm64.conf    | 4 ++++
- platform/marvell-prestera/sonic-platform-marvell | 2 +-
- 4 files changed, 13 insertions(+), 2 deletions(-)
+ platform/marvell-prestera/one-image.mk        | 3 ++-
+ platform/marvell-prestera/platform-marvell.mk | 6 ++++++
+ platform/marvell-prestera/platform_arm64.conf | 4 ++++
+ 3 files changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/platform/marvell-prestera/one-image.mk b/platform/marvell-prestera/one-image.mk
-index be282e921..1aaa466f5 100644
+index 6adca07fb..4d1b87ea2 100644
 --- a/platform/marvell-prestera/one-image.mk
 +++ b/platform/marvell-prestera/one-image.mk
 @@ -12,7 +12,8 @@ ifeq ($(CONFIGURED_ARCH),arm64)
@@ -50,7 +49,7 @@ index eec94d18a..c550491e3 100644
  
  AC5X_RD98DX35xx_PLATFORM = sonic-platform-rd98dx35xx-x86_$(AC5X_RD98DX35xx_PLATFORM_MODULE_VERSION)_$(CONFIGURED_ARCH).deb
 diff --git a/platform/marvell-prestera/platform_arm64.conf b/platform/marvell-prestera/platform_arm64.conf
-index 0dae738a4..cab2f42a4 100644
+index 004b92de3..ad85b3751 100644
 --- a/platform/marvell-prestera/platform_arm64.conf
 +++ b/platform/marvell-prestera/platform_arm64.conf
 @@ -41,6 +41,10 @@ case $PLATFORM in
@@ -65,5 +64,5 @@ index 0dae738a4..cab2f42a4 100644
  
  if [ $PLATFORM_AC5X -eq 1 ]; then
 -- 
-2.25.1
+2.34.1
 

@@ -1,7 +1,7 @@
-From c1091e353089ef9134d2129377f2b36d663dfc07 Mon Sep 17 00:00:00 2001
+From 31f8de70485193d509b335e9ec2b227b2da0e259 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Thu, 22 May 2025 14:10:19 +0300
-Subject: [PATCH] platform:prestera: fix support for AC5P-RD mmcblk
+Subject: [PATCH 5/6] platform [marvell] prestera boot distinct mmcblk vs scsi
 
 Why I did it
 AC5P-RD (arm64-marvell_rd98DX45xx_cn9131-r0) may have
@@ -24,9 +24,12 @@ How to test
 sonic-installer install sonic-marvell-prestera-arm64.bin; reboot
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/platform_arm64.conf | 58 ++++++++++---------
+ 1 file changed, 32 insertions(+), 26 deletions(-)
 
 diff --git a/platform/marvell-prestera/platform_arm64.conf b/platform/marvell-prestera/platform_arm64.conf
-index 32d60fcc9..2df8a4974 100644
+index ad85b3751..b6abc625a 100644
 --- a/platform/marvell-prestera/platform_arm64.conf
 +++ b/platform/marvell-prestera/platform_arm64.conf
 @@ -1,6 +1,8 @@
@@ -120,5 +123,5 @@ index 32d60fcc9..2df8a4974 100644
  }
  
 -- 
-2.25.1
+2.34.1
 
