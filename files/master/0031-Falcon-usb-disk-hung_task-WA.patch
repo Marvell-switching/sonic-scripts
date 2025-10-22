@@ -16,7 +16,7 @@ index 557358fd5..13d2fc3a8 100755
  }
  
  set -e
-+echo 0 > /proc/sys/kernel/hung_task_timeout_secs
++{ echo 0 > /proc/sys/kernel/hung_task_timeout_secs; } 2>/dev/null || true
 +sync
 +echo 3 > /proc/sys/vm/drop_caches
  
