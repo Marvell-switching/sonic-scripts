@@ -1,0 +1,40 @@
+From 61722cf16b23c4aca8b3e14b9ad7d0b133e4422f Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Wed, 5 Nov 2025 22:10:29 +0200
+Subject: [PATCH 1/1] K:config.local/armhf exclude configs
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../armhf/config.sonic-marvell-prestera       | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/config.local/armhf/config.sonic-marvell-prestera b/config.local/armhf/config.sonic-marvell-prestera
+index ece90b6..e8e09b5 100644
+--- a/config.local/armhf/config.sonic-marvell-prestera
++++ b/config.local/armhf/config.sonic-marvell-prestera
+@@ -1,2 +1,22 @@
+ CONFIG_MTD_CMDLINE_PARTS=y
+ CONFIG_MTD_OF_PARTS=y
++CONFIG_ARCH_VIRT=n
++CONFIG_ARCH_BCM=n
++CONFIG_ARCH_EXYNOS=n
++CONFIG_ARCH_HIGHBANK=n
++CONFIG_ARCH_MXC=n
++CONFIG_ARCH_MESON=n
++CONFIG_ARCH_OMAP3=n
++CONFIG_ARCH_OMAP4=n
++CONFIG_ARCH_ROCKCHIP=n
++CONFIG_ARCH_SOCFPGA=n
++CONFIG_ARCH_SUNXI=n
++CONFIG_ARCH_TEGRA=n
++CONFIG_ARCH_VEXPRESS=n
++CONFIG_ARCH_WM8850=n
++CONFIG_SOC_OMAP5=n
++CONFIG_SOC_AM33XX=n
++CONFIG_SOC_DRA7XX=n
++CONFIG_EFI=n
++CONFIG_SECONDARY_TRUSTED_KEYRING=n
++CONFIG_SYSTEM_BLACKLIST_KEYRING=n
+-- 
+2.34.1
+
