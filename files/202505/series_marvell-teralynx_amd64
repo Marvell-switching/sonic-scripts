@@ -1,1 +1,2 @@
-0001-show-interface-status-workaround-for-wistron-3200k.patch|sonic-buildimage
+0001-Add-or-tools-dependency-to-libsai.patch|sonic-buildimage
+0002-Update-libsai-and-SDK-driver-to-release-T6.2.0.patch|sonic-buildimage
