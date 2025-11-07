@@ -1,0 +1,200 @@
+From db2f0d3d1290e0fdb798e7ee694202cd82d9aa47 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 14 Oct 2025 15:56:01 +0530
+Subject: [PATCH 1/2] Add or-tools dependency to libsai
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ .../docker-syncd-mrvl-teralynx-rpc.mk         |  1 +
+ .../docker-syncd-mrvl-teralynx.mk             |  1 +
+ platform/marvell-teralynx/libsaithrift-dev.mk |  2 ++
+ platform/marvell-teralynx/or-tools.dep        |  8 +++++
+ platform/marvell-teralynx/or-tools.mk         |  6 ++++
+ .../or-tools/debian/changelog                 |  6 ++++
+ .../marvell-teralynx/or-tools/debian/compat   |  1 +
+ .../marvell-teralynx/or-tools/debian/control  | 13 +++++++
+ .../or-tools/debian/libortools.install        |  1 +
+ .../marvell-teralynx/or-tools/debian/rules    | 35 +++++++++++++++++++
+ platform/marvell-teralynx/rules.mk            |  3 +-
+ 11 files changed, 76 insertions(+), 1 deletion(-)
+ create mode 100644 platform/marvell-teralynx/or-tools.dep
+ create mode 100644 platform/marvell-teralynx/or-tools.mk
+ create mode 100644 platform/marvell-teralynx/or-tools/debian/changelog
+ create mode 100644 platform/marvell-teralynx/or-tools/debian/compat
+ create mode 100644 platform/marvell-teralynx/or-tools/debian/control
+ create mode 100644 platform/marvell-teralynx/or-tools/debian/libortools.install
+ create mode 100755 platform/marvell-teralynx/or-tools/debian/rules
+
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx-rpc.mk b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx-rpc.mk
+index c0ba78183..1f9ad31cc 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx-rpc.mk
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx-rpc.mk
+@@ -3,6 +3,7 @@
+ DOCKER_SYNCD_MRVL_TERALYNX_RPC = docker-syncd-mrvl-teralynx-rpc.gz
+ $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_PATH = $(PLATFORM_PATH)/docker-syncd-mrvl-teralynx-rpc
+ $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_DEPENDS += $(SYNCD_RPC) $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_SHELL)
++$(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_DEPENDS += $(LIBOR_TOOLS)
+ $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_PYTHON_WHEELS += $(PTF_PY3)
+ $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_FILES += $(SUPERVISOR_PROC_EXIT_LISTENER_SCRIPT)
+ $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)_LOAD_DOCKERS += $(DOCKER_SYNCD_BASE)
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
+index d95e2efbf..4ed4ea182 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
+@@ -4,6 +4,7 @@ DOCKER_SYNCD_PLATFORM_CODE = mrvl-teralynx
+ include $(PLATFORM_PATH)/../template/docker-syncd-bookworm.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD) $(PYTHON_SDK_API) $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_SHELL)
++$(DOCKER_SYNCD_BASE)_DEPENDS += $(LIBOR_TOOLS)
+ 
+ $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
+                                 $(LIBSWSSCOMMON_DBG) \
+diff --git a/platform/marvell-teralynx/libsaithrift-dev.mk b/platform/marvell-teralynx/libsaithrift-dev.mk
+index 17972dd7e..1daf58168 100755
+--- a/platform/marvell-teralynx/libsaithrift-dev.mk
++++ b/platform/marvell-teralynx/libsaithrift-dev.mk
+@@ -11,6 +11,8 @@ else
+ $(LIBSAITHRIFT_DEV)_DEPENDS += $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_HSAI) $(MRVL_TERALYNX_SHELL)
+ $(LIBSAITHRIFT_DEV)_RDEPENDS += $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_HSAI) $(MRVL_TERALYNX_SHELL)
+ endif
++$(LIBSAITHRIFT_DEV)_DEPENDS += $(LIBOR_TOOLS)
++$(LIBSAITHRIFT_DEV)_RDEPENDS += $(LIBOR_TOOLS)
+ SONIC_DPKG_DEBS += $(LIBSAITHRIFT_DEV)
+ 
+ PYTHON_SAITHRIFT = python-saithrift$(SAITHRIFT_VER)_$(SAI_VER)_$(CONFIGURED_ARCH).deb
+diff --git a/platform/marvell-teralynx/or-tools.dep b/platform/marvell-teralynx/or-tools.dep
+new file mode 100644
+index 000000000..cca59b9fd
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools.dep
+@@ -0,0 +1,8 @@
++SPATH       := $($(LIBOR_TOOLS)_SRC_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) $(PLATFORM_PATH)/or-tools.mk $(PLATFORM_PATH)/or-tools.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(SPATH))
++
++$(LIBOR_TOOLS)_CACHE_MODE  := GIT_CONTENT_SHA
++$(LIBOR_TOOLS)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(LIBOR_TOOLS)_DEP_FILES   := $(DEP_FILES)
+diff --git a/platform/marvell-teralynx/or-tools.mk b/platform/marvell-teralynx/or-tools.mk
+new file mode 100644
+index 000000000..1122173db
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools.mk
+@@ -0,0 +1,6 @@
++export OR_TOOLS_VERSION = 9.11
++export OR_TOOLS_VERSION_FULL = $(OR_TOOLS_VERSION)-1
++
++LIBOR_TOOLS = libortools_$(OR_TOOLS_VERSION_FULL)_$(CONFIGURED_ARCH).deb
++$(LIBOR_TOOLS)_SRC_PATH = $(PLATFORM_PATH)/or-tools
++SONIC_DPKG_DEBS += $(LIBOR_TOOLS)
+diff --git a/platform/marvell-teralynx/or-tools/debian/changelog b/platform/marvell-teralynx/or-tools/debian/changelog
+new file mode 100644
+index 000000000..773f2e3b7
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools/debian/changelog
+@@ -0,0 +1,6 @@
++or-tools (9.11-1) unstable; urgency=medium
++
++  * Initial release.
++
++ -- Pavan Naregundi <pnaregundi@marvell.com>  Thu, 07 Aug 2025 12:00:00 +0530
++
+diff --git a/platform/marvell-teralynx/or-tools/debian/compat b/platform/marvell-teralynx/or-tools/debian/compat
+new file mode 100644
+index 000000000..b4de39476
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools/debian/compat
+@@ -0,0 +1 @@
++11
+diff --git a/platform/marvell-teralynx/or-tools/debian/control b/platform/marvell-teralynx/or-tools/debian/control
+new file mode 100644
+index 000000000..788c65467
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools/debian/control
+@@ -0,0 +1,13 @@
++Source: or-tools
++Section: science
++Priority: optional
++Maintainer: Pavan Naregundi <pnaregundi@marvell.com>
++Build-Depends: debhelper (>= 11), cmake, python3-all, dh-python
++Standards-Version: 4.1.4
++
++Package: libortools
++Architecture: any
++Depends: ${shlibs:Depends}, ${misc:Depends}, python3
++Description: Google OR-Tools - Operations Research Tools
++ A fast and portable software suite for combinatorial optimization.
++
+diff --git a/platform/marvell-teralynx/or-tools/debian/libortools.install b/platform/marvell-teralynx/or-tools/debian/libortools.install
+new file mode 100644
+index 000000000..253446af9
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools/debian/libortools.install
+@@ -0,0 +1 @@
++or-tools/build/lib/*.so* /usr/lib/
+diff --git a/platform/marvell-teralynx/or-tools/debian/rules b/platform/marvell-teralynx/or-tools/debian/rules
+new file mode 100755
+index 000000000..6ce218130
+--- /dev/null
++++ b/platform/marvell-teralynx/or-tools/debian/rules
+@@ -0,0 +1,35 @@
++#!/usr/bin/make -f
++
++OR_TOOLS_TARBALL := v$(OR_TOOLS_VERSION).tar.gz
++OR_TOOLS_SRC_DIR := or-tools
++
++BUILD_FLAGS := -DBUILD_DEPS=ON \
++			-DBUILD_SHARED_LIBS=ON \
++			-DBUILD_EXAMPLES=OFF \
++			-DBUILD_TESTING=OFF \
++			-DBUILD_TOOLS=OFF
++
++CXX_FLAGS := -DCMAKE_CXX_FLAGS="-Wno-deprecated-declarations -D_GLIBCXX_USE_CXX11_ABI=0"
++
++%:
++	dh $@ --buildsystem=cmake
++
++override_dh_auto_configure:
++	rm -rf $(OR_TOOLS_SRC_DIR) $(OR_TOOLS_TARBALL)
++	wget https://github.com/google/or-tools/archive/refs/tags/$(OR_TOOLS_TARBALL)
++	mkdir $(OR_TOOLS_SRC_DIR)
++	tar -xzvf $(OR_TOOLS_TARBALL) -C $(OR_TOOLS_SRC_DIR) --strip-components=1
++	cd $(OR_TOOLS_SRC_DIR) && \
++		cmake -S . -B build $(BUILD_FLAGS) -DCMAKE_BUILD_TYPE=Release $(CXX_FLAGS)
++
++override_dh_auto_build:
++	cmake --build $(OR_TOOLS_SRC_DIR)/build --target ortools -j$(SONIC_CONFIG_MAKE_JOBS)
++
++override_dh_auto_install:
++	# Skip install
++
++override_dh_auto_clean:
++	rm -rf $(OR_TOOLS_SRC_DIR) $(OR_TOOLS_TARBALL)
++
++override_dh_auto_test:
++	# Skip tests
+diff --git a/platform/marvell-teralynx/rules.mk b/platform/marvell-teralynx/rules.mk
+index 5fab4684d..998e6ddc6 100755
+--- a/platform/marvell-teralynx/rules.mk
++++ b/platform/marvell-teralynx/rules.mk
+@@ -10,6 +10,7 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl-teralynx.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+ include $(PLATFORM_PATH)/python-saithrift.mk
+ include $(PLATFORM_PATH)/mrvl-teralynx.mk
++include $(PLATFORM_PATH)/or-tools.mk
+ 
+ SONIC_ALL += $(SONIC_MRVL_TERALYNX_ONE_IMAGE) \
+              $(DOCKER_FPM) \
+@@ -17,7 +18,7 @@ SONIC_ALL += $(SONIC_MRVL_TERALYNX_ONE_IMAGE) \
+              $(DOCKER_SYNCD_MRVL_TERALYNX_RPC)
+ 
+ # Inject mrvl-teralynx sai into syncd
+-$(SYNCD)_DEPENDS += $(MRVL_TERALYNX_HSAI) $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_SHELL)
++$(SYNCD)_DEPENDS += $(MRVL_TERALYNX_HSAI) $(MRVL_TERALYNX_LIBSAI) $(MRVL_TERALYNX_SHELL) $(LIBOR_TOOLS)
+ $(SYNCD)_UNINSTALLS += $(MRVL_TERALYNX_HSAI)
+ 
+ ifeq ($(ENABLE_SYNCD_RPC),y)
+-- 
+2.25.1
+
