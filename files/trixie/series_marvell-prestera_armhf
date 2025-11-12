@@ -1,21 +1,25 @@
 # Refer PR-status-info.txt
 # TRIXIE specific and strictly-ordered patches
-0001-device-marvell-marvell-prestera-for-trixie.patch               |sonic-buildimage
-0002-platform-submod-marvell-mrvl-prestera-for-trixie.patch         |sonic-buildimage
-0003-platform-submod-marvell-sonic-platform-marvell-for-trixie.patch|sonic-buildimage
-0003-platform-X-db98cx8580-init-rmmod-kempld.patch  |platform/marvell-prestera/sonic-platform-marvell
-0004-platform-marvell-prestera-support-AC5P-RD.patch                |sonic-buildimage
-0005-platform-marvell-prestera-boot-distinct-mmcblk-vs-sc.patch     |sonic-buildimage
-0006-platform-marvell-prestera-nokia-debian-rules-and-721.patch     |sonic-buildimage
-0008-py3.13-syntax-fix-in-sonic-py-common-and-sonic-yang.patch      |sonic-buildimage
-0022-kdrivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch           |src/sonic-linux-kernel
-0023-amd64-config-STRICT_DEVMEM-n-to-enable-mmap-on-trixie.patch    |src/sonic-linux-kernel
+0002-platform-X-move-i2c-adapter-to-i2c-dev.patch      |platform/marvell-prestera/sonic-platform-marvell
+0003-platform-X-db98cx8580-init-rmmod-kempld.patch     |platform/marvell-prestera/sonic-platform-marvell
+0004-driver-mvcpss.ko-fix-armhf-mvpci-probe-by-vendor-prod.patch    |platform/marvell-prestera/mrvl-prestera
+0004-driver-mvGpioDrv.ko-add-to-armhf-drivers.patch                 |platform/marvell-prestera/mrvl-prestera
+0004-platform-marvell-prest-Nokia7215-i2c-adapter-to-i2c-dev.patch  |sonic-buildimage
+0004-platform-marvell-prest-Nokia7215-armhf-ko-modules-init.patch   |sonic-buildimage
+0004-platform-marvell-prest-Nokia7215-cmdline-CMA-32M.patch         |sonic-buildimage
+0005-platform-marvell-prest-move-PLATFORM_CN9131-fit_addr-up.patch  |sonic-buildimage
+0006-platform-marvell-prest-ramdisk-compression-none-arm64.patch    |sonic-buildimage
+0007-platform-marvell-prest-fdt_cn9131-link-to-usr-lib-linux.patch  |sonic-buildimage
+#0008-device-marvell-add-dummy-platform.json-avoiding-WARN.patch     |sonic-buildimage
+0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch    |src/sonic-linux-kernel
+0024-K-config.local-armhf-exclude-configs.patch                     |src/sonic-linux-kernel
+0030-sonic-swss-marvell-Nokia-armhf-ignore-PriorityGroups.patch     |src/sonic-swss
 
 # Patches from BOOKWORM
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch     |src/sonic-utilities
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
-0020-arm64-kdump-support-add-support-in-kdump-config.patch          |src/sonic-utilities
-0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch     |sonic-buildimage
+#0020-arm64-kdump-support-add-support-in-kdump-config.patch          |src/sonic-utilities
+#0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch     |sonic-buildimage
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 
@@ -26,3 +30,4 @@
 
 # OPTIONAL:
 #0071-platform-marvell-prestera-fw_setenv-with-without-f.patch       |sonic-buildimage
+1001-Disable-WARNING-dhcp_dos_logger.py-Skipping-non-exis.patch      |sonic-buildimage

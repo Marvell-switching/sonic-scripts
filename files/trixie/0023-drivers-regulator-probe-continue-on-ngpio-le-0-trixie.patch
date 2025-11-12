@@ -1,0 +1,77 @@
+From adc31422a7d9863de587bd37e0a32e4aed9bb32b Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 3 Nov 2025 16:32:32 +0200
+Subject: [PATCH 1/1] drivers-regulator-probe-continue-on-ngpio-le-0-trixie
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ ...-probe-continue-on-ngpio-le-0-trixie.patch | 44 +++++++++++++++++++
+ patches-sonic/series                          |  1 +
+ 2 files changed, 45 insertions(+)
+ create mode 100644 patches-sonic/0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch
+
+diff --git a/patches-sonic/0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch b/patches-sonic/0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch
+new file mode 100644
+index 0000000..913047e
+--- /dev/null
++++ b/patches-sonic/0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch
+@@ -0,0 +1,44 @@
++From 943d2b80f157a36f3b0ab55f5f2596eba3282861 Mon Sep 17 00:00:00 2001
++From: Yan Markman <ymarkman@marvell.com>
++Date: Mon, 3 Nov 2025 14:55:38 +0200
++Subject: [PATCH 1/1] drivers: regulator: probe continue on ngpio le 0
++ trixie-WA
++
++K-6.12(trixie) has implementation different from K6.1(bookworm)
++for of_get_gpio_regulator_config(), which returns ngpios=-ENOENT=-2.
++This leads to devm_kcalloc(,-2,,)=NULL and aborting of the
++gpio_regulator_probe() with error -ENOMEM=-12.
++
++As Marvell WORKAROUND, do not abort the probe but continue.
++
++Signed-off-by: Yan Markman <ymarkman@marvell.com>
++---
++ drivers/regulator/gpio-regulator.c | 12 +++++++++---
++ 1 file changed, 9 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/regulator/gpio-regulator.c b/drivers/regulator/gpio-regulator.c
++index 1bdd494cf..4037a72fa 100644
++--- a/drivers/regulator/gpio-regulator.c
+++++ b/drivers/regulator/gpio-regulator.c
++@@ -262,9 +262,15 @@ static int gpio_regulator_probe(struct platform_device *pdev)
++ 
++ 	drvdata->gpiods = devm_kcalloc(dev, config->ngpios,
++ 				       sizeof(struct gpio_desc *), GFP_KERNEL);
++-	if (!drvdata->gpiods)
++-		return -ENOMEM;
++-
+++	if (!drvdata->gpiods) {
+++#ifdef CONFIG_GPIO_MVEBU
+++		/* Marvell WA for regulators ap0_sd_vccq, cp0_sd_vccq:
+++		 *  NULL for ngpios<=0 is OK, don't abort probe
+++		 */
+++		if (config->ngpios > 0)
+++#endif
+++			return -ENOMEM;
+++    }
++ 	if (config->input_supply) {
++ 		drvdata->desc.supply_name = devm_kstrdup(&pdev->dev,
++ 							 config->input_supply,
++-- 
++2.25.1
++
+diff --git a/patches-sonic/series b/patches-sonic/series
+index d1988a8..3ccdd81 100644
+--- a/patches-sonic/series
++++ b/patches-sonic/series
+@@ -179,6 +179,7 @@ cisco-npu-disable-other-bars.patch
+ 0018-drivers-i2c-fix-after-kdump-crash.patch
+ 0019-irqchip-mvebu-gicp-Clear-pending-interrupts-on-init.patch
+ 0022-arm64-dts-marvell-Add-DTS-for-cn9131-db-comexpress-trixie.patch
++0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch
+ 
+ # amd-pensando elba support
+ # TODO(trixie): update for current version
+-- 
+2.34.1
+

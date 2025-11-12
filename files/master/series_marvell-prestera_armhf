@@ -6,7 +6,6 @@
 0004-platform-marvell-prestera-support-AC5P-RD.patch                |sonic-buildimage
 0005-platform-marvell-prestera-boot-distinct-mmcblk-vs-sc.patch     |sonic-buildimage
 0006-platform-marvell-prestera-nokia-debian-rules-and-721.patch     |sonic-buildimage
-0022-kdrivers-restore-legacy-I2C_COMPAT-i2c-adapter.patch           |src/sonic-linux-kernel
 
 # Patches from BOOKWORM
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch     |src/sonic-utilities

@@ -1,0 +1,56 @@
+From 27d5f627c5280db40acf3c9791a91a1ec3628c7d Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 11 Nov 2025 14:36:01 +0200
+Subject: [PATCH 1/1] driver mvcpss.ko fix armhf mvpci probe by
+ vendor:product-id
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../linuxNoKernelModule/drivers/intDriver.c            |  7 +++++++
+ .../cpssEnabler/linuxNoKernelModule/drivers/mvpci.c    | 10 ++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/intDriver.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/intDriver.c
+index 1d2a11d..607c068 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/intDriver.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/intDriver.c
+@@ -103,6 +103,13 @@ static bool msi_used;
+ 
+ struct pci_dev *pci_devs_list[MAX_PCI_DEVS];
+ 
++/* Prototypes required to avoid warnings */
++void enable_irq_wrapper(unsigned int irq);
++void prt_msi_state(char *msg, unsigned bus, unsigned device, unsigned func);
++int mvintdrv_add_pci_dev_to_ar(struct pci_dev *dev);
++struct pci_dev *mvintdrv_get_pci_dev_from_ar(void);
++
++
+ void enable_irq_wrapper(unsigned int irq)
+ {
+ 	struct irq_desc *desc = irq_data_to_desc(irq_get_irq_data(irq));
+diff --git a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mvpci.c b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mvpci.c
+index 66b0043..23168c7 100644
+--- a/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mvpci.c
++++ b/drivers/armhf/cpssEnabler/linuxNoKernelModule/drivers/mvpci.c
+@@ -70,8 +70,18 @@ static void mvpcidrv_remove(struct pci_dev *pdev)
+ 	pci_disable_device(pdev);
+ }
+ 
++#define MARVELL_VENDOR_ID    0x11ab
++#define MARVELL_DEVICE_C804  0xc804
++
++static const struct pci_device_id mvpcidrv_pci_ids[] = {
++	{ PCI_DEVICE(MARVELL_VENDOR_ID, MARVELL_DEVICE_C804) },
++	/*{ PCI_DEVICE(MARVELL_VENDOR_ID, PCI_ANY_ID) }, */
++	{ 0, }
++};
++
+ static struct pci_driver mvpcidrv_pci_driver = {
+ 	.name		= MV_DRV_NAME,
++	.id_table	= mvpcidrv_pci_ids,
+ 	.probe		= mvpcidrv_probe,
+ 	.remove		= mvpcidrv_remove,
+ 	.driver.pm	= NULL,
+-- 
+2.34.1
+

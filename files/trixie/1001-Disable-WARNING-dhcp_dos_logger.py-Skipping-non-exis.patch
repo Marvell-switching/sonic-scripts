@@ -1,0 +1,27 @@
+From 063c06d1d8b4e2405b403c047fae15d9c860e6e9 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 6 Nov 2025 17:15:12 +0200
+Subject: [PATCH 1/1] Disable WARNING dhcp_dos_logger.py: Skipping non-existent
+ interface
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ files/image_config/dhcp_dos_logger/dhcp_dos_logger.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/files/image_config/dhcp_dos_logger/dhcp_dos_logger.py b/files/image_config/dhcp_dos_logger/dhcp_dos_logger.py
+index 86409ee49..9840fa767 100644
+--- a/files/image_config/dhcp_dos_logger/dhcp_dos_logger.py
++++ b/files/image_config/dhcp_dos_logger/dhcp_dos_logger.py
+@@ -24,7 +24,7 @@ def handler():
+     while True:
+         for port in drop_pkts.keys():
+             if not interface_exists(port):
+-                logger.log_warning(f"Skipping non-existent interface: {port}")
++                #logger.log_warning(f"Skipping non-existent interface: {port}")
+                 continue
+             try:
+                 output = subprocess.run(
+-- 
+2.34.1
+

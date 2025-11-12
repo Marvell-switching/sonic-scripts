@@ -1,0 +1,38 @@
+From 2b550bd389c21dc92231262b7befacceece90896 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 11 Nov 2025 09:48:42 +0200
+Subject: [PATCH 1/1] platform/marvell-prest: Nokia7215: cmdline with cma=32M
+
+SONIC handles TWO images and config Uboot env for them with
+possibility ro run either one of them
+  run sonic_image_1      -- default auto-started
+  run sonic_image_2      -- alternative non default "linuxargs_old"
+The ARM-HF architecture requires CMA (DMA) area 32M reservation
+over Kernel command line by parameter cma=32M@0-3G.
+
+For the "default" this cma=32M@0-3G present
+but the alternative run loss this parameter and fails on SAI-start.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/platform_armhf.conf | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-prestera/platform_armhf.conf b/platform/marvell-prestera/platform_armhf.conf
+index 1199e7581..189ae0a45 100644
+--- a/platform/marvell-prestera/platform_armhf.conf
++++ b/platform/marvell-prestera/platform_armhf.conf
+@@ -193,8 +193,8 @@ prepare_boot_menu() {
+     BORDER='echo "---------------------------------------------------";echo;'
+     fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
+ 
+-    fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4 ${extra_cmdline_linux} ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+-    fw_setenv ${FW_ARG} linuxargs_old "net.ifnames=0 loopfstype=squashfs loop=$image_dir_old/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4" > /dev/null
++    fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4 ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
++    fw_setenv ${FW_ARG} linuxargs_old "net.ifnames=0 loopfstype=squashfs loop=$image_dir_old/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4 ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+ 
+     # Set boot configs
+     fw_setenv ${FW_ARG} kernel_addr $kernel_addr > /dev/null
+-- 
+2.34.1
+
