@@ -1,0 +1,20 @@
+From 606127b420f2e67f79710749622d1e4d281472ba Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Wed, 12 Nov 2025 14:53:25 +0200
+Subject: [PATCH 1/1] [submod] sonic-platform-marvell replace i2c-adapter
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/sonic-platform-marvell | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/sonic-platform-marvell b/platform/marvell-prestera/sonic-platform-marvell
+index 93acf5af4..c3ab3fd85 160000
+--- a/platform/marvell-prestera/sonic-platform-marvell
++++ b/platform/marvell-prestera/sonic-platform-marvell
+@@ -1 +1 @@
+-Subproject commit 93acf5af4ba925efe8f4d58bd5cbf034341cc42c
++Subproject commit c3ab3fd85eb36738a9e2308775de7c121e143126
+-- 
+2.34.1
+

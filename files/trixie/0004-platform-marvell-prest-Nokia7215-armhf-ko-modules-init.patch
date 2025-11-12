@@ -1,4 +1,4 @@
-From 9a2dc0d30ad45c22e22fc5a8cf6ddaab28cdfd15 Mon Sep 17 00:00:00 2001
+From cf3053cef715d5762017102eaf0dc57fd20cf298 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Tue, 11 Nov 2025 15:56:09 +0200
 Subject: [PATCH 1/1] platform/marvell-prest: Nokia7215-armhf ko-modules init
@@ -11,8 +11,8 @@ latency and async-collisions on TRIXIE.
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
  .../sonic-platform-nokia/7215/scripts/nokia-7215init.sh  | 9 +++++++++
- .../marvell-prestera/sonic-platform-nokia/debian/rules   | 3 +++
- 2 files changed, 12 insertions(+)
+ .../marvell-prestera/sonic-platform-nokia/debian/rules   | 5 +++++
+ 2 files changed, 14 insertions(+)
 
 diff --git a/platform/marvell-prestera/sonic-platform-nokia/7215/scripts/nokia-7215init.sh b/platform/marvell-prestera/sonic-platform-nokia/7215/scripts/nokia-7215init.sh
 index 0df213537..1e35d4670 100755
@@ -42,7 +42,7 @@ index 0df213537..1e35d4670 100755
  i2cset -y -m 0x0f 0 0x41 0x5 0x00
  
 diff --git a/platform/marvell-prestera/sonic-platform-nokia/debian/rules b/platform/marvell-prestera/sonic-platform-nokia/debian/rules
-index 7dde1c706..ed59cd307 100755
+index 7dde1c706..99abdc8a9 100755
 --- a/platform/marvell-prestera/sonic-platform-nokia/debian/rules
 +++ b/platform/marvell-prestera/sonic-platform-nokia/debian/rules
 @@ -64,6 +64,8 @@ override_dh_auto_build:
@@ -54,11 +54,13 @@ index 7dde1c706..ed59cd307 100755
  		fi; \
  		cd $(MOD_SRC_DIR)/$${mod}; \
  		python3 setup.py build; \
-@@ -95,6 +97,7 @@ override_dh_auto_install:
+@@ -95,6 +97,9 @@ override_dh_auto_install:
  			cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
  		fi; \
  		cp $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/$(PRESTERA_MODULE_SRC)/mvcpss.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
-+		cp $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/mvGpioDrv/mvGpioDrv.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
++		if [ $$mod = "7215" ] && [ $(CONFIGURED_ARCH) = "armhf" ]; then \
++			cp $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/mvGpioDrv/mvGpioDrv.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
++		fi; \
  		if [ -d "$(MOD_SRC_DIR)/$${mod}/$(MODULE_DIR)" ] && ls "$(MOD_SRC_DIR)/$${mod}/$(MODULE_DIR)"/*.ko >/dev/null 2>&1; then \
  			cp $(MOD_SRC_DIR)/$${mod}/$(MODULE_DIR)/*.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
  		fi; \
