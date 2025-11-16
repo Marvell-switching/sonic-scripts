@@ -1,13 +1,5 @@
 # Refer PR-status-info.txt
 # TRIXIE specific and strictly-ordered patches
-0002-submod-sonic-platform-marvell-replace-i2c-adapter.patch        |sonic-buildimage
-0003-submod-mrvl-prestera-KO-update-trixie.patch                    |sonic-buildimage
-0004-platform-marvell-prest-Nokia7215-i2c-adapter-to-i2c-dev.patch  |sonic-buildimage
-0004-platform-marvell-prest-Nokia7215-armhf-ko-modules-init.patch   |sonic-buildimage
-0004-platform-marvell-prest-Nokia7215-cmdline-CMA-32M.patch         |sonic-buildimage
-0005-platform-marvell-prest-move-PLATFORM_CN9131-fit_addr-up.patch  |sonic-buildimage
-0006-platform-marvell-prest-ramdisk-compression-none-arm64.patch    |sonic-buildimage
-0007-platform-marvell-prest-fdt_cn9131-link-to-usr-lib-linux.patch  |sonic-buildimage
 0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch    |src/sonic-linux-kernel
 0024-K-config.local-armhf-exclude-configs.patch                     |src/sonic-linux-kernel
 0030-sonic-swss-marvell-Nokia-armhf-ignore-PriorityGroups.patch     |src/sonic-swss
