@@ -4,6 +4,17 @@
 # and removed from here, from directory and from series_marvell
 # when the patch is merged to community.
 
-https://github.com/saiarcot895/sonic-linux-kernel/pull/21
-  0024-K-config.local-armhf-exclude-configs.patch
+https://github.com/sonic-net/sonic-swss/pull/4013
+  0030-orchagent-portsorch-fix-Query-ingress-priority-group.patch |src/sonic-swss
+https://github.com/sonic-net/sonic-swss/pull/4023
+(https://github.com/sonic-net/sonic-buildimage/issues/24613)
+  0031-swss-ACL-fix-remove-mem-override.patch                     |src/sonic-swss
 
+-------------------------------
+TRACKING:
+https://github.com/sonic-net/sonic-buildimage/issues/23900
+https://github.com/sonic-net/sonic-buildimage/issues/23901
+https://github.com/sonic-net/sonic-buildimage/issues/23902
+https://github.com/sonic-net/sonic-buildimage/issues/24586
+https://github.com/sonic-net/sonic-buildimage/issues/24594
+git branch
