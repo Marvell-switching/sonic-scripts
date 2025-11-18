@@ -1,19 +1,9 @@
 # This file contains link and status to a x.patches which
 # are PR-ed into SONiC (non-Marvell) gitHub
 # A patch-info to be added here when Pull-Request is posted
-# and removed from here, from directory and from series_marvell*
+# and removed from here, from directory and from series_marvell
 # when the patch is merged to community.
 
 https://github.com/saiarcot895/sonic-linux-kernel/pull/21
   0024-K-config.local-armhf-exclude-configs.patch
-
-https://github.com/saiarcot895/sonic-buildimage/pull/65
- 0002-submod-sonic-platform-marvell-replace-i2c-adapter.patch        |sonic-buildimage
- 0003-submod-mrvl-prestera-KO-update-trixie.patch                    |sonic-buildimage
- 0004-platform-marvell-prest-Nokia7215-i2c-adapter-to-i2c-dev.patch  |sonic-buildimage
- 0004-platform-marvell-prest-Nokia7215-armhf-ko-modules-init.patch   |sonic-buildimage
- 0004-platform-marvell-prest-Nokia7215-cmdline-CMA-32M.patch         |sonic-buildimage
- 0005-platform-marvell-prest-move-PLATFORM_CN9131-fit_addr-up.patch  |sonic-buildimage
- 0006-platform-marvell-prest-ramdisk-compression-none-arm64.patch    |sonic-buildimage
- 0007-platform-marvell-prest-fdt_cn9131-link-to-usr-lib-linux.patch  |sonic-buildimage
 
