@@ -1,7 +1,7 @@
-From 8af1dc3623f31ffddaad6af3db40ba0f30af17e8 Mon Sep 17 00:00:00 2001
+From 27acb43af599f6bbc4a2c1100422b7bb68234774 Mon Sep 17 00:00:00 2001
 From: Pavan Naregundi <pnaregundi@marvell.com>
 Date: Fri, 18 Jul 2025 09:23:51 +0530
-Subject: [PATCH 2/2] Update libsai and SDK driver to release T6.2.0
+Subject: [PATCH] Update libsai and SDK driver to release T6.2.0
 
 Signed-off-by: Spandan Dasgupta <sdasgupta@marvell.com>
 ---
@@ -10,21 +10,21 @@ Signed-off-by: Spandan Dasgupta <sdasgupta@marvell.com>
  2 files changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/platform/marvell-teralynx/mrvl-teralynx b/platform/marvell-teralynx/mrvl-teralynx
-index 3c265da04..ab91c64af 160000
+index 3c265da04..b0c2dbc36 160000
 --- a/platform/marvell-teralynx/mrvl-teralynx
 +++ b/platform/marvell-teralynx/mrvl-teralynx
 @@ -1 +1 @@
 -Subproject commit 3c265da04286347f687d88df17bc6373204a6c77
-+Subproject commit ab91c64af182db926022da2a94dc71d471b1985d
++Subproject commit b0c2dbc36dd3c78cdfd274d56d98abe470e51d4a
 diff --git a/platform/marvell-teralynx/sai.mk b/platform/marvell-teralynx/sai.mk
-index 272ddc269..a3e687da3 100755
+index 272ddc269..7b97a048c 100755
 --- a/platform/marvell-teralynx/sai.mk
 +++ b/platform/marvell-teralynx/sai.mk
 @@ -1,6 +1,7 @@
  # MRVL_TERALYNX SAI
  
 -MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/master
-+SAI_RELEASE=T6.2.0
++SAI_RELEASE=T6.2.0.1.0.1
 +MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/202505/$(SAI_RELEASE)
  
  MRVL_TERALYNX_LIBSAI = isai.deb
