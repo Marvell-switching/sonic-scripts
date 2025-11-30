@@ -1,0 +1,146 @@
+From 07bdfa500799b200f3d4ba401c26d1aeff72b167 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 27 Nov 2025 13:38:56 +0200
+Subject: [PATCH 1/1] arm64: mrvl-pcie-ep-check.service, reboot on EP miss
+
+HW Problem: After reboot a Board with external-CPU connected
+over cable (but not directly to PCIE) not always see CPSS/Prestera
+EndPoint device on PCIE-bus.
+
+As workaround, check Marvell EP presence on PCIE. If missed - make the reboot.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ debian/mrvlprestera.install.template-arm64    |  4 ++
+ debian/rules                                  |  6 +++
+ .../mrvl-pcie-ep-check.service                |  1 +
+ .../systemd/system/mrvl-pcie-ep-check.service | 15 ++++++
+ .../usr/local/bin/mrvl-pcie-ep-check.sh       | 53 +++++++++++++++++++
+ 5 files changed, 79 insertions(+)
+ create mode 100644 debian/mrvlprestera.install.template-arm64
+ create mode 120000 platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service
+ create mode 100644 platform/arm64/common/usr/lib/systemd/system/mrvl-pcie-ep-check.service
+ create mode 100755 platform/arm64/common/usr/local/bin/mrvl-pcie-ep-check.sh
+
+diff --git a/debian/mrvlprestera.install.template-arm64 b/debian/mrvlprestera.install.template-arm64
+new file mode 100644
+index 0000000..d247749
+--- /dev/null
++++ b/debian/mrvlprestera.install.template-arm64
+@@ -0,0 +1,4 @@
++platform/ARCH/common/boot/*.dtb /boot
++platform/ARCH/common/usr/local/bin/* /usr/local/bin
++platform/ARCH/common/usr/lib/systemd/system/* /usr/lib/systemd/system
++platform/ARCH/common/etc/systemd/system/* /etc/systemd/system
+diff --git a/debian/rules b/debian/rules
+index a50fb85..a16afd3 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -24,10 +24,16 @@ override_dh_auto_build:
+ 	@if [ "$(CONFIGURED_ARCH)" = "amd64" ]; then \
+ 		echo "platform/$(CONFIGURED_ARCH)/common/usr/local/bin/* /usr/local/bin" > \
+ 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
++	else \
++	if [ "$(CONFIGURED_ARCH)" = "arm64" ]; then \
++		sed "s/ARCH/${CONFIGURED_ARCH}/g" \
++		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template-arm64 \
++		    > ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
+ 	else \
+ 		sed "s/ARCH/${CONFIGURED_ARCH}/g" \
+ 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template \
+ 		    > ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
++	fi \
+ 	fi
+ 
+ override_dh_auto_test:
+diff --git a/platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service b/platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service
+new file mode 120000
+index 0000000..43c8620
+--- /dev/null
++++ b/platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service
+@@ -0,0 +1 @@
++/usr/lib/systemd/system/mrvl-pcie-ep-check.service
+\ No newline at end of file
+diff --git a/platform/arm64/common/usr/lib/systemd/system/mrvl-pcie-ep-check.service b/platform/arm64/common/usr/lib/systemd/system/mrvl-pcie-ep-check.service
+new file mode 100644
+index 0000000..0b6e486
+--- /dev/null
++++ b/platform/arm64/common/usr/lib/systemd/system/mrvl-pcie-ep-check.service
+@@ -0,0 +1,15 @@
++[Unit]
++Description=Marvell PCIe-EP check
++DefaultDependencies=no
++After=local-fs.target
++Wants=local-fs.target
++Before=multi-user.target
++
++[Service]
++Type=oneshot
++ExecStart=/usr/local/bin/mrvl-pcie-ep-check.sh
++
++[Install]
++WantedBy=sysinit.target
++#WantedBy=multi-user.target
++
+diff --git a/platform/arm64/common/usr/local/bin/mrvl-pcie-ep-check.sh b/platform/arm64/common/usr/local/bin/mrvl-pcie-ep-check.sh
+new file mode 100755
+index 0000000..4df67e5
+--- /dev/null
++++ b/platform/arm64/common/usr/local/bin/mrvl-pcie-ep-check.sh
+@@ -0,0 +1,53 @@
++#!/bin/sh
++# mrvl-check-pcie-ep.sh
++#  Check Marvell-End-Point presence, reboot if not found
++#
++# Run on Init context, service-safe, logs via /dev/kmsg
++
++# Conditional: only for CN9131-DB-Comexpress
++if ! grep -iq "CN9131-DB-Comexpress" /proc/device-tree/model 2>/dev/null; then
++    # Not the target model -> exit clean
++    exit 0
++fi
++
++# EVENT_FILE is persistent marker file preventing loop on persistent miss
++EVENT_FILE="/var/lib/mrvl-pcie-ep-reboot-req"
++STAT_PASS="/var/lib/mrvl-pcie-ep-reboot.pass"
++STAT_FAIL="/var/lib/mrvl-pcie-ep-reboot.fail"
++
++# Find PCIe endpoint (Marvell vendor, not root-port)
++EP=""
++for d in /sys/bus/pci/devices/*; do
++    vend=$(cat "$d/vendor" 2>/dev/null)
++    cls=$(cat "$d/class"  2>/dev/null)
++
++    case "$vend:$cls" in
++        0x11ab:0x0604??) ;;      # skip bridges/root-ports
++        0x11ab:0x??????) EP="$d"; break ;; # endpoint 020000 found
++    esac
++done
++
++# Handle PCIe endpoint presence
++if [ ! -z "$EP" ]; then
++    # PCIe OK -> remove any previous marker
++    [ -f "$EVENT_FILE" ] && rm -f "$EVENT_FILE"
++    CNTR_PASS=$(cat "$STAT_PASS" 2>/dev/null)
++    CNTR_PASS=$((CNTR_PASS + 1))
++    echo "$CNTR_PASS" > "$STAT_PASS"
++    exit 0
++fi
++
++CNTR_FLT=$(cat "$STAT_FAIL" 2>/dev/null)
++CNTR_FLT=$((CNTR_FLT + 1))
++echo "$CNTR_FLT" > "$STAT_FAIL"
++
++echo "ERROR: Marvell PCIe endpoint missing" >/dev/kmsg
++echo "=================================================" >/dev/console
++echo "ERROR: Marvell PCIe endpoint missing"              >/dev/console
++echo "=================================================" >/dev/console
++if [ ! -f "$EVENT_FILE" ]; then
++    touch "$EVENT_FILE"
++    sync
++    reboot
++fi
++exit 0
+-- 
+2.34.1
+

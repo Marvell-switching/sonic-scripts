@@ -1,8 +1,8 @@
 # Refer PR-status-info.txt
 # TRIXIE specific and strictly-ordered patches
-0023-drivers-regulator-probe-continue-on-ngpio-le-0-trixie.patch    |src/sonic-linux-kernel
-0024-K-config.local-armhf-exclude-configs.patch                     |src/sonic-linux-kernel
-0030-sonic-swss-marvell-Nokia-armhf-ignore-PriorityGroups.patch     |src/sonic-swss
+0003-platform-X-db98cx85xx-init-rmmod-kempld.patch        |platform/marvell-prestera/sonic-platform-marvell
+0030-orchagent-portsorch-fix-Query-ingress-priority-group.patch     |src/sonic-swss
+0031-swss-ACL-fix-remove-mem-override.patch                         |src/sonic-swss
 
 # Patches from BOOKWORM
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch     |src/sonic-utilities
@@ -18,5 +18,6 @@
 #0057-sonic-platform-wistron-rules-for-trixie.patch                  |sonic-buildimage
 
 # OPTIONAL:
-#0071-platform-marvell-prestera-fw_setenv-with-without-f.patch       |sonic-buildimage
-1001-Disable-WARNING-dhcp_dos_logger.py-Skipping-non-exis.patch      |sonic-buildimage
+#0070-marvell-prestera-Uboot-print_menu-improve.patch                |sonic-buildimage
+1010-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
+1001-Disable-WARNING-dhcp_dos_logger.py-Skipping-non-exis.patch     |sonic-buildimage

@@ -1,0 +1,48 @@
+From 5e2089e37825d20750368153537cbe529a1afe51 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 17 Nov 2025 21:49:59 +0200
+Subject: [PATCH 1/1] platform.json avoid systemd-sonic-generator Failed to
+ open
+
+Run-time create platform.json containing only {} to avoid frequent
+error-prints "systemd-sonic-generator Failed to open platform.json"
+
+This DUMMY is enough since real Port-configuration is generated from
+the file port_config.ini.
+
+NOTE: this platform.json can't be in repo since it fails on system-helth
+ testing at build-time.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ rd98dx35xx_cn9131/scripts/rd98dx35xx-cn9131-init.sh | 3 +++
+ rd98dx45xx_cn9131/scripts/rd98dx45xx-cn9131-init.sh | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/rd98dx35xx_cn9131/scripts/rd98dx35xx-cn9131-init.sh b/rd98dx35xx_cn9131/scripts/rd98dx35xx-cn9131-init.sh
+index 69e0dd0..c84407b 100644
+--- a/rd98dx35xx_cn9131/scripts/rd98dx35xx-cn9131-init.sh
++++ b/rd98dx35xx_cn9131/scripts/rd98dx35xx-cn9131-init.sh
+@@ -12,4 +12,7 @@ rd98dx35xx-cn9131_profile()
+ # - Main entry
+ rd98dx35xx-cn9131_profile
+ 
++# Dummy platform.json to eliminate "systemd-sonic-generator: Failed to open"
++echo "{ }" > /usr/share/sonic/device/arm64-marvell_rd98DX35xx_cn9131-r0/platform.json
++
+ exit 0
+diff --git a/rd98dx45xx_cn9131/scripts/rd98dx45xx-cn9131-init.sh b/rd98dx45xx_cn9131/scripts/rd98dx45xx-cn9131-init.sh
+index 5184528..6aabb48 100644
+--- a/rd98dx45xx_cn9131/scripts/rd98dx45xx-cn9131-init.sh
++++ b/rd98dx45xx_cn9131/scripts/rd98dx45xx-cn9131-init.sh
+@@ -12,4 +12,7 @@ rd98dx45xx-cn9131_profile()
+ # - Main entry
+ rd98dx45xx-cn9131_profile
+ 
++# Dummy platform.json to eliminate "systemd-sonic-generator: Failed to open"
++echo "{ }" > /usr/share/sonic/device/arm64-marvell_rd98DX45xx_cn9131-r0/platform.json
++
+ exit 0
+-- 
+2.34.1
+

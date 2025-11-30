@@ -1,0 +1,82 @@
+From 33eb3b17c49bcd9c9a5dc055c80188df921b045f Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 27 Nov 2025 17:07:07 +0200
+Subject: [PATCH 1/1] db98cx85xx init: rmmod-kempld
+
+Remove Kontron kempld modules causing starvation on i2c bus
+for all Intel/x86_64 boards.
+
+The starvation is seen (for example) on "reboot" and on
+"show interfaces status" commands takin several minutes.
+
+Before removing there are i2c-0/1/2 busses with "empyh" i2c-1
+and i2c-2:
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- 18 -- -- -- -- -- -- --
+20: -- -- 22 -- -- -- -- -- -- -- -- -- 2c -- -- --
+30: 30 -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: 40 -- 42 43 -- -- -- -- -- -- -- -- 4c 4d 4e 4f
+50: UU UU -- 53 -- -- -- -- 58 59 -- -- -- -- -- --
+60: -- -- -- -- -- -- 66 -- 68 -- 6a 6b -- -- -- --
+70: -- -- -- -- -- -- -- 77
+
+After removing the i2c-2 is disappeared, i2c-1 has same devices as i2c-0.
+
+The starvation depends upon HW "COMe-bBD7 E2" CPU-module on board.
+For example, the same 8514 (8535):
+- Rev 2.0.0, FPD Rev P201.0009  -- starves
+- Rev 1.0.2, FPD Rev P102.0046  -- isn't
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ db98cx8514-10cc/scripts/db98cx8514-10cc-init.sh | 5 +++++
+ db98cx8522-10cc/scripts/db98cx8522-10cc-init.sh | 5 +++++
+ db98cx8540-16cd/scripts/db98cx8540-16cd-init.sh | 5 +++++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/db98cx8514-10cc/scripts/db98cx8514-10cc-init.sh b/db98cx8514-10cc/scripts/db98cx8514-10cc-init.sh
+index d7c5551..c5eff6f 100644
+--- a/db98cx8514-10cc/scripts/db98cx8514-10cc-init.sh
++++ b/db98cx8514-10cc/scripts/db98cx8514-10cc-init.sh
+@@ -16,4 +16,9 @@ echo optoe2 0x50 > /sys/bus/i2c/devices/i2c-2/new_device
+ # Disable BIOS ACPI interrupt
+ echo disable > /sys/firmware/acpi/interrupts/gpe01
+ 
++# Remove Kontron kempld modules (causing starvation on i2c bus)
++rmmod i2c_kempld || true
++rmmod gpio_kempld || true
++rmmod kempld_core || true
++
+ exit 0
+diff --git a/db98cx8522-10cc/scripts/db98cx8522-10cc-init.sh b/db98cx8522-10cc/scripts/db98cx8522-10cc-init.sh
+index 6502301..3662b57 100644
+--- a/db98cx8522-10cc/scripts/db98cx8522-10cc-init.sh
++++ b/db98cx8522-10cc/scripts/db98cx8522-10cc-init.sh
+@@ -18,4 +18,9 @@ echo optoe2 0x50 > /sys/bus/i2c/devices/i2c-2/new_device
+ # Disable BIOS ACPI interrupt
+ echo disable > /sys/firmware/acpi/interrupts/gpe01
+ 
++# Remove Kontron kempld modules (causing starvation on i2c bus)
++rmmod i2c_kempld || true
++rmmod gpio_kempld || true
++rmmod kempld_core || true
++
+ exit 0
+diff --git a/db98cx8540-16cd/scripts/db98cx8540-16cd-init.sh b/db98cx8540-16cd/scripts/db98cx8540-16cd-init.sh
+index 612cbf8..2a41066 100644
+--- a/db98cx8540-16cd/scripts/db98cx8540-16cd-init.sh
++++ b/db98cx8540-16cd/scripts/db98cx8540-16cd-init.sh
+@@ -18,4 +18,9 @@ echo optoe2 0x50 > /sys/bus/i2c/devices/i2c-2/new_device
+ # Disable BIOS ACPI interrupt
+ echo disable > /sys/firmware/acpi/interrupts/gpe01
+ 
++# Remove Kontron kempld modules (causing starvation on i2c bus)
++rmmod i2c_kempld || true
++rmmod gpio_kempld || true
++rmmod kempld_core || true
++
+ exit 0
+-- 
+2.34.1
+
