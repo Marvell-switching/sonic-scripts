@@ -20,6 +20,7 @@ CUR_DIR=$(basename `pwd`)
 LOG_FILE=patches_result.log
 FULL_PATH=`pwd`
 err_cnt=0
+PATCH_SERIES_FILE=
 
 # VERIFY_PATCHES=Y may be selected by MRVL sonic_build_script.sh
 if [[ "$DEVEL" == "" || "$VERIFY_PATCHES" == "Y" ]]; then
@@ -155,7 +156,7 @@ wget_cp()
 
 apply_sonicbuildimage_patches()
 {
- cat series_${PLATFORM}_${ARCH} | grep -v -E '^#|^$' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
+ cat ${PATCH_SERIES_FILE} | grep -v -E '^#|^$' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
  do
 	echo $patch_file
 	pushd patches
@@ -178,7 +179,7 @@ apply_sonicbuildimage_patches()
 apply_submodule_patches()
 {
 	CWD=`pwd`
- cat series_${PLATFORM}_${ARCH} | grep -v -E '^#|^$' | grep -v sonic-buildimage | while read -r line
+ cat ${PATCH_SERIES_FILE} | grep -v -E '^#|^$' | grep -v sonic-buildimage | while read -r line
  do
 	patch=`echo $line | cut -f 1 -d'|'`
 	dir=`echo $line | cut -f 2 -d'|'`
@@ -235,10 +236,15 @@ main()
 	[ -d patches ] || mkdir patches
 
 	# wget patch series file
-	wget_cp $WGET_PATH/series_${PLATFORM}_${ARCH}
-	if [ ! -f series_${PLATFORM}_${ARCH} ]; then
-		log "ERROR: Series file series_${PLATFORM}_${ARCH} not found"
-		exit 1
+    PATCH_SERIES_FILE=series_${PLATFORM}_${ARCH}
+	wget_cp $WGET_PATH/${PATCH_SERIES_FILE}
+	if [ ! -f ${PATCH_SERIES_FILE} ]; then
+		PATCH_SERIES_FILE=series_${PLATFORM}
+		wget_cp $WGET_PATH/${PATCH_SERIES_FILE}
+		if [ ! -f ${PATCH_SERIES_FILE} ]; then
+			log "ERROR: Series file series_${PLATFORM}_${ARCH} not found"
+		    exit 1
+		fi
 	fi
 
 	# Apply patch

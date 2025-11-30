@@ -1,4 +1,4 @@
-From 09256d5098a23d007f534195a87770694bff7812 Mon Sep 17 00:00:00 2001
+From a2ac1ba495d32cd36230d8c4a0d9c19cbc7c8b97 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Fri, 21 Nov 2025 23:36:19 +0200
 Subject: [PATCH 1/1] orchagent/portsorch: fix Query ingress priority groups
@@ -10,12 +10,12 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  1 file changed, 5 insertions(+)
 
 diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
-index 7f3c29f3..89f9a37e 100644
+index cb27f138..cb24265a 100644
 --- a/orchagent/portsorch.cpp
 +++ b/orchagent/portsorch.cpp
-@@ -6469,6 +6469,11 @@ void PortsOrch::initializePriorityGroupsBulk(std::vector<Port>& ports)
-             const auto& port = ports[idx];
+@@ -6532,6 +6532,11 @@ void PortsOrch::initializePriorityGroupsBulk(std::vector<Port>& ports)
              const auto status = bulker.statuses[idx];
+             idx++;
  
 +            if (port.m_priority_group_ids.size() == 0)
 +            {
