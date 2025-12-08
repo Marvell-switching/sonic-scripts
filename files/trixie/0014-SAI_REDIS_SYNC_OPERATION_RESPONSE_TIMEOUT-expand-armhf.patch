@@ -1,0 +1,33 @@
+From dd844062b27c5f305286e51cea3f10ddb9e913c6 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sat, 6 Dec 2025 20:55:49 +0200
+Subject: [PATCH 1/1] SAI_REDIS_SYNC_OPERATION_RESPONSE_TIMEOUT expand for
+ armhf
+
+Fix for issue
+https://github.com/sonic-net/sonic-buildimage/issues/24765
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ orchagent/saihelper.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/orchagent/saihelper.cpp b/orchagent/saihelper.cpp
+index 47fd7d4a..c3bf0707 100644
+--- a/orchagent/saihelper.cpp
++++ b/orchagent/saihelper.cpp
+@@ -29,7 +29,11 @@ using namespace swss;
+ #define STR(s) _STR(s)
+ 
+ #define CONTEXT_CFG_FILE "/usr/share/sonic/hwsku/context_config.json"
++#if defined(__arm__)
++#define SAI_REDIS_SYNC_OPERATION_RESPONSE_TIMEOUT ((480*1000)*2)
++#else
+ #define SAI_REDIS_SYNC_OPERATION_RESPONSE_TIMEOUT (480*1000)
++#endif
+ 
+ // hwinfo = "INTERFACE_NAME/PHY ID", mii_ioctl_data->phy_id is a __u16
+ #define HWINFO_MAX_SIZE IFNAMSIZ + 1 + 5
+-- 
+2.34.1
+
