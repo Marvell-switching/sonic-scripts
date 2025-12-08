@@ -10,8 +10,8 @@
 # Patches from BOOKWORM
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch     |src/sonic-utilities
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
-0020-arm64-kdump-support-add-support-in-kdump-config.patch          |src/sonic-utilities
-0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch     |sonic-buildimage
+#0020-arm64-kdump-support-add-support-in-kdump-config.patch          |src/sonic-utilities
+#0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch     |sonic-buildimage
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 
