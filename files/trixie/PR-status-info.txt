@@ -10,6 +10,9 @@ https://github.com/sonic-net/sonic-swss/pull/4023
 (https://github.com/sonic-net/sonic-buildimage/issues/24613)
   0031-swss-ACL-fix-remove-mem-override.patch                     |src/sonic-swss
 
+https://github.com/saiarcot895/sonic-buildimage/pull/84
+  0010-marvell-prestera-raise-syncd-nice-8-priority.patch         |sonic-buildimage
+
 -------------------------------
 TRACKING:
 https://github.com/sonic-net/sonic-buildimage/issues/23900
@@ -17,4 +20,4 @@ https://github.com/sonic-net/sonic-buildimage/issues/23901
 https://github.com/sonic-net/sonic-buildimage/issues/23902
 https://github.com/sonic-net/sonic-buildimage/issues/24586
 https://github.com/sonic-net/sonic-buildimage/issues/24594
-git branch
+
