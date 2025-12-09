@@ -1,0 +1,49 @@
+=================================================================================
+===================  "reboot_test"  =============================================
+=================================================================================
+
+Check CPSS presence as PCIE-EndPoint after reboot
+-------------------------------------------------
+- reboot_test_run.sh-SONiC (described below)
+- reboot_test_pcie.sh  - quick Debian-Only (no SONiC start), STOPs on error
+
+
+=================  reboot_test_run.sh-SONiC  =============================================
+When this "reboot_test" installed it does:
+**************
+Starts as SERVICE
+Prints
+    reboot_test no.NN started ---------------------------
+ where NN is test-cycle counter
+Waits 220 sec to apply "msai" and check the "msai" result
+IF the result is OK, prints
+   reboot_test no.NN passed
+IF the result is "fail", prints and saves the /var/log/syslog in /host/reboot/test/slreboot.NN.flt
+   reboot_test no.NN failed
+Remove /etc/sonic/config_db.json on EVEN test-cyle (e.g. next ODD cycle starts without configuration),
+but keep the config file for ODD cycle (e.g. next EVEN cycle goes with existing config file).
+Always remove /var/log/syslog* to remove the history as preparation for next cycle
+Go to reboot for next test-cycle
+**************
+Upon test failure (after the reboot) possible to see/get/report the SYSLOG files kept as
+    /host/reboot/test/slreboot.NN.flt
+    /host/reboot/test/slreboot.KK.flt
+
+*********************************************************************
+To INSTALL the test:
+-------------------
+cd /host/
+scp ....../reboot_test.tar.gz
+tar xf reboot_test.tar.gz
+cd reboot_test
+./reboot_test_install.sh
+*********************************************************************
+Start the test (after installation)
+----------------------------------
+reboot
+*********************************************************************
+Stop-Uninstall the test
+-----------------------
+/host/reboot_test/reboot_test_uninstall.sh
+
+

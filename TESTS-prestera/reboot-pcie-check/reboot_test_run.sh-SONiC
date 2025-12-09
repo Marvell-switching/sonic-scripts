@@ -1,0 +1,56 @@
+#!/bin/bash
+# ---------------- PCIE test ---------------------------
+# Full SONiC (vs Debian-Only)
+# RESULTs saved in   /host/reboot_test/*
+
+CONSOLE="/dev/console"
+BASE="/host/reboot_test"
+CNTR="$BASE/reboot_cntr"
+
+# Read and increment counter
+CNTR_VAL=$(cat "$CNTR")
+CNTR_VAL=$((CNTR_VAL + 1))
+echo "$CNTR_VAL" > "$CNTR"
+
+# with docker and full SONiC test
+
+echo "PCIE reboot_test no.$CNTR_VAL started ---------------------------" >$CONSOLE
+
+# Wait 220 seconds
+sleep 200
+echo "reboot_test: msai check in 20 sec ---------------------------" >$CONSOLE
+sleep 10
+echo "reboot_test: msai check in 10 sec ---------------------------" >$CONSOLE
+sleep 10
+
+if [ -n "$INVOCATION_ID" ] || [ -n "$JOURNAL_STREAM" ]; then
+    # Running as service - redirect output
+    msai >/dev/null 2>/dev/null
+else
+    # Running from shell - normal output
+    msai
+fi
+RET=$?
+if [ $RET -eq 0 ]; then
+    echo "reboot_test no.$CNTR_VAL passed" >$CONSOLE
+else
+    echo "reboot_test no.$CNTR_VAL failed" >$CONSOLE
+    cp /var/log/syslog "$BASE/slreboot.$CNTR_VAL.flt"  ## 2>/dev/null || true
+fi
+
+rem=$(( CNTR_VAL % 2 ))
+if [ "$rem" -eq 0 ]; then
+    rm -f /etc/sonic/config_db.json
+fi
+
+# Reboot system
+rm -rf /var/log/syslog*
+reboot
+
+exit 0
+
+## Quick enter and stop ---------------------------
+/host/reboot_test/reboot_test_uninstall.sh
+
+ls -l /host/reboot_test/*
+
