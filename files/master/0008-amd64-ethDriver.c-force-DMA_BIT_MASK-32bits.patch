@@ -1,0 +1,40 @@
+From 5270f2da3244eca40e3ad9e4f12cae9621517dde Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 16 Dec 2025 20:19:11 +0200
+Subject: [PATCH 1/1] amd64: ethDriver.c force DMA_BIT_MASK 32bits
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../linuxNoKernelModule/drivers/ethDriver.c            | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+index e9921f2..2b7e35d 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+@@ -4021,13 +4021,21 @@ static int mvppnd_pci_probe(struct pci_dev *pdev,
+ 		goto disable_pci_device;
+ 	}
+ 
++#if defined(CONFIG_X86)
++	/* We want 32 bit address space */
++	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
++	if (rc) {
++		dev_err(&pdev->dev, "Fail to set 32bit DMA mask\n");
++		goto free_regions;
++	}
++#else
+ 	/* We want 36 bit address space (32GB boards) */
+ 	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(36));
+ 	if (rc) {
+ 		dev_err(&pdev->dev, "Fail to set 36bit DMA mask\n");
+ 		goto free_regions;
+ 	}
+-
++#endif
+ 	pci_set_master(pdev);
+ 
+ 	ppdev->irq = ppdev->pdev.pdev->irq;
+-- 
+2.34.1
+
