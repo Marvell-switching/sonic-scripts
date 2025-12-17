@@ -1,4 +1,0 @@
-0001-Redis-timeout-WA.patch|sonic-buildimage
-0001-Enable-AC5X-marvell-x86-platform.patch|sonic-buildimage
-0001-SAI-switch-create-timeout-WA.patch|src/sonic-sairedis
-3135.patch|src/sonic-swss
