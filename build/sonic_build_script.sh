@@ -220,13 +220,11 @@ parse_arguments()
     fi
 
     # TRIXIE overrides
-    if [ "${BRANCH}" == "trixie" ]; then
-        GIT_HUB_URL="https://github.com/saiarcot895/sonic-buildimage.git"
-        GIT_BRANCH_PARAM="--single-branch"
+    if [ "${BRANCH}" == "master" ] || [ "${BRANCH}" = "202511" ]; then
         l_DEBIAN="trixie"
-        ENABLE_DOCKER_BASE_PULL_YN=""
-        NO_CACHE=Y
-        echo -e "\n TRIXIE-build force: no ENABLE_DOCKER_BASE_PULL and no-cache. Size ~49G\n"
+        #ENABLE_DOCKER_BASE_PULL_YN=""
+        #NO_CACHE=Y
+        #echo -e "\n Force: no ENABLE_DOCKER_BASE_PULL and no-cache\n"
     fi
 }
 
@@ -376,11 +374,6 @@ clone_ws()
         check_error $? "git-checkout-commit"
     fi
     git log -1 > commit_log.txt
-
-    if [ "${BRANCH}" == "202311" ] || [ "${BRANCH}" == "202305" ] || [ "${BRANCH}" == "202211" ]; then
-        #override
-        l_DEBIAN="bullseye"
-    fi
 }
 
 # commit_id_*

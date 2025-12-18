@@ -1,0 +1,29 @@
+From e3cb639c155fd8a43948d5113c6431313fa4f3d1 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Wed, 17 Dec 2025 17:41:07 +0200
+Subject: [PATCH] marvell-prestera: sai-1.17.1-1
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+
+diff --git a/platform/marvell-prestera/sai.mk b/platform/marvell-prestera/sai.mk
+index 49643c401..75a121126 100644
+--- a/platform/marvell-prestera/sai.mk
++++ b/platform/marvell-prestera/sai.mk
+@@ -2,11 +2,11 @@
+ 
+ BRANCH = master
+ ifeq ($(CONFIGURED_ARCH),arm64)
+-MRVL_SAI_VERSION = 1.16.1-3
++MRVL_SAI_VERSION = 1.17.1-1
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+-MRVL_SAI_VERSION = 1.16.1-3
++MRVL_SAI_VERSION = 1.17.1-1
+ else
+-MRVL_SAI_VERSION = 1.16.1-3
++MRVL_SAI_VERSION = 1.17.1-1
+ endif
+ 
+ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
+-- 
+2.34.1
+
