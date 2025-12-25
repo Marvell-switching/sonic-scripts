@@ -1,4 +1,4 @@
-From 07bdfa500799b200f3d4ba401c26d1aeff72b167 Mon Sep 17 00:00:00 2001
+From 3cd1f51080db8510ba059caa335aa0904a675702 Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
 Date: Thu, 27 Nov 2025 13:38:56 +0200
 Subject: [PATCH 1/1] arm64: mrvl-pcie-ep-check.service, reboot on EP miss
@@ -11,48 +11,14 @@ As workaround, check Marvell EP presence on PCIE. If missed - make the reboot.
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
- debian/mrvlprestera.install.template-arm64    |  4 ++
- debian/rules                                  |  6 +++
  .../mrvl-pcie-ep-check.service                |  1 +
  .../systemd/system/mrvl-pcie-ep-check.service | 15 ++++++
  .../usr/local/bin/mrvl-pcie-ep-check.sh       | 53 +++++++++++++++++++
- 5 files changed, 79 insertions(+)
- create mode 100644 debian/mrvlprestera.install.template-arm64
+ 3 files changed, 69 insertions(+)
  create mode 120000 platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service
  create mode 100644 platform/arm64/common/usr/lib/systemd/system/mrvl-pcie-ep-check.service
  create mode 100755 platform/arm64/common/usr/local/bin/mrvl-pcie-ep-check.sh
 
-diff --git a/debian/mrvlprestera.install.template-arm64 b/debian/mrvlprestera.install.template-arm64
-new file mode 100644
-index 0000000..d247749
---- /dev/null
-+++ b/debian/mrvlprestera.install.template-arm64
-@@ -0,0 +1,4 @@
-+platform/ARCH/common/boot/*.dtb /boot
-+platform/ARCH/common/usr/local/bin/* /usr/local/bin
-+platform/ARCH/common/usr/lib/systemd/system/* /usr/lib/systemd/system
-+platform/ARCH/common/etc/systemd/system/* /etc/systemd/system
-diff --git a/debian/rules b/debian/rules
-index a50fb85..a16afd3 100755
---- a/debian/rules
-+++ b/debian/rules
-@@ -24,10 +24,16 @@ override_dh_auto_build:
- 	@if [ "$(CONFIGURED_ARCH)" = "amd64" ]; then \
- 		echo "platform/$(CONFIGURED_ARCH)/common/usr/local/bin/* /usr/local/bin" > \
- 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
-+	else \
-+	if [ "$(CONFIGURED_ARCH)" = "arm64" ]; then \
-+		sed "s/ARCH/${CONFIGURED_ARCH}/g" \
-+		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template-arm64 \
-+		    > ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
- 	else \
- 		sed "s/ARCH/${CONFIGURED_ARCH}/g" \
- 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template \
- 		    > ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
-+	fi \
- 	fi
- 
- override_dh_auto_test:
 diff --git a/platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service b/platform/arm64/common/etc/systemd/system/multi-user.target.wants/mrvl-pcie-ep-check.service
 new file mode 120000
 index 0000000..43c8620
