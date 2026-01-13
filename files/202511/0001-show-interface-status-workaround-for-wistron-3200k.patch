@@ -1,0 +1,28 @@
+From 1ba9654107e0405e33162659938d741142558fcb Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 27 Feb 2025 04:32:48 -0800
+Subject: [PATCH 2/2] show interface status workaround for wistron 3200k box
+
+In transceiver related error case show interfaces status command
+takes the path of executing ipmi command which requires root
+privilage. adding sudo to run ipmi command with root privilage
+---
+ .../sw-to3200k/sonic_platform/thermal.py                        | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
+index 730f5b1c6..76fbab805 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
+@@ -52,7 +52,7 @@ class Thermal(ThermalBase):
+         self.__initialize_threshold()
+ 
+     def __initialize_threshold(self):
+-        cmd = ["ipmitool", "raw", "0x4", "0x27"]
++        cmd = ["sudo", "ipmitool", "raw", "0x4", "0x27"]
+         if self.lnc is None:
+             cmd.append(self.IPMI_SENSOR_NR[self.index])
+             p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+-- 
+2.25.1
+

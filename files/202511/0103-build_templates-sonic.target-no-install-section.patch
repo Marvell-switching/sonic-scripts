@@ -1,0 +1,23 @@
+From a8102d658113331a81d71ae7776a58cdf9d29ea0 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 23 Dec 2025 11:48:29 +0200
+Subject: [PATCH 1/1] build_templates/sonic.target no install section
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ files/build_templates/sonic.target | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/files/build_templates/sonic.target b/files/build_templates/sonic.target
+index 4070e21a0..f73e6977d 100644
+--- a/files/build_templates/sonic.target
++++ b/files/build_templates/sonic.target
+@@ -1,5 +1,2 @@
+ [Unit]
+ Description=SONiC services target.
+-
+-[Install]
+-WantedBy=multi-user.target
+-- 
+2.34.1
+

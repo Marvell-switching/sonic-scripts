@@ -1,0 +1,143 @@
+From 162dc5465467ede7766e14ac8ba0b1104deab77a Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 22 Dec 2025 19:03:13 +0200
+Subject: [PATCH 1/1] sonic-ext.target wrapper for sonic.target
+
+Create and enable sonic-ext.target wrapper acrivated on boot
+instead of regular sonic.target and applying the sonic-pre.service
+with "hook" sonic-ext.sh before activating for sonic.target.
+
+This wrapper does not impacts the SONiC commands having
+sonic.target start/stop/restart inside, but the bootup only.
+
+On devices slow CPU (armhf) this permits to "split/delay" between
+Debian bootup and SONiC.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ debian/mrvlprestera.install.template          |  1 +
+ debian/rules                                  |  2 ++
+ .../multi-user.target.wants/sonic-ext.target  |  1 +
+ .../usr/lib/systemd/system/sonic-ext.target   |  5 +++
+ .../usr/lib/systemd/system/sonic-pre.service  | 18 ++++++++++
+ platform/common/usr/local/bin/sonic-pre.sh    | 36 +++++++++++++++++++
+ platform/common/usr/local/bin/sonic_firstboot |  0
+ 7 files changed, 63 insertions(+)
+ create mode 120000 platform/common/etc/systemd/system/multi-user.target.wants/sonic-ext.target
+ create mode 100644 platform/common/usr/lib/systemd/system/sonic-ext.target
+ create mode 100644 platform/common/usr/lib/systemd/system/sonic-pre.service
+ create mode 100755 platform/common/usr/local/bin/sonic-pre.sh
+ create mode 100644 platform/common/usr/local/bin/sonic_firstboot
+
+diff --git a/debian/mrvlprestera.install.template b/debian/mrvlprestera.install.template
+index 5d3ea0d..8af809b 100644
+--- a/debian/mrvlprestera.install.template
++++ b/debian/mrvlprestera.install.template
+@@ -1,2 +1,3 @@
++platform/common/* /
+ platform/ARCH/common/boot/*.dtb /boot
+ platform/ARCH/common/usr/local/bin/* /usr/local/bin
+diff --git a/debian/rules b/debian/rules
+index a50fb85..ab9c4b9 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -24,6 +24,8 @@ override_dh_auto_build:
+ 	@if [ "$(CONFIGURED_ARCH)" = "amd64" ]; then \
+ 		echo "platform/$(CONFIGURED_ARCH)/common/usr/local/bin/* /usr/local/bin" > \
+ 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
++		echo "platform/common/* /" >> \
++		    ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
+ 	else \
+ 		sed "s/ARCH/${CONFIGURED_ARCH}/g" \
+ 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template \
+diff --git a/platform/common/etc/systemd/system/multi-user.target.wants/sonic-ext.target b/platform/common/etc/systemd/system/multi-user.target.wants/sonic-ext.target
+new file mode 120000
+index 0000000..5c398e5
+--- /dev/null
++++ b/platform/common/etc/systemd/system/multi-user.target.wants/sonic-ext.target
+@@ -0,0 +1 @@
++/lib/systemd/system/sonic-ext.target
+\ No newline at end of file
+diff --git a/platform/common/usr/lib/systemd/system/sonic-ext.target b/platform/common/usr/lib/systemd/system/sonic-ext.target
+new file mode 100644
+index 0000000..f81ad7e
+--- /dev/null
++++ b/platform/common/usr/lib/systemd/system/sonic-ext.target
+@@ -0,0 +1,5 @@
++[Unit]
++Description=SONiC extended target starting sonic.target after pre.service
++Requires=sonic-pre.service
++After=sonic-pre.service
++Wants=sonic.target
+diff --git a/platform/common/usr/lib/systemd/system/sonic-pre.service b/platform/common/usr/lib/systemd/system/sonic-pre.service
+new file mode 100644
+index 0000000..efb0ff7
+--- /dev/null
++++ b/platform/common/usr/lib/systemd/system/sonic-pre.service
+@@ -0,0 +1,18 @@
++[Unit]
++Description=SONiC pre-start service
++Before=sonic.target
++ConditionPathExists=/usr/local/bin/sonic-pre.sh
++DefaultDependencies=no
++After=local-fs.target
++Requires=network-online.target
++Wants=network-online.target
++
++[Service]
++Type=oneshot
++ExecStart=/usr/local/bin/sonic-pre.sh
++RemainAfterExit=yes
++TimeoutStartSec=0
++
++[Install]
++WantedBy=sonic-ext.target
++
+diff --git a/platform/common/usr/local/bin/sonic-pre.sh b/platform/common/usr/local/bin/sonic-pre.sh
+new file mode 100755
+index 0000000..ca0cce6
+--- /dev/null
++++ b/platform/common/usr/local/bin/sonic-pre.sh
+@@ -0,0 +1,36 @@
++#!/bin/bash
++
++MACHINE=$(uname -m)
++
++if [ -f /usr/local/bin/sonic_firstboot ]; then
++    rm -f /usr/local/bin/sonic_firstboot
++    case $MACHINE in
++        armv7l)
++            DELAY=30
++            ;;
++        aarch64|x86_64)
++            DELAY=2
++            ;;
++        *)
++            DELAY=0
++            ;;
++    esac
++else
++    case $MACHINE in
++        armv7l)
++            DELAY=20
++            ;;
++        aarch64|x86_64)
++            DELAY=0
++            ;;
++        *)
++            DELAY=0
++            ;;
++    esac
++fi
++
++echo "sonic-pre start with delay $DELAY sec" > /dev/kmsg
++if [ "$DELAY" -eq 0 ]; then exit 0; fi
++sleep $DELAY
++echo "sonic-pre end. Start sonic" > /dev/kmsg
++
+diff --git a/platform/common/usr/local/bin/sonic_firstboot b/platform/common/usr/local/bin/sonic_firstboot
+new file mode 100644
+index 0000000..e69de29
+-- 
+2.34.1
+

@@ -1,0 +1,30 @@
+From 849449dbd99087ca0856fa76f8baa2d8a5ab7f88 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 8 Dec 2025 16:14:05 +0200
+Subject: [PATCH 1/1] marvell-prestera: raise syncd nice -8 priority
+
+Fix for issue
+https://github.com/sonic-net/sonic-buildimage/issues/24771
+syncd supervisor-proc-exit-listener FATAL under startup and high CPU loading
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../docker-syncd-mrvl-prestera/supervisord.conf                 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera/supervisord.conf b/platform/marvell-prestera/docker-syncd-mrvl-prestera/supervisord.conf
+index 95ba2a89e..4d80416f8 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera/supervisord.conf
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera/supervisord.conf
+@@ -31,7 +31,7 @@ stderr_syslog=true
+ dependent_startup=true
+ 
+ [program:syncd]
+-command=/usr/bin/syncd_start.sh
++command=/usr/bin/nice -n -8 /usr/bin/syncd_start.sh
+ priority=3
+ autostart=false
+ autorestart=false
+-- 
+2.34.1
+
