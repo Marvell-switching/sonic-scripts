@@ -2,7 +2,8 @@
 ## Correct and verified 15-Jan-2026 on SONiC hash
 ## abb204cb6 -  2026-01-15 Tejaswini Chadaga : Update DNX saibcm kernel modules (#25076)
 ## Patches with PR:
-## 0007    https://github.com/sonic-net/sonic-buildimage/pull/25097
+## 0101    https://github.com/sonic-net/sonic-buildimage/pull/25126
+## 0007    https://github.com/sonic-net/sonic-buildimage/pull/25127
 ## 0011    https://github.com/sonic-net/sonic-buildimage/pull/24945
 ## 0100    https://github.com/sonic-net/sonic-buildimage/pull/24946
 ## 0012    https://github.com/sonic-net/sonic-utilities/pull/4173
@@ -28,13 +29,12 @@
 # TRIXIE specific and strictly-ordered patches
 0030-orchagent-portsorch-fix-Query-ingress-priority-group.patch     |src/sonic-swss
 0031-swss-ACL-fix-remove-mem-override.patch                         |src/sonic-swss
-0007-submod-mrvl-prestera-update-15jan.patch                        |sonic-buildimage
 0011-marvell-prestera-sai-1.17.1-1.patch                            |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
 0100-marvell-prestera-raise-syncd-nice-8-priority.patch             |sonic-buildimage
-0101-mrvl-pcie-ep-check.service-SMDEP-ignore-symlink.patch          |sonic-buildimage
-0103-build_templates-sonic.target-no-install-section.patch          |sonic-buildimage
+0101-marvell-prestera-SMDEP-ignore-symlink.patch                    |sonic-buildimage
+0007-mrvl-prestera-update-15jan-Nokia.patch                         |sonic-buildimage
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
 # OPTIONAL not to apply
