@@ -1,0 +1,20 @@
+From 3aa03a8abf3ffec668dc0275dbdc87da18bdcae4 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 15 Jan 2026 22:10:07 +0200
+Subject: [PATCH 1/1] [submod] mrvl-prestera update 15jan on 202505
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/mrvl-prestera | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/mrvl-prestera b/platform/marvell-prestera/mrvl-prestera
+index 88f0532a0..42b65ef88 160000
+--- a/platform/marvell-prestera/mrvl-prestera
++++ b/platform/marvell-prestera/mrvl-prestera
+@@ -1 +1 @@
+-Subproject commit 88f0532a0e6c33d399dc69096da463ce4fcfa8d4
++Subproject commit 42b65ef88e293be85c9fa7f383b6f7fe199b863d
+-- 
+2.34.1
+

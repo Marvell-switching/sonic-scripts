@@ -1,11 +1,11 @@
-From 75d22d6759d70a9e30333ee290d783e4a03af130 Mon Sep 17 00:00:00 2001
+From de72886e9df6647e3e4a0b2980e8335f631d854e Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
-Date: Thu, 15 Jan 2026 20:44:43 +0200
-Subject: [PATCH 1/1] [submod] mrvl-prestera update 15jan
+Date: Mon, 19 Jan 2026 20:40:09 +0200
+Subject: [PATCH 2/2] mrvl-prestera update 15jan Nokia
 
-intDriver: Add timeout WA for lost IRQs (#56)
-sonic-ext.target wrapper for sonic.target (#60)
-amd64: ethDriver.c force DMA_BIT_MASK 32bits (#59)
+intDriver: Add timeout WA for lost IRQs (sonic-net#56)
+sonic-ext.target wrapper for sonic.target (sonic-net#60)
+amd64: ethDriver.c force DMA_BIT_MASK 32bits (sonic-net#59)
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
@@ -13,12 +13,12 @@ Signed-off-by: Yan Markman <ymarkman@marvell.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/platform/marvell-prestera/mrvl-prestera b/platform/marvell-prestera/mrvl-prestera
-index 0e6334897..f455d2bc9 160000
+index 0e6334897..52cdc81db 160000
 --- a/platform/marvell-prestera/mrvl-prestera
 +++ b/platform/marvell-prestera/mrvl-prestera
 @@ -1 +1 @@
 -Subproject commit 0e63348973df0c1793684704cb6e9d07bf5d473e
-+Subproject commit f455d2bc9e426cbe7e8945a3c331697b9e0febcf
++Subproject commit 52cdc81db3585515f9c16be2c295e9c2d5f0b3ea
 -- 
 2.34.1
 
