@@ -1,3 +1,4 @@
+0007-submod-mrvl-prestera-update-15jan-on-202505.patch|sonic-buildimage
 0001-buildimage-print-each-build-target-on-separated-line.patch|sonic-buildimage
 0001-platform-marvell-prestera-fw_setenv-with-without-f.patch|sonic-buildimage
 0012-utilities-restart-mgmt-over-usb-interface-if-not-RUN.patch|src/sonic-utilities
