@@ -10,12 +10,12 @@
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
-0031-swss-ACL-fix-remove-mem-override.patch                         |src/sonic-swss
-0011-marvell-prestera-sai-1.17.1-1.patch                            |sonic-buildimage
+#0011-marvell-prestera-sai-1.17.1-3.patch                            |sonic-buildimage
+0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
-0100-marvell-prestera-raise-syncd-nice-8-priority.patch             |sonic-buildimage
-0101-marvell-prestera-SMDEP-ignore-symlink.patch                    |sonic-buildimage
 0007-mrvl-prestera-update-15jan-Nokia.patch                         |sonic-buildimage
+0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
+0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
