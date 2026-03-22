@@ -1,0 +1,45 @@
+From 47aadcb96a77d9d2417d1bc6050f75baeebf0ae9 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 19 Mar 2026 13:03:02 +0200
+Subject: [PATCH 1/1] fast-reboot warm-reboot prohibit from root
+
+PROBLEM:
+fast-reboot and warm-reboot are working properly only
+when called "sudo x-reboot" from admin, but NOT from "root"
+
+PROBLEM appearances:
+- x-reboot stuck forever or till watchdog expiry
+- after reboot SAI started improperly
+- "fast-reboot" passes over full system-reset (including reset-BIOS-GRUB)
+
+SOLUTION:
+Prohibit call from "root"
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ scripts/fast-reboot | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/fast-reboot b/scripts/fast-reboot
+index 6d994693..194d6872 100755
+--- a/scripts/fast-reboot
++++ b/scripts/fast-reboot
+@@ -897,10 +897,14 @@ parseOptions $@
+ # Filter ASIC list based on -m option
+ filter_asic_list
+ 
++if [[ -z "$SUDO_USER" || "$SUDO_USER" == "root" ]]; then
++    echo "This command must be run as admin#sudo... but not as root" >&2
++    exit "${EXIT_FAILURE}"
++fi
+ # Check root privileges
+ if [[ "$EUID" -ne 0 ]]
+ then
+-    echo "This command must be run as root" >&2
++    echo "This command must be run as sudo" >&2
+     exit "${EXIT_FAILURE}"
+ fi
+ 
+-- 
+2.34.1
+
