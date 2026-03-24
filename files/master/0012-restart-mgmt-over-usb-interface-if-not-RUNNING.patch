@@ -1,8 +1,7 @@
-From 2a1cb1e5af100e9470aa03ab654a1a81f78b16a8 Mon Sep 17 00:00:00 2001
+From 229cb0b2e3d42b0d6c9b97b8ac318f7a37334a9e Mon Sep 17 00:00:00 2001
 From: Yan Markman <ymarkman@marvell.com>
-Date: Thu, 17 Jul 2025 10:37:23 +0300
-Subject: [PATCH 1/1] [utilities] restart mgmt over-usb interface if not
- RUNNING
+Date: Tue, 24 Mar 2026 23:44:56 +0200
+Subject: [PATCH 1/2] restart mgmt over-usb interface if not RUNNING
 
 PROBLEM:
 Sometimes after "config reload" command the management
@@ -16,19 +15,21 @@ If the management interface is a USB device and is not RUNNING
 (/sys/class/net/${if}/operstate is not "up") at the end of the
 "config reload" command
 bring it down and up with delay to trigger renegotiation.
+Before bringing it down, save default route and restore them
+after bringing the interface up again
 
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
- config/main.py | 41 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 41 insertions(+)
+ config/main.py | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
 diff --git a/config/main.py b/config/main.py
-index 45224de7..24809dc7 100644
+index 9197fb8f..f6432cdf 100644
 --- a/config/main.py
 +++ b/config/main.py
-@@ -1018,6 +1018,45 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
+@@ -1073,6 +1073,50 @@ def _wait_for_monit_service_monitored(service, timeout=10):
+     log.log_error("Monit monitor action for '{}' did not complete within {} seconds".format(service, timeout))
  
-     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
  
 +def get_mgmt_interface():
 +    """
@@ -49,7 +50,8 @@ index 45224de7..24809dc7 100644
 +def reset_mgmt_interface_if_usb_not_running():
 +    """
 +    If the management interface is a USB device and not RUNNING,
-+    bring it down and up with delay to trigger renegotiation.
++    bring it down and up with delay to trigger re-negotiation.
++    Failures are logged and ignored so reload is not aborted.
 +    """
 +    iface = get_mgmt_interface()
 +    if not iface:
@@ -65,14 +67,18 @@ index 45224de7..24809dc7 100644
 +        pass  # Continue to attempt reset
 +
 +    click.echo("Reset USB-based mgmt interface for re-negotiation")
-+    subprocess.run(["ip", "link", "set", iface, "down"], check=True)
-+    time.sleep(1.0)
-+    subprocess.run(["ip", "link", "set", iface, "up"], check=True)
-+    # Continue anyway
- 
++    try:
++        subprocess.run(["ip", "link", "set", iface, "down"], check=True)
++        time.sleep(1.0)
++        subprocess.run(["ip", "link", "set", iface, "up"], check=True)
++    except (subprocess.CalledProcessError, OSError) as err:
++        log.log_warning("USB mgmt interface reset failed for {}: {}".format(iface, err))
++
++
  def _restart_services():
      last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
-@@ -1043,6 +1082,8 @@ def _restart_services():
+     last_networking_timestamp = get_service_finish_timestamp('networking')
+@@ -1099,6 +1143,8 @@ def _restart_services():
      click.echo("Reloading Monit configuration ...")
      clicommon.run_command(['sudo', 'monit', 'reload'])
  
@@ -82,5 +88,5 @@ index 45224de7..24809dc7 100644
      out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
      if out.strip() != "active":
 -- 
-2.25.1
+2.34.1
 
