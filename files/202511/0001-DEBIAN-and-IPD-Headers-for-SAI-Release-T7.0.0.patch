@@ -1,0 +1,32 @@
+From 56a7c58f8712364531ee877a966bd021f6db360f Mon Sep 17 00:00:00 2001
+From: Spandan Dasgupta <sdasgupta@marvell.com>
+Date: Tue, 7 Apr 2026 15:26:52 +0530
+Subject: [PATCH] DEBIAN and IPD Headers for SAI Release T7.0.0
+
+---
+ platform/marvell-teralynx/mrvl-teralynx | 2 +-
+ platform/marvell-teralynx/sai.mk        | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-teralynx/mrvl-teralynx b/platform/marvell-teralynx/mrvl-teralynx
+index 53d8dcf62..0aa7da2f5 160000
+--- a/platform/marvell-teralynx/mrvl-teralynx
++++ b/platform/marvell-teralynx/mrvl-teralynx
+@@ -1 +1 @@
+-Subproject commit 53d8dcf6270719e7bdc42619e182015bb2245ac7
++Subproject commit 0aa7da2f5fadcd2e919bc41b56256eea26fcce9d
+diff --git a/platform/marvell-teralynx/sai.mk b/platform/marvell-teralynx/sai.mk
+index 272ddc269..2efdb5851 100755
+--- a/platform/marvell-teralynx/sai.mk
++++ b/platform/marvell-teralynx/sai.mk
+@@ -1,6 +1,6 @@
+ # MRVL_TERALYNX SAI
+ 
+-MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/master
++MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/202511/T7.0.0
+ 
+ MRVL_TERALYNX_LIBSAI = isai.deb
+ MRVL_TERALYNX_HSAI   = saihdr.deb
+-- 
+2.25.1
+
