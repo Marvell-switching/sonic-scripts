@@ -1,8 +1,6 @@
-
-From cd6675c9d8244741a15bec7e81cfc782dd194ddc Mon Sep 17 00:00:00 2001
+From 164916b2bac90876d7b0c874502818cdfe63436c Mon Sep 17 00:00:00 2001
 From: Spandan Dasgupta <sdasgupta@marvell.com>
-Date: Wed, 8 Apr 2026 16:51:01 +0530
-
+Date: Wed, 8 Apr 2026 18:38:02 +0530
 Subject: [PATCH] DEBIAN and IPD Headers for SAI Release T7.0.0
 
 ---
@@ -12,13 +10,11 @@ Subject: [PATCH] DEBIAN and IPD Headers for SAI Release T7.0.0
 
 diff --git a/platform/marvell-teralynx/mrvl-teralynx b/platform/marvell-teralynx/mrvl-teralynx
 index 53d8dcf62..b514bf0b4 160000
-
 --- a/platform/marvell-teralynx/mrvl-teralynx
 +++ b/platform/marvell-teralynx/mrvl-teralynx
 @@ -1 +1 @@
 -Subproject commit 53d8dcf6270719e7bdc42619e182015bb2245ac7
 +Subproject commit b514bf0b446af5db96064990cfa09fd0d4db8124
-
 diff --git a/platform/marvell-teralynx/sai.mk b/platform/marvell-teralynx/sai.mk
 index 272ddc269..2efdb5851 100755
 --- a/platform/marvell-teralynx/sai.mk
