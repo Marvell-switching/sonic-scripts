@@ -1,10 +1,11 @@
 ##-------------------------------------------------------------------------------------
 ## Correct and verified 22-Mar-2026 on SONiC hash
-## cee76d55f -  2026-03-21 saksarav-nokia : [Nokia] Enable interrupts for all cores in BCM DNX devices (#26245)
+## 4afba46e2 - 2026-04-11 mssonicbld : [submodule] Update submodule sonic-swss-common to the latest HEAD automatically (#26720)
 ## Patches with PR:
 ## 0011    https://github.com/sonic-net/sonic-buildimage/pull/26440
 ## 0012    https://github.com/sonic-net/sonic-utilities/pull/4174 \_squash; pull/4390 on <202511>
 ## 0015    https://github.com/sonic-net/sonic-utilities/pull/4174 /
+## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 4372    https://github.com/sonic-net/sonic-utilities/pull/4372
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
