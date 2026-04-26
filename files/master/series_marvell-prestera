@@ -1,10 +1,8 @@
 ##-------------------------------------------------------------------------------------
 ## Correct and verified 22-Mar-2026 on SONiC hash
-## 4afba46e2 - 2026-04-11 mssonicbld : [submodule] Update submodule sonic-swss-common to the latest HEAD automatically (#26720)
+## 3706490f8 - 2026-04-25 mssonicbld : [submodule] Update submodule sonic-dash-ha to the latest HEAD automatically (#26949)
 ## Patches with PR:
-## 0011    https://github.com/sonic-net/sonic-buildimage/pull/26440
-## 0012    https://github.com/sonic-net/sonic-utilities/pull/4174 \_squash; pull/4390 on <202511>
-## 0015    https://github.com/sonic-net/sonic-utilities/pull/4174 /
+## 0012    https://github.com/sonic-net/sonic-buildimage/pull/26992 (replaces the #26440)
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 4372    https://github.com/sonic-net/sonic-utilities/pull/4372
@@ -17,15 +15,13 @@
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 
 # From BOOKWORM
-0012-restart-mgmt-over-usb-interface-if-not-RUNNING.patch           |src/sonic-utilities
-0015-Nokia-armhf-config-reload-with-swss-and-sync-restart.patch     |src/sonic-utilities
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
 4372-fast-reboot-warm-reboot-prohibit-from-root.patch               |src/sonic-utilities
 0064-build_templates-marvell-blacklist-with-kempld.patch            |sonic-buildimage
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
-0011-marvell-prestera-sai-1.17.1-2.patch                            |sonic-buildimage
+0012-marvell-prestera-sai-1.17.1-12.patch                           |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
