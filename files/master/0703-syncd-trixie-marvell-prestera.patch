@@ -1,0 +1,108 @@
+From d12179e690ea538d37c4bb74d961003c1d0d3fd0 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 27 Apr 2026 19:41:48 +0300
+Subject: [PATCH 1/1] syncd-trixie: marvell-prestera
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk | 4 ++--
+ .../docker-saiserver-mrvl-prestera/Dockerfile.j2            | 6 +++---
+ platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk | 2 +-
+ .../docker-syncd-mrvl-prestera-rpc/Dockerfile.j2            | 4 ++--
+ platform/marvell-prestera/docker-syncd-mrvl-prestera.mk     | 2 +-
+ .../docker-syncd-mrvl-prestera/Dockerfile.j2                | 2 +-
+ 6 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk b/platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk
+index 88eb35940..5376bd162 100644
+--- a/platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk
++++ b/platform/marvell-prestera/docker-saiserver-mrvl-prestera.mk
+@@ -3,9 +3,9 @@
+ DOCKER_SAISERVER_MRVL = docker-saiserver$(SAITHRIFT_VER)-mrvl-prestera.gz
+ $(DOCKER_SAISERVER_MRVL)_PATH = $(PLATFORM_PATH)/docker-saiserver-mrvl-prestera
+ $(DOCKER_SAISERVER_MRVL)_DEPENDS += $(SAISERVER)
+-$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_BOOKWORM)
++$(DOCKER_SAISERVER_MRVL)_LOAD_DOCKERS += $(DOCKER_CONFIG_ENGINE_TRIXIE)
+ SONIC_DOCKER_IMAGES += $(DOCKER_SAISERVER_MRVL)
+-SONIC_BOOKWORM_DOCKERS += $(DOCKER_SAISERVER_MRVL)
++SONIC_TRIXIE_DOCKERS += $(DOCKER_SAISERVER_MRVL)
+ 
+ $(DOCKER_SAISERVER_MRVL)_CONTAINER_NAME = saiserver$(SAITHRIFT_VER)
+ $(DOCKER_SAISERVER_MRVL)_RUN_OPT += --privileged -t
+diff --git a/platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2 b/platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2
+index fba058ea6..2a928d310 100644
+--- a/platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2
++++ b/platform/marvell-prestera/docker-saiserver-mrvl-prestera/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages %}
+-ARG BASE=docker-config-engine-bookworm-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++ARG BASE=docker-config-engine-trixie-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ FROM $BASE AS base
+ 
+@@ -10,11 +10,11 @@ ENV DEBIAN_FRONTEND=noninteractive
+ 
+ RUN apt-get update              \
+  && apt-get -y install          \
+-      libboost-atomic1.74.0     \
++      libboost-atomic1.88.0     \
+       libqt5core5a              \
+       libqt5network5            \
+       gdb                       \
+-      libthrift-0.17.0
++      libthrift-0.19.0t64
+ 
+ COPY \
+ {% for deb in docker_saiserver_mrvl_prestera_debs.split(' ') -%}
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
+index feed954e3..d8c4d22ec 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
+@@ -25,4 +25,4 @@ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/warmboot:/var/warmboot
+ 
+-SONIC_BOOKWORM_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
++SONIC_TRIXIE_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2 b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
+index 3941d8b15..906a1f8d1 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
+@@ -21,8 +21,8 @@ RUN apt-get update \
+     wget                \
+     libqt5core5a        \
+     libqt5network5      \
+-    libboost-atomic1.74.0 \
+-    libthrift-0.17.0      \
++    libboost-atomic1.88.0 \
++    libthrift-0.19.0t64   \
+     libnanomsg5           \
+     libnanomsg-dev
+ 
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
+index 177f9a10e..885374cad 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
+@@ -1,7 +1,7 @@
+ # docker image for mrvl syncd
+ 
+ DOCKER_SYNCD_PLATFORM_CODE = mrvl-prestera
+-include $(PLATFORM_PATH)/../template/docker-syncd-bookworm.mk
++include $(PLATFORM_PATH)/../template/docker-syncd-trixie.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2 b/platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2
+index 553b3b8c3..ed89330b7 100755
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera/Dockerfile.j2
+@@ -1,5 +1,5 @@
+ {% from "dockers/dockerfile-macros.j2" import install_debian_packages, copy_files %}
+-ARG BASE=docker-config-engine-bookworm-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++ARG BASE=docker-config-engine-trixie-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ 
+ FROM $BASE AS base
+ 
+-- 
+2.34.1
+
