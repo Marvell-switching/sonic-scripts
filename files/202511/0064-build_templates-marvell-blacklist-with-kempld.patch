@@ -1,0 +1,43 @@
+From f3232eefe642601ba2bf8f8baea3c23860032c44 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Tue, 31 Mar 2026 12:11:15 +0300
+Subject: [PATCH 1/1] build_templates: marvell blacklist with kempld
+
+Expand into build_templates basic rootfs with blacklist file
+/etc/modprobe.d/50-kempld.conf specifically for
+Marvell AMD64 Kontron/kemld modules wich lead to
+- occasional i2c SMBUS and KEMPLD bus enumeration swap with further PMON failure
+- I2c-mux collision and bus-stuck on a Marvell device
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ files/build_templates/sonic_debian_extension.j2 | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/files/build_templates/sonic_debian_extension.j2 b/files/build_templates/sonic_debian_extension.j2
+index 757260cd2..b097e2468 100644
+--- a/files/build_templates/sonic_debian_extension.j2
++++ b/files/build_templates/sonic_debian_extension.j2
+@@ -867,6 +867,19 @@ fi
+ ## copy blacklist file
+ sudo cp $IMAGE_CONFIGS/platform/linux_kernel_bde.conf $FILESYSTEM_ROOT/etc/modprobe.d/
+ 
++# Marvell AMD64 blacklist with Kontron/kemld modules wich lead to
++# - occasional i2c SMBUS and KEMPLD bus enumeration swap with further PMON failure
++# - I2c-mux collision and bus-stuck on a Marvell device
++if [[ "$CONFIGURED_PLATFORM" == "marvell-prestera" && "$CONFIGURED_ARCH" == "amd64" ]]; then
++FILE="$FILESYSTEM_ROOT/etc/modprobe.d/50-kempld.conf"
++sudo mkdir -p "$(dirname "$FILE")"
++grep -q kempld_core "$FILE" 2>/dev/null || sudo tee -a "$FILE" > /dev/null <<'EOF'
++blacklist kempld_core
++blacklist gpio_kempld
++blacklist i2c_kempld
++EOF
++fi
++
+ # Enable psample drivers to support sFlow on vs
+ {% if sonic_asic_platform == "vs" %}
+ sudo tee -a $FILESYSTEM_ROOT/etc/modules-load.d/modules.conf > /dev/null <<EOF
+-- 
+2.34.1
+
