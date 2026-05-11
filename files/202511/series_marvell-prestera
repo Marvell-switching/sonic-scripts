@@ -1,3 +1,5 @@
+## 8c89a2551 - 2026-05-06 mssonicbld : [FRR][Patch]: bgpd: Fix suppress-fib-pending config race condition on startup (#27197)
+
 # OPTIONAL
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 
@@ -7,6 +9,7 @@
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
+0014-marvell-prestera-sai-1.17.1-13.patch                           |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
