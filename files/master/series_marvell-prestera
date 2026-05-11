@@ -1,13 +1,13 @@
 ##-------------------------------------------------------------------------------------
-## 43d5886ea -  2026-05-04 yijingyan2 : [build] add libsaimetadata as build dependency for libsaivs (#27128)
-##     \--- ++ 1878-sonic-sairedis-1878.patch -->  https://github.com/sonic-net/sonic-sairedis/pull/1878
+## 3706490f8 - 2026-04-25 mssonicbld : [submodule] Update submodule sonic-dash-ha to the latest HEAD automatically (#26949)
+##
 ## Patches with PR:
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 4372    https://github.com/sonic-net/sonic-utilities/pull/4372
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
 ## 0701/0702/0703 https://github.com/sonic-net/sonic-buildimage/pull/27136
-## 0014-marvell-prestera-sai-1.17.1-4.patch
+## 0014    https://github.com/sonic-net/sonic-buildimage/pull/27233
 ##-------------------------------------------------------------------------------------
 
 # Apply optional and oldest first, but newest - last for easy debug
@@ -22,7 +22,7 @@
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
-0014-marvell-prestera-sai-1.17.1-4.patch                            |sonic-buildimage
+0014-marvell-prestera-sai-1.17.1-13.patch                           |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
