@@ -6,8 +6,7 @@
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 4372    https://github.com/sonic-net/sonic-utilities/pull/4372
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
-## 0701/0702/0703 https://github.com/sonic-net/sonic-buildimage/pull/27136
-## 0014    https://github.com/sonic-net/sonic-buildimage/pull/27233
+## 0703    https://github.com/sonic-net/sonic-buildimage/pull/27136
 ##-------------------------------------------------------------------------------------
 
 # Apply optional and oldest first, but newest - last for easy debug
@@ -17,13 +16,12 @@
 
 # From BOOKWORM
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
-4372-fast-reboot-warm-reboot-prohibit-from-root.patch               |src/sonic-utilities
 0064-build_templates-marvell-blacklist-with-kempld.patch            |sonic-buildimage
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
-0014-marvell-prestera-sai-1.17.1-13.patch                           |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
+0703-syncd-trixie-marvell-prestera.patch                            |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
 0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
@@ -40,7 +38,3 @@
 #20250-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch      |sonic-buildimage
 #0057-sonic-platform-wistron-rules-for-trixie.patch                  |sonic-buildimage
 
-# syncd-TRIXIE
-0701-syncd-trixie-platfrom-template.patch                           |sonic-buildimage
-0702-syncd-trixie-sonic-slave-trixie-Dockerfile.j2-setupt.patch     |sonic-buildimage
-0703-syncd-trixie-marvell-prestera.patch                            |sonic-buildimage

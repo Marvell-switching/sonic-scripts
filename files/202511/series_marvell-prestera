@@ -9,7 +9,6 @@
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 # TRIXIE specific and strictly-ordered patches
-0014-marvell-prestera-sai-1.17.1-13.patch                           |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 
 # Strictly ordered performance/stability patch-SET ----------------------------
