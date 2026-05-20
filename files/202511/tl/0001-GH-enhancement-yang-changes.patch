@@ -1,0 +1,131 @@
+From df94bf9a5d87bcf4d39cf636317a1059739588c5 Mon Sep 17 00:00:00 2001
+From: Anandhi Dhanabalan <adhanabalan@marvell.com>
+Date: Thu, 11 Dec 2025 16:51:37 +0530
+Subject: [PATCH] GH enhancement yang changes
+
+Signed-off-by: Anandhi Dhanabalan <adhanabalan@marvell.com>
+---
+ .../yang-models/sonic-hash.yang               | 62 +++++++++++++++++++
+ .../yang-templates/sonic-types.yang.j2        | 13 ++++
+ 2 files changed, 75 insertions(+)
+
+diff --git a/src/sonic-yang-models/yang-models/sonic-hash.yang b/src/sonic-yang-models/yang-models/sonic-hash.yang
+index 10d2592d3..02e56a04e 100644
+--- a/src/sonic-yang-models/yang-models/sonic-hash.yang
++++ b/src/sonic-yang-models/yang-models/sonic-hash.yang
+@@ -41,6 +41,8 @@ module sonic-hash {
+             enum INNER_L4_DST_PORT;
+             enum INNER_L4_SRC_PORT;
+             enum IPV6_FLOW_LABEL;
++            enum RDMA_BTH_OPCODE;
++            enum RDMA_BTH_DEST_QP;
+         }
+     }
+ 
+@@ -58,12 +60,72 @@ module sonic-hash {
+                     ordered-by user;
+                 }
+ 
++                leaf-list ecmp_hash_ipv4 {
++                    description "Hash fields for hashing ipv4 packets going through ECMP";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list ecmp_hash_ipv6 {
++                    description "Hash fields for hashing ipv6 packets going through ECMP";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list ecmp_hash_ipnip {
++                    description "Hash fields for hashing ipnip packets going through ECMP";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list ecmp_hash_ipv4_rdma {
++                    description "Hash fields for hashing ipv4_rdma packets going through ECMP";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list ecmp_hash_ipv6_rdma {
++                    description "Hash fields for hashing ipv6_rdma packets going through ECMP";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
+                 leaf-list lag_hash  {
+                     description "Hash fields for hashing packets going through LAG";
+                     type hash:hash-field;
+                     ordered-by user;
+                 }
+ 
++                leaf-list lag_hash_ipv4 {
++                    description "Hash fields for hashing ipv4 packets going through LAG";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list lag_hash_ipv6 {
++                    description "Hash fields for hashing ipv6 packets going through LAG";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list lag_hash_ipnip {
++                    description "Hash fields for hashing ipnip packets going through LAG";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list lag_hash_ipv4_rdma {
++                    description "Hash fields for hashing ipv4_rdma packets going through LAG";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
++                leaf-list lag_hash_ipv6_rdma {
++                    description "Hash fields for hashing ipv6_rdma packets going through LAG";
++                    type hash:hash-field;
++                    ordered-by user;
++                }
++
+                 leaf ecmp_hash_algorithm {
+                     description "Hash algorithm for hashing packets going through ECMP";
+                     type stypes:hash-algorithm;
+diff --git a/src/sonic-yang-models/yang-templates/sonic-types.yang.j2 b/src/sonic-yang-models/yang-templates/sonic-types.yang.j2
+index 8a003d545..e1092db7b 100644
+--- a/src/sonic-yang-models/yang-templates/sonic-types.yang.j2
++++ b/src/sonic-yang-models/yang-templates/sonic-types.yang.j2
+@@ -353,6 +353,8 @@ module sonic-types {
+             enum INNER_L4_DST_PORT;
+             enum INNER_L4_SRC_PORT;
+             enum IPV6_FLOW_LABEL;
++            enum RDMA_BTH_OPCODE;
++            enum RDMA_BTH_DEST_QP;
+         }
+     }
+ 
+@@ -369,6 +371,17 @@ module sonic-types {
+         }
+     }
+ 
++    typedef hash-packet-type {
++        description "Represents the packet type for which hash is configured";
++        type enumeration {
++            enum IPV4;
++            enum IPV6;
++            enum IPNIP;
++            enum IPV4_RDMA;
++            enum IPV6_RDMA;
++        }
++    }
++
+     typedef timezone-name-type {
+         type string;
+         description
+-- 
+2.25.1
+

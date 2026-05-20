@@ -1,0 +1,1582 @@
+From 3e321f06ca1ae59dd2e029690dc54f69189cf6a3 Mon Sep 17 00:00:00 2001
+From: Rakshitha SK <rsk@marvell.com>
+Date: Tue, 28 Apr 2026 08:46:00 +0530
+Subject: [PATCH] sonic-yang-models-Add-YANG-model-for-OSPFv2 Problem: OSPFv2
+ CONFIG_DB tables had no YANG model. config apply-patch reported "no YANG
+ models" for all OSPFV2_* tables and skipped validation.
+
+RCA:
+sonic-ospfv2.yang was missing. Without it, sonic-yang and CVL could
+not validate OSPF field types, ranges, and enum values.
+
+Fix:
+
+Add sonic-ospfv2.yang to yang-models/
+Register in setup.py package_data
+Add OSPF entries to sample_config_db.json
+Add YANG validation test cases (tests/yang_model_tests/)
+
+Signed-off-by: Rakshitha SK <rsk@marvell.com>
+---
+ src/sonic-yang-models/setup.py                |   1 +
+ .../tests/files/sample_config_db.json         |  40 +
+ .../tests/yang_model_tests/tests/ospfv2.json  |  96 +++
+ .../yang_model_tests/tests_config/ospfv2.json | 573 +++++++++++++
+ .../yang-models/sonic-ospfv2.yang             | 799 ++++++++++++++++++
+ 5 files changed, 1509 insertions(+)
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests/ospfv2.json
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests_config/ospfv2.json
+ create mode 100644 src/sonic-yang-models/yang-models/sonic-ospfv2.yang
+
+diff --git a/src/sonic-yang-models/setup.py b/src/sonic-yang-models/setup.py
+index 1b8fec987..5965ba4b9 100644
+--- a/src/sonic-yang-models/setup.py
++++ b/src/sonic-yang-models/setup.py
+@@ -165,6 +165,7 @@ yang_files = [
+     'sonic-neigh.yang',
+     'sonic-ntp.yang',
+     'sonic-nvgre-tunnel.yang',
++    'sonic-ospfv2.yang',
+     'sonic-passwh.yang',
+     'sonic-pbh.yang',
+     'sonic-peer-switch.yang',
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 31c96da6c..455408878 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -3340,6 +3340,46 @@
+                 "ars_obj_name": "ars_obj_name"
+             },
+             "Ethernet8": {}
++        },
++        "OSPFV2_ROUTER": {
++            "default": {
++                "enable": "true",
++                "router-id": "1.1.1.1"
++            }
++        },
++        "OSPFV2_ROUTER_AREA": {
++            "default|0.0.0.0": {
++                "stub": "false"
++            }
++        },
++        "OSPFV2_ROUTER_AREA_NETWORK": {
++            "default|0.0.0.0|10.0.0.0/24": {
++                "NULL": "NULL"
++            }
++        },
++        "OSPFV2_ROUTER_AREA_VIRTUAL_LINK": {
++            "default|0.0.0.1|2.2.2.2": {
++                "enable": "true"
++            }
++        },
++        "OSPFV2_ROUTER_AREA_POLICY_ADDRESS_RANGE": {
++            "default|0.0.0.0|10.0.0.0/8": {
++                "advertise": "true"
++            }
++        },
++        "OSPFV2_ROUTER_DISTRIBUTE_ROUTE": {
++            "default|CONNECTED|IMPORT": {
++                "metric": "10"
++            }
++        },
++        "OSPFV2_INTERFACE": {
++            "Ethernet0|0.0.0.0": {
++                "area-id": "0.0.0.0"
++            }
++        },
++        "OSPFV2_ROUTER_PASSIVE_INTERFACE": {
++            "default|Ethernet4|0.0.0.0": {
++            }
+         }
+     },
+     "SAMPLE_CONFIG_DB_UNKNOWN": {
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/ospfv2.json b/src/sonic-yang-models/tests/yang_model_tests/tests/ospfv2.json
+new file mode 100644
+index 000000000..177f30ccd
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/ospfv2.json
+@@ -0,0 +1,96 @@
++{
++    "OSPFV2_ROUTER_DEFAULT_VRF_TEST": {
++        "desc": "Configure OSPF router in default VRF with basic fields."
++    },
++    "OSPFV2_ROUTER_CUSTOM_VRF_TEST": {
++        "desc": "Configure OSPF router in a named VRF (leafref to VRF_LIST)."
++    },
++    "OSPFV2_ROUTER_ALL_PARAMS_TEST": {
++        "desc": "Configure OSPF router with all optional parameters."
++    },
++    "OSPFV2_ROUTER_AREA_TEST": {
++        "desc": "Configure OSPF area with MD5 authentication, shortcut, and filter lists."
++    },
++    "OSPFV2_ROUTER_AREA_STUB_TEST": {
++        "desc": "Configure OSPF totally-stubby area with default-cost."
++    },
++    "OSPFV2_ROUTER_AREA_NETWORK_TEST": {
++        "desc": "Assign a network prefix to an OSPF area."
++    },
++    "OSPFV2_ROUTER_AREA_VIRTUAL_LINK_TEST": {
++        "desc": "Configure OSPF virtual link with MD5 authentication and all timer fields."
++    },
++    "OSPFV2_ROUTER_AREA_RANGE_TEST": {
++        "desc": "Configure OSPF area range with metric, advertise flag, and substitue-prefix."
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_IMPORT_TEST": {
++        "desc": "Configure OSPF redistribute BGP routes (IMPORT direction) with route-map and metric."
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_DEFAULT_TEST": {
++        "desc": "Configure OSPF default-information originate with always flag."
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_EXPORT_TEST": {
++        "desc": "Configure OSPF distribute-list on EXPORT direction with access-list for BGP and STATIC protocols."
++    },
++    "OSPFV2_INTERFACE_TEST": {
++        "desc": "Configure OSPF on an interface with specific IP address, timers, and authentication."
++    },
++    "OSPFV2_INTERFACE_ALL_ADDR_TEST": {
++        "desc": "Configure OSPF on interface using 0.0.0.0 wildcard address."
++    },
++    "OSPFV2_PASSIVE_INTERFACE_TEST": {
++        "desc": "Configure OSPF passive interface (key-only table)."
++    },
++    "OSPFV2_INTERFACE_BFD_WITH_ADDR_TEST": {
++        "desc": "Configure OSPF interface with bfd-enable on an address-specific entry — bfd-enable is interface-wide and must only be set on the if_addr = 0.0.0.0 entry.",
++        "eStr": ["bfd-enable is an interface-wide setting"]
++    },
++    "OSPFV2_INTERFACE_NETWORK_TYPE_WITH_ADDR_TEST": {
++        "desc": "Configure OSPF interface with network-type on an address-specific entry — network-type is interface-wide and must only be set on the if_addr = 0.0.0.0 entry.",
++        "eStr": ["network-type is an interface-wide setting"]
++    },
++    "OSPFV2_ROUTER_INVALID_ROUTER_ID_TEST": {
++        "desc": "Configure OSPF router with invalid router-id (not an IPv4 address).",
++        "eStrKey": "Pattern"
++    },
++    "OSPFV2_ROUTER_INVALID_ABR_TYPE_TEST": {
++        "desc": "Configure OSPF router with invalid abr-type enum value.",
++        "eStr": ["Invalid"]
++    },
++    "OSPFV2_ROUTER_INVALID_WRITE_MULTIPLIER_TEST": {
++        "desc": "Configure OSPF router with write-multiplier=0 (valid range is 1..100).",
++        "eStr": ["range"]
++    },
++    "OSPFV2_ROUTER_AREA_INVALID_AUTH_TEST": {
++        "desc": "Configure OSPF area with invalid authentication enum value.",
++        "eStr": ["Invalid"]
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_INVALID_PROTOCOL_TEST": {
++        "desc": "Configure OSPF redistribute with invalid protocol enum value.",
++        "eStr": ["Invalid"]
++    },
++    "OSPFV2_INTERFACE_METRIC_ZERO_TEST": {
++        "desc": "Configure OSPF interface with metric=0 (valid range is 1..65535).",
++        "eStr": ["range"]
++    },
++    "OSPFV2_INTERFACE_HELLO_MULTIPLIER_DEAD_INTERVAL_TEST": {
++        "desc": "Configure OSPF interface with both dead-interval and hello-multiplier set — mutually exclusive in FRR.",
++        "eStr": ["mutually exclusive"]
++    },
++    "OSPFV2_VLINK_MD5_KEY_ID_ONLY_TEST": {
++        "desc": "Configure virtual-link with authentication-key-id but no authentication-md5-key — both must be set together.",
++        "eStr": ["authentication-key-id and authentication-md5-key must be set together"]
++    },
++    "OSPFV2_VLINK_MD5_KEY_ONLY_TEST": {
++        "desc": "Configure virtual-link with authentication-md5-key but no authentication-key-id — both must be set together.",
++        "eStr": ["authentication-key-id and authentication-md5-key must be set together"]
++    },
++    "OSPFV2_ROUTER_SPF_TIMER_ONE_OF_THREE_TEST": {
++        "desc": "Configure OSPF router with only spf-initial-delay set — all three SPF timer leaves must be set together.",
++        "eStr": ["spf-initial-delay, spf-maximum-delay and spf-throttle-delay must all be set together"]
++    },
++    "OSPFV2_ROUTER_SPF_TIMER_TWO_OF_THREE_TEST": {
++        "desc": "Configure OSPF router with spf-initial-delay and spf-maximum-delay but missing spf-throttle-delay — all three must be set together.",
++        "eStr": ["spf-initial-delay, spf-maximum-delay and spf-throttle-delay must all be set together"]
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/ospfv2.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/ospfv2.json
+new file mode 100644
+index 000000000..4dd89abeb
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/ospfv2.json
+@@ -0,0 +1,573 @@
++{
++    "OSPFV2_ROUTER_DEFAULT_VRF_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "router-id": "1.1.1.1"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_CUSTOM_VRF_TEST": {
++        "sonic-vrf:sonic-vrf": {
++            "sonic-vrf:VRF": {
++                "VRF_LIST": [
++                    {
++                        "name": "Vrf_ospf"
++                    }
++                ]
++            }
++        },
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "Vrf_ospf",
++                        "enable": "true",
++                        "router-id": "2.2.2.2"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_ALL_PARAMS_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "router-id": "10.10.10.1",
++                        "abr-type": "STANDARD",
++                        "auto-cost-reference-bandwidth": "100000",
++                        "ospf-rfc1583-compatible": "false",
++                        "passive-interface-default": "false",
++                        "default-metric": "20",
++                        "write-multiplier": "20",
++                        "log-adjacency-changes": "DETAIL",
++                        "distance-all": "110",
++                        "distance-intra-area": "50",
++                        "distance-inter-area": "60",
++                        "distance-external": "70",
++                        "spf-initial-delay": "200",
++                        "spf-maximum-delay": "5000",
++                        "spf-throttle-delay": "1000",
++                        "lsa-min-interval-timer": "1000",
++                        "lsa-min-arrival-timer": "1000",
++                        "lsa-refresh-timer": "1800",
++                        "max-metric-administrative": "false",
++                        "graceful-restart-enable": "true",
++                        "graceful-restart-grace-period": "120",
++                        "graceful-restart-helper-enable": "true"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA": {
++                "OSPFV2_ROUTER_AREA_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "authentication": "MD5HMAC",
++                        "shortcut": "DEFAULT",
++                        "import-list": "OSPF_IMPORT_LIST",
++                        "export-list": "OSPF_EXPORT_LIST",
++                        "filter-list-in": "OSPF_FILTER_IN",
++                        "filter-list-out": "OSPF_FILTER_OUT"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_STUB_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA": {
++                "OSPFV2_ROUTER_AREA_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.2",
++                        "stub": "true",
++                        "stub-no-summary": "true",
++                        "stub-default-cost": "10"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_NETWORK_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA_NETWORK": {
++                "OSPFV2_ROUTER_AREA_NETWORK_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.0",
++                        "network": "10.0.0.0/8",
++                        "NULL": "NULL"
++                    },
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "network": "192.168.1.0/24",
++                        "NULL": "NULL"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_VIRTUAL_LINK_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA_VIRTUAL_LINK": {
++                "OSPFV2_ROUTER_AREA_VIRTUAL_LINK_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "nbr_router_id": "10.0.0.2",
++                        "enable": "true",
++                        "hello-interval": "10",
++                        "dead-interval": "40",
++                        "retransmission-interval": "5",
++                        "transmit-delay": "1",
++                        "authentication-type": "MD5HMAC",
++                        "authentication-key-id": "1",
++                        "authentication-md5-key": "ospfmd5key"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_RANGE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA_POLICY_ADDRESS_RANGE": {
++                "OSPFV2_ROUTER_AREA_POLICY_ADDRESS_RANGE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "prefix": "192.168.0.0/24",
++                        "advertise": "true",
++                        "metric": "100",
++                        "substitue-prefix": "192.168.1.0/24"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_IMPORT_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_DISTRIBUTE_ROUTE": {
++                "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "protocol": "BGP",
++                        "direction": "IMPORT",
++                        "metric": "100",
++                        "metric-type": "TYPE_2",
++                        "route-map": "SET_BGP_METRIC"
++                    },
++                    {
++                        "vrf_name": "default",
++                        "protocol": "STATIC",
++                        "direction": "IMPORT",
++                        "metric": "200",
++                        "metric-type": "TYPE_1"
++                    },
++                    {
++                        "vrf_name": "default",
++                        "protocol": "CONNECTED",
++                        "direction": "IMPORT"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_DEFAULT_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_DISTRIBUTE_ROUTE": {
++                "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "protocol": "DEFAULT_ROUTE",
++                        "direction": "IMPORT",
++                        "always": "true",
++                        "metric": "10",
++                        "metric-type": "TYPE_1"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_EXPORT_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_DISTRIBUTE_ROUTE": {
++                "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "protocol": "BGP",
++                        "direction": "EXPORT",
++                        "access-list": "FILTER_BGP_OUT"
++                    },
++                    {
++                        "vrf_name": "default",
++                        "protocol": "STATIC",
++                        "direction": "EXPORT",
++                        "access-list": "FILTER_STATIC_OUT"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet0",
++                        "if_addr": "192.168.1.1",
++                        "vrf_name": "default",
++                        "area-id": "0.0.0.0",
++                        "metric": "100",
++                        "priority": "1",
++                        "hello-interval": "10",
++                        "dead-interval": "40",
++                        "retransmission-interval": "5",
++                        "transmit-delay": "1",
++                        "authentication-type": "TEXT",
++                        "authentication-key": "secret01"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_ALL_ADDR_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet4",
++                        "if_addr": "0.0.0.0",
++                        "vrf_name": "default",
++                        "area-id": "0.0.0.1",
++                        "network-type": "POINT_TO_POINT_NETWORK",
++                        "bfd-enable": "true",
++                        "metric": "10",
++                        "hello-interval": "10",
++                        "dead-interval": "40",
++                        "mtu-ignore": "true",
++                        "authentication-type": "MD5HMAC",
++                        "authentication-key-id": "5",
++                        "authentication-md5-key": "ospfmd5key"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_PASSIVE_INTERFACE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_PASSIVE_INTERFACE": {
++                "OSPFV2_ROUTER_PASSIVE_INTERFACE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "if_name": "Ethernet4",
++                        "if_addr": "10.0.0.1"
++                    },
++                    {
++                        "vrf_name": "default",
++                        "if_name": "Ethernet8",
++                        "if_addr": "0.0.0.0"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_BFD_WITH_ADDR_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet0",
++                        "if_addr": "192.168.1.1",
++                        "vrf_name": "default",
++                        "bfd-enable": "true"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_NETWORK_TYPE_WITH_ADDR_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet0",
++                        "if_addr": "192.168.1.1",
++                        "vrf_name": "default",
++                        "network-type": "BROADCAST_NETWORK"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_INVALID_ROUTER_ID_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "router-id": "not.a.valid.ip"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_INVALID_ABR_TYPE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "abr-type": "ospf-abr"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_INVALID_WRITE_MULTIPLIER_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "write-multiplier": "0"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_AREA_INVALID_AUTH_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA": {
++                "OSPFV2_ROUTER_AREA_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "authentication": "PLAINTEXT"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_DISTRIBUTE_INVALID_PROTOCOL_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_DISTRIBUTE_ROUTE": {
++                "OSPFV2_ROUTER_DISTRIBUTE_ROUTE_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "protocol": "ISIS",
++                        "direction": "IMPORT"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_METRIC_ZERO_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet0",
++                        "if_addr": "192.168.1.1",
++                        "vrf_name": "default",
++                        "area-id": "0.0.0.0",
++                        "metric": "0"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_INTERFACE_HELLO_MULTIPLIER_DEAD_INTERVAL_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_INTERFACE": {
++                "OSPFV2_INTERFACE_LIST": [
++                    {
++                        "if_name": "Ethernet0",
++                        "if_addr": "192.168.1.1",
++                        "vrf_name": "default",
++                        "area-id": "0.0.0.0",
++                        "dead-interval": "40",
++                        "hello-multiplier": "3"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_VLINK_MD5_KEY_ID_ONLY_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA_VIRTUAL_LINK": {
++                "OSPFV2_ROUTER_AREA_VIRTUAL_LINK_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "nbr_router_id": "10.0.0.2",
++                        "authentication-type": "MD5HMAC",
++                        "authentication-key-id": "1"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_VLINK_MD5_KEY_ONLY_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true"
++                    }
++                ]
++            },
++            "sonic-ospfv2:OSPFV2_ROUTER_AREA_VIRTUAL_LINK": {
++                "OSPFV2_ROUTER_AREA_VIRTUAL_LINK_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "area_id": "0.0.0.1",
++                        "nbr_router_id": "10.0.0.2",
++                        "authentication-type": "MD5HMAC",
++                        "authentication-md5-key": "ospfmd5key"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_SPF_TIMER_ONE_OF_THREE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "spf-initial-delay": "200"
++                    }
++                ]
++            }
++        }
++    },
++    "OSPFV2_ROUTER_SPF_TIMER_TWO_OF_THREE_TEST": {
++        "sonic-ospfv2:sonic-ospfv2": {
++            "sonic-ospfv2:OSPFV2_ROUTER": {
++                "OSPFV2_ROUTER_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "enable": "true",
++                        "spf-initial-delay": "200",
++                        "spf-maximum-delay": "5000"
++                    }
++                ]
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/yang-models/sonic-ospfv2.yang b/src/sonic-yang-models/yang-models/sonic-ospfv2.yang
+new file mode 100644
+index 000000000..ac4c75169
+--- /dev/null
++++ b/src/sonic-yang-models/yang-models/sonic-ospfv2.yang
+@@ -0,0 +1,799 @@
++module sonic-ospfv2 {
++
++    yang-version 1.1;
++
++    namespace "http://github.com/sonic-net/sonic-ospfv2";
++    prefix ospfv2;
++
++    import sonic-vrf {
++        prefix vrf;
++    }
++
++    import ietf-inet-types {
++        prefix inet;
++    }
++
++    import sonic-types {
++        prefix stypes;
++    }
++
++    organization "SONiC";
++
++    contact "SONiC";
++
++    description "SONiC OSPF v2 YANG model.";
++
++    revision 2026-04-10 {
++        description "Initial revision.";
++    }
++
++    typedef ospf-area-id-type {
++        type inet:ipv4-address;
++        description
++            "OSPF area identifier in dotted-decimal notation (e.g. 0.0.0.0, 0.0.0.1).
++             Only dotted-decimal form is accepted to prevent duplicate keys — FRR
++             treats integer form (e.g. 1) and dotted-decimal (e.g. 0.0.0.1) as the
++             same 32-bit area ID.";
++    }
++
++    typedef ospf-if-addr-type {
++        type union {
++            type inet:ipv4-address;
++            type string {
++                pattern "0\\.0\\.0\\.0";
++            }
++        }
++        description
++            "Interface IP address.
++             Use 0.0.0.0 to apply OSPF config to all addresses on the interface.";
++    }
++
++    container sonic-ospfv2 {
++
++        container OSPFV2_ROUTER {
++            description "OSPF global router configuration per VRF.";
++
++            list OSPFV2_ROUTER_LIST {
++                key "vrf_name";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name. Use 'default' for the default routing table.";
++                }
++
++                leaf enable {
++                    type stypes:boolean_type;
++                    description "Enable OSPF on this VRF.";
++                }
++
++                leaf router-id {
++                    type inet:ipv4-address;
++                    description "OSPF router-id.";
++                }
++
++                leaf abr-type {
++                    type enumeration {
++                        enum "CISCO"    { description "Cisco ABR implementation."; }
++                        enum "IBM"      { description "IBM ABR implementation."; }
++                        enum "SHORTCUT" { description "Shortcut ABR."; }
++                        enum "STANDARD" { description "Standard ABR (RFC 2328)."; }
++                    }
++                    description "OSPF ABR type.";
++                }
++
++                leaf auto-cost-reference-bandwidth {
++                    type uint32 {
++                        range "1..4294967";
++                    }
++                    description "Reference bandwidth in Mbits/sec for OSPF cost calculation.";
++                }
++
++                leaf ospf-rfc1583-compatible {
++                    type stypes:boolean_type;
++                    description "Enable RFC 1583 compatibility mode.";
++                }
++
++                leaf passive-interface-default {
++                    type stypes:boolean_type;
++                    description "Set all interfaces as passive by default.";
++                }
++
++                leaf default-metric {
++                    type uint32 {
++                        range "0..16777214";
++                    }
++                    description "Default metric for redistributed routes.";
++                }
++
++                leaf write-multiplier {
++                    type uint8 {
++                        range "1..100";
++                    }
++                    description "Maximum number of interfaces serviced per write.";
++                }
++
++                leaf log-adjacency-changes {
++                    type enumeration {
++                        enum "BRIEF"  { description "Log only neighbor up/down events."; }
++                        enum "DETAIL" { description "Log all state changes."; }
++                    }
++                    description "Log OSPF adjacency state changes.";
++                }
++
++                leaf distance-all {
++                    type uint8 {
++                        range "1..255";
++                    }
++                    description "OSPF administrative distance for all route types.";
++                }
++
++                leaf distance-intra-area {
++                    type uint8 {
++                        range "1..255";
++                    }
++                    description "OSPF administrative distance for intra-area routes.";
++                }
++
++                leaf distance-inter-area {
++                    type uint8 {
++                        range "1..255";
++                    }
++                    description "OSPF administrative distance for inter-area routes.";
++                }
++
++                leaf distance-external {
++                    type uint8 {
++                        range "1..255";
++                    }
++                    description "OSPF administrative distance for external routes.";
++                }
++
++                leaf spf-initial-delay {
++                    type uint32 {
++                        range "0..600000";
++                    }
++                    must "../spf-maximum-delay and ../spf-throttle-delay" {
++                        error-message "spf-initial-delay, spf-maximum-delay and spf-throttle-delay must all be set together or not at all.";
++                    }
++                    description "Initial SPF delay in milliseconds.";
++                }
++
++                leaf spf-maximum-delay {
++                    type uint32 {
++                        range "0..600000";
++                    }
++                    must "../spf-initial-delay and ../spf-throttle-delay" {
++                        error-message "spf-initial-delay, spf-maximum-delay and spf-throttle-delay must all be set together or not at all.";
++                    }
++                    description "Maximum SPF delay in milliseconds.";
++                }
++
++                leaf spf-throttle-delay {
++                    type uint32 {
++                        range "0..600000";
++                    }
++                    must "../spf-initial-delay and ../spf-maximum-delay" {
++                        error-message "spf-initial-delay, spf-maximum-delay and spf-throttle-delay must all be set together or not at all.";
++                    }
++                    description "SPF throttle delay in milliseconds.";
++                }
++
++                leaf lsa-min-interval-timer {
++                    type uint32 {
++                        range "0..5000";
++                    }
++                    description "Minimum interval between same LSA transmissions in milliseconds.";
++                }
++
++                leaf lsa-min-arrival-timer {
++                    type uint32 {
++                        range "0..600000";
++                    }
++                    description "Minimum delay in receiving new version of LSA in milliseconds.";
++                }
++
++                leaf lsa-refresh-timer {
++                    type uint16 {
++                        range "10..1800";
++                    }
++                    description "LSA refresh interval in seconds.";
++                }
++
++                leaf max-metric-administrative {
++                    type stypes:boolean_type;
++                    description "Advertise maximum metric (stub router) administratively.";
++                }
++
++                leaf max-metric-on-startup {
++                    type uint32 {
++                        range "5..86400";
++                    }
++                    description "Advertise maximum metric on startup for given number of seconds.";
++                }
++
++                leaf max-metric-on-shutdown {
++                    type uint8 {
++                        range "5..100";
++                    }
++                    description "Advertise maximum metric prior to shutdown for given number of seconds.";
++                }
++
++                leaf graceful-restart-enable {
++                    type stypes:boolean_type;
++                    description "Enable OSPF graceful restart.";
++                }
++
++                leaf graceful-restart-grace-period {
++                    type uint16 {
++                        range "1..1800";
++                    }
++                    description "Graceful restart grace period in seconds.";
++                }
++
++                leaf graceful-restart-helper-enable {
++                    type stypes:boolean_type;
++                    description "Enable OSPF graceful restart helper mode.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_AREA {
++            description "OSPF area configuration table.";
++
++            list OSPFV2_ROUTER_AREA_LIST {
++                key "vrf_name area_id";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name. Use 'default' for the default routing table.";
++                }
++
++                leaf area_id {
++                    type ospf-area-id-type;
++                    description "OSPF area identifier.";
++                }
++
++                leaf stub {
++                    type stypes:boolean_type;
++                    description "Configure this area as a stub area.";
++                }
++
++                leaf stub-no-summary {
++                    type stypes:boolean_type;
++                    description "Do not send summary LSAs into this stub area (totally stubby).";
++                }
++
++                leaf stub-default-cost {
++                    type uint32 {
++                        range "0..16777215";
++                    }
++                    description "Default cost advertised into stub area.";
++                }
++
++                leaf authentication {
++                    type enumeration {
++                        enum "TEXT"    { description "Simple password authentication."; }
++                        enum "MD5HMAC" { description "MD5 message-digest authentication."; }
++                        enum "NONE"    { description "Disable authentication."; }
++                    }
++                    description "Area-level authentication type.";
++                }
++
++                leaf import-list {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Access-list to filter networks from other areas into this area.";
++                }
++
++                leaf export-list {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Access-list to filter networks from this area to other areas.";
++                }
++
++                leaf filter-list-in {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Prefix-list to filter networks entering this area.";
++                }
++
++                leaf filter-list-out {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Prefix-list to filter networks leaving this area.";
++                }
++
++                leaf shortcut {
++                    type enumeration {
++                        enum "ENABLE"  { description "Enable shortcutting through this area."; }
++                        enum "DISABLE" { description "Disable shortcutting through this area."; }
++                        enum "DEFAULT" { description "Default shortcutting behavior."; }
++                    }
++                    description "OSPF area shortcut mode.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_AREA_NETWORK {
++            description
++                "OSPF network-to-area assignment table.
++                 Each entry assigns a network prefix to an OSPF area.
++                 This is a key-only table — presence of the entry is sufficient.";
++
++            list OSPFV2_ROUTER_AREA_NETWORK_LIST {
++                key "vrf_name area_id network";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name.";
++                }
++
++                leaf area_id {
++                    type ospf-area-id-type;
++                    description "OSPF area ID.";
++                }
++
++                leaf network {
++                    type inet:ipv4-prefix;
++                    description "IPv4 network prefix to assign to the area.";
++                }
++
++                leaf NULL {
++                    mandatory true;
++                    type string {
++                        pattern "NULL";
++                    }
++                    description "Placeholder field for key-only table. Value must be 'NULL'.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_AREA_VIRTUAL_LINK {
++            description "OSPF virtual link configuration table.";
++
++            list OSPFV2_ROUTER_AREA_VIRTUAL_LINK_LIST {
++                key "vrf_name area_id nbr_router_id";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name.";
++                }
++
++                leaf area_id {
++                    type ospf-area-id-type;
++                    description "Transit area ID for the virtual link.";
++                }
++
++                leaf nbr_router_id {
++                    type inet:ipv4-address;
++                    description "Router-ID of the remote ABR endpoint of the virtual link.";
++                }
++
++                leaf enable {
++                    type stypes:boolean_type;
++                    description "Enable this virtual link.";
++                }
++
++                leaf dead-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "Dead interval in seconds.";
++                }
++
++                leaf hello-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "Hello interval in seconds.";
++                }
++
++                leaf retransmission-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "LSA retransmit interval in seconds.";
++                }
++
++                leaf transmit-delay {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "LSA transmit delay in seconds.";
++                }
++
++                leaf authentication-type {
++                    type enumeration {
++                        enum "TEXT"    { description "Simple password authentication."; }
++                        enum "MD5HMAC" { description "MD5 message-digest authentication."; }
++                        enum "NONE"    { description "Disable authentication (null)."; }
++                    }
++                    description "Virtual link authentication type.";
++                }
++
++                leaf authentication-key {
++                    when "../authentication-type = 'TEXT'";
++                    type string {
++                        length "1..8";
++                    }
++                    description "Simple text authentication password (max 8 chars). Valid only when authentication-type is TEXT.";
++                }
++
++                leaf authentication-key-id {
++                    when "../authentication-type = 'MD5HMAC'";
++                    type uint8 {
++                        range "1..255";
++                    }
++                    must "../authentication-md5-key" {
++                        error-message "authentication-key-id and authentication-md5-key must be set together.";
++                    }
++                    description "MD5 key ID for message-digest authentication. Valid only when authentication-type is MD5HMAC.";
++                }
++
++                leaf authentication-md5-key {
++                    when "../authentication-type = 'MD5HMAC'";
++                    type string {
++                        length "1..16";
++                    }
++                    must "../authentication-key-id" {
++                        error-message "authentication-key-id and authentication-md5-key must be set together.";
++                    }
++                    description "MD5 key string for message-digest authentication (max 16 chars). Valid only when authentication-type is MD5HMAC.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_AREA_POLICY_ADDRESS_RANGE {
++            description "OSPF area range (summarization) configuration table.";
++
++            list OSPFV2_ROUTER_AREA_POLICY_ADDRESS_RANGE_LIST {
++                key "vrf_name area_id prefix";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name.";
++                }
++
++                leaf area_id {
++                    type ospf-area-id-type;
++                    description "OSPF area ID.";
++                }
++
++                leaf prefix {
++                    type inet:ipv4-prefix;
++                    description "Summary address range prefix.";
++                }
++
++                leaf advertise {
++                    type stypes:boolean_type;
++                    description "Advertise this range (true) or suppress it (false).";
++                }
++
++                leaf metric {
++                    type uint32 {
++                        range "0..16777215";
++                    }
++                    description "Metric (cost) for the summary range.";
++                }
++
++                leaf substitue-prefix {
++                    type inet:ipv4-prefix;
++                    description "Network prefix to announce instead of the range.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_DISTRIBUTE_ROUTE {
++            description "OSPF redistribute and distribute-list configuration table.";
++
++            list OSPFV2_ROUTER_DISTRIBUTE_ROUTE_LIST {
++                key "vrf_name protocol direction";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name.";
++                }
++
++                leaf protocol {
++                    type enumeration {
++                        enum "BGP"           { description "BGP routes."; }
++                        enum "STATIC"        { description "Static routes."; }
++                        enum "KERNEL"        { description "Kernel routes."; }
++                        enum "CONNECTED"     { description "Connected routes."; }
++                        enum "DEFAULT_ROUTE" { description "Default route (default-information originate)."; }
++                    }
++                    description "Source protocol to redistribute into OSPF or to filter on export.";
++                }
++
++                leaf direction {
++                    type enumeration {
++                        enum "IMPORT" { description "Redistribute into OSPF (or default-information originate)."; }
++                        enum "EXPORT" { description "Apply distribute-list out of OSPF."; }
++                    }
++                    description "Traffic direction for this distribute/redistribute entry.";
++                }
++
++                leaf route-map {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Route-map name. Used with IMPORT direction only.";
++                }
++
++                leaf metric {
++                    type uint32 {
++                        range "0..16777214";
++                    }
++                    description "Metric for redistributed routes. Used with IMPORT direction only.";
++                }
++
++                leaf metric-type {
++                    type enumeration {
++                        enum "TYPE_1" { description "OSPF external metric type 1."; }
++                        enum "TYPE_2" { description "OSPF external metric type 2."; }
++                    }
++                    description "OSPF metric type for redistributed routes. Used with IMPORT direction only.";
++                }
++
++                leaf always {
++                    type stypes:boolean_type;
++                    description
++                        "Always advertise default route even when not in routing table.
++                         Applies only when protocol=DEFAULT_ROUTE and direction=IMPORT.";
++                }
++
++                leaf access-list {
++                    type string {
++                        length "1..255";
++                    }
++                    description "Access-list name. Used with EXPORT direction only.";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_INTERFACE {
++            description "OSPF per-interface configuration table.";
++
++            list OSPFV2_INTERFACE_LIST {
++                key "if_name if_addr";
++
++                leaf if_name {
++                    type stypes:interface_name;
++                    description "Interface name (e.g. Ethernet0, PortChannel1, Vlan10).";
++                }
++
++                leaf if_addr {
++                    type ospf-if-addr-type;
++                    description
++                        "Interface IP address.
++                         Use 0.0.0.0 to apply OSPF config to all IP addresses on the interface.";
++                }
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name for this interface.";
++                }
++
++                leaf area-id {
++                    type ospf-area-id-type;
++                    description "OSPF area to assign this interface to.";
++                }
++
++                leaf network-type {
++                    type enumeration {
++                        enum "BROADCAST_NETWORK"      { description "Broadcast network type."; }
++                        enum "POINT_TO_POINT_NETWORK" { description "Point-to-point network type."; }
++                    }
++                    must "../if_addr = '0.0.0.0'" {
++                        error-message "network-type is an interface-wide setting; it must only be set on the entry with if_addr = '0.0.0.0'.";
++                    }
++                    description "OSPF network type for this interface. Must be configured on the if_addr = '0.0.0.0' entry only.";
++                }
++
++                leaf metric {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "OSPF interface cost (metric).";
++                }
++
++                leaf priority {
++                    type uint8;
++                    description "Router priority for OSPF DR/BDR election (0=never DR/BDR).";
++                }
++
++                leaf mtu-ignore {
++                    type stypes:boolean_type;
++                    description "Disable MTU mismatch detection on this interface.";
++                }
++
++                leaf bfd-enable {
++                    type stypes:boolean_type;
++                    must "../if_addr = '0.0.0.0'" {
++                        error-message "bfd-enable is an interface-wide setting; it must only be set on the entry with if_addr = '0.0.0.0'.";
++                    }
++                    description "Enable BFD for this OSPF interface. Must be configured on the if_addr = '0.0.0.0' entry only.";
++                }
++
++                leaf hello-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "OSPF hello interval in seconds.";
++                }
++
++                leaf dead-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    must "not(../hello-multiplier)" {
++                        error-message "dead-interval and hello-multiplier are mutually exclusive; use one or the other.";
++                    }
++                    description "OSPF dead interval in seconds.";
++                }
++
++                leaf hello-multiplier {
++                    type uint8 {
++                        range "1..10";
++                    }
++                    must "not(../dead-interval)" {
++                        error-message "hello-multiplier and dead-interval are mutually exclusive; use one or the other.";
++                    }
++                    description
++                        "Multiplier for fast hello packets (dead-interval minimal mode).
++                         Mutually exclusive with dead-interval.";
++                }
++
++                leaf retransmission-interval {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "OSPF LSA retransmit interval in seconds.";
++                }
++
++                leaf transmit-delay {
++                    type uint16 {
++                        range "1..65535";
++                    }
++                    description "OSPF LSA transmit delay in seconds.";
++                }
++
++                leaf authentication-type {
++                    type enumeration {
++                        enum "TEXT"    { description "Simple password authentication."; }
++                        enum "MD5HMAC" { description "MD5 message-digest authentication."; }
++                        enum "NONE"    { description "Disable authentication (null)."; }
++                    }
++                    description "OSPF authentication type for this interface.";
++                }
++
++                leaf authentication-key {
++                    type string {
++                        length "1..8";
++                    }
++                    description "Simple text authentication password (max 8 chars).";
++                }
++
++                leaf authentication-key-id {
++                    type uint8 {
++                        range "1..255";
++                    }
++                    description "MD5 key ID for message-digest authentication.";
++                }
++
++                leaf authentication-md5-key {
++                    type string {
++                        length "1..16";
++                    }
++                    description "MD5 key string for message-digest authentication (max 16 chars).";
++                }
++
++            }
++
++        }
++
++        container OSPFV2_ROUTER_PASSIVE_INTERFACE {
++            description
++                "OSPF passive interface table.
++                 Interfaces listed here will not send/receive OSPF hello packets.
++                 This is a key-only table — presence of the entry is sufficient.";
++
++            list OSPFV2_ROUTER_PASSIVE_INTERFACE_LIST {
++                key "vrf_name if_name if_addr";
++
++                leaf vrf_name {
++                    type union {
++                        type string {
++                            pattern "default";
++                        }
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                    }
++                    description "VRF name.";
++                }
++
++                leaf if_name {
++                    type stypes:interface_name;
++                    description "Interface name to configure as passive.";
++                }
++
++                leaf if_addr {
++                    type ospf-if-addr-type;
++                    description
++                        "Interface IP address.
++                         Use 0.0.0.0 to make all addresses on the interface passive.";
++                }
++
++            }
++
++        }
++
++    }
++
++}
+-- 
+2.25.1
+

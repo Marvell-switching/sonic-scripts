@@ -1,0 +1,44 @@
+From b54350a180c708f197ed4b961d8e63da2ea47b34 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Wed, 10 Sep 2025 13:41:19 +0530
+Subject: [PATCH] Fixed  the way thermalctrld identifies and references PSU fan
+ components
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ sonic-thermalctld/scripts/thermalctld | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/sonic-thermalctld/scripts/thermalctld b/sonic-thermalctld/scripts/thermalctld
+index 67fcf05..a0681f6 100644
+--- a/sonic-thermalctld/scripts/thermalctld
++++ b/sonic-thermalctld/scripts/thermalctld
+@@ -190,6 +190,16 @@ class FanUpdater(logger.Logger):
+         self.drawer_table = swsscommon.Table(state_db, FanUpdater.FAN_DRAWER_INFO_TABLE_NAME)
+         self.phy_entity_table = swsscommon.Table(state_db, PHYSICAL_ENTITY_INFO_TABLE)
+ 
++    def get_psu_key(self, psu_index):
++        if self.chassis is not None:
++            try:
++                return self.chassis.get_psu(psu_index).get_name()
++            except NotImplementedError:
++                pass
++            except IndexError:
++                pass
++        return 'PSU {}'.format(psu_index + 1)
++
+     def __del__(self):
+         if self.table:
+             table_keys = self.table.getKeys()
+@@ -297,7 +307,7 @@ class FanUpdater(logger.Logger):
+         """
+         drawer_name = NOT_AVAILABLE if fan_type != FanType.DRAWER else str(try_get(parent.get_name))
+         if fan_type == FanType.PSU:
+-            parent_name = try_get(parent.get_name, default='PSU {}'.format(parent_index + 1))
++            parent_name = self.get_psu_key(parent_index)
+         elif fan_type == FanType.MODULE:
+             parent_name = try_get(parent.get_name, default='Module {}'.format(parent_index + 1))
+         else:
+-- 
+2.25.1
+

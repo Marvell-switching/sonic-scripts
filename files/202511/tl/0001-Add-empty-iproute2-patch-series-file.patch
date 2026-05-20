@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Thu, 3 Apr 2026 12:00:00 +0530
+Subject: [PATCH] Add empty iproute2 patch series file
+
+The iproute2 Makefile expects a patch/series file for stg import.
+Create an empty one since no custom patches are needed.
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ src/iproute2/patch/series | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 src/iproute2/patch/series
+
+diff --git a/src/iproute2/patch/series b/src/iproute2/patch/series
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/src/iproute2/patch/series
+@@ -0,0 +1 @@
++
+-- 
+2.39.5
+
+2.39.5
+

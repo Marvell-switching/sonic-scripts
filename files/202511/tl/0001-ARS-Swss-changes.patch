@@ -1,0 +1,3907 @@
+From 443975139424865311762e6bf116b4326fb7f0d4 Mon Sep 17 00:00:00 2001
+From: Naveen Rampuram <nrampuram@marvell.com>
+Date: Fri, 12 Dec 2025 11:55:29 +0530
+Subject: [PATCH] ARS Swss changes
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/Makefile.am                        |    1 +
+ orchagent/aclorch.cpp                        |  183 +-
+ orchagent/aclorch.h                          |   19 +
+ orchagent/acltable.h                         |    1 +
+ orchagent/arsorch.cpp                        | 1876 ++++++++++++++++++
+ orchagent/arsorch.h                          |  198 ++
+ orchagent/orchdaemon.cpp                     |   13 +-
+ orchagent/orchdaemon.h                       |    1 +
+ orchagent/p4orch/tests/Makefile.am           |    7 +-
+ orchagent/p4orch/tests/fake_routeorch.cpp    |   20 +-
+ orchagent/p4orch/tests/fake_zmqorch.cpp      |   27 +
+ orchagent/p4orch/tests/test_main.cpp         |    2 +-
+ orchagent/portsorch.cpp                      |   57 +
+ orchagent/portsorch.h                        |    2 +
+ orchagent/routeorch.cpp                      |   90 +-
+ orchagent/routeorch.h                        |   14 +-
+ orchagent/saihelper.cpp                      |    6 +
+ tests/mock_tests/Makefile.am                 |    1 +
+ tests/mock_tests/aclorch_ut.cpp              |   13 +-
+ tests/mock_tests/flowcounterrouteorch_ut.cpp |   14 +-
+ tests/mock_tests/intfsorch_ut.cpp            |   24 +-
+ tests/mock_tests/mock_orch_test.cpp          |   13 +-
+ tests/mock_tests/mock_orchagent_main.h       |    2 +
+ tests/mock_tests/routeorch_ut.cpp            |   13 +-
+ tests/test_ars.py                            |  650 ++++++
+ 25 files changed, 3207 insertions(+), 40 deletions(-)
+ create mode 100644 orchagent/arsorch.cpp
+ create mode 100644 orchagent/arsorch.h
+ create mode 100644 orchagent/p4orch/tests/fake_zmqorch.cpp
+ mode change 100644 => 100755 orchagent/routeorch.h
+ create mode 100644 tests/test_ars.py
+
+diff --git a/orchagent/Makefile.am b/orchagent/Makefile.am
+index 311f7add..aa1d83d6 100644
+--- a/orchagent/Makefile.am
++++ b/orchagent/Makefile.am
+@@ -131,6 +131,7 @@ orchagent_SOURCES = \
+             dash/dashportmaporch.cpp \
+             twamporch.cpp \
+             stporch.cpp \
++            arsorch.cpp \
+             nexthopkey.cpp \
+             macsecpost.cpp \
+             high_frequency_telemetry/hftelorch.cpp \
+diff --git a/orchagent/aclorch.cpp b/orchagent/aclorch.cpp
+index 110cd223..9008927a 100755
+--- a/orchagent/aclorch.cpp
++++ b/orchagent/aclorch.cpp
+@@ -138,6 +138,11 @@ static acl_rule_attr_lookup_t aclOtherActionLookup =
+     { ACTION_COUNTER,                       SAI_ACL_ENTRY_ATTR_ACTION_COUNTER}
+ };
+ 
++static acl_rule_attr_lookup_t aclArsActionLookup =
++{
++    { ACTION_DISABLE_ARS_FORWARDING,        SAI_ACL_ENTRY_ATTR_ACTION_DISABLE_ARS_FORWARDING}
++};
++
+ static acl_packet_action_lookup_t aclPacketActionLookup =
+ {
+     { PACKET_ACTION_FORWARD, SAI_PACKET_ACTION_FORWARD },
+@@ -414,6 +419,18 @@ static acl_table_action_list_lookup_t defaultAclActionList =
+                 }
+             }
+         }
++    },
++    {
++        // ARS
++        TABLE_TYPE_ARS,
++        {
++            {
++                ACL_STAGE_INGRESS,
++                {
++                    SAI_ACL_ACTION_TYPE_DISABLE_ARS_FORWARDING
++                }
++            }
++        }
+     }
+ };
+ 
+@@ -815,6 +832,7 @@ bool AclTableTypeParser::parseAclTableTypeActions(const std::string& value, AclT
+         auto otherAction = aclOtherActionLookup.find(action);
+         auto metadataAction = aclMetadataDscpActionLookup.find(action);
+         auto innerAction = aclInnerActionLookup.find(action);
++        auto arsAction = aclArsActionLookup.find(action);
+         if (l3Action != aclL3ActionLookup.end())
+         {
+             saiActionAttr = l3Action->second;
+@@ -839,6 +857,10 @@ bool AclTableTypeParser::parseAclTableTypeActions(const std::string& value, AclT
+         {
+             saiActionAttr = metadataAction->second;
+         }
++        else if (arsAction != aclArsActionLookup.end())
++        {
++            saiActionAttr = arsAction->second;
++        }
+         else
+         {
+             SWSS_LOG_ERROR("Unknown action %s", action.c_str());
+@@ -1798,6 +1820,10 @@ shared_ptr<AclRule> AclRule::makeShared(AclOrch *acl, MirrorOrch *mirror, DTelOr
+ 
+             return make_shared<AclRuleDTelWatchListEntry>(acl, dtel, rule, table);
+         }
++        else if (aclArsActionLookup.find(action) != aclArsActionLookup.cend())
++        {
++            return make_shared<AclRuleArs>(acl, rule, table);
++        }
+     }
+ 
+     if (!aclRule)
+@@ -3539,6 +3565,7 @@ void AclOrch::init(vector<TableConnector>& connectors, PortsOrch *portOrch, Mirr
+         m_switchMetaDataCapabilities[TABLE_ACL_ENTRY_ATTR_META_CAPABLE] = "true";
+         m_switchMetaDataCapabilities[TABLE_ACL_ENTRY_ACTION_META_CAPABLE] = "true";
+         m_metaDataMgr.populateRange(1,7);
++        m_switchArsCapabilities[TABLE_ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE] = "true";
+     }
+     else
+     {
+@@ -3556,6 +3583,7 @@ void AclOrch::init(vector<TableConnector>& connectors, PortsOrch *portOrch, Mirr
+         m_switchMetaDataCapabilities[TABLE_ACL_USER_META_DATA_RANGE_CAPABLE] = "false";
+         m_switchMetaDataCapabilities[TABLE_ACL_ENTRY_ATTR_META_CAPABLE] = "false";
+         m_switchMetaDataCapabilities[TABLE_ACL_ENTRY_ACTION_META_CAPABLE] = "false";
++        m_switchArsCapabilities[TABLE_ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE] = "false";
+ 
+         status = sai_query_attribute_capability(gSwitchId, SAI_OBJECT_TYPE_SWITCH, SAI_SWITCH_ATTR_ACL_USER_META_DATA_RANGE, &capability);
+         if (status != SAI_STATUS_SUCCESS)
+@@ -3631,7 +3659,23 @@ void AclOrch::init(vector<TableConnector>& connectors, PortsOrch *portOrch, Mirr
+ 
+         m_metaDataMgr.populateRange(metadataMin, metadataMax);
+ 
++        status = sai_query_attribute_capability(gSwitchId, SAI_OBJECT_TYPE_ACL_ENTRY, SAI_ACL_ENTRY_ATTR_ACTION_DISABLE_ARS_FORWARDING, &capability);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_WARN("Could not query SAI_ACL_ENTRY_ATTR_ACTION_DISABLE_ARS_FORWARDING %d", status);
++        }
++        else
++        {
++            if (capability.set_implemented)
++            {
++                m_switchArsCapabilities[TABLE_ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE] = "true";
++            }
++
++            SWSS_LOG_NOTICE("SAI_ACL_ENTRY_ATTR_ACTION_DISABLE_ARS_FORWARDING capability %d", capability.set_implemented);
++        }
+     }
++
++
+     // Store the capabilities in state database
+     // TODO: Move this part of the code into syncd
+     vector<FieldValueTuple> fvVector;
+@@ -3940,6 +3984,28 @@ void AclOrch::initDefaultTableTypes(const string& platform, const string& sub_pl
+     }
+     // Placeholder for control plane tables
+     addAclTableType(builder.withName(TABLE_TYPE_CTRLPLANE).build());
++
++    addAclTableType(
++        builder.withName(TABLE_TYPE_ARS)
++            .withBindPointType(SAI_ACL_BIND_POINT_TYPE_PORT)
++            .withBindPointType(SAI_ACL_BIND_POINT_TYPE_LAG)
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_SRC_IP))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_DST_IP))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_ICMP_CODE))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_TCP_FLAGS))
++            .withMatch(make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORTS))
++            .withMatch(make_shared<AclTableRangeMatch>(set<sai_acl_range_type_t>{
++                {SAI_ACL_RANGE_TYPE_L4_SRC_PORT_RANGE, SAI_ACL_RANGE_TYPE_L4_DST_PORT_RANGE}}))
++            .build()
++    );
++
+ }
+ 
+ void AclOrch::queryAclActionCapability()
+@@ -4035,12 +4101,17 @@ void AclOrch::putAclActionCapabilityInDB(acl_stage_type_t stage)
+     string delimiter;
+     ostringstream acl_action_value_stream;
+     ostringstream is_action_list_mandatory_stream;
+-    acl_rule_attr_lookup_t metadataActionLookup = {};
++    acl_rule_attr_lookup_t metadataActionLookup = {}, arsActionLookup = {};
+     if (isAclMetaDataSupported())
+     {
+         metadataActionLookup = aclMetadataDscpActionLookup;
+     }
+-    for (const auto& action_map: {aclL3ActionLookup, aclMirrorStageLookup, aclDTelActionLookup, metadataActionLookup, aclInnerActionLookup})
++    if (isAclArsSupported())
++    {
++        arsActionLookup = aclArsActionLookup;
++    }
++
++    for (const auto& action_map: {aclL3ActionLookup, aclMirrorStageLookup, aclDTelActionLookup, metadataActionLookup, aclInnerActionLookup, arsActionLookup})
+     {
+         for (const auto& it: action_map)
+         {
+@@ -5249,6 +5320,15 @@ uint16_t AclOrch::getAclMetaDataMax() const
+     return 0;
+ }
+ 
++bool AclOrch::isAclArsSupported() const
++{
++    if (m_switchArsCapabilities.at(TABLE_ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE) == "true")
++    {
++        return true;
++    }
++    return false;
++}
++
+ bool AclOrch::isUsingEgrSetDscp(const string& table) const
+ {
+     if (m_egrSetDscpRef.find(table) != m_egrSetDscpRef.end())
+@@ -6156,3 +6236,102 @@ void MetaDataMgr::recycleMetaData(uint16_t metadata)
+         SWSS_LOG_ERROR("Unexpected: Metadata free before Initialization complete.");
+     }
+ }
++
++AclRuleArs::AclRuleArs(AclOrch *m_pAclOrch, string rule, string table):
++    AclRule(m_pAclOrch, rule, table),
++    m_state(false)
++{
++}
++
++
++bool AclRuleArs::validateAddAction(string attr_name, string attr_value)
++{
++    SWSS_LOG_ENTER();
++
++    SWSS_LOG_INFO("Name %s Value %s", attr_name.c_str(), attr_value.c_str());
++
++    sai_acl_entry_attr_t action;
++    const auto it = aclArsActionLookup.find(attr_name);
++    if (it != aclArsActionLookup.cend())
++    {
++        action = it->second;
++    }
++    else
++    {
++        return false;
++    }
++
++    sai_acl_action_data_t actionData;
++    actionData.enable = true;
++    actionData.parameter.booldata = (attr_value == "true") ? true : false;
++    return setAction(action, actionData);
++}
++
++bool AclRuleArs::validate()
++{
++    SWSS_LOG_ENTER();
++    if ( m_actions.size() != 1)
++    {
++        return false;
++    }
++
++    return true;
++}
++
++bool AclRuleArs::createRule()
++{
++    SWSS_LOG_ENTER();
++
++    return activate();
++}
++
++bool AclRuleArs::removeRule()
++{
++    SWSS_LOG_ENTER();
++
++    return deactivate();
++}
++
++bool AclRuleArs::activate()
++{
++    SWSS_LOG_ENTER();
++    sai_object_id_t oid = SAI_NULL_OBJECT_ID;
++
++    for (auto& it: m_actions)
++    {
++        auto attr = it.second.getSaiAttr();
++        attr.value.aclaction.enable = true;
++        attr.value.aclaction.parameter.objlist.list = &oid;
++        attr.value.aclaction.parameter.objlist.count = 1;
++        setAction(it.first, attr.value.aclaction);
++    }
++
++    if (!AclRule::createRule())
++    {
++        return false;
++    }
++
++    m_state = true;
++    return true;
++}
++
++bool AclRuleArs::deactivate()
++{
++    SWSS_LOG_ENTER();
++    if (!m_state)
++    {
++        return true;
++    }
++    if (!AclRule::removeRule())
++    {
++        return false;
++    }
++
++    m_state = false;
++    return true;
++}
++
++void AclRuleArs::onUpdate(SubjectType, void *)
++{
++    // Do nothing
++}
+diff --git a/orchagent/aclorch.h b/orchagent/aclorch.h
+index 32dc172e..a9cc78fa 100755
+--- a/orchagent/aclorch.h
++++ b/orchagent/aclorch.h
+@@ -79,6 +79,7 @@
+ #define ACTION_META_DATA                    "META_DATA_ACTION"
+ #define ACTION_DSCP                         "DSCP_ACTION"
+ #define ACTION_INNER_SRC_MAC_REWRITE_ACTION "INNER_SRC_MAC_REWRITE_ACTION"
++#define ACTION_DISABLE_ARS_FORWARDING       "DISABLE_ARS_FORWARDING"
+ 
+ #define PACKET_ACTION_FORWARD      "FORWARD"
+ #define PACKET_ACTION_DROP         "DROP"
+@@ -119,6 +120,7 @@
+ #define TABLE_ACL_USER_META_DATA_MAX                 "ACL_USER_META_DATA_MAX"
+ #define TABLE_ACL_ENTRY_ATTR_META_CAPABLE            "ACL_ENTRY_ATTR_META_CAPABLE"
+ #define TABLE_ACL_ENTRY_ACTION_META_CAPABLE          "ACL_ENTRY_ACTION_META_CAPABLE"
++#define TABLE_ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE   "ACL_ENTRY_ACTION_DISABLE_ARS_CAPABLE"
+ 
+ enum AclObjectStatus
+ {
+@@ -473,6 +475,21 @@ protected:
+     MetaDataMgr* m_metaDataMgr;
+ };
+ 
++class AclRuleArs: public AclRule
++{
++public:
++    AclRuleArs (AclOrch *m_pAclOrch, string rule, string table);
++    bool validateAddAction(string attr_name, string attr_value);
++    bool validate();
++    bool createRule();
++    bool removeRule();
++    bool activate();
++    bool deactivate();
++    void onUpdate(SubjectType, void *) override;
++protected:
++    bool m_state;
++};
++
+ class AclTable
+ {
+ public:
+@@ -618,6 +635,7 @@ public:
+     bool isAclMetaDataSupported() const;
+     uint16_t getAclMetaDataMin() const;
+     uint16_t getAclMetaDataMax() const;
++    bool isAclArsSupported() const;
+ 
+     void addMetaDataRef(string key, uint16_t metadata);
+     void removeMetaDataRef(string key, uint16_t metadata);
+@@ -628,6 +646,7 @@ public:
+     map<string, bool> m_mirrorTableCapabilities;
+     map<acl_stage_type_t, bool> m_L3V4V6Capability;
+     map<string, string> m_switchMetaDataCapabilities;
++    map<string, string> m_switchArsCapabilities;
+     
+     void registerFlexCounter(const AclRule& rule);
+     void deregisterFlexCounter(const AclRule& rule);
+diff --git a/orchagent/acltable.h b/orchagent/acltable.h
+index 8f51fd9a..863baef0 100644
+--- a/orchagent/acltable.h
++++ b/orchagent/acltable.h
+@@ -40,6 +40,7 @@ extern "C" {
+ #define TABLE_TYPE_EGR_SET_DSCP         "EGR_SET_DSCP"
+ #define TABLE_TYPE_UNDERLAY_SET_DSCP    "UNDERLAY_SET_DSCP"
+ #define TABLE_TYPE_UNDERLAY_SET_DSCPV6  "UNDERLAY_SET_DSCPV6"
++#define TABLE_TYPE_ARS                  "ARS"
+ 
+ typedef enum
+ {
+diff --git a/orchagent/arsorch.cpp b/orchagent/arsorch.cpp
+new file mode 100644
+index 00000000..29e974f6
+--- /dev/null
++++ b/orchagent/arsorch.cpp
+@@ -0,0 +1,1876 @@
++#include <assert.h>
++#include <inttypes.h>
++#include "arsorch.h"
++#include "routeorch.h"
++#include "portsorch.h"
++#include "logger.h"
++#include "swssnet.h"
++#include <array>
++#include <algorithm>
++#include "sai_serialize.h"
++#include "flow_counter_handler.h"
++
++extern sai_object_id_t gSwitchId;
++
++extern sai_ars_profile_api_t*       sai_ars_profile_api;
++extern sai_ars_api_t*               sai_ars_api;
++extern sai_switch_api_t*            sai_switch_api;
++
++extern PortsOrch *gPortsOrch;
++
++static ars_sai_attr_lookup_t ars_profile_attrs = {
++    {SAI_ARS_PROFILE_ATTR_ALGO, {"SAI_ARS_PROFILE_ATTR_ALGO"}},
++    {SAI_ARS_PROFILE_ATTR_SAMPLING_INTERVAL, {"SAI_ARS_PROFILE_ATTR_SAMPLING_INTERVAL"}},
++    {SAI_ARS_PROFILE_ATTR_ARS_RANDOM_SEED, {"SAI_ARS_PROFILE_ATTR_ARS_RANDOM_SEED"}},
++    {SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_GROUPS, {"SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_GROUPS"}},
++    {SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_MEMBERS_PER_GROUP, {"SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_MEMBERS_PER_GROUP"}},
++    {SAI_ARS_PROFILE_ATTR_LAG_ARS_MAX_GROUPS, {"SAI_ARS_PROFILE_ATTR_LAG_ARS_MAX_GROUPS"}},
++    {SAI_ARS_PROFILE_ATTR_LAG_ARS_MAX_MEMBERS_PER_GROUP, {"SAI_ARS_PROFILE_ATTR_LAG_ARS_MAX_MEMBERS_PER_GROUP"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_PAST, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_PAST"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_PAST_WEIGHT, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_PAST_WEIGHT"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_FUTURE, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_FUTURE"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_FUTURE_WEIGHT, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_FUTURE_WEIGHT"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_CURRENT, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_CURRENT"}},
++    {SAI_ARS_PROFILE_ATTR_PORT_LOAD_EXPONENT, {"SAI_ARS_PROFILE_ATTR_PORT_LOAD_EXPONENT"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BANDS, {"SAI_ARS_PROFILE_ATTR_QUANT_BANDS"}},
++    {SAI_ARS_PROFILE_ATTR_ENABLE_IPV4, {"SAI_ARS_PROFILE_ATTR_ENABLE_IPV4"}},
++    {SAI_ARS_PROFILE_ATTR_ENABLE_IPV6, {"SAI_ARS_PROFILE_ATTR_ENABLE_IPV6"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_PAST_MIN_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_PAST_MIN_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_PAST_MAX_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_PAST_MAX_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_PAST, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_PAST"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_PAST, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_PAST"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MIN_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MIN_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MAX_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MAX_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_FUTURE, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_FUTURE"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_FUTURE, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_FUTURE"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MIN_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MIN_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MAX_VAL, {"SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MAX_VAL"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_CURRENT, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MIN_THRESHOLD_LIST_LOAD_CURRENT"}},
++    {SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_CURRENT, {"SAI_ARS_PROFILE_ATTR_QUANT_BAND_MAX_THRESHOLD_LIST_LOAD_CURRENT"}},
++    {SAI_ARS_PROFILE_ATTR_MAX_FLOWS, {"SAI_ARS_PROFILE_ATTR_MAX_FLOWS"}}
++};
++static ars_sai_attr_lookup_t ars_obj_attrs = {
++    {SAI_ARS_ATTR_MODE, {"SAI_ARS_ATTR_MODE"}},
++    {SAI_ARS_ATTR_IDLE_TIME, {"SAI_ARS_ATTR_IDLE_TIME"}},
++    {SAI_ARS_ATTR_MAX_FLOWS, {"SAI_ARS_ATTR_MAX_FLOWS"}},
++    {SAI_ARS_ATTR_MON_ENABLE, {"SAI_ARS_ATTR_MON_ENABLE"}},
++    {SAI_ARS_ATTR_SAMPLEPACKET_ENABLE, {"SAI_ARS_ATTR_SAMPLEPACKET_ENABLE"}},
++    {SAI_ARS_ATTR_MAX_ALT_MEMEBERS_PER_GROUP, {"SAI_ARS_ATTR_MAX_ALT_MEMEBERS_PER_GROUP"}},
++    {SAI_ARS_ATTR_MAX_PRIMARY_MEMEBERS_PER_GROUP, {"SAI_ARS_ATTR_MAX_PRIMARY_MEMEBERS_PER_GROUP"}},
++    {SAI_ARS_ATTR_PRIMARY_PATH_QUALITY_THRESHOLD, {"SAI_ARS_ATTR_PRIMARY_PATH_QUALITY_THRESHOLD"}},
++    {SAI_ARS_ATTR_ALTERNATE_PATH_COST, {"SAI_ARS_ATTR_ALTERNATE_PATH_COST"}},
++    {SAI_ARS_ATTR_ALTERNATE_PATH_BIAS, {"SAI_ARS_ATTR_ALTERNATE_PATH_BIAS"}}
++};
++static ars_sai_attr_lookup_t ars_port_attrs = {
++    {SAI_PORT_ATTR_ARS_ENABLE, {"SAI_PORT_ATTR_ARS_ENABLE"}},
++    {SAI_PORT_ATTR_ARS_PORT_LOAD_SCALING_FACTOR, {"SAI_PORT_ATTR_ARS_PORT_LOAD_SCALING_FACTOR"}},
++};
++
++static ars_sai_attr_lookup_t ars_nhg_attrs = {
++    {SAI_NEXT_HOP_GROUP_ATTR_ARS_OBJECT_ID, {"SAI_NEXT_HOP_GROUP_ATTR_ARS_OBJECT_ID"}},
++    {SAI_NEXT_HOP_GROUP_ATTR_ARS_PACKET_DROPS, {"SAI_NEXT_HOP_GROUP_ATTR_ARS_PACKET_DROPS"}},
++    {SAI_NEXT_HOP_GROUP_ATTR_ARS_NEXT_HOP_REASSIGNMENTS, {"SAI_NEXT_HOP_GROUP_ATTR_ARS_NEXT_HOP_REASSIGNMENTS"}},
++    {SAI_NEXT_HOP_GROUP_ATTR_ARS_PORT_REASSIGNMENTS, {"SAI_NEXT_HOP_GROUP_ATTR_ARS_PORT_REASSIGNMENTS"}}
++};
++
++static ars_sai_attr_lookup_t ars_switch_attrs = {
++    {SAI_SWITCH_ATTR_ARS_PROFILE, {"SAI_SWITCH_ATTR_ARS_PROFILE"}}
++};
++
++static ars_sai_feature_data_t ars_feature_switch_data =
++    {"SAI_OBJECT_TYPE_SWITCH",ars_switch_attrs};
++
++static ars_sai_feature_data_t ars_feature_profile_data =
++    {"SAI_OBJECT_TYPE_ARS_PROFILE",ars_profile_attrs};
++
++static ars_sai_feature_data_t ars_feature_obj_data =
++    {"SAI_OBJECT_TYPE_ARS",ars_obj_attrs};
++
++static ars_sai_feature_data_t ars_feature_port_data =
++    {"SAI_OBJECT_TYPE_PORT",ars_port_attrs};
++
++static ars_sai_feature_data_t ars_feature_nhg_data =
++    {"SAI_OBJECT_TYPE_NEXT_HOP_GROUP",ars_nhg_attrs};
++
++static ars_sai_feature_lookup_t ars_features =
++{
++    {SAI_OBJECT_TYPE_SWITCH, ars_feature_switch_data},
++    {SAI_OBJECT_TYPE_ARS_PROFILE, ars_feature_profile_data},
++    {SAI_OBJECT_TYPE_ARS, ars_feature_obj_data},
++    {SAI_OBJECT_TYPE_PORT, ars_feature_port_data},
++    {SAI_OBJECT_TYPE_NEXT_HOP_GROUP, ars_feature_nhg_data},
++};
++
++#define ARS_FIELD_NAME_MAX_FLOWS              "max_flows"
++#define ARS_FIELD_NAME_ALGORITHM              "algorithm"
++#define ARS_FIELD_NAME_SAMPLE_INTERVAL        "sample_interval"
++#define ARS_FIELD_NAME_PAST_LOAD_MIN_VALUE    "past_load_min_value"
++#define ARS_FIELD_NAME_PAST_LOAD_MAX_VALUE    "past_load_max_value"
++#define ARS_FIELD_NAME_PAST_LOAD_WEIGHT       "past_load_weight"
++#define ARS_FIELD_NAME_FUTURE_LOAD_MIN_VALUE  "future_load_min_value"
++#define ARS_FIELD_NAME_FUTURE_LOAD_MAX_VALUE  "future_load_max_value"
++#define ARS_FIELD_NAME_FUTURE_LOAD_WEIGHT     "future_load_weight"
++#define ARS_FIELD_NAME_CURRENT_LOAD_MIN_VALUE "current_load_min_value"
++#define ARS_FIELD_NAME_CURRENT_LOAD_MAX_VALUE "current_load_max_value"
++#define ARS_FIELD_NAME_MIN_VALUE              "min_value"
++#define ARS_FIELD_NAME_MAX_VALUE              "max_value"
++#define ARS_FIELD_NAME_WEIGHT                 "weight"
++#define ARS_FIELD_NAME_FUTURE_LOAD            "future_load"
++#define ARS_FIELD_NAME_CURRENT_LOAD           "current_load"
++#define ARS_FIELD_NAME_INDEX                  "index"
++#define ARS_FIELD_NAME_IPV4_ENABLE            "ipv4_enable"
++#define ARS_FIELD_NAME_IPV6_ENABLE            "ipv6_enable"
++
++#define ARS_FIELD_NAME_PROFILE_NAME           "profile_name"
++#define ARS_FIELD_NAME_ARS_OBJ_NAME           "ars_obj_name"
++#define ARS_FIELD_NAME_ASSIGN_MODE            "assign_mode"
++#define ARS_FIELD_NAME_PER_FLOWLET            "per_flowlet_quality"
++#define ARS_FIELD_NAME_PER_PACKET             "per_packet_quality"
++#define ARS_FIELD_NAME_IDLE_TIME              "flowlet_idle_time"
++#define ARS_FIELD_NAME_OBJ_MAX_FLOWS          "max_flows"
++#define ARS_FIELD_NAME_QUALITY_THRESHOLD      "quality_threshold"
++#define ARS_FIELD_NAME_SCALING_FACTOR         "scaling_factor"
++#define ARS_FIELD_NAME_PRIMARY_PATH_THRESHOLD  "primary_path_threshold"
++#define ARS_FIELD_NAME_ALTERNATIVE_PATH_COST   "alternative_path_cost"
++
++
++#define ARS_FIELD_NAME_NHG_PATH_SELECTOR_MODE  "ars_nhg_path_selector_mode"
++#define ARS_FIELD_NAME_LAG_PATH_SELECTOR_MODE  "ars_lag_path_selector_mode"
++#define ARS_FIELD_NAME_DEFAULT_OBJECT          "default_ars_object"
++#define ARS_FIELD_NAME_OBJECT_NAME             "ars_obj_name"
++#define ARS_FIELD_NAME_ROLE                    "role"
++
++ArsOrch::ArsOrch(DBConnector *config_db, DBConnector *appDb, DBConnector *stateDb, vector<string> &tableNames, VRFOrch *vrfOrch) :
++        Orch(config_db, tableNames),
++        m_vrfOrch(vrfOrch),
++        m_arsProfileStateTable(std::unique_ptr<Table>(new Table(stateDb, STATE_ARS_PROFILE_TABLE_NAME))),
++        m_arsCapabilityStateTable(std::unique_ptr<Table>(new Table(stateDb, STATE_ARS_CAPABILITY_TABLE_NAME)))
++{
++    SWSS_LOG_ENTER();
++
++    initCapabilities();
++
++    if (m_isArsSupported)
++    {
++        gPortsOrch->attach(this);
++    }
++}
++
++
++bool ArsOrch::isSetImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id)
++{
++    auto feature = ars_features.find((uint32_t)object_type);
++    if (feature == ars_features.end())
++    {
++        return false;
++    }
++    auto attr = feature->second.attrs.find(attr_id);
++    if (attr == feature->second.attrs.end())
++    {
++        return false;
++    }
++    return attr->second.set_implemented;
++}
++
++bool ArsOrch::isCreateImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id)
++{
++    auto feature = ars_features.find((uint32_t)object_type);
++    if (feature == ars_features.end())
++    {
++        return false;
++    }
++    auto attr = feature->second.attrs.find(attr_id);
++    if (attr == feature->second.attrs.end())
++    {
++        return false;
++    }
++    return attr->second.create_implemented;
++}
++
++bool ArsOrch::isGetImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id)
++{
++    auto feature = ars_features.find((uint32_t)object_type);
++    if (feature == ars_features.end())
++    {
++        return false;
++    }
++    auto attr = feature->second.attrs.find(attr_id);
++    if (attr == feature->second.attrs.end())
++    {
++        return false;
++    }
++    return attr->second.get_implemented;
++}
++
++void ArsOrch::initCapabilities()
++{
++    SWSS_LOG_ENTER();
++
++    sai_attr_capability_t capability = {};
++
++    for (auto it = ars_features.begin(); it != ars_features.end(); it++)
++    {
++        for (auto it2 = it->second.attrs.begin(); it2 != it->second.attrs.end(); it2++)
++        {
++            if (sai_query_attribute_capability(gSwitchId, (sai_object_type_t)it->first,
++                                                    (sai_attr_id_t)it2->first,
++                                                    &capability) == SAI_STATUS_SUCCESS)
++            {
++                SWSS_LOG_DEBUG("Feature %s Attr %s is supported. Create %s Set %s Get %s", it->second.name.c_str(), it2->second.attr_name.c_str(), capability.create_implemented ? "Y" : "N", capability.set_implemented ? "Y" : "N", capability.get_implemented ? "Y" : "N");
++            }
++            else
++            {
++                SWSS_LOG_NOTICE("Feature %s Attr %s is NOT supported", it->second.name.c_str(), it2->second.attr_name.c_str());
++            }
++
++            it2->second.create_implemented = capability.create_implemented;
++            it2->second.set_implemented = capability.set_implemented;
++            it2->second.get_implemented = capability.get_implemented;
++
++            vector<FieldValueTuple> fieldValues;
++            fieldValues.emplace_back("create", capability.create_implemented ? "true" : "false");
++            fieldValues.emplace_back("set", capability.set_implemented ? "true" : "false");
++            fieldValues.emplace_back("get", capability.get_implemented ? "true" : "false");
++            m_arsCapabilityStateTable->set(it->second.name + "|" + it2->second.attr_name, fieldValues);
++        }
++    }
++
++    m_isArsSupported = isCreateImplemented(SAI_OBJECT_TYPE_SWITCH, SAI_SWITCH_ATTR_ARS_PROFILE);
++}
++
++void ArsOrch::deinitCapabilities()
++{
++    SWSS_LOG_ENTER();
++
++    // Clear out ARS capability state entries
++    if (m_arsCapabilityStateTable)
++    {
++        for (auto &feature : ars_features)
++        {
++            for (auto &attr : feature.second.attrs)
++            {
++                std::string key = feature.second.name + "|" + attr.second.attr_name;
++                m_arsCapabilityStateTable->del(key);
++            }
++        }
++    }
++
++    // Reset internal flags and structures
++    m_isArsSupported = false;
++
++    SWSS_LOG_NOTICE("ArsOrch capabilities deinitialized");
++}
++
++void ArsOrch::deinit()
++{
++    SWSS_LOG_ENTER();
++
++    if (m_isArsSupported && gPortsOrch)
++    {
++        gPortsOrch->detach(this);
++    }
++
++    deinitCapabilities();
++
++    SWSS_LOG_NOTICE("ArsOrch deinitialized");
++}
++
++
++void ArsOrch::update(SubjectType type, void *cntx)
++{
++    SWSS_LOG_ENTER();
++    assert(cntx);
++
++    if (m_arsProfiles.empty())
++    {
++        SWSS_LOG_INFO("ARS not enabled - no action on interface state change");
++        return;
++    }
++
++    switch(type) {
++        case SUBJECT_TYPE_PORT_OPER_STATE_CHANGE:
++        {
++            /* configure port scaling factor when port speed becomes available */
++            PortOperStateUpdate *update = reinterpret_cast<PortOperStateUpdate *>(cntx);
++            SWSS_LOG_NOTICE("ARS port notification - port %s state %s", update->port.m_alias.c_str(), update->operStatus == SAI_PORT_OPER_STATUS_UP ? "enable" : "disable");
++            auto ars_if = m_arsEnabledInterfaces.find(update->port.m_alias);
++            bool is_found = (ars_if != m_arsEnabledInterfaces.end());
++            if (is_found)
++            {
++                SWSS_LOG_INFO("Interface %s %senabled for ARS - %s ARS",
++                        update->port.m_alias.c_str(),
++                        is_found ? "" : "not ",
++                        update->operStatus == SAI_PORT_OPER_STATUS_UP ? "enable" : "disable");
++                if (update->operStatus == SAI_PORT_OPER_STATUS_UP)
++                {
++                    updateArsEnabledInterface(update->port, ars_if->second.first, true);
++                }
++            }
++            break;
++        }
++        default:
++            break;
++    }
++}
++
++bool ArsOrch::validateNexthopsForArs(sai_object_id_t vrf_id, const NextHopGroupKey &nextHops, sai_object_id_t &ars_obj_id) 
++{
++    SWSS_LOG_ENTER();
++
++    std::string common_ars_obj;
++    std::string common_ars_obj_nh;
++    std::string ars_obj_nh;
++    bool is_ars_capable_nhg = false;
++    ArsSelectorModeNhg selector_mode = getNhgSelectorMode();
++    if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID)
++    {
++        SWSS_LOG_DEBUG("Invalid ARS NHG selector mode — cannot validate nexthops");
++        return false;
++    }
++
++    // --------------------------------------------------
++    // 1. GLOBAL MODE
++    // --------------------------------------------------
++    if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL)
++    {
++        if (!isDefaultArsObjectValid(selector_mode, common_ars_obj))
++        {
++            SWSS_LOG_DEBUG("Default ars object is not configured for GLOBAL mode");
++            return false;
++        }
++        /* Need to fill sai object */
++        is_ars_capable_nhg = true;
++    }
++
++    auto &nhk_map = nextHops.getNextHops();
++    if (nhk_map.empty())
++    {
++        SWSS_LOG_DEBUG("No nexthops found for VRF %lu in ARS validation", vrf_id);
++        return false;
++    }
++
++    // --------------------------------------------------
++    // 2. INTERFACE MODE
++    // --------------------------------------------------
++    if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE)
++    {
++        bool allArsCapable = validateInterfaceModeArs(nextHops.getNextHops(), selector_mode, common_ars_obj);
++        if (allArsCapable)
++        {
++            SWSS_LOG_NOTICE("All INTERFACE-mode nexthop interfaces are ARS capable");
++            is_ars_capable_nhg = true;
++        }
++        else
++        {
++            SWSS_LOG_NOTICE("Some INTERFACE-mode nexthop interfaces are NOT ARS capable");
++            return false;
++        }
++    }
++
++    // --------------------------------------------------
++    // 3. NEXTHOP MODE
++    // --------------------------------------------------
++    if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_NEXTHOP)
++    {
++        for (const auto &nh: nhk_map)
++        {
++            std::string nexthop_ip = nh.ip_address.to_string();
++            std::string alias = nh.alias; /* interface name (EthernetX, PortChannelX, etc.) */
++            std::string vrf_name;
++            vrf_name = m_vrfOrch->getVRFname(vrf_id); 
++            auto nexthop_key = std::make_pair(vrf_name, nexthop_ip);
++            auto nexthopIt = m_arsNexthops.find(nexthop_key);
++            if (nexthopIt == m_arsNexthops.end())
++            {
++                SWSS_LOG_NOTICE("ARS nexthop entry not found for VRF %s and nexthop %s",
++                    vrf_name.c_str(), nexthop_ip.c_str());
++                return false;
++            }
++            const ArsNexthopEntry &ars_entry = nexthopIt->second;
++            ars_obj_nh = ars_entry.ars_obj_name;
++            if (common_ars_obj_nh.empty())
++            {
++                common_ars_obj_nh = ars_obj_nh;
++            }
++            else if (ars_obj_nh != common_ars_obj_nh)
++            {
++                SWSS_LOG_NOTICE("Nexthop %s has ARS object %s, differs from others (%s)",
++                             nexthop_ip.c_str(), ars_obj_nh.c_str(), common_ars_obj_nh.c_str());
++                return false;
++            }
++        }
++        bool allArsCapable = validateInterfaceModeArs(nextHops.getNextHops(), selector_mode, common_ars_obj);
++        if (allArsCapable)
++        {
++            SWSS_LOG_NOTICE("All nextop-mode nexthop interfaces are ARS capable");
++            common_ars_obj = ars_obj_nh;
++            is_ars_capable_nhg = true;
++        }
++    }
++    if (is_ars_capable_nhg)
++    {
++        ars_obj_id = getArsObjectId(common_ars_obj);
++        return true;
++    }
++    return false;
++}
++
++bool ArsOrch::validatePortOrSubPorts(const std::string &alias, std::string &ars_object)
++{
++    SWSS_LOG_ENTER();
++    Port port;
++    if (!gPortsOrch->getPort(alias, port))
++    {
++        SWSS_LOG_NOTICE("Port %s not found", alias.c_str());
++        return false;
++    }
++
++    switch (port.m_type)
++    {
++        case Port::LAG:
++            if (port.m_members.empty())
++            {
++                SWSS_LOG_NOTICE("PortChannel %s has no members", alias.c_str());
++                return false;
++            }
++            for (const auto &member : port.m_members)
++            {
++                if (!validatePortOrSubPorts(member, ars_object))
++                    return false;
++            }
++            return true;
++
++        default:
++            /* Physical port or sub-interface */
++            std::string checkAlias = alias;
++            auto dotPos = alias.find('.');
++            if (dotPos != std::string::npos)
++                checkAlias = alias.substr(0, dotPos);
++
++            if (!isPortArsCapable(checkAlias, ars_object))
++            {
++                SWSS_LOG_NOTICE("Port %s is not ARS capable", checkAlias.c_str());
++                return false;
++            }
++            return true;
++    }
++}
++
++bool ArsOrch::validateInterfaceModeArs(const std::set<NextHopKey> &nextHops, ArsSelectorModeNhg selector_mode, std::string &common_ars_obj)
++{
++    SWSS_LOG_ENTER();
++
++    std::set<std::string> nh_member_list;
++    bool first_iface = true;
++    std::string ars_obj;
++    Port port;
++    // Step 1: collect unique interfaces from nexthops
++    for (const auto &nh : nextHops)
++    {
++        if (!nh.alias.empty())
++            nh_member_list.insert(nh.alias); //nhMemberList
++    }
++
++    // Step 2: validate each interface
++    for (const auto &alias : nh_member_list)
++    {
++        if (!gPortsOrch->getPort(alias, port))
++        {
++            SWSS_LOG_NOTICE("Interface %s not found", alias.c_str());
++            return false;
++        }
++
++        switch (port.m_type)
++        {
++            case Port::VLAN:
++                if (port.m_members.empty())
++                {
++                    SWSS_LOG_NOTICE("VLAN %s has no member ports", alias.c_str());
++                    return false;
++                }
++                for (const auto &member : port.m_members)
++                {
++                    if (!validatePortOrSubPorts(member, ars_obj))
++                    {
++                        SWSS_LOG_NOTICE("Underlying port %s under VLAN %s is not ARS capable",
++                                        member.c_str(), alias.c_str());
++                        return false;
++                    }
++                    // Ensure ARS object consistency across all interfaces
++                    
++                    if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE)
++                    {
++                        if (first_iface)
++                        {
++                            common_ars_obj = ars_obj;
++                            first_iface = false;
++                        }
++                        else if (ars_obj != common_ars_obj)
++                        {
++                            SWSS_LOG_NOTICE("Interface %s has ARS object %s (expected %s)", 
++                                alias.c_str(), ars_obj.c_str(), common_ars_obj.c_str());
++                            return false;
++                        }
++                    }
++                }
++                break;
++
++            default:
++                /* Physical port, sub-interface, or PortChannel */
++                if (!validatePortOrSubPorts(alias, ars_obj)) {
++                    SWSS_LOG_NOTICE("ARS is not capable for interface '%s' with ARS object '%s'",
++                       alias.c_str(), ars_obj.c_str());
++                    return false;
++                 }
++                /* Ensure ARS object consistency across all interfaces */
++                if (selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE)
++                {
++                    if (first_iface)
++                    {
++                            common_ars_obj = ars_obj;
++                            first_iface = false;
++                    }
++                   else if (ars_obj != common_ars_obj)
++                   {
++                       SWSS_LOG_NOTICE("Interface %s has ARS object %s (expected %s)", 
++                           alias.c_str(), ars_obj.c_str(), common_ars_obj.c_str());
++                       return false;
++                   }
++                }
++                break;
++        }
++    }
++
++    SWSS_LOG_DEBUG("All interfaces are ARS capable");
++    return true;
++}
++
++ArsSelectorModeNhg ArsOrch::getNhgSelectorMode() const
++{
++    SWSS_LOG_ENTER();
++    if (m_arsProfiles.empty())
++    {
++        SWSS_LOG_NOTICE("No ARS profile found in m_arsProfiles");
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID;
++    }
++
++    const ArsProfileEntry& profile = m_arsProfiles.begin()->second;
++
++    // Sanity check in case mode is invalid or uninitialized
++    if (profile.nhg_selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID)
++    {
++        SWSS_LOG_NOTICE("ARS profile has invalid NHG selector mode");
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID;
++    }
++
++    return profile.nhg_selector_mode;
++}
++
++bool ArsOrch::isDefaultArsObjectValid(ArsSelectorModeNhg selector_mode, std::string &default_ars_object) const
++{
++    SWSS_LOG_ENTER();
++
++    /* Only GLOBAL mode requires a default ARS object */
++    if (selector_mode != ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL)
++    {
++        return false;
++    }
++
++    if (m_arsProfiles.empty())
++    {
++        SWSS_LOG_ERROR("No ARS profile available");
++        return false;
++    }
++
++    const ArsProfileEntry &profile = m_arsProfiles.begin()->second;
++
++    if (profile.default_ars_object.empty())
++    {
++        SWSS_LOG_ERROR("Default ARS object is missing for GLOBAL mode");
++        return false;
++    }
++
++    default_ars_object = profile.default_ars_object;
++
++    SWSS_LOG_DEBUG("Default ARS object validated for GLOBAL mode: %s",
++                   default_ars_object.c_str());
++    return true;
++}
++
++
++bool ArsOrch::isPortArsCapable(const std::string &if_name, std::string &ars_object)
++{
++    SWSS_LOG_ENTER();
++    auto it = m_arsEnabledInterfaces.find(if_name);
++    if (it == m_arsEnabledInterfaces.end())
++    {
++        SWSS_LOG_DEBUG("Interface %s is not ARS enabled", if_name.c_str());
++        return false;
++    }
++
++    ars_object = it->second.second; // ARS object
++    SWSS_LOG_DEBUG("Interface %s is ARS enabled with ARS object %s", if_name.c_str(), ars_object.c_str());
++    return true;
++}
++
++sai_object_id_t ArsOrch::getArsObjectId(const std::string &ars_obj_name) const
++{
++    SWSS_LOG_ENTER();
++    auto it = m_arsObjects.find(ars_obj_name);
++    if (it == m_arsObjects.end())
++    {
++        SWSS_LOG_NOTICE("ARS object %s not found", ars_obj_name.c_str());
++        return SAI_NULL_OBJECT_ID;
++    }
++
++    return it->second.ars_object_id;
++}
++
++
++bool ArsOrch::bake()
++{
++    SWSS_LOG_ENTER();
++
++    if (!m_isArsSupported)
++    {
++        SWSS_LOG_NOTICE("ARS not supported - no action");
++        return true;
++    }
++
++    return Orch::bake();
++}
++
++
++bool ArsOrch::isArsProfileEnabled () const
++{
++    SWSS_LOG_ENTER();
++
++    if (!m_arsProfiles.empty())
++    {
++        SWSS_LOG_INFO("ARS profiles exist.");
++        return true;
++    }
++
++    SWSS_LOG_INFO("No ARS profiles configured in m_arsProfiles");
++    return false;
++}
++
++bool ArsOrch::createArsProfile(ArsProfileEntry &profile, vector<sai_attribute_t> &ars_attrs)
++{
++    SWSS_LOG_ENTER();
++
++    sai_status_t    status = SAI_STATUS_NOT_SUPPORTED;
++    vector<sai_attribute_t> supported_ars_attrs;
++
++    /* go over set of attr and set only supported attributes  */
++    for (auto attr : ars_attrs)
++    {
++        if (isCreateImplemented(SAI_OBJECT_TYPE_ARS_PROFILE, attr.id))
++        {
++            supported_ars_attrs.push_back(attr);
++            SWSS_LOG_NOTICE("ARS profile %s. Setting Attr %d value %u",
++                             profile.profile_name.c_str(), attr.id, attr.value.u32);
++        }
++        else
++        {
++            if (attr.id == SAI_ARS_PROFILE_ATTR_ENABLE_IPV4 || attr.id == SAI_ARS_PROFILE_ATTR_ENABLE_IPV6)
++            {
++                SWSS_LOG_WARN("Setting Attr %d is not supported. Failed to set ARS profile %s value %s",
++                               attr.id, profile.profile_name.c_str(), attr.value.booldata ? "true" : "false");
++            }
++            else
++            {
++                SWSS_LOG_WARN("Setting Attr %d is not supported. Failed to set ARS profile %s value %u",
++                               attr.id, profile.profile_name.c_str(), attr.value.u32);
++            }
++            continue;
++        }
++    }
++
++    if (supported_ars_attrs.empty())
++    {
++        SWSS_LOG_WARN("No supported attributes found for ARS profile %s", profile.profile_name.c_str());
++        return false;
++    }
++
++    status = sai_ars_profile_api->create_ars_profile(&profile.m_sai_ars_id,
++                                                     gSwitchId,
++                                                     (uint32_t)supported_ars_attrs.size(),
++                                                     supported_ars_attrs.data());
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to create ars profile %s: %d", profile.profile_name.c_str(), status);
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_ARS_PROFILE, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++    }
++
++    // update read-only attributes
++    sai_attribute_t attr;
++    if (isGetImplemented(SAI_OBJECT_TYPE_ARS_PROFILE, SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_GROUPS))
++    {
++        attr.id = SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_GROUPS;
++        status = sai_ars_profile_api->get_ars_profile_attribute(profile.m_sai_ars_id, 1, &attr);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to get ars profile %s (oid 0x%" PRIx64 ") attr SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_GROUPS: %d",
++                profile.profile_name.c_str(), profile.m_sai_ars_id, status);
++            attr.value.u32 = 0;
++        }
++    }
++    profile.max_ecmp_groups = attr.value.u32;
++
++    if (isGetImplemented(SAI_OBJECT_TYPE_ARS_PROFILE, SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_MEMBERS_PER_GROUP))
++    {
++        attr.id = SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_MEMBERS_PER_GROUP;
++        status = sai_ars_profile_api->get_ars_profile_attribute(profile.m_sai_ars_id, 1, &attr);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to get ars profile %s (oid 0x%" PRIx64 ") attr SAI_ARS_PROFILE_ATTR_ECMP_ARS_MAX_MEMBERS_PER_GROUP: %d",
++                profile.profile_name.c_str(), profile.m_sai_ars_id, status);
++            attr.value.u32 = 0;
++        }
++    }
++    profile.max_ecmp_members_per_group = attr.value.u32;
++
++    sai_attribute_t switch_attr;
++    switch_attr.id = SAI_SWITCH_ATTR_ARS_PROFILE;
++    switch_attr.value.oid = profile.m_sai_ars_id;
++
++    status = sai_switch_api->set_switch_attribute(gSwitchId, &switch_attr);
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to set switch ARS profile to %s: %d",
++                       profile.profile_name.c_str(), status);
++    }
++    else
++    {
++        SWSS_LOG_NOTICE("Set switch ARS profile to %s (oid 0x%" PRIx64 ")",
++                        profile.profile_name.c_str(), profile.m_sai_ars_id);
++    }
++
++    SWSS_LOG_NOTICE("Created ARS profile %s (oid 0x%" PRIx64 ")", profile.profile_name.c_str(), profile.m_sai_ars_id);
++
++    return true;
++}
++
++bool ArsOrch::setArsProfile(ArsProfileEntry &profile, vector<sai_attribute_t> &ars_attrs)
++{
++    SWSS_LOG_ENTER();
++
++    sai_status_t status = SAI_STATUS_NOT_SUPPORTED;
++
++    /* go over set of attr and set only supported attributes  */
++    for (auto attr : ars_attrs)
++    {
++        if (!isSetImplemented(SAI_OBJECT_TYPE_ARS_PROFILE, attr.id))
++        {
++            if (attr.id == SAI_ARS_PROFILE_ATTR_ENABLE_IPV4 || attr.id == SAI_ARS_PROFILE_ATTR_ENABLE_IPV6)
++            {
++                SWSS_LOG_WARN("Setting Attr %d is not supported. Failed to set ARS profile %s (oid 0x%" PRIx64 ") value %s",
++                               attr.id, profile.profile_name.c_str(), profile.m_sai_ars_id, attr.value.booldata ? "true" : "false");
++            }
++            else
++            {
++                SWSS_LOG_WARN("Setting Attr %d is not supported. Failed to set ARS profile %s (oid 0x%" PRIx64 ") value %u",
++                               attr.id, profile.profile_name.c_str(), profile.m_sai_ars_id, attr.value.u32);
++            }
++            continue;
++        }
++
++        status = sai_ars_profile_api->set_ars_profile_attribute(profile.m_sai_ars_id, &attr);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to set ars profile %s (oid 0x%" PRIx64 ") attr %d: %d",
++                profile.profile_name.c_str(), profile.m_sai_ars_id, attr.id, status);
++            task_process_status handle_status = handleSaiSetStatus(SAI_API_ARS, status);
++            if (handle_status != task_success)
++            {
++                return parseHandleSaiStatusFailure(handle_status);
++            }
++        }
++    }
++
++    return true;
++}
++
++bool ArsOrch::deleteArsProfile(ArsProfileEntry &profile)
++{
++    SWSS_LOG_ENTER();
++
++    sai_status_t status = SAI_STATUS_SUCCESS;
++
++    if (profile.m_sai_ars_id == SAI_NULL_OBJECT_ID)
++    {
++        SWSS_LOG_WARN("ARS profile %s has invalid SAI object ID; skipping delete",
++                      profile.profile_name.c_str());
++        return false;
++    }
++
++    sai_attribute_t switch_attr;
++    switch_attr.id = SAI_SWITCH_ATTR_ARS_PROFILE;
++    status = sai_switch_api->get_switch_attribute(gSwitchId , 1, &switch_attr);
++    if (status == SAI_STATUS_SUCCESS && switch_attr.value.oid == profile.m_sai_ars_id)
++    {
++        switch_attr.value.oid = SAI_NULL_OBJECT_ID;
++        status = sai_switch_api->set_switch_attribute(gSwitchId, &switch_attr);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to unset switch ARS profile %s: %d",
++                           profile.profile_name.c_str(), status);
++        }
++        else
++        {
++            SWSS_LOG_NOTICE("Unset switch ARS profile %s", profile.profile_name.c_str());
++        }
++    }
++    SWSS_LOG_NOTICE("Deleting ARS profile %s (oid 0x%" PRIx64 ")",
++                    profile.profile_name.c_str(), profile.m_sai_ars_id);
++
++    status = sai_ars_profile_api->remove_ars_profile(profile.m_sai_ars_id);
++
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to delete ARS profile %s (oid 0x%" PRIx64 "): status=%d",
++                       profile.profile_name.c_str(), profile.m_sai_ars_id, status);
++
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_ARS_PROFILE, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++
++        return false;
++    }
++
++    profile.m_sai_ars_id = SAI_NULL_OBJECT_ID;
++    profile.max_ecmp_groups = 0;
++    profile.max_ecmp_members_per_group = 0;
++
++    SWSS_LOG_NOTICE("Deleted ARS profile %s successfully", profile.profile_name.c_str());
++    return true;
++}
++
++
++void ArsOrch::processArsInterfaces(bool enable, std::uint32_t scaling_factor)
++{
++    SWSS_LOG_ENTER();
++    const auto &nh_member_list = gPortsOrch->getAllPorts();
++
++    for (const auto &it : nh_member_list)
++    {
++        const auto &port = it.second;
++
++        if (port.m_type != Port::PHY)
++            continue;
++
++        bool alreadyEnabled = (m_arsEnabledInterfaces.find(port.m_alias) != m_arsEnabledInterfaces.end());
++
++        if (enable && !alreadyEnabled)
++        {
++            SWSS_LOG_INFO("Creating ARS interface for port: %s", port.m_alias.c_str());
++            updateArsEnabledInterface(port, scaling_factor, true);
++        }
++        else if (!enable && alreadyEnabled)
++        {
++            SWSS_LOG_INFO("Removing ARS interface for port: %s", port.m_alias.c_str());
++            updateArsEnabledInterface(port, scaling_factor, false);
++        }
++    }
++}
++
++void ArsOrch::createArsProfileSelectorMode(ArsProfileEntry &profile, ArsSelectorModeNhg new_nhg_mode, ArsSelectorModeNhg prev_nhg_mode)
++{
++    SWSS_LOG_ENTER();
++
++    std::uint32_t scaling_factor = 0;
++
++    if (new_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL)
++    {
++        SWSS_LOG_INFO("NHG ARS profile '%s' switched to GLOBAL mode. Creating ARS interfaces for all ports.",
++                      profile.profile_name.c_str());
++        processArsInterfaces(true, scaling_factor);
++    }
++    else if ((new_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE ||
++              new_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_NEXTHOP) &&
++             prev_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL)
++    {
++        SWSS_LOG_INFO("NHG ARS profile '%s' switched from GLOBAL to INTERFACE/NEXTHOP. Removing ARS interfaces from unused ports.",
++                      profile.profile_name.c_str());
++        processArsInterfaces(false, scaling_factor);
++    }
++}
++
++std::vector<sai_attribute_t> ArsOrch::buildArsAttributesFromObject(ArsObjectEntry *object)
++{
++    SWSS_LOG_ENTER();
++
++    std::vector<sai_attribute_t> ars_attrs;
++    if (!object)
++    {
++        SWSS_LOG_WARN("ARS object is nullptr");
++        return ars_attrs;
++    }
++
++    sai_attribute_t attr;
++
++    // Check differences with prev applied values
++    if (!m_arsObjects.empty())
++    {
++        auto it = m_arsObjects.find(object->ars_obj_name);
++        if (it != m_arsObjects.end())
++        {
++            ArsObjectEntry &prev = it->second;
++
++            if (object->assign_mode != prev.assign_mode)
++            {
++                attr.id = SAI_ARS_ATTR_MODE;
++                attr.value.u32 = object->assign_mode;
++                ars_attrs.push_back(attr);
++            }
++
++            if (object->flowlet_idle_time != prev.flowlet_idle_time)
++            {
++                attr.id = SAI_ARS_ATTR_IDLE_TIME;
++                attr.value.u32 = object->flowlet_idle_time;
++                ars_attrs.push_back(attr);
++            }
++
++            if (object->max_flows != prev.max_flows)
++            {
++                attr.id = SAI_ARS_ATTR_MAX_FLOWS;
++                attr.value.u32 = object->max_flows;
++                ars_attrs.push_back(attr);
++            }
++
++            if (object->primary_path_threshold != prev.primary_path_threshold)
++            {
++                attr.id = SAI_ARS_ATTR_PRIMARY_PATH_QUALITY_THRESHOLD;
++                attr.value.u32 = object->primary_path_threshold;
++                ars_attrs.push_back(attr);
++            }
++
++            if (object->alternative_path_cost != prev.alternative_path_cost)
++            {
++                attr.id = SAI_ARS_ATTR_ALTERNATE_PATH_COST;
++                attr.value.u32 = object->alternative_path_cost;
++                ars_attrs.push_back(attr);
++            }
++
++            return ars_attrs;
++        }
++    }
++
++    /* first time create, fill everything */
++    attr.id = SAI_ARS_ATTR_MODE;
++    attr.value.u32 = object->assign_mode;
++    ars_attrs.push_back(attr);
++
++    attr.id = SAI_ARS_ATTR_IDLE_TIME;
++    attr.value.u32 = object->flowlet_idle_time;
++    ars_attrs.push_back(attr);
++
++    attr.id = SAI_ARS_ATTR_MAX_FLOWS;
++    attr.value.u32 = object->max_flows;
++    ars_attrs.push_back(attr);
++
++    attr.id = SAI_ARS_ATTR_PRIMARY_PATH_QUALITY_THRESHOLD;
++    attr.value.u32 = object->primary_path_threshold;
++    ars_attrs.push_back(attr);
++
++    attr.id = SAI_ARS_ATTR_ALTERNATE_PATH_COST;
++    attr.value.u32 = object->alternative_path_cost;
++    ars_attrs.push_back(attr);
++
++    return ars_attrs;
++}
++
++
++
++bool ArsOrch::createArsObject(ArsObjectEntry *object)
++{
++    SWSS_LOG_ENTER();
++
++    if (!object)
++    {
++        SWSS_LOG_ERROR("createArsObject: null object pointer");
++        return false;
++    }
++
++    auto ars_attrs = buildArsAttributesFromObject(object);
++    std::vector<sai_attribute_t> supported_attrs;
++
++    for (auto &attr : ars_attrs)
++    {
++        if (isCreateImplemented(SAI_OBJECT_TYPE_ARS, attr.id))
++        {
++            supported_attrs.push_back(attr);
++            SWSS_LOG_DEBUG("ARS object: setting attr %d value %u", attr.id, attr.value.u32);
++        }
++        else
++        {
++            SWSS_LOG_DEBUG("Attr %d not supported for create ARS object", attr.id);
++        }
++    }
++
++    if (supported_attrs.empty())
++    {
++        SWSS_LOG_WARN("No supported attrs for ARS object");
++        return false;
++    }
++
++    sai_status_t status = sai_ars_api->create_ars(
++        &object->ars_object_id,
++        gSwitchId,
++        (uint32_t)supported_attrs.size(),
++        supported_attrs.data());
++
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to create ARS object: %d", status);
++        return parseHandleSaiStatusFailure(handleSaiSetStatus(SAI_API_ARS, status));
++    }
++
++    return true;
++}
++
++bool ArsOrch::setArsObject(ArsObjectEntry *object)
++{
++    SWSS_LOG_ENTER();
++
++    if (!object)
++    {
++        SWSS_LOG_ERROR("setArsObject: null object pointer");
++        return false;
++    }
++
++    auto ars_attrs = buildArsAttributesFromObject(object);
++    sai_status_t status = SAI_STATUS_NOT_SUPPORTED;
++
++    for (auto &a : ars_attrs)
++    {
++        if (!isSetImplemented(SAI_OBJECT_TYPE_ARS, a.id))
++        {
++            SWSS_LOG_WARN("Setting attr %d not supported. ARS oid 0x%" PRIx64 ")",
++                          a.id, object->ars_object_id);
++            continue;
++        }
++
++        status = sai_ars_api->set_ars_attribute(object->ars_object_id, &a);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to set ARS attr %d: %d", a.id, status);
++
++            task_process_status handle_status = handleSaiSetStatus(SAI_API_ARS, status);
++            if (handle_status != task_success)
++            {
++                return parseHandleSaiStatusFailure(handle_status);
++            }
++        }
++    }
++
++    return true;
++}
++
++bool ArsOrch::delArsObject(ArsObjectEntry *object)
++{
++    SWSS_LOG_ENTER();
++    sai_status_t    status = SAI_STATUS_NOT_SUPPORTED;
++    const std::string &ars_obj_name = object->ars_obj_name;
++
++    for (const auto &profile_pair : m_arsProfiles)
++    {
++        const ArsProfileEntry &profile = profile_pair.second;
++
++        if (profile.default_ars_object == ars_obj_name)
++        {
++            SWSS_LOG_WARN("ARS object %s is default ARS object for profile %s, cannot delete",
++                      ars_obj_name.c_str(), profile.profile_name.c_str());
++            return false;
++        }
++
++        if (profile.nhg_selector_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL)
++        {
++            SWSS_LOG_WARN("ARS object %s is GLOBAL in profile %s, cannot delete",
++                          ars_obj_name.c_str(), profile.profile_name.c_str());
++            return false;
++        }
++    }
++    for (const auto &iface : m_arsEnabledInterfaces)
++    {
++        const std::string &iface_ars = iface.second.second;
++        if (iface_ars == ars_obj_name)
++        {
++            SWSS_LOG_WARN("ARS object %s is used by interface %s, cannot delete",
++                          ars_obj_name.c_str(), iface.first.c_str());
++            return false;
++        }
++    }
++    for (const auto &nh : m_arsNexthops)
++    {
++        if (nh.second.ars_obj_name == ars_obj_name)
++        {
++            SWSS_LOG_WARN("ARS object %s is used by nexthop %s, cannot delete",
++                          ars_obj_name.c_str(), nh.first.first.c_str());
++            return false;
++        }
++    }
++
++    status = sai_ars_api->remove_ars(object->ars_object_id);
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to remove ars object%s (oid 0x%" PRIx64 ": %d)",
++                        object->ars_obj_name.c_str(), object->ars_object_id, status);
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_ARS, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++    }
++
++    return true;
++}
++
++bool ArsOrch::updateArsEnabledInterface(const Port &port, const uint32_t scaling_factor, const bool is_enable)
++{
++    SWSS_LOG_ENTER();
++
++    if (isSetImplemented(SAI_OBJECT_TYPE_PORT, SAI_PORT_ATTR_ARS_ENABLE))
++    {
++        if (!gPortsOrch->setPortArsEnable(port, is_enable))
++        {
++            SWSS_LOG_ERROR("Failed to set ars enable for port %s", port.m_alias.c_str());
++            return false;
++        }
++    }
++
++    if (isSetImplemented(SAI_OBJECT_TYPE_PORT, SAI_PORT_ATTR_ARS_PORT_LOAD_SCALING_FACTOR))
++    {
++        if (is_enable && !gPortsOrch->setPortArsLoadScaling(port, scaling_factor))
++        {
++            SWSS_LOG_ERROR("Failed to set ars load scaling factor for port %s", port.m_alias.c_str());
++            return false;
++        }
++    }
++
++    SWSS_LOG_NOTICE("Interface %s - %sable ARS on interface",
++                    port.m_alias.c_str(),
++                    is_enable ? "en" : "dis");
++
++    return true;
++}
++
++bool ArsOrch::findDefaultArsObject(const ArsSelectorModeNhg& selector_mode, std::string& ars_obj_name)
++{
++    SWSS_LOG_ENTER();
++    for (const auto& profile_pair : m_arsProfiles)
++    {
++        const ArsProfileEntry& profile = profile_pair.second;
++
++        if (profile.nhg_selector_mode == selector_mode &&
++            !profile.default_ars_object.empty())
++        {
++
++            ars_obj_name = profile.default_ars_object;
++            SWSS_LOG_INFO("Using default ars_obj_name '%s' from profile '%s'",
++                         ars_obj_name.c_str(), profile.profile_name.c_str());
++            return true;
++        }
++    }
++    return false;
++}
++
++ArsSelectorModeNhg ArsOrch::parseNhgSelectorMode(const std::string &nhg_mode) const
++{
++    SWSS_LOG_ENTER();
++    if (nhg_mode == "global")
++    {
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_GLOBAL;
++    }
++    else if (nhg_mode == "interface")
++    {
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE;
++    }
++    else if (nhg_mode == "nexthop")
++    {
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_NEXTHOP;
++    }
++    else
++    {
++        // Invalid mode
++        return ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID;
++    }
++}
++
++ArsSelectorModeLag ArsOrch::parseLagSelectorMode(const std::string &modeStr) const
++{
++    SWSS_LOG_ENTER();
++    if (modeStr == "global")
++    {
++        return ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_GLOBAL;
++    }
++    else if (modeStr == "interface")
++    {
++        return ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INTERFACE;
++    }
++    else
++    {
++        // Invalid mode
++        return ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INVALID;
++    }
++}
++
++bool ArsOrch::doTaskArsProfile(Consumer &consumer)
++{
++    SWSS_LOG_ENTER();
++
++    auto it = consumer.m_toSync.begin();
++    while (it != consumer.m_toSync.end())
++    {
++        KeyOpFieldsValuesTuple t = it->second;
++        string key = kfvKey(t);
++        size_t found = key.find(consumer.getConsumerTable()->getTableNameSeparator().c_str());
++         string table_id = key.substr(0, found);
++        string ars_profile_name = key.substr(found + 1);
++        string op = kfvOp(t);
++    
++        uint32_t max_flows = 0, sampling_interval = 0, past_load_min_val = 0, past_load_max_val = 0, past_load_weight = 0;
++        uint32_t future_load_min_val = 0, future_load_max_val = 0, future_load_weight = 0, current_load_min_val = 0, current_load_max_val = 0;
++        bool ipv6_enable = false, ipv4_enable = false;
++        ArsAlgorithm algo = ARS_ALGORITHM_EWMA;
++
++        bool is_new_entry = false;
++        sai_attribute_t         ars_attr;
++        vector<sai_attribute_t> ars_attrs;
++        std::string             default_ars_object;
++        ArsSelectorModeNhg nhg_mode = ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE;
++        ArsSelectorModeNhg new_nhg_mode = ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE;
++        ArsSelectorModeLag lag_mode = ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INTERFACE;
++        ArsSelectorModeLag new_lag_mode = ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INTERFACE;
++
++        SWSS_LOG_NOTICE("OP: %s, Profile: %s", op.c_str(), ars_profile_name.c_str());
++
++        auto arsProfile_entry = m_arsProfiles.find(ars_profile_name);
++
++        if (op == SET_COMMAND)
++        {
++            vector<FieldValueTuple> fvVector;
++            FieldValueTuple name("profile_name", ars_profile_name);
++            fvVector.push_back(name);
++
++            if (arsProfile_entry != m_arsProfiles.end())
++            {
++                max_flows = arsProfile_entry->second.max_flows;
++                algo = arsProfile_entry->second.algorithm;
++                sampling_interval = arsProfile_entry->second.sampling_interval;
++                ipv4_enable = arsProfile_entry->second.ipv4_enabled;
++                ipv6_enable = arsProfile_entry->second.ipv6_enabled;
++                past_load_min_val = arsProfile_entry->second.path_metrics.past_load.min_value;
++                past_load_max_val = arsProfile_entry->second.path_metrics.past_load.max_value;
++                past_load_weight = arsProfile_entry->second.path_metrics.past_load.weight;
++                future_load_min_val = arsProfile_entry->second.path_metrics.future_load.min_value;
++                future_load_max_val = arsProfile_entry->second.path_metrics.future_load.max_value;
++                future_load_weight = arsProfile_entry->second.path_metrics.future_load.weight;
++                current_load_min_val = arsProfile_entry->second.path_metrics.future_load.min_value;
++                current_load_max_val = arsProfile_entry->second.path_metrics.future_load.max_value;
++                nhg_mode = arsProfile_entry->second.nhg_selector_mode;
++                lag_mode = arsProfile_entry->second.lag_selector_mode;
++                default_ars_object = arsProfile_entry->second.default_ars_object;
++            }
++
++            for (auto i : kfvFieldsValues(t))
++            {
++                if (fvField(i) == ARS_FIELD_NAME_MAX_FLOWS)
++                {
++                    max_flows = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_MAX_FLOWS;
++                    ars_attr.value.u32 = max_flows;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_ALGORITHM)
++                {
++                    if (fvValue(i) == "ewma")
++                    {
++                        algo = ARS_ALGORITHM_EWMA;
++                    }
++                    else
++                    {
++                        SWSS_LOG_WARN("Received unsupported algorithm %s", fvValue(i).c_str());
++                        continue;
++                    }
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_ALGO;
++                    ars_attr.value.u32 = algo;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_SAMPLE_INTERVAL)
++                {
++                    sampling_interval = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_SAMPLING_INTERVAL;
++                    ars_attr.value.u32 = sampling_interval;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_IPV4_ENABLE)
++                {
++                    ipv4_enable = (fvValue(i) == "true");
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_ENABLE_IPV4;
++                    ars_attr.value.booldata = ipv4_enable;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_IPV6_ENABLE)
++                {
++                    ipv6_enable = (fvValue(i) == "true");
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_ENABLE_IPV6;
++                    ars_attr.value.booldata = ipv6_enable;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_PAST_LOAD_MIN_VALUE)
++                {
++                    past_load_min_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_PAST_MIN_VAL;
++                    ars_attr.value.u32 = past_load_min_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_PAST_LOAD_MAX_VALUE)
++                {
++                    past_load_max_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_PAST_MAX_VAL;
++                    ars_attr.value.u32 = past_load_max_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_PAST_LOAD_WEIGHT)
++                {
++                    past_load_weight = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_PORT_LOAD_PAST_WEIGHT;
++                    ars_attr.value.u32 = past_load_weight;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_FUTURE_LOAD_MIN_VALUE)
++                {
++                    future_load_min_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MIN_VAL;
++                    ars_attr.value.u32 = future_load_min_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_FUTURE_LOAD_MAX_VALUE)
++                {
++                    future_load_max_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_FUTURE_MAX_VAL;
++                    ars_attr.value.u32 = future_load_max_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_FUTURE_LOAD_WEIGHT)
++                {
++                    future_load_weight = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_PORT_LOAD_FUTURE_WEIGHT;
++                    ars_attr.value.u32 = future_load_weight;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_CURRENT_LOAD_MIN_VALUE)
++                {
++                    current_load_min_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MIN_VAL;
++                    ars_attr.value.u32 = current_load_min_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_CURRENT_LOAD_MAX_VALUE)
++                {
++                    current_load_max_val = stoi(fvValue(i));
++                    ars_attr.id = SAI_ARS_PROFILE_ATTR_LOAD_CURRENT_MAX_VAL;
++                    ars_attr.value.u32 = current_load_max_val;
++                    ars_attrs.push_back(ars_attr);
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_NHG_PATH_SELECTOR_MODE)
++                {
++                    new_nhg_mode = parseNhgSelectorMode(fvValue(i));
++                    if (new_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INVALID)
++                    {
++                        SWSS_LOG_ERROR("Invalid NHG selector mode: %s", fvValue(i).c_str());
++                        continue;
++                    }
++                    if(new_nhg_mode != nhg_mode)
++                    {
++                       createArsProfileSelectorMode(arsProfile_entry->second, new_nhg_mode, nhg_mode);
++                       nhg_mode = new_nhg_mode;
++                    }
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_LAG_PATH_SELECTOR_MODE)
++                {
++                    new_lag_mode = parseLagSelectorMode(fvValue(i));
++                    if (new_lag_mode == ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INVALID)
++                    {
++                        SWSS_LOG_ERROR("Invalid LAG selector mode: %s", fvValue(i).c_str());
++                        continue;
++                    }
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_DEFAULT_OBJECT)
++                {
++                    default_ars_object = fvValue(i);
++                }
++                else
++                {
++                    SWSS_LOG_WARN("Received unsupported field %s", fvField(i).c_str());
++                    break;
++                }
++                FieldValueTuple value(fvField(i), fvValue(i));
++                fvVector.push_back(value);
++            }
++
++            if (arsProfile_entry == m_arsProfiles.end())
++            {
++                ArsProfileEntry arsProfileEntry;
++                arsProfileEntry.profile_name = ars_profile_name;
++                m_arsProfiles[ars_profile_name] = arsProfileEntry;
++                arsProfile_entry = m_arsProfiles.find(ars_profile_name);
++                SWSS_LOG_NOTICE("Added new ARS profile %s", ars_profile_name.c_str());
++                is_new_entry = true;
++            }
++
++            arsProfile_entry->second.max_flows = max_flows;
++            arsProfile_entry->second.algorithm = algo;
++            arsProfile_entry->second.sampling_interval = sampling_interval;
++            arsProfile_entry->second.ipv4_enabled = ipv4_enable;
++            arsProfile_entry->second.ipv6_enabled = ipv6_enable;
++            arsProfile_entry->second.path_metrics.past_load.min_value = past_load_min_val;
++            arsProfile_entry->second.path_metrics.past_load.max_value = past_load_max_val;
++            arsProfile_entry->second.path_metrics.past_load.weight = past_load_weight;
++            arsProfile_entry->second.path_metrics.future_load.min_value = future_load_min_val;
++            arsProfile_entry->second.path_metrics.future_load.max_value = future_load_max_val;
++            arsProfile_entry->second.path_metrics.future_load.weight = future_load_weight;
++            arsProfile_entry->second.path_metrics.current_load.min_value = current_load_min_val;
++            arsProfile_entry->second.path_metrics.current_load.max_value = current_load_max_val;
++            arsProfile_entry->second.nhg_selector_mode = nhg_mode;
++            arsProfile_entry->second.lag_selector_mode = lag_mode;
++            arsProfile_entry->second.default_ars_object = default_ars_object;
++
++            bool res;
++            if (is_new_entry)
++            {
++                res = createArsProfile(arsProfile_entry->second, ars_attrs);
++            }
++            else
++            {
++                res = setArsProfile(arsProfile_entry->second, ars_attrs);
++            }
++
++            if (!res)
++            {
++                SWSS_LOG_ERROR("Failed to create/set ARS profile %s", ars_profile_name.c_str());
++                continue;
++            }
++            if (new_nhg_mode == ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE)
++            {
++                if (!default_ars_object.empty())
++                {
++                    // Scan interface_table and update ars_object_name
++                    for (auto &entry : m_arsEnabledInterfaces)
++                    {
++                        auto &ars_pair = entry.second;
++
++                        // Update ars_object_name if not already set
++                        if (ars_pair.second.empty())
++                        {
++                            ars_pair.second = default_ars_object;
++                            SWSS_LOG_INFO("Updated ARS object for interface %s to default %s",
++                                           entry.first.c_str(), default_ars_object.c_str());
++                        }
++                    }
++                }
++            }
++            FieldValueTuple groups("max_ecmp_groups", std::to_string(arsProfile_entry->second.max_ecmp_groups));
++            fvVector.push_back(groups);
++            FieldValueTuple members("max_ecmp_members_per_group", std::to_string(arsProfile_entry->second.max_ecmp_members_per_group));
++            fvVector.push_back(members);
++            m_arsProfileStateTable->set(ars_profile_name, fvVector);
++        }
++        else if (op == DEL_COMMAND)
++        {
++            if (arsProfile_entry == m_arsProfiles.end())
++            {
++                SWSS_LOG_NOTICE("Received delete call for non-existent entry %s", ars_profile_name.c_str());
++            }
++            else 
++            {
++                /* Check if there are no child objects associated prior to deleting */
++                if (m_arsEnabledInterfaces.empty())
++                {
++                    SWSS_LOG_INFO("Received delete call for valid entry with no further dependencies, deleting %s",
++                        ars_profile_name.c_str());
++                }
++                else
++                {
++                    SWSS_LOG_NOTICE("Child Prefix/Member entries are still associated with this ARS profile %s", 
++                            ars_profile_name.c_str());
++                    continue;
++                }
++                deleteArsProfile(arsProfile_entry->second);
++                m_arsProfiles.erase(arsProfile_entry);
++                m_arsProfileStateTable->del(ars_profile_name);
++            }
++        }
++
++        it = consumer.m_toSync.erase(it);
++    }
++    return true;
++}
++
++bool ArsOrch::doTaskArsInterfaces(Consumer &consumer)
++{
++    SWSS_LOG_ENTER();
++
++    if (m_arsProfiles.empty())
++    {
++        SWSS_LOG_WARN("No ARS profiles exist");
++        return false;
++    }
++    auto it = consumer.m_toSync.begin();
++    while (it != consumer.m_toSync.end())
++    {
++        KeyOpFieldsValuesTuple t = it->second;
++        string key = kfvKey(t);
++
++        size_t found = key.find(consumer.getConsumerTable()->getTableNameSeparator().c_str());
++        string table_id = key.substr(0, found);
++        string if_name = key.substr(found + 1);
++        string op = kfvOp(t);
++
++        Port p;
++        std::uint32_t scaling_factor = 0;
++        std::string ars_obj_name;
++
++        SWSS_LOG_NOTICE("ARS Path Op %s Interface %s", op.c_str(), if_name.c_str());
++
++        if (op == SET_COMMAND)
++        {
++            auto ars_if = m_arsEnabledInterfaces.find(if_name);
++
++            for (auto i : kfvFieldsValues(t))
++            {
++                if (fvField(i) == ARS_FIELD_NAME_SCALING_FACTOR)
++                {
++                    scaling_factor = static_cast<uint32_t>(stoi(fvValue(i)));
++
++                    if (ars_if != m_arsEnabledInterfaces.end() && ars_if->second.first == scaling_factor)
++                    {
++                        SWSS_LOG_WARN("Scaling factor %s for interface %s unchanged - skipped",
++                                      fvValue(i).c_str(), if_name.c_str());
++                        it = consumer.m_toSync.erase(it);
++                        continue;
++                    }
++                }
++                else if (fvField(i) == ARS_FIELD_NAME_OBJECT_NAME)
++                {
++                    ars_obj_name = fvValue(i);
++                    if (!ars_obj_name.empty())
++                    {
++                        SWSS_LOG_INFO("Received ars_obj_name '%s' for interface %s",
++                                     ars_obj_name.c_str(), if_name.c_str());
++                    }
++                    else
++                    {
++                        SWSS_LOG_INFO("Received empty ars_obj_name for interface %s", if_name.c_str());
++                    }
++
++                }
++                else
++                {
++                    SWSS_LOG_WARN("Received unsupported field %s", fvField(i).c_str());
++                    continue;
++                }
++
++            }
++
++            /* Apply default ARS object if not provided */
++            if (ars_obj_name.empty())
++            {
++                bool result = findDefaultArsObject(ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE, 
++                                  ars_obj_name);
++                if (!result)
++                {
++                   /* No suitable ars object found */
++                    SWSS_LOG_WARN(
++                    "NHG path selector is in INTERFACE mode, but no ARS object is configured "
++                    "either in the ARS profile 'default_ars_object' or in the ARS interface 'ars_obj_name'");
++                }
++            }
++
++            m_arsEnabledInterfaces[if_name] = std::make_pair(scaling_factor, ars_obj_name);
++            SWSS_LOG_NOTICE("Added/Updated interface %s scaling_factor %d obj_name '%s'",
++                            if_name.c_str(), scaling_factor, ars_obj_name.c_str());
++        }
++        else if (op == DEL_COMMAND)
++        {
++            auto ars_if = m_arsEnabledInterfaces.find(if_name);
++            if (ars_if == m_arsEnabledInterfaces.end())
++            {
++                SWSS_LOG_INFO("Delete called for non-existent interface %s", if_name.c_str());
++                it = consumer.m_toSync.erase(it);
++                continue;
++            }
++
++            SWSS_LOG_INFO("Removing interface %s with obj_name '%s'",
++                          if_name.c_str(), ars_if->second.second.c_str());
++            m_arsEnabledInterfaces.erase(ars_if);
++        }
++
++        if (!gPortsOrch->getPort(if_name, p) || p.m_port_id == SAI_NULL_OBJECT_ID)
++        {
++            SWSS_LOG_WARN("Tried to %s non-existent/down interface %s - skipped", op.c_str(), if_name.c_str());
++        }
++        else
++        {
++            updateArsEnabledInterface(p, scaling_factor, (op == SET_COMMAND));
++        }
++
++        it = consumer.m_toSync.erase(it);
++    }
++
++  // Update ARS state table with scaling factor and ars_obj_name
++    string ifnames = "";
++    for (const auto &entry : m_arsEnabledInterfaces)
++    {
++        ifnames += entry.first + ":" + std::to_string(entry.second.first) +
++                   ":" + entry.second.second + " "; // format: if_name:scaling:obj_name
++    }
++    return true;
++}
++bool ArsOrch::doTaskArsObject(Consumer &consumer)
++{
++    SWSS_LOG_ENTER();
++    bool status = false;
++
++    auto it = consumer.m_toSync.begin();
++    while (it != consumer.m_toSync.end())
++    {
++        KeyOpFieldsValuesTuple t = it->second;
++        string ars_obj_name = kfvKey(t);
++        string op = kfvOp(t);
++
++        SWSS_LOG_NOTICE("ARS Object Op %s, Object Name %s", op.c_str(), ars_obj_name.c_str());
++
++        ArsObjectEntry ars_object;
++
++        if (op == SET_COMMAND)
++        {
++            // Set defaults
++            ars_object.assign_mode = PER_FLOWLET_QUALITY;
++            ars_object.flowlet_idle_time = ARS_OBJECT_DEFAULT_FLOWLET_IDLE_TIME_US;
++            ars_object.max_flows = ARS_OBJECT_DEFAULT_MAX_FLOWS;
++            ars_object.primary_path_threshold = ARS_OBJECT_DEFAULT_PRIMARY_PATH_THRESHOLD;
++            ars_object.alternative_path_cost = ARS_OBJECT_DEFAULT_ALTERNATIVE_PATH_COST;
++
++            // Override with incoming fields
++            for (auto fv : kfvFieldsValues(t))
++            {
++                if (fvField(fv) == ARS_FIELD_NAME_ASSIGN_MODE)
++                {
++                    if (fvValue(fv) == "per_flowlet_quality")
++                        ars_object.assign_mode = PER_FLOWLET_QUALITY;
++                    else if (fvValue(fv) == "per_packet_quality")
++                        ars_object.assign_mode = PER_PACKET_QUALITY;
++                    else
++                        SWSS_LOG_WARN("Unsupported assign_mode %s, using default", fvValue(fv).c_str());
++                }
++                else if (fvField(fv) == ARS_FIELD_NAME_IDLE_TIME)
++                    ars_object.flowlet_idle_time = static_cast<uint16_t>(stoi(fvValue(fv)));
++                else if (fvField(fv) == ARS_FIELD_NAME_OBJ_MAX_FLOWS)
++                    ars_object.max_flows = static_cast<uint32_t>(stoi(fvValue(fv)));
++                else if (fvField(fv) == ARS_FIELD_NAME_PRIMARY_PATH_THRESHOLD)
++                    ars_object.primary_path_threshold = static_cast<uint32_t>(stoi(fvValue(fv)));
++                else if (fvField(fv) == ARS_FIELD_NAME_ALTERNATIVE_PATH_COST)
++                    ars_object.alternative_path_cost = static_cast<uint32_t>(stoi(fvValue(fv)));
++            }
++
++            // Create or update ARS object in SAI
++            auto table_it = m_arsObjects.find(ars_obj_name);
++            if (table_it == m_arsObjects.end())
++            {
++                /* Create new entry*/
++                ars_object.ars_obj_name = ars_obj_name;
++                status = createArsObject(&ars_object);
++                if (status)
++                {
++                    SWSS_LOG_DEBUG("ARS object created: %s", ars_obj_name.c_str());
++                }
++            }
++            else
++            {
++                /*Exisitng object so set the particular field*/
++                ars_object.ars_object_id = table_it->second.ars_object_id;  // preserve oid
++                status = setArsObject(&ars_object);
++                if (status) 
++                {
++                    SWSS_LOG_NOTICE("ARS object updated: %s", ars_obj_name.c_str());
++                }
++            }
++            if (status)
++            {
++                m_arsObjects[ars_obj_name] = ars_object;
++            }
++            else
++            {
++                SWSS_LOG_ERROR("Failed to create/update ARS object %s, skipping map update", ars_obj_name.c_str());
++            }
++        }
++        else if (op == DEL_COMMAND)
++        {
++            auto table_it = m_arsObjects.find(ars_obj_name);
++            if (table_it != m_arsObjects.end() && table_it->second.ars_object_id)
++            {
++                delArsObject(&table_it->second);
++            }
++            m_arsObjects.erase(ars_obj_name);
++            SWSS_LOG_NOTICE("ARS object deleted: %s", ars_obj_name.c_str());
++        }
++
++        it = consumer.m_toSync.erase(it);
++    }
++
++    return true;
++}
++
++bool ArsOrch::doTaskArsNexthop(Consumer &consumer)
++{
++    SWSS_LOG_ENTER();
++
++    auto it = consumer.m_toSync.begin();
++    while (it != consumer.m_toSync.end())
++    {
++        KeyOpFieldsValuesTuple t = it->second;
++        std::string key = kfvKey(t);
++
++        /* Parse VRF and nexthop_ip from key*/
++        size_t found = key.find(consumer.getConsumerTable()->getTableNameSeparator().c_str());
++        std::string vrf_name = key.substr(0, found);
++        IpAddress nexthop_ip(key.substr(found + 1));
++        std::string op = kfvOp(t);
++
++        SWSS_LOG_NOTICE("ARS NHG Op %s, VRF %s, Nexthop %s",
++                        op.c_str(), vrf_name.c_str(), nexthop_ip.to_string().c_str());
++
++        auto nexthop_key = std::make_pair(vrf_name, nexthop_ip);
++
++        if (op == SET_COMMAND)
++        {
++
++            // Find or create entry
++            auto itr = m_arsNexthops.find(nexthop_key);
++            if (itr == m_arsNexthops.end())
++            {
++                m_arsNexthops[nexthop_key] = ArsNexthopEntry();
++                itr = m_arsNexthops.find(nexthop_key);
++            }
++
++            ArsNexthopEntry &ars_nexthop = itr->second;
++
++            // Read fields
++            std::string ars_obj_name = "";
++            std::string role = "primary_path"; // default
++
++            for (auto fv : kfvFieldsValues(t))
++            {
++                if (fvField(fv) == ARS_FIELD_NAME_ARS_OBJ_NAME)
++                {
++                    ars_obj_name = fvValue(fv);
++                }
++                else if (fvField(fv) == ARS_FIELD_NAME_ROLE)
++                {
++                    role = fvValue(fv);
++                }
++                else
++                {
++                    SWSS_LOG_WARN("Unsupported field %s in ARS_NEXTHOP_LIST",
++                                  fvField(fv).c_str());
++                }
++            }
++
++            /* Apply default ARS object if not provided */
++            if (ars_obj_name.empty())
++            {
++                bool result = findDefaultArsObject(ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_NEXTHOP, 
++                                  ars_obj_name);
++                if (!result)
++                {
++                   /* No suitable profile found */
++                    SWSS_LOG_WARN("NHG path selector is in nexthop mode, but no default ARS object is configured");
++                }
++            }
++
++            /* Validate ARS object */
++            auto ars_obj_it = m_arsObjects.find(ars_obj_name);
++            if (ars_obj_it == m_arsObjects.end())
++            {
++                SWSS_LOG_ERROR("ARS object %s does not exist, cannot attach NHG",
++                               ars_obj_name.c_str());
++                it = consumer.m_toSync.erase(it);
++                continue;
++            }
++
++            ars_nexthop.ars_obj_name = ars_obj_name;
++            ars_nexthop.role = role;
++
++            SWSS_LOG_NOTICE("ARS NHG added: VRF %s, Nexthop %s, ARS Obj %s, Role %s",
++                            vrf_name.c_str(), nexthop_ip.to_string().c_str(),
++                            ars_obj_name.c_str(), role.c_str());
++        }
++        else if (op == DEL_COMMAND)
++        {
++            auto itr = m_arsNexthops.find(nexthop_key);
++
++            if (itr == m_arsNexthops.end())
++            {
++                SWSS_LOG_NOTICE("ARS NHG entry does not exist for VRF %s, Nexthop %s, ignoring delete",
++                                vrf_name.c_str(), nexthop_ip.to_string().c_str());
++                it = consumer.m_toSync.erase(it);
++                continue;
++            }
++
++            ArsNexthopEntry &ars_nexthop = itr->second;
++
++            // Remove from internal map
++            m_arsNexthops.erase(itr);
++
++            SWSS_LOG_NOTICE("ARS NHG removed: VRF %s, Nexthop %s, ARS Obj %s, Role %s",
++                            vrf_name.c_str(), nexthop_ip.to_string().c_str(),
++                            ars_nexthop.ars_obj_name.c_str(), ars_nexthop.role.c_str());
++        }
++
++        // Move iterator after processing
++        it = consumer.m_toSync.erase(it);
++    }
++
++    return true;
++}
++void ArsOrch::doTask(Consumer& consumer) 
++{
++    SWSS_LOG_ENTER();
++    const string & table_name = consumer.getTableName();
++
++    if (!m_isArsSupported)
++    {
++        SWSS_LOG_ERROR("HW doesn't support ARS \n");
++        return;
++    }
++
++	if (table_name == CFG_ARS_PROFILE)
++    {
++        doTaskArsProfile(consumer);
++    }
++    else if (table_name == CFG_ARS_INTERFACE)
++    {
++        doTaskArsInterfaces(consumer);
++    }
++    else if (table_name == CFG_ARS_OBJECT)
++    {
++        doTaskArsObject(consumer);
++    }
++    else if (table_name == CFG_ARS_NEXTHOP)
++    {
++        doTaskArsNexthop(consumer);
++    }
++    else
++    {
++        SWSS_LOG_ERROR("Unknown table : %s", table_name.c_str());
++    }
++}
+diff --git a/orchagent/arsorch.h b/orchagent/arsorch.h
+new file mode 100644
+index 00000000..0bad1a36
+--- /dev/null
++++ b/orchagent/arsorch.h
+@@ -0,0 +1,198 @@
++#ifndef SWSS_ARSORCH_H
++#define SWSS_ARSORCH_H
++
++#include "orch.h"
++#include "observer.h"
++#include "intfsorch.h"
++#include "neighorch.h"
++#include "producerstatetable.h"
++
++#include "ipaddress.h"
++#include "ipaddresses.h"
++#include "ipprefix.h"
++#include "nexthopgroupkey.h"
++
++#include <map>
++
++#define ARS_OBJECT_DEFAULT_FLOWLET_IDLE_TIME_US     256
++#define ARS_OBJECT_DEFAULT_MAX_FLOWS                512
++#define ARS_OBJECT_DEFAULT_PRIMARY_PATH_THRESHOLD   16
++#define ARS_OBJECT_DEFAULT_ALTERNATIVE_PATH_COST    0
++
++enum ArsAssignMode
++{
++    PER_FLOWLET_QUALITY = SAI_ARS_MODE_FLOWLET_QUALITY,
++    PER_PACKET_QUALITY = SAI_ARS_MODE_PER_PACKET_QUALITY 
++};
++
++typedef enum ArsAlgorithm
++{
++    ARS_ALGORITHM_EWMA
++} ArsAlgorithm;
++
++enum class ArsSelectorModeNhg
++{
++    ARS_SELECTOR_MODE_NHG_GLOBAL     = 0,
++    ARS_SELECTOR_MODE_NHG_INTERFACE  = 1,
++    ARS_SELECTOR_MODE_NHG_NEXTHOP    = 2,
++    ARS_SELECTOR_MODE_NHG_INVALID    = 3
++};
++
++enum class ArsSelectorModeLag
++{
++    ARS_SELECTOR_MODE_LAG_GLOBAL     = 0,
++    ARS_SELECTOR_MODE_LAG_INTERFACE  = 1,
++    ARS_SELECTOR_MODE_LAG_INVALID    = 2
++};
++
++typedef struct ArsObjectEntry
++{
++    std::string ars_obj_name;
++    ArsAssignMode assign_mode;                      // Stores an assign_mode from ArsAssignModes
++    uint32_t flowlet_idle_time;                     // Flowlet idle time in micro seconds
++    uint32_t max_flows;                             // Maximum number of flows in a flowlet
++    sai_object_id_t ars_object_id;                  // ARS Object ID if already created
++    uint32_t primary_path_threshold;                // Primary path threshold value
++    uint32_t alternative_path_cost;                 // Alternative path cost
++} ArsObjectEntry;
++
++typedef struct ArsNexthopEntry
++{
++    std::string ars_obj_name;
++    std::string role;
++} ArsNexthopEntry;
++
++typedef struct ArsProfileEntry
++{
++    string profile_name;                                    // Name of ARS profile configured by user
++    ArsAlgorithm algorithm;                                 // ARS algorithm
++    ArsSelectorModeNhg nhg_selector_mode = ArsSelectorModeNhg::ARS_SELECTOR_MODE_NHG_INTERFACE;
++    ArsSelectorModeLag lag_selector_mode = ArsSelectorModeLag::ARS_SELECTOR_MODE_LAG_INTERFACE;
++    std::string default_ars_object;
++    uint32_t max_flows;                                     // Maximum number of supported flows
++    uint32_t sampling_interval;                             // Sampling interval in micro seconds
++    struct
++    {
++        struct {
++            uint32_t min_value;                             // Minimum value of the load
++            uint32_t max_value;                             // Maximum value of the load
++            uint32_t weight;                                // Weight of the metric
++        } past_load;
++
++        struct {
++            uint32_t min_value;                             // Minimum value of the load
++            uint32_t max_value;                             // Maximum value of the load
++        } current_load;
++
++        struct {
++            uint32_t min_value;                             // Minimum value of the load
++            uint32_t max_value;                             // Maximum value of the load
++            uint32_t weight;                                // Weight of the metric
++        } future_load;
++    } path_metrics;
++
++    bool ipv4_enabled;                                      // Enable IPv4
++    bool ipv6_enabled;                                      // Enable IPv6
++    uint32_t max_ecmp_groups;
++    uint32_t max_ecmp_members_per_group;
++    uint32_t ref_count;                                     // Number of objects using this profile
++    sai_object_id_t m_sai_ars_id;                           // SAI ARS profile OID
++} ArsProfileEntry;
++
++/* Map from IP prefix to ARS object */
++typedef std::map<std::pair<std::string, IpAddress>, ArsNexthopEntry> ArsNexthops;
++/* Main structure to hold user configuration */
++typedef std::map<std::string, ArsProfileEntry> ArsProfiles;
++typedef std::map<std::string, ArsObjectEntry> ArsObjects;
++/* list of ARS-enabled Interfaces */
++typedef std::map<std::string, std::pair<std::uint32_t, std::string>> ArsEnabledInterfaces;  // ARS-Enabled interfaces for the profile
++
++typedef struct _ars_sai_attr_t
++{
++    _ars_sai_attr_t(std::string name):
++        attr_name(name), create_implemented(false), set_implemented(false), get_implemented(false) {}
++    std::string attr_name;
++    bool create_implemented;
++    bool set_implemented;
++    bool get_implemented;
++} ars_sai_attr_t;
++typedef std::map<uint32_t, ars_sai_attr_t> ars_sai_attr_lookup_t;
++typedef struct _ars_sai_feature_data_t {
++    std::string name;
++    ars_sai_attr_lookup_t attrs;
++ } ars_sai_feature_data_t;
++typedef std::map<uint32_t, ars_sai_feature_data_t> ars_sai_feature_lookup_t;
++
++
++class ArsOrch : public Orch, public Observer
++{
++public:
++    ArsOrch(DBConnector *db, DBConnector *appDb, DBConnector *stateDb, vector<string> &tableNames, VRFOrch *vrfOrch);
++    ~ArsOrch() { deinit(); }
++    // warm reboot support
++    bool bake() override;
++    void update(SubjectType type, void *cntx);
++    bool isArsProfileEnabled() const;
++    bool validateNexthopsForArs(sai_object_id_t vrf_id, const NextHopGroupKey& nextHops, sai_object_id_t &ars_obj_id);
++protected:
++    VRFOrch *m_vrfOrch;
++
++private:
++    bool m_isArsSupported = false;
++    ArsProfiles m_arsProfiles;
++    ArsObjects m_arsObjects;
++    ArsNexthops m_arsNexthops;
++    ArsEnabledInterfaces m_arsEnabledInterfaces;
++    std::unique_ptr<Table> m_arsProfileStateTable;
++    std::unique_ptr<Table> m_arsIfStateTable;
++    std::unique_ptr<Table> m_arsNhgStateTable;
++    std::unique_ptr<Table> m_arsCapabilityStateTable;
++    std::unique_ptr<Table> m_arsObjectStateTable;
++  
++    bool setArsProfile(ArsProfileEntry &profile, vector<sai_attribute_t> &ars_attrs);
++    bool createArsProfile(ArsProfileEntry &profile, vector<sai_attribute_t> &ars_attrs);
++    bool setArsObject(ArsObjectEntry *object);    
++    bool createArsObject(ArsObjectEntry *object);
++    bool deleteArsProfile(ArsProfileEntry &profile);
++    std::vector<sai_attribute_t> buildArsAttributesFromObject(ArsObjectEntry *object);
++    bool delArsObject(ArsObjectEntry *object);
++    bool updateArsEnabledInterface(const Port &port, const uint32_t scaling_factor, const bool is_enable);
++
++    bool validatePortOrSubPorts(const std::string &alias, std::string &ars_object);
++
++    bool validateInterfaceModeArs(const std::set<NextHopKey> &nextHops, 
++                                  ArsSelectorModeNhg selector_mode, 
++                                  std::string &common_ars_obj);
++
++    ArsSelectorModeNhg getNhgSelectorMode() const;
++
++    bool isDefaultArsObjectValid(ArsSelectorModeNhg selector_mode, std::string &default_ars_object) const;
++
++    bool isPortArsCapable(const std::string &if_name, std::string &ars_object);
++
++    sai_object_id_t getArsObjectId(const std::string &ars_obj_name) const;
++
++    bool findDefaultArsObject(const ArsSelectorModeNhg &selector_mode, std::string &ars_obj_name);
++
++    bool updateArsInterface(ArsProfileEntry &profile, const Port &port, const bool is_enable);
++    ArsSelectorModeNhg parseNhgSelectorMode(const std::string &modeStr) const;
++    ArsSelectorModeLag parseLagSelectorMode(const std::string &modeStr) const;
++    void createArsProfileSelectorMode(ArsProfileEntry &profile, ArsSelectorModeNhg new_nhg_mode, ArsSelectorModeNhg prev_nhg_mode);
++
++    void processArsInterfaces(bool enable, std::uint32_t scaling_factor);
++
++    bool doTaskArsObject(Consumer &consumer);
++    bool doTaskArsProfile(Consumer &consumer);
++    bool doTaskArsInterfaces(Consumer &consumer);
++    bool doTaskArsNexthop(Consumer &consumer);
++    void doTask(Consumer& consumer);
++
++    bool isSetImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id);
++    bool isCreateImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id);
++    bool isGetImplemented(sai_object_type_t object_type, sai_attr_id_t attr_id);
++    void initCapabilities();
++    void deinit();
++    void deinitCapabilities();
++};
++
++#endif /* SWSS_ARSORCH_H */
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index 7b71e36a..4fe98cd5 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -60,6 +60,7 @@ CoppOrch *gCoppOrch;
+ P4Orch *gP4Orch;
+ BfdOrch *gBfdOrch;
+ Srv6Orch *gSrv6Orch;
++ArsOrch *gArsOrch;
+ FlowCounterRouteOrch *gFlowCounterRouteOrch;
+ DebugCounterOrch *gDebugCounterOrch;
+ MonitorOrch *gMonitorOrch;
+@@ -303,6 +304,15 @@ bool OrchDaemon::init()
+     gSrv6Orch = new Srv6Orch(m_configDb, m_applDb, srv6_tables, gSwitchOrch, vrf_orch, gNeighOrch);
+     gDirectory.set(gSrv6Orch);
+ 
++    vector<string> ars_tables = {
++        CFG_ARS_PROFILE,
++        CFG_ARS_INTERFACE,
++        CFG_ARS_OBJECT,
++        CFG_ARS_NEXTHOP
++    };
++    gArsOrch = new ArsOrch(m_configDb, m_applDb, m_stateDb, ars_tables, vrf_orch);
++    gDirectory.set(gArsOrch);
++
+     const int routeorch_pri = 5;
+     vector<table_name_with_pri_t> route_tables = {
+         { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+@@ -313,7 +323,7 @@ bool OrchDaemon::init()
+     auto enable_route_zmq = get_feature_status(ORCH_NORTHBOND_ROUTE_ZMQ_ENABLED, false);
+     auto route_zmq_sever = enable_route_zmq ? m_zmqServer : nullptr;
+ 
+-    gRouteOrch = new RouteOrch(m_applDb, route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, vrf_orch, gFgNhgOrch, gSrv6Orch, route_zmq_sever);
++    gRouteOrch = new RouteOrch(m_applDb, route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, vrf_orch, gFgNhgOrch, gSrv6Orch, gArsOrch, route_zmq_sever);
+     gNhgOrch = new NhgOrch(m_applDb, APP_NEXTHOP_GROUP_TABLE_NAME);
+     gCbfNhgOrch = new CbfNhgOrch(m_applDb, APP_CLASS_BASED_NEXT_HOP_GROUP_TABLE_NAME);
+ 
+@@ -573,6 +583,7 @@ bool OrchDaemon::init()
+     m_orchList.push_back(gNatOrch);
+     m_orchList.push_back(gMlagOrch);
+     m_orchList.push_back(gIsoGrpOrch);
++    m_orchList.push_back(gArsOrch);
+     m_orchList.push_back(mux_st_orch);
+     m_orchList.push_back(nvgre_tunnel_orch);
+     m_orchList.push_back(nvgre_tunnel_map_orch);
+diff --git a/orchagent/orchdaemon.h b/orchagent/orchdaemon.h
+index 2041c6bf..1e593dff 100644
+--- a/orchagent/orchdaemon.h
++++ b/orchagent/orchdaemon.h
+@@ -60,6 +60,7 @@
+ #include "dash/dashportmaporch.h"
+ #include "high_frequency_telemetry/hftelorch.h"
+ #include <sairedis.h>
++#include "arsorch.h"
+ 
+ using namespace swss;
+ 
+diff --git a/orchagent/p4orch/tests/Makefile.am b/orchagent/p4orch/tests/Makefile.am
+index 7dba3d32..9eb26b2f 100644
+--- a/orchagent/p4orch/tests/Makefile.am
++++ b/orchagent/p4orch/tests/Makefile.am
+@@ -49,9 +49,10 @@ p4orch_tests_SOURCES = $(ORCHAGENT_DIR)/orch.cpp \
+ 		       $(P4ORCH_DIR)/mirror_session_manager.cpp \
+ 		       $(P4ORCH_DIR)/l3_admit_manager.cpp \
+ 		       $(P4ORCH_DIR)/ext_tables_manager.cpp \
+-		       $(top_srcdir)/tests/mock_tests/fake_response_publisher.cpp \
+-		       fake_routeorch.cpp \
+-		       fake_portorch.cpp \
++	       $(top_srcdir)/tests/mock_tests/fake_response_publisher.cpp \
++	       fake_routeorch.cpp \
++	       fake_zmqorch.cpp \
++	       fake_portorch.cpp \
+ 		       fake_crmorch.cpp \
+ 		       fake_flexcounterorch.cpp \
+ 		       fake_flowcounterrouteorch.cpp \
+diff --git a/orchagent/p4orch/tests/fake_routeorch.cpp b/orchagent/p4orch/tests/fake_routeorch.cpp
+index f6fa1f05..c6372dff 100644
+--- a/orchagent/p4orch/tests/fake_routeorch.cpp
++++ b/orchagent/p4orch/tests/fake_routeorch.cpp
+@@ -19,12 +19,21 @@ extern sai_mpls_api_t*              sai_mpls_api;
+ extern sai_switch_api_t*            sai_switch_api;
+ extern size_t gMaxBulkSize;
+ 
+-RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch) :
++RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch, ArsOrch *arsOrch, swss::ZmqServer *zmqServer) :
+         gRouteBulker(sai_route_api, gMaxBulkSize),
+         gLabelRouteBulker(sai_mpls_api, gMaxBulkSize),
+         gNextHopGroupMemberBulker(sai_next_hop_group_api, gSwitchId, gMaxBulkSize),
+-        Orch(db, tableNames),
+-        m_appTunnelDecapTermProducer(db, "TUNNEL_DECAP_TERM_TABLE")
++        ZmqOrch(db, tableNames, zmqServer),
++        m_switchOrch(switchOrch),
++        m_neighOrch(neighOrch),
++        m_intfsOrch(intfsOrch),
++        m_vrfOrch(vrfOrch),
++        m_fgNhgOrch(fgNhgOrch),
++        m_nextHopGroupCount(0),
++        m_srv6Orch(srv6Orch),
++        m_arsOrch(arsOrch),
++        m_resync(false),
++        m_appTunnelDecapTermProducer(db, APP_TUNNEL_DECAP_TERM_TABLE_NAME)
+ {
+ 
+ }
+@@ -99,7 +108,7 @@ bool RouteOrch::invalidnexthopinNextHopGroup(const NextHopKey &nexthop, uint32_t
+     return true;
+ }
+ 
+-void RouteOrch::doTask(Consumer& consumer)
++void RouteOrch::doTask(ConsumerBase& consumer)
+ {
+ 
+ }
+@@ -134,7 +143,8 @@ bool RouteOrch::removeFineGrainedNextHopGroup(sai_object_id_t &next_hop_group_id
+     return true;
+ }
+ 
+-bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
++bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops, sai_object_id_t vrf_id)
++
+ {
+     return true;
+ }
+diff --git a/orchagent/p4orch/tests/fake_zmqorch.cpp b/orchagent/p4orch/tests/fake_zmqorch.cpp
+new file mode 100644
+index 00000000..a9d550c1
+--- /dev/null
++++ b/orchagent/p4orch/tests/fake_zmqorch.cpp
+@@ -0,0 +1,27 @@
++#include "zmqorch.h"
++
++ZmqOrch::ZmqOrch(swss::DBConnector *db, const std::vector<std::string> &tableNames, swss::ZmqServer *zmqServer)
++    : Orch(db, tableNames)
++{
++}
++
++ZmqOrch::ZmqOrch(swss::DBConnector *db, const std::vector<table_name_with_pri_t> &tableNames_with_pri, swss::ZmqServer *zmqServer)
++    : Orch(db, tableNames_with_pri)
++{
++}
++
++void ZmqOrch::doTask(Consumer &consumer)
++{
++}
++
++void ZmqOrch::addConsumer(swss::DBConnector *db, std::string tableName, int pri, swss::ZmqServer *zmqServer)
++{
++}
++
++void ZmqConsumer::execute()
++{
++}
++
++void ZmqConsumer::drain()
++{
++}
+diff --git a/orchagent/p4orch/tests/test_main.cpp b/orchagent/p4orch/tests/test_main.cpp
+index ead5b20b..3db8a25c 100644
+--- a/orchagent/p4orch/tests/test_main.cpp
++++ b/orchagent/p4orch/tests/test_main.cpp
+@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
+         { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+         { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
+     };
+-    RouteOrch route_orch(gAppDb, route_tables, NULL, NULL, NULL, NULL, NULL, NULL);
++    RouteOrch route_orch(gAppDb, route_tables, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+     gRouteOrch = &route_orch;
+     gDirectory.set(static_cast<RouteOrch *>(&route_orch));
+ 
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 5d03078c..4f75810c 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -10777,6 +10777,63 @@ bool PortsOrch::setPortPtTam(const Port& port, sai_object_id_t tam_id)
+     return true;
+ }
+ 
++bool PortsOrch::setPortArsEnable(const Port& port, bool is_enable)
++{
++    SWSS_LOG_ENTER();
++    sai_attribute_t attr;
++
++    attr.id = SAI_PORT_ATTR_ARS_ENABLE;
++    attr.value.booldata = is_enable;
++    sai_status_t status = sai_port_api->set_port_attribute(port.m_port_id, &attr);
++
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR(
++            "Failed to %s ARS on port %s (OID 0x%" PRIx64 "): SAI status = %d",
++            is_enable ? "enable" : "disable",
++            port.m_alias.c_str(),
++            port.m_port_id,
++            status);
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_PORT, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++    }
++
++    return true;
++}
++
++bool PortsOrch::setPortArsLoadScaling(const Port& port, const uint32_t scaling_factor)
++{
++    SWSS_LOG_ENTER();
++    sai_attribute_t attr;
++
++    /* Normalize port speed using SAI scaling factor if not provided
++     * 10G:1, 25G:2.5, 40G:4, 50G:5, 100G:10, 200G:20, 400G:40.*/
++    attr.value.u32 = (scaling_factor == 0) ? (port.m_speed / 10000) : scaling_factor;
++
++    attr.id = SAI_PORT_ATTR_ARS_PORT_LOAD_SCALING_FACTOR;
++    sai_status_t status = sai_port_api->set_port_attribute(port.m_port_id, &attr);
++
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR(
++            "Failed to set ARS load scaling factor (%u) on port %s (OID 0x%" PRIx64 "): SAI status = %d",
++            attr.value.u32,
++            port.m_alias.c_str(),
++            port.m_port_id,
++            status);
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_PORT, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++    }
++
++    return true;
++}
++
+ bool PortsOrch::createPtTam()
+ {
+     SWSS_LOG_ENTER();
+diff --git a/orchagent/portsorch.h b/orchagent/portsorch.h
+index 089e2ed4..e9f8c088 100644
+--- a/orchagent/portsorch.h
++++ b/orchagent/portsorch.h
+@@ -257,6 +257,8 @@ public:
+ 
+     bool setPortPtIntfId(const Port& port, sai_uint16_t intf_id);
+     bool setPortPtTimestampTemplate(const Port& port, sai_port_path_tracing_timestamp_type_t ts_type);
++    bool setPortArsEnable(const Port& port, bool is_enable);
++    bool setPortArsLoadScaling(const Port& port, const uint32_t scaling_factor);
+ 
+ private:
+     unique_ptr<CounterNameMapUpdater> m_counterNameMapUpdater;
+diff --git a/orchagent/routeorch.cpp b/orchagent/routeorch.cpp
+index d2a50e02..923f94aa 100644
+--- a/orchagent/routeorch.cpp
++++ b/orchagent/routeorch.cpp
+@@ -13,6 +13,7 @@
+ #include "swssnet.h"
+ #include "crmorch.h"
+ #include "directory.h"
++#include "arsorch.h"
+ 
+ extern sai_object_id_t gVirtualRouterId;
+ extern sai_object_id_t gSwitchId;
+@@ -37,7 +38,7 @@ extern string gMySwitchType;
+ #define DEFAULT_NUMBER_OF_ECMP_GROUPS   128
+ #define DEFAULT_MAX_ECMP_GROUP_SIZE     32
+ 
+-RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch, swss::ZmqServer *zmqServer) :
++RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch, ArsOrch *arsOrch, swss::ZmqServer *zmqServer) :
+         gRouteBulker(sai_route_api, gMaxBulkSize),
+         gLabelRouteBulker(sai_mpls_api, gMaxBulkSize),
+         gNextHopGroupMemberBulker(sai_next_hop_group_api, gSwitchId, gMaxBulkSize),
+@@ -49,6 +50,7 @@ RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames,
+         m_fgNhgOrch(fgNhgOrch),
+         m_nextHopGroupCount(0),
+         m_srv6Orch(srv6Orch),
++        m_arsOrch(arsOrch),
+         m_resync(false),
+         m_appTunnelDecapTermProducer(db, APP_TUNNEL_DECAP_TERM_TABLE_NAME)
+ {
+@@ -1445,12 +1447,13 @@ bool RouteOrch::removeFineGrainedNextHopGroup(sai_object_id_t &next_hop_group_id
+     return true;
+ }
+ 
+-bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
++bool RouteOrch::addNextHopGroup(const NextHopGroupKey& nexthops, vector<sai_attribute_t> &nhg_attrs, sai_object_id_t vrf_id)
+ {
+     SWSS_LOG_ENTER();
+-
++    sai_attribute_t nhg_attr;
++    sai_object_id_t ars_obj_id;
+     assert(!hasNextHopGroup(nexthops));
+-
++ 
+     if (m_nextHopGroupCount + NhgOrch::getSyncedNhgCount() >= m_maxNextHopGroupCount)
+     {
+         SWSS_LOG_DEBUG("Failed to create new next hop group. \
+@@ -1458,6 +1461,24 @@ bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
+         return false;
+     }
+ 
++    bool is_ars_enabled = false;
++    bool is_ars_object_found = false;
++    bool is_nexthop_ars_capable = false;
++
++    is_ars_enabled = m_arsOrch->isArsProfileEnabled();
++    if (is_ars_enabled)
++    {
++       is_ars_object_found = m_arsOrch->validateNexthopsForArs(vrf_id, nexthops, ars_obj_id);
++       /* set nexthop is ars capable only when ARS criteria are met */
++       if (is_ars_object_found)
++       {
++           is_nexthop_ars_capable = true;
++           nhg_attr.id = SAI_NEXT_HOP_GROUP_ATTR_ARS_OBJECT_ID;
++           nhg_attr.value.oid = ars_obj_id;
++           nhg_attrs.push_back(nhg_attr);
++       }
++    }
++
+     vector<sai_object_id_t> next_hop_ids;
+     set<NextHopKey> next_hop_set = nexthops.getNextHops();
+     set<NextHopKey> valid_next_hops_for_refcount;  // Track valid next hops for reference counting
+@@ -1519,27 +1540,48 @@ bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
+         SWSS_LOG_INFO("Skipping creation of nexthop group as none of nexthop are active");
+         return false;
+     }
+-    sai_attribute_t nhg_attr;
+-    vector<sai_attribute_t> nhg_attrs;
+-
+-    nhg_attr.id = SAI_NEXT_HOP_GROUP_ATTR_TYPE;
+-    nhg_attr.value.s32 = m_switchOrch->checkOrderedEcmpEnable() ? SAI_NEXT_HOP_GROUP_TYPE_DYNAMIC_ORDERED_ECMP : SAI_NEXT_HOP_GROUP_TYPE_ECMP;
+-    nhg_attrs.push_back(nhg_attr);
+-
+     sai_object_id_t next_hop_group_id;
+     sai_status_t status = sai_next_hop_group_api->create_next_hop_group(&next_hop_group_id,
+                                                                         gSwitchId,
+                                                                         (uint32_t)nhg_attrs.size(),
+                                                                         nhg_attrs.data());
+-
+     if (status != SAI_STATUS_SUCCESS)
+     {
+-        SWSS_LOG_ERROR("Failed to create next hop group %s, rv:%d",
++        if (is_nexthop_ars_capable)
++        {
++            SWSS_LOG_NOTICE("Trying to create nexthop group without ARS %s, rv:%d",
+                        nexthops.to_string().c_str(), status);
+-        task_process_status handle_status = handleSaiCreateStatus(SAI_API_NEXT_HOP_GROUP, status);
+-        if (handle_status != task_success)
++            std::vector<sai_attribute_t> nhg_attrs_no_ars;
++            for (const auto &attr : nhg_attrs)
++            {
++                if (attr.id != SAI_NEXT_HOP_GROUP_ATTR_ARS_OBJECT_ID)
++                    nhg_attrs_no_ars.push_back(attr);
++            }
++            sai_status_t status = sai_next_hop_group_api->create_next_hop_group(&next_hop_group_id,
++                                                                        gSwitchId,
++                                                                        (uint32_t)nhg_attrs_no_ars.size(),
++                                                                        nhg_attrs_no_ars.data());
++            if (status != SAI_STATUS_SUCCESS)
++            {
++                SWSS_LOG_ERROR("Failed to create next hop group (without ARS) %s, rv:%d",
++                           nexthops.to_string().c_str(), status);
++                task_process_status handle_status = handleSaiCreateStatus(SAI_API_NEXT_HOP_GROUP, status);
++                if (handle_status != task_success)
++                {
++                    return parseHandleSaiStatusFailure(handle_status);
++                }
++
++            }
++        }
++        else 
+         {
+-            return parseHandleSaiStatusFailure(handle_status);
++            SWSS_LOG_ERROR("Failed to create next hop group %s, rv:%d",
++                       nexthops.to_string().c_str(), status);
++            task_process_status handle_status = handleSaiCreateStatus(SAI_API_NEXT_HOP_GROUP, status);
++            if (handle_status != task_success)
++            {
++                return parseHandleSaiStatusFailure(handle_status);
++            }
+         }
+     }
+ 
+@@ -1550,7 +1592,6 @@ bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
+ 
+     NextHopGroupEntry next_hop_group_entry;
+     next_hop_group_entry.next_hop_group_id = next_hop_group_id;
+-    next_hop_group_entry.nh_member_install_count = 0;
+ 
+     size_t npid_count = next_hop_ids.size();
+     vector<sai_object_id_t> nhgm_ids(npid_count);
+@@ -1642,6 +1683,18 @@ bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
+     return true;
+ }
+ 
++bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nextHops, sai_object_id_t vrf_id)
++{
++    sai_attribute_t nhg_attr;
++    vector<sai_attribute_t> nhg_attrs;
++
++    nhg_attr.id = SAI_NEXT_HOP_GROUP_ATTR_TYPE;
++    nhg_attr.value.s32 = m_switchOrch->checkOrderedEcmpEnable() ? SAI_NEXT_HOP_GROUP_TYPE_DYNAMIC_ORDERED_ECMP : SAI_NEXT_HOP_GROUP_TYPE_ECMP;
++    nhg_attrs.push_back(nhg_attr);
++
++    return addNextHopGroup(nextHops, nhg_attrs, vrf_id);
++}
++
+ bool RouteOrch::removeNextHopGroup(const NextHopGroupKey &nexthops, const bool is_default_route_nh_swap)
+ {
+     SWSS_LOG_ENTER();
+@@ -2126,12 +2179,11 @@ bool RouteOrch::addRoute(RouteBulkContext& ctx, const NextHopGroupKey &nextHops)
+                 return false;
+             }
+         }
+-
+         /* Check if there is already an existing next hop group */
+         if (!hasNextHopGroup(nextHops))
+         {
+             /* Try to create a new next hop group */
+-            if (!addNextHopGroup(nextHops))
++            if (!addNextHopGroup(nextHops, vrf_id))
+             {
+                 /* If the nexthop is a srv6 nexthop, not create tempRoute
+                  * retry to add route */
+diff --git a/orchagent/routeorch.h b/orchagent/routeorch.h
+old mode 100644
+new mode 100755
+index 9569bb0a..209a9b0c
+--- a/orchagent/routeorch.h
++++ b/orchagent/routeorch.h
+@@ -8,6 +8,7 @@
+ #include "neighorch.h"
+ #include "vxlanorch.h"
+ #include "srv6orch.h"
++#include "arsorch.h"
+ 
+ #include "ipaddress.h"
+ #include "ipaddresses.h"
+@@ -28,6 +29,7 @@
+ #define LOOPBACK_PREFIX     "Loopback"
+ #define VLAN_PREFIX         "Vlan"
+ 
++
+ struct NextHopGroupMemberEntry
+ {
+     sai_object_id_t  next_hop_id; // next hop sai oid
+@@ -89,6 +91,8 @@ struct RouteNhg
+ 
+     bool operator==(const RouteNhg& rnhg)
+        { return ((nhg_key == rnhg.nhg_key) && (nhg_index == rnhg.nhg_index) && (context_index == rnhg.context_index)); }
++    bool operator==(const NextHopGroupKey& other_key) 
++        { return nhg_key == other_key; }
+     bool operator!=(const RouteNhg& rnhg) { return !(*this == rnhg); }
+ };
+ 
+@@ -120,8 +124,12 @@ typedef std::map<sai_object_id_t, LabelRouteTable> LabelRouteTables;
+ typedef std::pair<sai_object_id_t, IpAddress> Host;
+ /* NextHopObserverTable: Host, next hop observer entry */
+ typedef std::map<Host, NextHopObserverEntry> NextHopObserverTable;
++/* Prefix: vrf_id, IpPrefix */
++typedef std::pair<sai_object_id_t, IpPrefix> Prefix;
+ /* Single Nexthop to Routemap */
+ typedef std::map<NextHopKey, std::set<RouteKey>> NextHopRouteTable;
++/* NexthopGroup set */
++typedef std::vector<RouteNhg> NhgTable;
+ 
+ struct NextHopObserverEntry
+ {
+@@ -212,7 +220,7 @@ struct LabelRouteBulkContext
+ class RouteOrch : public ZmqOrch, public Subject
+ {
+ public:
+-    RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch, swss::ZmqServer *zmqServer = nullptr);
++    RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch, ArsOrch *arsOrch, swss::ZmqServer *zmqServer = nullptr);
+ 
+     bool hasNextHopGroup(const NextHopGroupKey&) const;
+     sai_object_id_t getNextHopGroupId(const NextHopGroupKey&);
+@@ -228,7 +236,8 @@ public:
+     int getNextHopGroupRefCount(const NextHopGroupKey& key) { return m_syncdNextHopGroups[key].ref_count; }
+     std::set<std::pair<NextHopGroupKey, sai_object_id_t>> &getBulkNhgReducedRefCnt() { return m_bulkNhgReducedRefCnt; }
+ 
+-    bool addNextHopGroup(const NextHopGroupKey&);
++    bool addNextHopGroup(const NextHopGroupKey&, sai_object_id_t vrf_id = gVirtualRouterId);
++    bool addNextHopGroup(const NextHopGroupKey&, std::vector<sai_attribute_t> &nhg_attrs, sai_object_id_t vrf_id = gVirtualRouterId);
+     bool removeNextHopGroup(const NextHopGroupKey&, const bool is_default_route_nh_swap=false);
+ 
+     bool addRoute(RouteBulkContext& ctx, const NextHopGroupKey &nextHops);
+@@ -275,6 +284,7 @@ private:
+     VRFOrch *m_vrfOrch;
+     FgNhgOrch *m_fgNhgOrch;
+     Srv6Orch *m_srv6Orch;
++    ArsOrch *m_arsOrch;
+ 
+     unsigned int m_nextHopGroupCount;
+     unsigned int m_maxNextHopGroupCount;
+diff --git a/orchagent/saihelper.cpp b/orchagent/saihelper.cpp
+index 47fd7d4a..544bd677 100644
+--- a/orchagent/saihelper.cpp
++++ b/orchagent/saihelper.cpp
+@@ -91,6 +91,8 @@ sai_twamp_api_t*                    sai_twamp_api;
+ sai_tam_api_t*                      sai_tam_api;
+ sai_stp_api_t*                      sai_stp_api;
+ sai_dash_meter_api_t*               sai_dash_meter_api;
++sai_ars_api_t*                      sai_ars_api;
++sai_ars_profile_api_t*              sai_ars_profile_api;
+ sai_dash_outbound_port_map_api_t*   sai_dash_outbound_port_map_api;
+ sai_dash_trusted_vni_api_t*         sai_dash_trusted_vni_api;
+ 
+@@ -251,6 +253,8 @@ void initSaiApi()
+     sai_api_query(SAI_API_TWAMP,                (void **)&sai_twamp_api);
+     sai_api_query(SAI_API_TAM,                  (void **)&sai_tam_api);
+     sai_api_query(SAI_API_STP,                  (void **)&sai_stp_api);
++    sai_api_query(SAI_API_ARS,                  (void **)&sai_ars_api);
++    sai_api_query(SAI_API_ARS_PROFILE,          (void **)&sai_ars_profile_api);
+ 
+     sai_log_set(SAI_API_SWITCH,                 SAI_LOG_LEVEL_NOTICE);
+     sai_log_set(SAI_API_BRIDGE,                 SAI_LOG_LEVEL_NOTICE);
+@@ -294,6 +298,8 @@ void initSaiApi()
+     sai_log_set(SAI_API_TWAMP,                  SAI_LOG_LEVEL_NOTICE);
+     sai_log_set(SAI_API_TAM,                    SAI_LOG_LEVEL_NOTICE);
+     sai_log_set(SAI_API_STP,                    SAI_LOG_LEVEL_NOTICE);
++    sai_log_set(SAI_API_ARS,                    SAI_LOG_LEVEL_NOTICE);
++    sai_log_set(SAI_API_ARS_PROFILE,            SAI_LOG_LEVEL_NOTICE);
+ }
+ 
+ void initFlexCounterTables()
+diff --git a/tests/mock_tests/Makefile.am b/tests/mock_tests/Makefile.am
+index e18006c6..3bac68c1 100644
+--- a/tests/mock_tests/Makefile.am
++++ b/tests/mock_tests/Makefile.am
+@@ -108,6 +108,7 @@ tests_SOURCES = aclorch_ut.cpp \
+                 $(top_srcdir)/orchagent/mirrororch.cpp \
+                 $(top_srcdir)/orchagent/fdborch.cpp \
+                 $(top_srcdir)/orchagent/aclorch.cpp \
++                $(top_srcdir)/orchagent/arsorch.cpp \
+                 $(top_srcdir)/orchagent/pbh/pbhcap.cpp \
+                 $(top_srcdir)/orchagent/pbh/pbhcnt.cpp \
+                 $(top_srcdir)/orchagent/pbh/pbhmgr.cpp \
+diff --git a/tests/mock_tests/aclorch_ut.cpp b/tests/mock_tests/aclorch_ut.cpp
+index dc3f3106..69de45ef 100755
+--- a/tests/mock_tests/aclorch_ut.cpp
++++ b/tests/mock_tests/aclorch_ut.cpp
+@@ -12,6 +12,7 @@ extern IntfsOrch *gIntfsOrch;
+ extern NeighOrch *gNeighOrch;
+ extern FgNhgOrch *gFgNhgOrch;
+ extern Srv6Orch  *gSrv6Orch;
++extern ArsOrch   *gArsOrch;
+ 
+ extern FdbOrch *gFdbOrch;
+ extern MirrorOrch *gMirrorOrch;
+@@ -433,6 +434,14 @@ namespace aclorch_test
+                 srv6_my_sid_cfg_table
+             };
+             gSrv6Orch = new Srv6Orch(m_config_db.get(), m_app_db.get(), srv6_tables, gSwitchOrch, gVrfOrch, gNeighOrch);
++            ASSERT_EQ(gArsOrch, nullptr);
++            vector<string> ars_tables = {
++                CFG_ARS_PROFILE,
++                CFG_ARS_INTERFACE,
++                CFG_ARS_OBJECT,
++                CFG_ARS_NEXTHOP
++            };
++            gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
+ 
+             ASSERT_EQ(gRouteOrch, nullptr);
+             const int routeorch_pri = 5;
+@@ -440,7 +449,7 @@ namespace aclorch_test
+                 { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+                 { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
+             };
+-            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+ 
+             vector<TableConnector> policer_tables = {
+                 TableConnector(m_config_db.get(), CFG_POLICER_TABLE_NAME),
+@@ -477,6 +486,8 @@ namespace aclorch_test
+             gFlowCounterRouteOrch = nullptr;
+             delete gSrv6Orch;
+             gSrv6Orch = nullptr;
++            delete gArsOrch;
++            gArsOrch = nullptr;
+             delete gNeighOrch;
+             gNeighOrch = nullptr;
+             delete gFdbOrch;
+diff --git a/tests/mock_tests/flowcounterrouteorch_ut.cpp b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+index 37f81b21..e70d9a4a 100644
+--- a/tests/mock_tests/flowcounterrouteorch_ut.cpp
++++ b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+@@ -223,13 +223,22 @@ namespace flowcounterrouteorch_test
+             };
+             gFlowCounterRouteOrch = new FlowCounterRouteOrch(m_config_db.get(), route_pattern_tables);
+ 
++            ASSERT_EQ(gArsOrch, nullptr);
++            vector<string> ars_tables = {
++                CFG_ARS_PROFILE,
++                CFG_ARS_INTERFACE,
++                CFG_ARS_OBJECT,
++                CFG_ARS_NEXTHOP
++            };
++            gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
++
+             ASSERT_EQ(gRouteOrch, nullptr);
+             const int routeorch_pri = 5;
+             vector<table_name_with_pri_t> route_tables = {
+                 { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+                 { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
+             };
+-            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+             gNhgOrch = new NhgOrch(m_app_db.get(), APP_NEXTHOP_GROUP_TABLE_NAME);
+ 
+             // Recreate buffer orch to read populated data
+@@ -353,6 +362,9 @@ namespace flowcounterrouteorch_test
+             delete gFlowCounterRouteOrch;
+             gFlowCounterRouteOrch = nullptr;
+ 
++            delete gArsOrch;
++            gArsOrch = nullptr;
++            
+             sai_counter_api = pold_sai_counter_api;
+             ut_helper::uninitSaiApi();
+             return;
+diff --git a/tests/mock_tests/intfsorch_ut.cpp b/tests/mock_tests/intfsorch_ut.cpp
+index b77d0a6c..a5522a5f 100644
+--- a/tests/mock_tests/intfsorch_ut.cpp
++++ b/tests/mock_tests/intfsorch_ut.cpp
+@@ -148,8 +148,13 @@ namespace intfsorch_test
+             gVrfOrch = new VRFOrch(m_app_db.get(), APP_VRF_TABLE_NAME, m_state_db.get(), STATE_VRF_OBJECT_TABLE_NAME);
+             gDirectory.set(gVrfOrch);
+ 
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+@@ -207,13 +212,23 @@ namespace intfsorch_test
+             };
+             gFlowCounterRouteOrch = new FlowCounterRouteOrch(m_config_db.get(), route_pattern_tables);
+ 
++            ASSERT_EQ(gArsOrch, nullptr);
++            vector<string> ars_tables = {
++                CFG_ARS_PROFILE,
++                CFG_ARS_INTERFACE,
++                CFG_ARS_OBJECT,
++                CFG_ARS_NEXTHOP
++            };
++            gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
++
++
+             ASSERT_EQ(gRouteOrch, nullptr);
+             const int routeorch_pri = 5;
+             vector<table_name_with_pri_t> route_tables = {
+                 { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+                 { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
+             };
+-            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+             gNhgOrch = new NhgOrch(m_app_db.get(), APP_NEXTHOP_GROUP_TABLE_NAME);
+ 
+             // Recreate buffer orch to read populated data
+@@ -291,6 +306,9 @@ namespace intfsorch_test
+             delete gFlowCounterRouteOrch;
+             gFlowCounterRouteOrch = nullptr;
+ 
++            delete gArsOrch;
++            gArsOrch = nullptr;
++
+             sai_router_intfs_api = pold_sai_rif_api;
+             ut_helper::uninitSaiApi();
+         }
+@@ -394,4 +412,4 @@ namespace intfsorch_test
+         m_syncdIntfses = gIntfsOrch->getSyncdIntfses();
+         ASSERT_EQ(m_syncdIntfses["Loopback3"].vrf_id, gVirtualRouterId);    
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/tests/mock_tests/mock_orch_test.cpp b/tests/mock_tests/mock_orch_test.cpp
+index 3c26cfdb..53bfbeba 100644
+--- a/tests/mock_tests/mock_orch_test.cpp
++++ b/tests/mock_tests/mock_orch_test.cpp
+@@ -226,12 +226,23 @@ void MockOrchTest::SetUp()
+     ut_orch_list.push_back((Orch **)&gCrmOrch);
+     global_orch_list.insert((Orch **)&gCrmOrch);
+ 
++    vector<string> ars_tables = {
++        CFG_ARS_PROFILE,
++        CFG_ARS_INTERFACE,
++        CFG_ARS_OBJECT,
++        CFG_ARS_NEXTHOP
++    };
++    gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
++    gDirectory.set(gArsOrch);
++    ut_orch_list.push_back((Orch **)&gArsOrch);
++    global_orch_list.insert((Orch **)&gArsOrch);
++
+     const int routeorch_pri = 5;
+     vector<table_name_with_pri_t> route_tables = {
+         { APP_ROUTE_TABLE_NAME, routeorch_pri },
+         { APP_LABEL_ROUTE_TABLE_NAME, routeorch_pri }
+     };
+-    gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++    gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+     gDirectory.set(gRouteOrch);
+     ut_orch_list.push_back((Orch **)&gRouteOrch);
+     global_orch_list.insert((Orch **)&gRouteOrch);
+diff --git a/tests/mock_tests/mock_orchagent_main.h b/tests/mock_tests/mock_orchagent_main.h
+index b087066f..fdb4cceb 100644
+--- a/tests/mock_tests/mock_orchagent_main.h
++++ b/tests/mock_tests/mock_orchagent_main.h
+@@ -21,6 +21,7 @@
+ #include "pfcwdorch.h"
+ #undef protected
+ #undef private
++#include "arsorch.h"
+ #include "vrforch.h"
+ #include "vnetorch.h"
+ #include "vxlanorch.h"
+@@ -69,6 +70,7 @@ template <typename DropHandler, typename ForwardHandler> PfcWdSwOrch<DropHandler
+ extern VRFOrch *gVrfOrch;
+ extern NhgOrch *gNhgOrch;
+ extern Srv6Orch  *gSrv6Orch;
++extern ArsOrch  *gArsOrch;
+ extern BfdOrch *gBfdOrch;
+ extern AclOrch *gAclOrch;
+ extern PolicerOrch *gPolicerOrch;
+diff --git a/tests/mock_tests/routeorch_ut.cpp b/tests/mock_tests/routeorch_ut.cpp
+index a25d0b5c..3c3db238 100644
+--- a/tests/mock_tests/routeorch_ut.cpp
++++ b/tests/mock_tests/routeorch_ut.cpp
+@@ -309,6 +309,14 @@ namespace routeorch_test
+                 srv6_my_sid_cfg_table
+             };
+             gSrv6Orch = new Srv6Orch(m_config_db.get(), m_app_db.get(), srv6_tables, gSwitchOrch, gVrfOrch, gNeighOrch);
++            ASSERT_EQ(gArsOrch, nullptr);
++            vector<string> ars_tables = {
++                CFG_ARS_PROFILE,                 
++                CFG_ARS_INTERFACE,               
++                CFG_ARS_OBJECT,               
++                CFG_ARS_NEXTHOP           
++            };
++            gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
+ 
+             ASSERT_EQ(gRouteOrch, nullptr);
+             const int routeorch_pri = 5;
+@@ -316,7 +324,7 @@ namespace routeorch_test
+                 { APP_ROUTE_TABLE_NAME,        routeorch_pri },
+                 { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
+             };
+-            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+             gNhgOrch = new NhgOrch(m_app_db.get(), APP_NEXTHOP_GROUP_TABLE_NAME);
+ 
+             // Recreate buffer orch to read populated data
+@@ -413,6 +421,9 @@ namespace routeorch_test
+             delete gSrv6Orch;
+             gSrv6Orch = nullptr;
+ 
++            delete gArsOrch;
++            gArsOrch = nullptr;
++
+             delete gNeighOrch;
+             gNeighOrch = nullptr;
+ 
+diff --git a/tests/test_ars.py b/tests/test_ars.py
+new file mode 100644
+index 00000000..ab6eb0af
+--- /dev/null
++++ b/tests/test_ars.py
+@@ -0,0 +1,650 @@
++import os
++import re
++import time
++import json
++import pytest
++import ipaddress
++import subprocess
++import pdb
++
++from swsscommon import swsscommon
++from dvslib.dvs_common import wait_for_result
++
++# CONFIG_DB table names
++CFG_ARS_PROFILE_TBL = "ARS_PROFILE"
++CFG_ARS_OBJECT_TBL = "ARS_OBJECT"
++CFG_ARS_INTERFACE_TBL = "ARS_INTERFACE"
++CFG_ARS_NEXTHOP_TBL = "ARS_NEXTHOP"
++
++class TestArsBase(object):
++    NUM_PORTS = 32
++    def setup_db(self, dvs):
++        self.pdb = dvs.get_app_db()
++        self.adb = dvs.get_asic_db()
++        self.cdb = dvs.get_config_db()
++        self.sdb = dvs.get_state_db()
++        self.config_db = swsscommon.DBConnector(swsscommon.CONFIG_DB, dvs.redis_sock, 0)
++        self.state_db = swsscommon.DBConnector(swsscommon.STATE_DB, dvs.redis_sock, 0)
++        self.asic_db = swsscommon.DBConnector(swsscommon.ASIC_DB, dvs.redis_sock, 0)
++        self.dvs = dvs
++
++    def set_admin_status(self, interface, status):
++        self.cdb.update_entry("PORT", interface, {"admin_status": status})
++
++    def create_vrf(self, vrf_name):
++        initial_entries = set(self.adb.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER"))
++
++        self.cdb.create_entry("VRF", vrf_name, {"empty": "empty"})
++        self.adb.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER", len(initial_entries) + 1)
++
++        current_entries = set(self.adb.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER"))
++        assert len(current_entries - initial_entries) == 1
++        return list(current_entries - initial_entries)[0]
++
++    def remove_vrf(self, vrf_name):
++        self.cdb.delete_entry("VRF", vrf_name)
++
++    def create_l3_intf(self, interface, vrf_name):
++        if len(vrf_name) == 0:
++            self.cdb.create_entry("INTERFACE", interface, {"NULL": "NULL"})
++        else:
++            self.cdb.create_entry("INTERFACE", interface, {"vrf_name": vrf_name})
++
++    def remove_l3_intf(self, interface):
++        self.cdb.delete_entry("INTERFACE", interface)
++
++    def add_ip_address(self, interface, ip):
++        self.cdb.create_entry("INTERFACE", interface + "|" + ip, {"NULL": "NULL"})
++
++    def remove_ip_address(self, interface, ip):
++        self.cdb.delete_entry("INTERFACE", interface + "|" + ip)
++
++    def create_route_entry(self, key, pairs):
++        tbl = swsscommon.ProducerStateTable(self.pdb.db_connection, "ROUTE_TABLE")
++        fvs = swsscommon.FieldValuePairs(list(pairs.items()))
++        tbl.set(key, fvs)
++
++    def remove_route_entry(self, key):
++        tbl = swsscommon.ProducerStateTable(self.pdb.db_connection, "ROUTE_TABLE")
++        tbl._del(key)
++
++    def check_route_entries(self, destinations):
++        def _access_function():
++            route_entries = self.adb.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
++            route_destinations = [json.loads(route_entry)["dest"]
++                                  for route_entry in route_entries]
++            return (all(destination in route_destinations for destination in destinations), None)
++
++        wait_for_result(_access_function)
++
++    def check_route_entries_with_vrf(self, destinations, vrf_oids):
++        def _access_function():
++            route_entries = self.adb.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
++            route_destination_vrf = [(json.loads(route_entry)["dest"], json.loads(route_entry)["vr"])
++                                           for route_entry in route_entries]
++            return (all((destination, vrf_oid) in route_destination_vrf
++                        for destination, vrf_oid in zip(destinations, vrf_oids)), None)
++
++        wait_for_result(_access_function)
++
++    def check_route_entries_nexthop_ars(self):
++        keys = self.asic_db.keys('ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP*')
++        nhg_keys = [k for k in keys if 'SAI_OBJECT_TYPE_NEXT_HOP_GROUP:' in k]
++    
++        # Validate that at least one NEXT_HOP_GROUP exists
++        assert len(nhg_keys) > 0, "No NEXT_HOP_GROUP objects found"
++
++        for nhg_key in nhg_keys:
++            attrs = self.asic_db.hgetall(nhg_key)
++
++            # Validate mandatory attributes
++            assert "SAI_NEXT_HOP_GROUP_ATTR_TYPE" in attrs, f"{nhg_key} missing TYPE attribute"
++            assert "SAI_NEXT_HOP_GROUP_ATTR_ARS_OBJECT_ID" in attrs, f"{nhg_key} missing ARS_OBJECT_ID attribute"
++
++            nhg_type = attrs.get("SAI_NEXT_HOP_GROUP_ATTR_TYPE")
++            print(f"{nhg_key} attributes: {attrs}")
++
++    def check_deleted_route_entries(self, destinations):
++        def _access_function():
++            route_entries = self.adb.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
++            route_destinations = [json.loads(route_entry)["dest"] for route_entry in route_entries]
++            return (all(destination not in route_destinations for destination in destinations), None)
++
++        wait_for_result(_access_function)
++
++    def clear_srv_config(self, dvs):
++        dvs.servers[0].runcmd("ip address flush dev eth0")
++        dvs.servers[1].runcmd("ip address flush dev eth0")
++        dvs.servers[2].runcmd("ip address flush dev eth0")
++        dvs.servers[3].runcmd("ip address flush dev eth0")
++
++    def create_ars_profile(self, dvs, profile_name="ars_profile_default"):
++        self.setup_db(dvs)
++
++        # Create a handle to the ARS profile table
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_PROFILE_TBL)
++
++         # Define the ARS profile field-value pairs
++        fvs = swsscommon.FieldValuePairs([
++            ("algorithm", "ewma"),
++            ("ars_nhg_path_selector_mode", "interface"),
++            ("ars_lag_path_selector_mode", "interface"),
++            ("default_ars_object", "ars_obj_1"),
++            ("max_flows", "1000"),
++        ])
++
++        # Set the profile in CONFIG_DB
++        tbl.set(profile_name, fvs)
++
++    def check_ars_profile(self):
++        # Get all ARS_PROFILE entries
++        for _ in range(10):
++            ars_keys = self.adb.get_keys('ASIC_STATE:SAI_OBJECT_TYPE_ARS_PROFILE')
++            if ars_keys:
++                break
++            time.sleep(1)
++        else:
++            assert False, "No ARS_PROFILE objects found in ASIC DB"
++
++    def create_ars_object(self, dvs, object_name="ars_obj_1"):
++        self.setup_db(dvs)
++
++        # Create a handle to the ARS object table
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_OBJECT_TBL)
++
++        # Define ARS object field-value pairs
++        fvs = swsscommon.FieldValuePairs([
++            ("assign_mode", "PER_FLOWLET_QUALITY"),
++            ("flowlet_idle_time", "10000"),
++            ("max_flows", "256"),
++            ("primary_path_threshold", "80"),
++            ("alternative_path_cost", "20"),
++        ])
++
++        # Create the ARS object in CONFIG_DB
++        tbl.set(object_name, fvs)
++
++    def remove_ars_object(self, object_name="ars_obj_1"):
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_OBJECT_TBL)
++        tbl._del(object_name)
++
++    def check_ars_object(self):
++        # Wait until ARS object is programmed
++        for _ in range(10):
++            ars_keys = self.adb.get_keys('ASIC_STATE:SAI_OBJECT_TYPE_ARS')
++            if ars_keys:
++                break
++            time.sleep(1)
++        else:
++            assert False, "No ARS objects found in ASIC DB"
++
++    def check_ars_interface(self, expected=True):
++        # Wait until all port records are available
++        asic_port_records = self.adb.wait_for_n_keys(
++            "ASIC_STATE:SAI_OBJECT_TYPE_PORT",
++            self.NUM_PORTS + 1  # +1 for CPU port
++        )
++
++        # Filter only the ports we care about
++        ports = [port for port in asic_port_records if port in self.adb.port_name_map.values()]
++
++        # Check ARS_ENABLE for each port using wait_for_field_match
++        for port in ports:
++            self.adb.wait_for_field_match(
++                "ASIC_STATE:SAI_OBJECT_TYPE_PORT",  # table name
++                port,                               # key (port OID)
++                {"SAI_PORT_ATTR_ARS_ENABLE": "true"}
++            )
++    def dump_state_table(self, table_name):
++        """Debug helper to dump entire STATE_DB table."""
++        tbl = swsscommon.Table(self.state_db, table_name)
++        keys = tbl.getKeys()
++        print(f"--- Dump of STATE_DB:{table_name} ---")
++        for k in keys:
++            status, fvs = tbl.get(k)
++            if status:
++                print(f"{k}: {dict(fvs)}")
++        print("--- End dump ---")
++
++    def read_syslog(self, dvs):
++        try:
++            logs = subprocess.check_output(
++                ["docker", "exec", self.dvs.dvsname, "cat", "/var/log/syslog"],
++                text=True,
++                timeout=10
++            )
++            return logs
++        except Exception as e:
++            pytest.fail(f"Failed to read syslog: {e}")
++        return ""
++
++    def check_syslog_for_invalid_profile(self, profile_name, logs):
++        """Check syslog for invalid ARS profile log."""
++        pattern = rf"Failed to create/set ARS profile {re.escape(profile_name)}"
++        return bool(re.search(pattern, logs, re.IGNORECASE))
++
++    def check_syslog_for_nexthop(self, nexthop_key, logs):
++        """Check syslog for ARS nexthop creation log."""
++        # nexthop_key format: "vrf|ip"
++        ip = nexthop_key.split('|')[1]
++        pattern = rf"doTaskArsNexthop: ARS NHG Op SET, VRF default, Nexthop {re.escape(ip)}"
++        return bool(re.search(pattern, logs, re.IGNORECASE))
++
++class TestArsOrch(TestArsBase):
++    """ Functionality tests for ars """
++
++    def test_ars_profile(self, dvs):
++        """Validate ARS profile creation."""
++        self.setup_db(dvs)
++        # create ARS Profile
++        self.create_ars_profile(dvs)
++        # check ARS Profile
++        self.check_ars_profile()
++
++    def test_ars_object(self, dvs):
++        """Validate ARS object creation."""
++        self.setup_db(dvs)
++        # create ARS Profile
++        self.create_ars_profile(dvs)
++        # create ARS object
++        self.create_ars_object(dvs)
++        # check ARS object
++        self.check_ars_object()
++        # remove ARS object
++        self.remove_ars_object()
++
++
++    def test_ars_interface(self, dvs):
++        """Create ARS interface entry and validate in ASIC DB"""
++        self.setup_db(dvs)
++        # create ARS Profile
++        self.create_ars_profile(dvs)
++        # create ARS object
++        self.create_ars_object(dvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_INTERFACE_TBL)
++        # Generate port list: Ethernet0, Ethernet4, ..., Ethernet32
++        ports = [f"Ethernet{i}" for i in range(0, 125, 4)]
++
++        for port in ports:
++            fvs = swsscommon.FieldValuePairs([
++                ("scaling_factor", "1"),
++                ("ars_obj_name", "ars_obj_default"),
++            ])
++            tbl.set(port, fvs)
++            time.sleep(0.1)
++        self.check_ars_interface()
++        for port in ports:
++            tbl._del(port)
++            time.sleep(0.1)
++
++    def test_ars_nexthops(self, dvs):
++        """Create ARS nexthops and validate orchagent logs in syslog."""
++        self.setup_db(dvs)
++        # create ARS Profile
++        self.create_ars_profile(dvs)
++        # create ARS object
++        self.create_ars_object(dvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_NEXTHOP_TBL)
++
++        nexthops = [
++            "default|1.1.1.10",
++            "default|2.2.2.20",
++            "default|3.3.3.30"
++        ]
++        #create ARS nexthop
++        for key in nexthops:
++            fvs = swsscommon.FieldValuePairs([("ars_obj_name", "ars_obj_1")])
++            tbl.set(key, fvs)
++
++        time.sleep(5)
++
++        logs = self.read_syslog(dvs)
++
++        for key in nexthops:
++            assert self.check_syslog_for_nexthop(key, logs), \
++                f"Orchagent did not log ARS nexthop creation for {key} in syslog"
++        #delete ARS nexthop
++        for key in nexthops:
++            tbl._del(key)
++
++    def test_ars_profile_invalid_config(self, dvs):
++        """Test invalid ARS profile configuration."""
++        self.setup_db(dvs)
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_PROFILE_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("algorithm", "invalid_algo"),
++        ])
++        tbl.set("ars_profile_invalid", fvs)
++
++        time.sleep(2)
++
++        logs = self.read_syslog(dvs)
++        assert self.check_syslog_for_invalid_profile("ars_profile_invalid", logs), \
++            "Orchagent did not log 'Failed to create/set ARS profile in syslog"
++
++    def test_ars_profile_global_mode(self, dvs):
++        """Validate ARS global mode profile creation."""
++        self.setup_db(dvs)
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_PROFILE_TBL)
++
++        # Create a profile in INTERFACE mode
++        fvs = swsscommon.FieldValuePairs([
++            ("algorithm", "ewma"),
++            ("ars_nhg_path_selector_mode", "global"),
++            ("default_ars_object", "ars_obj_1"),
++        ])
++        tbl.set("ars_profile_default", fvs)
++
++        # Create a object in INTERFACE mode
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_OBJECT_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("assign_mode", "PER_FLOWLET_QUALITY"),
++            ("flowlet_idle_time", "10000"),
++            ("max_flows", "256"),
++            ("primary_path_threshold", "80"),
++            ("alternative_path_cost", "20"),
++        ])
++        tbl.set("ars_obj_1", fvs)
++
++        time.sleep(2)
++
++        # create l3 interface
++        self.create_l3_intf("Ethernet0", "")
++        self.create_l3_intf("Ethernet4", "")
++
++        # set ip address
++        self.add_ip_address("Ethernet0", "10.0.0.0/31")
++        self.add_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # bring up interface
++        self.set_admin_status("Ethernet0", "up")
++        self.set_admin_status("Ethernet4", "up")
++
++        # set ip address and default route
++        dvs.servers[0].runcmd("ip address add 10.0.0.1/31 dev eth0")
++        dvs.servers[0].runcmd("ip route add default via 10.0.0.0")
++
++        dvs.servers[1].runcmd("ip address add 20.0.0.3/31 dev eth0")
++        dvs.servers[1].runcmd("ip route add default via 20.0.0.2")
++        time.sleep(2)
++
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 20.0.0.3\"")
++
++        # add route entry -- multiple nexthop
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check neighbor got resolved and removed from NEIGH_RESOLVE_TABLE
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet0:10.0.0.1")
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet4:20.0.0.3")
++
++        # check ASIC route database
++        self.check_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++     
++        # check ASIC ARS nexthop
++        self.check_route_entries_nexthop_ars()
++        # remove route entry
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 20.0.0.3\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check ASIC route database
++        self.check_deleted_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++
++        # remove ip address
++        self.remove_ip_address("Ethernet0", "10.0.0.0/31")
++        self.remove_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # remove l3 interface
++        self.remove_l3_intf("Ethernet0")
++        self.remove_l3_intf("Ethernet4")
++
++        self.set_admin_status("Ethernet0", "down")
++        self.set_admin_status("Ethernet4", "down")
++
++        # remove ip address and default route
++        dvs.servers[0].runcmd("ip route del default dev eth0")
++        dvs.servers[0].runcmd("ip address del 10.0.0.1/31 dev eth0")
++
++        dvs.servers[1].runcmd("ip route del default dev eth0")
++        dvs.servers[1].runcmd("ip address del 20.0.0.3/31 dev eth0")
++
++    def test_ars_profile_interface_mode(self, dvs):
++        """Validate ARS interface mode profile creation."""
++        self.setup_db(dvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_PROFILE_TBL)
++
++        # Create a profile in INTERFACE mode
++        fvs = swsscommon.FieldValuePairs([
++            ("algorithm", "ewma"),
++            ("ars_nhg_path_selector_mode", "interface"),
++            ("default_ars_object", "ars_obj_1"),
++        ])
++        tbl.set("ars_profile_default", fvs)
++
++        # Create a object in INTERFACE mode
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_OBJECT_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("assign_mode", "PER_PACKET_QUALITY"),
++            ("flowlet_idle_time", "10000"),
++            ("max_flows", "256"),
++            ("primary_path_threshold", "80"),
++            ("alternative_path_cost", "20"),
++        ])
++        tbl.set("ars_obj_1", fvs)
++
++        # Create a interface in INTERFACE mode
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_INTERFACE_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("scaling_factor", "1"),
++            ("ars_obj_name", "ars_obj_default"),
++        ])
++        for intf in ["Ethernet0", "Ethernet4", "Ethernet8"]:
++            tbl.set(intf, fvs)
++
++        time.sleep(2)
++        self.clear_srv_config(dvs)
++
++        # create l3 interface
++        self.create_l3_intf("Ethernet0", "")
++        self.create_l3_intf("Ethernet4", "")
++
++        # set ip address
++        self.add_ip_address("Ethernet0", "10.0.0.0/31")
++        self.add_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # bring up interface
++        self.set_admin_status("Ethernet0", "up")
++        self.set_admin_status("Ethernet4", "up")
++
++        # set ip address and default route
++        dvs.servers[0].runcmd("ip address add 10.0.0.1/31 dev eth0")
++        dvs.servers[0].runcmd("ip route add default via 10.0.0.0")
++
++        dvs.servers[1].runcmd("ip address add 20.0.0.3/31 dev eth0")
++        dvs.servers[1].runcmd("ip route add default via 20.0.0.2")
++        time.sleep(2)
++
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 20.0.0.3\"")
++
++        # add route entry -- multiple nexthop
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check neighbor got resolved and removed from NEIGH_RESOLVE_TABLE
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet0:10.0.0.1")
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet4:20.0.0.3")
++
++        # check ASIC route database
++        self.check_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++     
++        time.sleep(2)
++        # check ASIC ARS nexthop
++        self.check_route_entries_nexthop_ars()
++        # remove route entry
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 20.0.0.3\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check ASIC route database
++        self.check_deleted_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++
++        # remove ip address
++        self.remove_ip_address("Ethernet0", "10.0.0.0/31")
++        self.remove_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # remove l3 interface
++        self.remove_l3_intf("Ethernet0")
++        self.remove_l3_intf("Ethernet4")
++
++        self.set_admin_status("Ethernet0", "down")
++        self.set_admin_status("Ethernet4", "down")
++
++        # remove ip address and default route
++        dvs.servers[0].runcmd("ip route del default dev eth0")
++        dvs.servers[0].runcmd("ip address del 10.0.0.1/31 dev eth0")
++
++        dvs.servers[1].runcmd("ip route del default dev eth0")
++        dvs.servers[1].runcmd("ip address del 20.0.0.3/31 dev eth0")
++
++    def test_ars_profile_nexthop_mode(self, dvs):
++        """Validate ARS nexthop mode profile creation."""
++        self.setup_db(dvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_PROFILE_TBL)
++
++        # Create a profile in GLOBAL mode
++        fvs = swsscommon.FieldValuePairs([
++            ("algorithm", "ewma"),
++            ("ars_nhg_path_selector_mode", "nexthop"),
++            ("default_ars_object", "ars_obj_1"),
++        ])
++        tbl.set("ars_profile_default", fvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_OBJECT_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("assign_mode", "PER_FLOWLET_QUALITY"),
++            ("flowlet_idle_time", "10000"),
++            ("max_flows", "256"),
++            ("primary_path_threshold", "80"),
++            ("alternative_path_cost", "20"),
++        ])
++        tbl.set("ars_obj_1", fvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_INTERFACE_TBL)
++        fvs = swsscommon.FieldValuePairs([
++            ("scaling_factor", "1"),
++        ])
++        for intf in ["Ethernet0", "Ethernet4"]:
++            tbl.set(intf, fvs)
++
++        tbl = swsscommon.Table(self.config_db, CFG_ARS_NEXTHOP_TBL)
++
++        nexthops = [
++            "|10.0.0.1",
++            "|20.0.0.3"
++        ]
++
++        for key in nexthops:
++            fvs = swsscommon.FieldValuePairs([("ars_obj_name", "ars_obj_1")])
++            tbl.set(key, fvs)
++
++        time.sleep(2)  # let interfaces settle
++
++        self.clear_srv_config(dvs)
++
++        # create l3 interface
++        self.create_l3_intf("Ethernet0", "")
++        self.create_l3_intf("Ethernet4", "")
++
++        # set ip address
++        self.add_ip_address("Ethernet0", "10.0.0.0/31")
++        self.add_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # bring up interface
++        self.set_admin_status("Ethernet0", "up")
++        self.set_admin_status("Ethernet4", "up")
++
++        # set ip address and default route
++        dvs.servers[0].runcmd("ip address add 10.0.0.1/31 dev eth0")
++        dvs.servers[0].runcmd("ip route add default via 10.0.0.0")
++
++        dvs.servers[1].runcmd("ip address add 20.0.0.3/31 dev eth0")
++        dvs.servers[1].runcmd("ip route add default via 20.0.0.2")
++        time.sleep(2)
++
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 2.2.2.0/24 20.0.0.3\"")
++
++        # add route entry -- multiple nexthop
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check neighbor got resolved and removed from NEIGH_RESOLVE_TABLE
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet0:10.0.0.1")
++        self.pdb.wait_for_deleted_entry("NEIGH_RESOLVE_TABLE", "Ethernet4:20.0.0.3")
++
++        # check ASIC route database
++        self.check_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++     
++        # check ASIC ARS nexthop
++        self.check_route_entries_nexthop_ars()
++        # remove route entry
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 2.2.2.0/24 20.0.0.3\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 10.0.0.1\"")
++        dvs.runcmd("vtysh -c \"configure terminal\" -c \"no ip route 3.3.3.0/24 20.0.0.3\"")
++
++        # check application database
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "2.2.2.0/24")
++        self.pdb.wait_for_deleted_entry("ROUTE_TABLE", "3.3.3.0/24")
++
++        # check ASIC route database
++        self.check_deleted_route_entries(["2.2.2.0/24", "3.3.3.0/24"])
++
++        # remove ip address
++        self.remove_ip_address("Ethernet0", "10.0.0.0/31")
++        self.remove_ip_address("Ethernet4", "20.0.0.2/31")
++
++        # remove l3 interface
++        self.remove_l3_intf("Ethernet0")
++        self.remove_l3_intf("Ethernet4")
++
++        self.set_admin_status("Ethernet0", "down")
++        self.set_admin_status("Ethernet4", "down")
++
++        # remove ip address and default route
++        dvs.servers[0].runcmd("ip route del default dev eth0")
++        dvs.servers[0].runcmd("ip address del 10.0.0.1/31 dev eth0")
++
++        dvs.servers[1].runcmd("ip route del default dev eth0")
++        dvs.servers[1].runcmd("ip address del 20.0.0.3/31 dev eth0")
++
++
+-- 
+2.25.1
+

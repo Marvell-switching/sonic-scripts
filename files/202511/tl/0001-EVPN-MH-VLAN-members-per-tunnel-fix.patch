@@ -1,0 +1,174 @@
+From 35d5f48da705f7c77c6b9b9ac63e5e9f7c63cba4 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Thu, 23 Apr 2026 08:01:16 +0530
+Subject: [PATCH] EVPN MH - VLAN members per tunnel fix
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fdbsyncd/fdbsync.cpp    | 23 +++++++++++++++++++----
+ orchagent/portsorch.cpp |  9 +++------
+ orchagent/vrforch.h     |  5 +++++
+ orchagent/vxlanorch.cpp | 19 ++++++++++++++-----
+ 4 files changed, 41 insertions(+), 15 deletions(-)
+
+diff --git a/fdbsyncd/fdbsync.cpp b/fdbsyncd/fdbsync.cpp
+index 9abecc4c..df62b1fa 100644
+--- a/fdbsyncd/fdbsync.cpp
++++ b/fdbsyncd/fdbsync.cpp
+@@ -862,6 +862,7 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+     string vlan_id = "";
+     bool isVxlanIntf = false;
+     NEXT_HOP_VALUE_TYPE dest_type = UNKNOWN;
++    bool is_imet_mac = false;
+ 
+     if ((nlmsg_type != RTM_NEWNEIGH) && (nlmsg_type != RTM_GETNEIGH) &&
+         (nlmsg_type != RTM_DELNEIGH))
+@@ -894,6 +895,16 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+ 
+     nl_addr2str(rtnl_neigh_get_lladdr(neigh), macStr, MAX_ADDR_SIZE);
+ 
++    /*
++     * Detect IMET routes early (MAC 00:00:00:00:00:00) so we can ensure
++     * proper handling throughout the function, particularly for DEL messages
++     * which need NDA_DST extracted even on RTM_DELNEIGH.
++     */
++    if (MacAddress(macStr) == MacAddress("00:00:00:00:00:00"))
++    {
++        is_imet_mac = true;
++    }
++
+     if (tb[NDA_NH_ID])
+     {
+         nexthop_group = std::to_string(*(uint32_t *)RTA_DATA(tb[NDA_NH_ID]));
+@@ -925,7 +936,7 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+     SWSS_LOG_NOTICE("EVPN-MH-DBG: onMsgNbr entry: mac=%s ifindex=%d isVxlan=%d nlmsg_type=%d state=0x%x flags=0x%x delete_key=%d dest_type=%d",
+                     macStr, ifindex, isVxlanIntf, nlmsg_type, state, nm->ndm_flags, delete_key, dest_type);
+ 
+-    if (isVxlanIntf == false)
++    if (isVxlanIntf == false && !is_imet_mac)
+     {
+         SWSS_LOG_NOTICE("EVPN-MH-DBG: non-VxLAN path: mac=%s ifindex=%d nlmsg_type=%d state=0x%x flags=0x%x",
+                         macStr, ifindex, nlmsg_type, state, nm->ndm_flags);
+@@ -1001,7 +1012,7 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+     }
+ 
+ 
+-    if (isVxlanIntf == false)
++    if (isVxlanIntf == false && !is_imet_mac)
+     {
+         vlan = rtnl_neigh_get_vlan(neigh);
+         SWSS_LOG_NOTICE("EVPN-MH-DBG: non-VxLAN DELETE path: mac=%s vlan=%d flags=0x%x nvoExist=%d",
+@@ -1026,9 +1037,13 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+      * dest_type is not required for delete messages. It is skipped so that the
+      * bridge fdb delete goes through as it does not contain the NDA_DST attribute.
+      *
++     * Except for IMET routes which need the NDA_DST information to construct
++     * the correct VXLAN_REMOTE_VNI_TABLE key for deletion.
++     *
+      * VTEP can only be applicable if dest_type is not NEXTHOPGROUP
+      */
+-    if (nlmsg_type != RTM_DELNEIGH && dest_type != NEXTHOPGROUP)
++    if ((nlmsg_type != RTM_DELNEIGH && dest_type != NEXTHOPGROUP) ||
++        is_imet_mac)
+     {
+         vtep_addr = rtnl_neigh_get_dst(neigh);
+         if (vtep_addr == NULL)
+@@ -1066,7 +1081,7 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+     }
+ 
+     /* Handling IMET routes */
+-    if (MacAddress(macStr) == MacAddress("00:00:00:00:00:00"))
++    if (is_imet_mac)
+     {
+         string vlan_str = ifname.substr(str_loc+1, string::npos);
+ 
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 78963b28..68f5cb85 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -7186,8 +7186,9 @@ bool PortsOrch::removeBridgePort(Port &port)
+     /* Remove STP ports before bridge port deletion*/
+     gStpOrch->removeStpPorts(port);
+ 
+-    //Flush the FDB entires corresponding to the port
+-    gFdbOrch->flushFDBEntries(port.m_bridge_port_id, SAI_NULL_OBJECT_ID);
++    //Flush all FDB entires corresponding to the port (including static entries
++    //on tunnel/nexthop_group bridge ports)
++    gFdbOrch->flushAllFDBEntries(port.m_bridge_port_id, SAI_NULL_OBJECT_ID);
+     SWSS_LOG_INFO("Flush FDB entries for port %s", port.m_alias.c_str());
+ 
+     /* Remove bridge port */
+@@ -7832,10 +7833,6 @@ bool PortsOrch::removeVlanMember(Port &vlan, Port &port, string end_point_ip)
+ 
+ bool PortsOrch::isVlanMember(Port &vlan, Port &port, string end_point_ip)
+ {
+-    if(port.m_type == Port::TUNNEL || port.m_type == Port::NEXTHOP_GROUP)
+-    {
+-        return true;
+-    }
+     if (!end_point_ip.empty())
+     {
+         if (vlan.m_vlan_info.l2mc_members.find(end_point_ip) != vlan.m_vlan_info.l2mc_members.end())
+diff --git a/orchagent/vrforch.h b/orchagent/vrforch.h
+index 2238e1f2..bf4bb9b3 100644
+--- a/orchagent/vrforch.h
++++ b/orchagent/vrforch.h
+@@ -179,6 +179,11 @@ public:
+         }
+     }
+ 
++    void markVniAsL3(const uint32_t vni)
++    {
++        l3vni_table_[vni].l3_vni = true;
++    }
++
+     int updateL3VniVlan(uint32_t vni, uint16_t vlan_id);
+ private:
+     virtual bool addOperation(const Request& request);
+diff --git a/orchagent/vxlanorch.cpp b/orchagent/vxlanorch.cpp
+index 36eec38b..2ad475ea 100644
+--- a/orchagent/vxlanorch.cpp
++++ b/orchagent/vxlanorch.cpp
+@@ -2373,6 +2373,14 @@ bool VxlanVrfMapOrch::addOperation(const Request& request)
+         entry.decap_id = tunnel_obj->addDecapMapperEntry(vrf_id, vni_id);
+         vrf_orch->increaseVrfRefCount(vrf_name);
+ 
++        /* Mark the VNI as L3 early so that VxlanTunnelMapOrch::addOperation
++         * (which may run before VRFOrch::updateVrfVNIMap) will see this VNI
++         * as L3 and skip creating the L2 SAI tunnel map entry. Having both
++         * L2 and L3 decap entries for the same VNI on the ASIC is not
++         * supported.
++         */
++        vrf_orch->markVniAsL3(vni_id);
++
+         SWSS_LOG_DEBUG("Vxlan tunnel encap entry '%" PRIx64 "' decap entry '0x%" PRIx64 "'",
+                 entry.encap_id, entry.decap_id);
+ 
+@@ -2437,11 +2445,6 @@ bool VxlanVrfMapOrch::delOperation(const Request& request)
+         SWSS_LOG_NOTICE("VxlanVrfMapOrch Vxlan tunnel VRF encap entry '%" PRIx64 "' decap entry '0x%" PRIx64 "'",
+                 entry.encap_id, entry.decap_id);
+ 
+-        remove_tunnel_map_entry(entry.encap_id);
+-        vrf_orch->decreaseVrfRefCount(vrf_name);
+-        remove_tunnel_map_entry(entry.decap_id);
+-        vrf_orch->decreaseVrfRefCount(vrf_name);
+-
+         if (!entry.isL2Vni)
+         {
+             entry.isL2Vni = vxlan_tun_map_orch->isVniVlanMapExists(entry.vni_id, vniVlanMapName, &tnl_map_entry_id, &vlan_id);
+@@ -2454,6 +2457,12 @@ bool VxlanVrfMapOrch::delOperation(const Request& request)
+                 SWSS_LOG_DEBUG("add_tunnel_map_entry name %s, vlan %d, vni %d\n", entry.vniVlanMapName.c_str(), entry.vlan_id, entry.vni_id);
+             }
+         }
++
++        remove_tunnel_map_entry(entry.encap_id);
++        vrf_orch->decreaseVrfRefCount(vrf_name);
++        remove_tunnel_map_entry(entry.decap_id);
++        vrf_orch->decreaseVrfRefCount(vrf_name);
++
+         if(entry.isL2Vni)
+         {
+             const auto tunnel_map_id = tunnel_obj->getDecapMapId(TUNNEL_MAP_T_VLAN);
+-- 
+2.25.1
+

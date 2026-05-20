@@ -1,0 +1,87 @@
+From 24f7f86433ef2b75f0e94996605479827b939df8 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Wed, 29 Oct 2025 09:52:17 +0530
+Subject: [PATCH] show vlan brief optimized for single pass of input data
+
+---
+ .../cli-plugin-tests/test_show_dhcp_relay.py  | 18 ++++++++++++++----
+ .../cli/show/plugins/show_dhcp_relay.py       | 19 +++++++++----------
+ 2 files changed, 23 insertions(+), 14 deletions(-)
+
+diff --git a/dockers/docker-dhcp-relay/cli-plugin-tests/test_show_dhcp_relay.py b/dockers/docker-dhcp-relay/cli-plugin-tests/test_show_dhcp_relay.py
+index 7bef2f076..be4dcbf52 100644
+--- a/dockers/docker-dhcp-relay/cli-plugin-tests/test_show_dhcp_relay.py
++++ b/dockers/docker-dhcp-relay/cli-plugin-tests/test_show_dhcp_relay.py
+@@ -109,7 +109,7 @@ IP_VER_TEST_PARAM_MAP = {
+ def test_plugin_registration():
+     cli = mock.MagicMock()
+     show.register(cli)
+-    assert 'DHCP Helper Address' in dict(vlan.VlanBrief.COLUMNS)
++    assert 'DHCP Helper Address' in dict(vlan.VlanBrRow.COLUMNS)
+ 
+ 
+ @pytest.mark.parametrize("feature_table", [{}, {"dhcp_server": {"state": "disabled"}},
+@@ -119,12 +119,22 @@ def test_dhcp_relay_column_output(feature_table):
+         ({'Vlan1001': {'dhcp_servers': ['192.0.0.1', '192.168.0.2']}}, {}, {}),
+         (MockDb({"FEATURE": feature_table})),
+     )
++#mock the dict passed in by show vlan when calling get_dhcp_helper_addr()
++    row = vlan.VlanBrRow("1001")
++    vlan_dict = dict()
++    vlan_dict["1001"] = row
++    cdict = dict(vlan.VlanBrRow.COLUMNS)
++    index = list(cdict).index("DHCP Helper Address")
++
+     if "dhcp_server" in feature_table and "state" in feature_table["dhcp_server"] and \
+        feature_table["dhcp_server"]["state"] == "enabled":
+-        assert show.get_dhcp_helper_address(ctx, 'Vlan1001') == 'N/A'
++        show.get_dhcp_helper_addr(ctx, vlan_dict)
++        clirow = vlan_dict["1001"].vinfo()
++        assert clirow[index]  == 'N/A'
+     else:
+-        assert show.get_dhcp_helper_address(ctx, 'Vlan1001') == '192.0.0.1\n192.168.0.2'
+-
++        show.get_dhcp_helper_addr(ctx, vlan_dict)
++        clirow = vlan_dict["1001"].vinfo()
++        assert clirow[index]  == '192.0.0.1\n192.168.0.2'
+ 
+ @parameterized.expand(COMMON_TEST_DATA)
+ @patchfs
+diff --git a/dockers/docker-dhcp-relay/cli/show/plugins/show_dhcp_relay.py b/dockers/docker-dhcp-relay/cli/show/plugins/show_dhcp_relay.py
+index 83b6bcb72..359822886 100644
+--- a/dockers/docker-dhcp-relay/cli/show/plugins/show_dhcp_relay.py
++++ b/dockers/docker-dhcp-relay/cli/show/plugins/show_dhcp_relay.py
+@@ -57,21 +57,20 @@ def check_sonic_dhcpv4_relay_flag():
+         return True
+     return False
+ 
+-def get_dhcp_helper_address(ctx, vlan):
+-    cfg, db = ctx
+-    vlan_dhcp_helper_data, _, _ = cfg
+-    vlan_config = vlan_dhcp_helper_data.get(vlan)
+-    if not vlan_config:
+-        return ""
++def get_dhcp_helper_addr(ctx, vlan_dict):
++    vlan_full_cfg, db = ctx
++    vlan_dhcp_helper_data, _, _ = vlan_full_cfg
+ 
+     feature_data = db.cfgdb.get_table("FEATURE")
+     dhcp_server_enabled = is_dhcp_server_enabled(feature_data)
+-    dhcp_helpers = ["N/A"] if dhcp_server_enabled else vlan_config.get('dhcp_servers', [])
+ 
+-    return '\n'.join(natsorted(dhcp_helpers))
++    for vif in vlan_dhcp_helper_data:
++        vlan_prefix, vid = vif.split('Vlan')
++        vlan_config =  vlan_dhcp_helper_data[vif]
++        dhcp_helpers = ["N/A"] if dhcp_server_enabled else vlan_config.get('dhcp_servers', [])
++        vlan_dict[vid].setparam("DHCP Helper Address", '\n'.join(natsorted(dhcp_helpers)))
+ 
+-
+-show_vlan.VlanBrief.register_column('DHCP Helper Address', get_dhcp_helper_address)
++show_vlan.VlanBrRow.register_column('DHCP Helper Address', get_dhcp_helper_addr)
+ 
+ class DHCPv4_Counter(object):
+     def __init__(self):
+-- 
+2.25.1
+

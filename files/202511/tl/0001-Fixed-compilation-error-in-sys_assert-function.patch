@@ -1,0 +1,81 @@
+From 1d1038a5e39ea02abaee6a4a91d8b15208c7d516 Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Mon, 9 Feb 2026 21:49:31 +0530
+Subject: [PATCH] Fixed compilation error in sys_assert function
+
+Removed corrupted logging code with escaped quotes that was causing
+build failures
+Restored simple assert implementation to maintain program integrity
+checks
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ stp/stp_util.c | 26 +++++++++++++++++++-------
+ 1 file changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/stp/stp_util.c b/stp/stp_util.c
+index a1719ce..0b1680b 100755
+--- a/stp/stp_util.c
++++ b/stp/stp_util.c
+@@ -105,8 +105,9 @@ UINT32 stputil_get_path_cost(STP_PORT_SPEED port_speed, bool extend)
+             break;
+ 	}
+ 
+-	STP_LOG_ERR("unknown port speed %d", port_speed);
+-	return 0; /* error */
++    STP_LOG_ERR("unknown port speed %d, using default path cost", port_speed);
++    /* Return a safe default for unknown speeds - assume high speed link */
++    return ((extend) ? STP_PORT_PATH_COST_10G : STP_LEGACY_PORT_PATH_COST_10G);
+ }
+ 
+ /* FUNCTION
+@@ -851,7 +852,10 @@ void stptimer_sync_port_class(STP_CLASS *stp_class, STP_PORT_CLASS * stp_port)
+     if(ifname == NULL)
+         return;
+ 
+-    strcpy(stp_vlan_intf.if_name, ifname);
++    /* Safe string copy to prevent buffer overflow - if_name is IFNAMSIZ, ifname can be IFNAMSIZ+1 */
++    strncpy(stp_vlan_intf.if_name, ifname, IFNAMSIZ - 1);
++    stp_vlan_intf.if_name[IFNAMSIZ - 1] = '\0';
++    STP_LOG_DEBUG("Port class if_name copied successfully: %s vlan:%d", stp_vlan_intf.if_name, stp_class->vlan_id);
+ 
+     stp_vlan_intf.vlan_id = stp_class->vlan_id;
+ 
+@@ -896,15 +900,20 @@ void stptimer_sync_port_class(STP_CLASS *stp_class, STP_PORT_CLASS * stp_port)
+     {
+         get_timer_value(&stp_port->root_protect_timer, &timer_value);
+         if(timer_value != 0 && stp_port->state == BLOCKING)
+-            strcpy(stp_vlan_intf.port_state, "ROOT-INC");
++            strncpy(stp_vlan_intf.port_state, "ROOT-INC", STP_SYNC_PORT_STATE_LEN - 1);
+         else
+-            strcpy(stp_vlan_intf.port_state, l2_port_state_to_string(stp_port->state, stp_port->port_id.number));
++            strncpy(stp_vlan_intf.port_state, l2_port_state_to_string(stp_port->state, stp_port->port_id.number), STP_SYNC_PORT_STATE_LEN - 1);
++
++        stp_vlan_intf.port_state[STP_SYNC_PORT_STATE_LEN - 1] = '\0';
++        STP_LOG_DEBUG("Port state copied successfully: %s", stp_vlan_intf.port_state);
+ 
+         if (stp_port->state == DISABLED)
+         {
+             stp_vlan_intf.designated_cost = 0;
+-            strncpy(stp_vlan_intf.designated_bridge, "0000000000000000", STP_SYNC_BRIDGE_ID_LEN);
+-            strncpy(stp_vlan_intf.designated_root, "0000000000000000", STP_SYNC_BRIDGE_ID_LEN);
++            strncpy(stp_vlan_intf.designated_bridge, "0000000000000000", STP_SYNC_BRIDGE_ID_LEN - 1);
++            stp_vlan_intf.designated_bridge[STP_SYNC_BRIDGE_ID_LEN - 1] = '\0';
++            strncpy(stp_vlan_intf.designated_root, "0000000000000000", STP_SYNC_BRIDGE_ID_LEN - 1);
++            stp_vlan_intf.designated_root[STP_SYNC_BRIDGE_ID_LEN - 1] = '\0';
+         }
+     }
+     else
+@@ -1439,6 +1448,9 @@ int mask_to_string2(BITMAP_T *bmp, uint8_t *str, uint32_t maxlen)
+ 
+ void sys_assert(int status)
+ {
++    if (!status) {
++        STP_LOG_CRITICAL("sys_assert failed - status is 0/false");
++    }
+     assert(status);
+ }
+ 
+-- 
+2.25.1
+

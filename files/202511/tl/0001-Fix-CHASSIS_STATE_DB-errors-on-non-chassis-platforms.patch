@@ -1,0 +1,106 @@
+From b757e4a5f6c8d45397fc16d1645e7fcefd3331df Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Fri, 27 Mar 2026 14:51:48 +0530
+Subject: [PATCH] Fix CHASSIS_STATE_DB errors on non-chassis platforms
+
+Below error logs that appear across gnmi restarts:
+ERR gnmi#telemetry: :- getDbInfo: Failed to find CHASSIS_STATE_DB database in : key
+ERR gnmi#dialout_client_cli: :- getDbInfo: Failed to find CHASSIS_STATE_DB database in : key
+
+These logs cause teardown errors in sonic-mgmt tests
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ show_client/system_health_cli.go | 21 +++++++++++++++++++++
+ sonic_data_client/db_client.go   | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/show_client/system_health_cli.go b/show_client/system_health_cli.go
+index 763f80a..fc86a5d 100644
+--- a/show_client/system_health_cli.go
++++ b/show_client/system_health_cli.go
+@@ -8,6 +8,7 @@ import (
+ 
+ 	log "github.com/golang/glog"
+ 	sdc "github.com/sonic-net/sonic-gnmi/sonic_data_client"
++	sdcfg "github.com/sonic-net/sonic-gnmi/sonic_db_config"
+ 	"google.golang.org/grpc/codes"
+ 	"google.golang.org/grpc/status"
+ )
+@@ -160,6 +161,26 @@ func getSystemHealthDpu(options sdc.OptionMap) ([]byte, error) {
+ 
+ // Get data from chassis database using GetMapFromQueries
+ func getChassisDataDirect(moduleName string) (map[string]interface{}, error) {
++	// Check whether CHASSIS_STATE_DB is present in the runtime database config.
++	// On non-chassis platform, CHASSIS_STATE_DB won't be present in database_config.json.
++	// Check Db exists before querying.
++
++	dbList, err := sdcfg.GetDbList(sdcfg.SONIC_DEFAULT_NAMESPACE)
++	if err != nil {
++		return nil, fmt.Errorf("getChassisDataDirect: failed to get DB list: %w", err)
++	}
++	chassisStateDBPresent := false
++	for _, db := range dbList {
++		if db == "CHASSIS_STATE_DB" {
++			chassisStateDBPresent = true
++			break
++		}
++	}
++	if !chassisStateDBPresent {
++		log.V(2).Infof("getChassisDataDirect: CHASSIS_STATE_DB not present on this platform, skipping")
++		return make(map[string]interface{}), nil
++	}
++
+ 	var queries [][]string
+ 	if moduleName != "" && moduleName != "all" {
+ 		queries = [][]string{
+diff --git a/sonic_data_client/db_client.go b/sonic_data_client/db_client.go
+index c00ed34..46a4f08 100644
+--- a/sonic_data_client/db_client.go
++++ b/sonic_data_client/db_client.go
+@@ -594,6 +594,28 @@ func init() {
+ }
+ 
+ func initRedisDbClients() {
++	// Build the set of DBs present in the runtime database_config.json so
++	// we can skip DBs absent on this platform before calling GetDbSock, which would otherwise
++	// log ERR for every missing DB.
++	// Note: GetDbList always returns the default namespace DB list.
++	// This is safe because all namespaces carry the same DB names; they differ only in
++	// socket paths. GetDbList and GetDbAllNamespaces share the same DbInit gate,
++	// so if GetDbList fails GetDbAllNamespaces would fail too;
++	// returning early here avoids redundant failures.
++	runtimeDbList, err := sdcfg.GetDbList(sdcfg.SONIC_DEFAULT_NAMESPACE)
++	if err != nil {
++		log.Errorf("initRedisDbClients: failed to get runtime DB list: %v", err)
++		return
++	}
++	if len(runtimeDbList) == 0 {
++		log.Errorf("initRedisDbClients: runtime DB list is empty, database config may be corrupt")
++		return
++	}
++	runtimeDbSet := make(map[string]bool, len(runtimeDbList))
++	for _, db := range runtimeDbList {
++		runtimeDbSet[db] = true
++	}
++
+ 	AllNamespaces, err := sdcfg.GetDbAllNamespaces()
+ 	if err != nil {
+ 		log.Errorf("init error:  %v", err)
+@@ -603,6 +625,13 @@ func initRedisDbClients() {
+ 		Target2RedisDb[dbNamespace] = make(map[string]*redis.Client)
+ 		for dbName, dbn := range spb.Target_value {
+ 			if dbName != "OTHERS" {
++				// Skip DBs not present in the runtime database_config.json.
++				// runtimeDbSet is non-empty here (guaranteed by the early return
++				// above), so a missing key safely returns false in Go.
++				if !runtimeDbSet[dbName] {
++					log.V(2).Infof("initRedisDbClients: skipping %s, not in runtime DB config", dbName)
++					continue
++				}
+ 				addr, err := sdcfg.GetDbSock(dbName, dbNamespace)
+ 				if err != nil {
+ 					log.Warningf("Skipping %s in namespace %s: %v", dbName, dbNamespace, err)
+-- 
+2.25.1
+

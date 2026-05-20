@@ -1,0 +1,30 @@
+From 3cebb430284a4066204409a02821caba8d08061f Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 21 Aug 2025 14:45:53 +0530
+Subject: [PATCH] [SONICDC-498] pc/test_lag_member_forwarding fails with BFD
+ offload capability query failed
+
+The BFD offload capability is optional for the product, so changing the log level from ERROR to WARNING.
+Hence changed BFD offload capability Log Level to WARN Instead of error.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ orchagent/bfdorch.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/orchagent/bfdorch.cpp b/orchagent/bfdorch.cpp
+index c9b672b7..c37b178a 100644
+--- a/orchagent/bfdorch.cpp
++++ b/orchagent/bfdorch.cpp
+@@ -745,7 +745,7 @@ bool BgpGlobalStateOrch::offload_supported(bool get_ipv6)
+                                             attr.id, &capability);
+     if (status != SAI_STATUS_SUCCESS)
+     {
+-        SWSS_LOG_ERROR("Unable to query BFD offload capability");
++        SWSS_LOG_WARN("Unable to query BFD offload capability");
+         return false;
+     }
+     if (!capability.get_implemented)
+-- 
+2.25.1
+

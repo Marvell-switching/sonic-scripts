@@ -1,0 +1,95 @@
+From 6d50ff3b5b90c7b815cf03af8467d8b7bf696f68 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 1 Apr 2025 13:53:25 +0530
+Subject: [PATCH 7/8] Revert "[system-health] Add fan direction check for
+ system health (#14509)"
+
+This reverts commit 5e893666df7ea9dc681f223ab9943e9bd33efaa8.
+---
+ .../health_checker/hardware_checker.py           | 14 --------------
+ src/system-health/tests/test_system_health.py    | 16 +---------------
+ 2 files changed, 1 insertion(+), 29 deletions(-)
+
+diff --git a/src/system-health/health_checker/hardware_checker.py b/src/system-health/health_checker/hardware_checker.py
+index 113fd8866..b0696d2e8 100644
+--- a/src/system-health/health_checker/hardware_checker.py
++++ b/src/system-health/health_checker/hardware_checker.py
+@@ -71,7 +71,6 @@ class HardwareChecker(HealthChecker):
+             1. Check all fans are present
+             2. Check all fans are in good state
+             3. Check fan speed is in valid range
+-            4. Check all fans direction are the same
+         :param config: Health checker configuration
+         :return:
+         """
+@@ -83,7 +82,6 @@ class HardwareChecker(HealthChecker):
+             self.set_object_not_ok('Fan', 'Fan', 'Failed to get fan information')
+             return
+ 
+-        expect_fan_direction = None
+         for key in natsorted(keys):
+             key_list = key.split('|')
+             if len(key_list) != 2:  # error data in DB, log it and ignore
+@@ -137,18 +135,6 @@ class HardwareChecker(HealthChecker):
+                                                    is_over_speed))
+                         continue
+ 
+-            if not self._ignore_check(config.ignore_devices, 'fan', name, 'direction'):
+-                direction = data_dict.get('direction', 'N/A')
+-                # ignore fan whose direction is not available to avoid too many false alarms
+-                if direction != 'N/A':
+-                    if not expect_fan_direction:
+-                        # initialize the expect fan direction
+-                        expect_fan_direction = (name, direction)
+-                    elif direction != expect_fan_direction[1]:
+-                        self.set_object_not_ok('Fan', name,
+-                                               f'{name} direction {direction} is not aligned with {expect_fan_direction[0]} direction {expect_fan_direction[1]}')
+-                        continue
+-
+             status = data_dict.get('status', 'false')
+             if status.lower() != 'true':
+                 self.set_object_not_ok('Fan', name, '{} is broken'.format(name))
+diff --git a/src/system-health/tests/test_system_health.py b/src/system-health/tests/test_system_health.py
+index 179971844..b029dba1d 100644
+--- a/src/system-health/tests/test_system_health.py
++++ b/src/system-health/tests/test_system_health.py
+@@ -353,8 +353,7 @@ def test_hardware_checker():
+             'speed': '60',
+             'speed_target': '60',
+             'is_under_speed': 'False',
+-            'is_over_speed': 'False',
+-            'direction': 'intake'
++            'is_over_speed': 'False'
+         },
+         'FAN_INFO|fan2': {
+             'presence': 'False',
+@@ -387,15 +386,6 @@ def test_hardware_checker():
+             'speed_target': '60',
+             'is_under_speed': 'False',
+             'is_over_speed': 'True',
+-        },
+-        'FAN_INFO|fan6': {
+-            'presence': 'True',
+-            'status': 'True',
+-            'speed': '60',
+-            'speed_target': '60',
+-            'is_under_speed': 'False',
+-            'is_over_speed': 'False',
+-            'direction': 'exhaust'
+         }
+     })
+ 
+@@ -494,10 +484,6 @@ def test_hardware_checker():
+     assert 'fan5' in checker._info
+     assert checker._info['fan5'][HealthChecker.INFO_FIELD_OBJECT_STATUS] == HealthChecker.STATUS_NOT_OK
+ 
+-    assert 'fan6' in checker._info
+-    assert checker._info['fan6'][HealthChecker.INFO_FIELD_OBJECT_STATUS] == HealthChecker.STATUS_NOT_OK
+-    assert checker._info['fan6'][HealthChecker.INFO_FIELD_OBJECT_MSG] == 'fan6 direction exhaust is not aligned with fan1 direction intake'
+-
+     assert 'PSU 1' in checker._info
+     assert checker._info['PSU 1'][HealthChecker.INFO_FIELD_OBJECT_STATUS] == HealthChecker.STATUS_OK
+ 
+-- 
+2.25.1
+

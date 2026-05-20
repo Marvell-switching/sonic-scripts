@@ -1,0 +1,61 @@
+From b7e67158097ce13a06b19ea04c91db92b284f67e Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 22 Jan 2026 16:08:03 +0530
+Subject: [PATCH] Enable bfd_data_plane_mode in utilities/test framework
+
+Added bfd_data_plane_mode flag in utilities/test framework corresponding
+to sonic-yang-models/yang-models/sonic-device_metadata.yang
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../autogen_test/show_cmd_output.py                  | 12 ++++++------
+ .../autogen_test/sonic-device_metadata.yang          |  6 ++++++
+ 2 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/tests/cli_autogen_input/autogen_test/show_cmd_output.py b/tests/cli_autogen_input/autogen_test/show_cmd_output.py
+index a0a0e8cf..b633dd83 100644
+--- a/tests/cli_autogen_input/autogen_test/show_cmd_output.py
++++ b/tests/cli_autogen_input/autogen_test/show_cmd_output.py
+@@ -4,16 +4,16 @@ This module are holding correct output for the show command for cli_autogen_test
+ 
+ 
+ show_device_metadata_localhost="""\
+-HWSKU        DEFAULT BGP STATUS    DOCKER ROUTING CONFIG MODE    HOSTNAME    PLATFORM                MAC                DEFAULT PFCWD STATUS    BGP ASN    DEPLOYMENT ID    NON EXISTING FIELD    TYPE       BUFFER MODEL    FRR MGMT FRAMEWORK CONFIG
+------------  --------------------  ----------------------------  ----------  ----------------------  -----------------  ----------------------  ---------  ---------------  --------------------  ---------  --------------  ---------------------------
+-ACS-MSN2100  up                    N/A                           r-sonic-01  x86_64-mlnx_msn2100-r0  ff:ff:ff:ff:ff:00  disable                 N/A        N/A              N/A                   ToRRouter  traditional     N/A
++HWSKU        DEFAULT BGP STATUS    DOCKER ROUTING CONFIG MODE    HOSTNAME    PLATFORM                MAC                DEFAULT PFCWD STATUS    BGP ASN    DEPLOYMENT ID    NON EXISTING FIELD    TYPE       BUFFER MODEL    FRR MGMT FRAMEWORK CONFIG    BFD DATA PLANE MODE
++-----------  --------------------  ----------------------------  ----------  ----------------------  -----------------  ----------------------  ---------  ---------------  --------------------  ---------  --------------  ---------------------------  ---------------------
++ACS-MSN2100  up                    N/A                           r-sonic-01  x86_64-mlnx_msn2100-r0  ff:ff:ff:ff:ff:00  disable                 N/A        N/A              N/A                   ToRRouter  traditional     N/A                          N/A
+ """
+ 
+ 
+ show_device_metadata_localhost_changed_buffer_model="""\
+-HWSKU        DEFAULT BGP STATUS    DOCKER ROUTING CONFIG MODE    HOSTNAME    PLATFORM                MAC                DEFAULT PFCWD STATUS    BGP ASN    DEPLOYMENT ID    NON EXISTING FIELD    TYPE       BUFFER MODEL    FRR MGMT FRAMEWORK CONFIG
+------------  --------------------  ----------------------------  ----------  ----------------------  -----------------  ----------------------  ---------  ---------------  --------------------  ---------  --------------  ---------------------------
+-ACS-MSN2100  up                    N/A                           r-sonic-01  x86_64-mlnx_msn2100-r0  ff:ff:ff:ff:ff:00  disable                 N/A        N/A              N/A                   ToRRouter  dynamic         N/A
++HWSKU        DEFAULT BGP STATUS    DOCKER ROUTING CONFIG MODE    HOSTNAME    PLATFORM                MAC                DEFAULT PFCWD STATUS    BGP ASN    DEPLOYMENT ID    NON EXISTING FIELD    TYPE       BUFFER MODEL    FRR MGMT FRAMEWORK CONFIG    BFD DATA PLANE MODE
++-----------  --------------------  ----------------------------  ----------  ----------------------  -----------------  ----------------------  ---------  ---------------  --------------------  ---------  --------------  ---------------------------  ---------------------
++ACS-MSN2100  up                    N/A                           r-sonic-01  x86_64-mlnx_msn2100-r0  ff:ff:ff:ff:ff:00  disable                 N/A        N/A              N/A                   ToRRouter  dynamic         N/A                          N/A
+ """
+ 
+ 
+diff --git a/tests/cli_autogen_input/autogen_test/sonic-device_metadata.yang b/tests/cli_autogen_input/autogen_test/sonic-device_metadata.yang
+index 593f17ba..9a850171 100644
+--- a/tests/cli_autogen_input/autogen_test/sonic-device_metadata.yang
++++ b/tests/cli_autogen_input/autogen_test/sonic-device_metadata.yang
+@@ -117,6 +117,12 @@ module sonic-device_metadata {
+                         otherwise, sonic-bgpcfgd handles the FRR configurations based on the predefined templates.";
+                     default "false";
+                 }
++
++                leaf bfd_data_plane_mode {
++                    type stypes:admin_mode;
++                    description "Enable BFD data plane mode to start bfdd with --dplaneaddr parameter for hardware-accelerated BFD.";
++                    default "disabled";
++                }
+             }
+             /* end of container localhost */
+         }
+-- 
+2.25.1
+

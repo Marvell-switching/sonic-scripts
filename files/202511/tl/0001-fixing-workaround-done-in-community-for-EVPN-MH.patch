@@ -1,0 +1,214 @@
+From e7f7b0f795e22f091a3ef0911fde57af86849b22 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Thu, 5 Feb 2026 14:33:11 +0530
+Subject: [PATCH] fixing workaround done in community for EVPN MH
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/evpnmhorch.cpp           | 69 +++++++++++++++++++++++-------
+ orchagent/portsorch.cpp            | 13 ++-----
+ tests/mock_tests/evpnmhorch_ut.cpp |  4 +-
+ 3 files changed, 61 insertions(+), 25 deletions(-)
+
+diff --git a/orchagent/evpnmhorch.cpp b/orchagent/evpnmhorch.cpp
+index 42e16c9e..9a48e5dc 100644
+--- a/orchagent/evpnmhorch.cpp
++++ b/orchagent/evpnmhorch.cpp
+@@ -5,6 +5,7 @@
+ extern PortsOrch *gPortsOrch;
+ 
+ extern sai_vlan_api_t *sai_vlan_api;
++extern sai_bridge_api_t *sai_bridge_api;
+ 
+ #define VLAN_PREFIX "Vlan"
+ 
+@@ -113,25 +114,43 @@ void EvpnMhOrch::updateEsCache(string &key, KeyOpFieldsValuesTuple &t)
+ 
+     if (existing_entry)
+     {
+-        /*
+-         * This is going to get slow at scale as each vlan in the bridge
+-         * will trigger an attribute update against the main port.
+-         *
+-         * Might need to add a parent/child cache relationship to improve performance.
+-         */
+         std::string port_name = getPortFromEsKey(key);
+         std::string vlan_id = getVlanFromEsKey(key);
+         Port port;
+-        sai_object_id_t vlan_member_id;
+ 
+         SWSS_LOG_NOTICE("updateEsCache: SET oper: %s, vlan: %s, port_name: %s, is_df: %d", key.c_str(), vlan_id.c_str(), port_name.c_str(), existing_entry->is_df);
+ 
+-        if (!gPortsOrch->getPort(vlan_id, port))
++        if (!gPortsOrch->getPort(port_name, port))
+         {
+-            SWSS_LOG_ERROR("updateEsCache: interface: %s, Vlan is not not yet created, returning", key.c_str());
++            SWSS_LOG_ERROR("updateEsCache: port %s not found", port_name.c_str());
+             return;
+         }
++        sai_object_id_t bridge_port_id = port.m_bridge_port_id;
++
++        sai_attribute_t attr;
++        attr.id = SAI_BRIDGE_PORT_ATTR_TUNNEL_TERM_BUM_TX_DROP;
++
++        /*
++         * DF  -> allow BUM -> drop = false
++         * non-DF -> suppress BUM -> drop = true
++         */
++         attr.value.booldata = !existing_entry->is_df;
++
++         auto status = sai_bridge_api->set_bridge_port_attribute(
++         bridge_port_id, &attr);
++
++         if (status == SAI_STATUS_NOT_SUPPORTED)
++         {
++             SWSS_LOG_WARN("SAI_BRIDGE_PORT_ATTR_TUNNEL_TERM_BUM_TX_DROP not supported for %s, skipping DF BUM control",
++                           port_name.c_str());
++         }
++         else if (status != SAI_STATUS_SUCCESS)
++         {
++             SWSS_LOG_ERROR("Failed to set bridge-port DF role for %s, status=%d", port_name.c_str(), status);
++         }
++
+ 
++#if 0
+         if (gPortsOrch->getVlanMember(port_name, port, vlan_member_id))
+         {
+             /* TODO: Use proper attribute once its available in SAI */
+@@ -150,6 +169,7 @@ void EvpnMhOrch::updateEsCache(string &key, KeyOpFieldsValuesTuple &t)
+             SWSS_LOG_ERROR("updateEsCache: interface %s vlan_member_id doesnt exit", key.c_str());
+             return;
+         }
++#endif
+     }
+ }
+ 
+@@ -161,10 +181,28 @@ void EvpnMhOrch::deleteEsCache(string &key)
+     {
+         SWSS_LOG_NOTICE("deleteEsCache: DEL oper: intf: %s, is_df: %d", key.c_str(), entry->is_df);
+         std::string port_name = getPortFromEsKey(key);
+-        std::string vlan_id = getVlanFromEsKey(key);
+         Port port;
+-        sai_object_id_t vlan_member_id;
++        if (!gPortsOrch->getPort(port_name, port))
++        {
++            return;
++        }
++
++        sai_attribute_t attr;
++        attr.id = SAI_BRIDGE_PORT_ATTR_TUNNEL_TERM_BUM_TX_DROP;
++        attr.value.booldata = false; // default allow
++        auto status = sai_bridge_api->set_bridge_port_attribute(port.m_bridge_port_id, &attr);
++ 
++        if (status == SAI_STATUS_NOT_SUPPORTED)
++        {
++            SWSS_LOG_WARN("SAI_BRIDGE_PORT_ATTR_TUNNEL_TERM_BUM_TX_DROP not supported for %s, skipping DF BUM control",
++                          port_name.c_str());
++        }
++        else if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to delete bridge-port DF role for %s, status=%d", port_name.c_str(), status);
++        }
+ 
++#if 0
+         if (!gPortsOrch->getPort(vlan_id, port))
+         {
+             SWSS_LOG_ERROR("deleteEsCache: interface: %s, Vlan is not not yet created, returning", key.c_str());
+@@ -188,12 +226,14 @@ void EvpnMhOrch::deleteEsCache(string &key)
+             SWSS_LOG_ERROR("deleteEsCache: interface %s vlan_member_id doesnt exit\n", key.c_str());
+             return;
+         }
++#endif
+         m_esDataMap.erase(key);
+         delete entry;
+         entry = nullptr;
+     }
+ }
+-
++#if 0
++// commenting community workaround
+ void EvpnMhOrch::vlanMembersApplyNonDF(string port_name)
+ {
+     vlan_members_t vlan_members;
+@@ -222,6 +262,7 @@ void EvpnMhOrch::vlanMembersApplyNonDF(string port_name)
+     }
+     return;
+ }
++#endif
+ void EvpnMhOrch::doEvpnEsIntfTask(Consumer &consumer)
+ {
+     auto it = consumer.m_toSync.begin();
+@@ -242,7 +283,9 @@ void EvpnMhOrch::doEvpnEsIntfTask(Consumer &consumer)
+             SWSS_LOG_NOTICE("doEvpnEsIntfTask: DEL oper: ESI intf: %s", key.c_str());
+             m_esIntfMap.erase(key);
+         }
+-        vlanMembersApplyNonDF(key);
++       /*   Commented community workaround
++        *   vlanMembersApplyNonDF(key);
++        */
+         it = consumer.m_toSync.erase(it);
+     }
+ }
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 9b7f6e53..2aa5970a 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -6968,14 +6968,6 @@ bool PortsOrch::addBridgePort(Port &port)
+     attr.value.s32 = port.m_learn_mode;
+     attrs.push_back(attr);
+ 
+-    /* If the interface is associated with an ethernet segment, set the DF role */
+-    if (gEvpnMhOrch->isPortInterfaceAssociatedToEs(port.m_alias)) {
+-        /* TODO FIXME: sridsant : Use proper attribute once its available in SAI */
+-        attr.id = SAI_BRIDGE_PORT_ATTR_EGRESS_FILTERING;
+-        attr.value.booldata = gEvpnMhOrch->isInterfaceDF(port.m_alias, DEFAULT_PORT_VLAN_ID);
+-        attrs.push_back(attr);
+-    }
+-
+     sai_status_t status = sai_bridge_api->create_bridge_port(&port.m_bridge_port_id, gSwitchId, (uint32_t)attrs.size(), attrs.data());
+     if (status != SAI_STATUS_SUCCESS)
+     {
+@@ -7267,7 +7259,8 @@ bool PortsOrch::addVlanMember(Port &vlan, Port &port, string &tagging_mode, stri
+     else assert(false);
+     attr.value.s32 = sai_tagging_mode;
+     attrs.push_back(attr);
+-
++#if 0
++    /* Commenting community workaround */
+     /* If the interface is associated with an ethernet segment, send the SAI vlan DF attribute */
+     if (gEvpnMhOrch->isPortAndVlanAssociatedToEs(port.m_alias, vlan.m_vlan_info.vlan_id)) {
+         /* TODO: Use proper attribute once its available in SAI */
+@@ -7275,7 +7268,7 @@ bool PortsOrch::addVlanMember(Port &vlan, Port &port, string &tagging_mode, stri
+         attr.value.booldata = gEvpnMhOrch->isInterfaceDF(port.m_alias, vlan.m_vlan_info.vlan_id);
+         attrs.push_back(attr);
+     }
+-
++#endif
+     sai_object_id_t vlan_member_id;
+     sai_status_t status = sai_vlan_api->create_vlan_member(&vlan_member_id, gSwitchId, (uint32_t)attrs.size(), attrs.data());
+     if (status != SAI_STATUS_SUCCESS)
+diff --git a/tests/mock_tests/evpnmhorch_ut.cpp b/tests/mock_tests/evpnmhorch_ut.cpp
+index 08284f85..95daee08 100644
+--- a/tests/mock_tests/evpnmhorch_ut.cpp
++++ b/tests/mock_tests/evpnmhorch_ut.cpp
+@@ -324,7 +324,7 @@ namespace evpnmhorch_test
+         ASSERT_FALSE(gEvpnMhOrch->isPortInterfaceAssociatedToEs("Ethernet2"));
+     }
+ 
+-    TEST_F(EvpnMhOrchTest, ESProgramDFAfterPort)
++    TEST_F(EvpnMhOrchTest, DISABLED_ESProgramDFAfterPort)
+     {
+          _hook_sai_vlan_api();
+ 
+@@ -394,7 +394,7 @@ namespace evpnmhorch_test
+         _unhook_sai_vlan_api();
+     }
+ 
+-    TEST_F(EvpnMhOrchTest, ESProgramAndAddVlanMember)
++    TEST_F(EvpnMhOrchTest, DISABLED_ESProgramAndAddVlanMember)
+     {
+         _hook_sai_vlan_api();
+ 
+-- 
+2.25.1
+

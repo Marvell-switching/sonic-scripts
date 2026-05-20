@@ -1,0 +1,119 @@
+From bd19762553e8caaec1424714dab897c9dc500dd4 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Thu, 11 Dec 2025 21:42:07 +0530
+Subject: [PATCH] Add sysctls required for OSPF
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+net.ipv4.igmp_max_memberships default is 20. Increased it to 10k
+Each OSPF interface needs 2 multicast membership. For 4K vlans
+increased 4k x 2 = 8192 + headroom = 10240
+
+net.core.optmem_max default is 20K. Increased it to 512KB
+net.core.optmem_max controls the maximum size of ancillary buffer
+space allowed per socket.
+Ancillary buffer is metadata attached to socket messages,
+separate from the actual message payload.
+
+Default 20K allows only 426 memberships (20,480 ÷ 48 = 426),
+to handle 8k memberships atleast 384KB size is required, rounded
+it to 512KB.
+
+These settings doesn't impact any extra default kernel memory
+consumption unless interfaces/sockets use the memory
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ files/build_templates/sonic_debian_extension.j2 |  6 ++++++
+ files/image_config/bgp/bgp-config.service       | 15 +++++++++++++++
+ files/image_config/bgp/frr-sysctl.conf.j2       |  8 ++++++++
+ files/image_config/config-setup/config-setup    | 13 +++++++++++++
+ 4 files changed, 42 insertions(+)
+ create mode 100644 files/image_config/bgp/bgp-config.service
+ create mode 100644 files/image_config/bgp/frr-sysctl.conf.j2
+
+diff --git a/files/build_templates/sonic_debian_extension.j2 b/files/build_templates/sonic_debian_extension.j2
+index 817d5c925..e3a5e6eb8 100644
+--- a/files/build_templates/sonic_debian_extension.j2
++++ b/files/build_templates/sonic_debian_extension.j2
+@@ -646,6 +646,12 @@ sudo cp $IMAGE_CONFIGS/config-setup/config-setup.conf $FILESYSTEM_ROOT/etc/confi
+ echo "config-setup.service" | sudo tee -a $GENERATED_SERVICE_FILE
+ sudo LANG=C chroot $FILESYSTEM_ROOT systemctl enable config-setup.service
+ 
++
++sudo cp $IMAGE_CONFIGS/bgp/frr-sysctl.conf.j2 $FILESYSTEM_ROOT/usr/share/sonic/templates/frr-sysctl.conf.j2
++sudo cp $IMAGE_CONFIGS/bgp/bgp-config.service $FILESYSTEM_ROOT_USR_LIB_SYSTEMD_SYSTEM/
++echo "bgp-config.service" | sudo tee -a $GENERATED_SERVICE_FILE
++sudo LANG=C chroot $FILESYSTEM_ROOT systemctl enable bgp-config.service
++
+ # Copy reset-factory script and service
+ sudo cp $IMAGE_CONFIGS/reset-factory/reset-factory $FILESYSTEM_ROOT/usr/bin/reset-factory
+ 
+diff --git a/files/image_config/bgp/bgp-config.service b/files/image_config/bgp/bgp-config.service
+new file mode 100644
+index 000000000..b21256ec6
+--- /dev/null
++++ b/files/image_config/bgp/bgp-config.service
+@@ -0,0 +1,15 @@
++[Unit]
++Description=Install BGP settings
++Requires=sonic.target
++After=sonic.target
++Before=bgp.service
++StartLimitIntervalSec=0
++
++[Service]
++Environment="NUM_DPU=0"
++Environment="IS_DPU_DEVICE=false"
++Type=oneshot
++ExecStart=/usr/bin/config-setup apply_bgp
++
++[Install]
++WantedBy=sonic.target
+diff --git a/files/image_config/bgp/frr-sysctl.conf.j2 b/files/image_config/bgp/frr-sysctl.conf.j2
+new file mode 100644
+index 000000000..c8478794c
+--- /dev/null
++++ b/files/image_config/bgp/frr-sysctl.conf.j2
+@@ -0,0 +1,8 @@
++###############################################################################
++# This file was AUTOMATICALLY GENERATED. DO NOT MODIFY.
++# Controlled by bgp-config.service
++###############################################################################
++{% if DEVICE_METADATA is defined and DEVICE_METADATA.get('localhost', {}).get('frr_mgmt_framework_config') == 'true' %}
++net.ipv4.igmp_max_memberships = 10240
++net.core.optmem_max = 524288
++{% endif %}
+diff --git a/files/image_config/config-setup/config-setup b/files/image_config/config-setup/config-setup
+index 7053cab08..6b1914193 100755
+--- a/files/image_config/config-setup/config-setup
++++ b/files/image_config/config-setup/config-setup
+@@ -147,6 +147,15 @@ apply_tacacs()
+     fi
+ }
+ 
++# Apply bgp config
++apply_bgp()
++{
++    if [ -f /usr/share/sonic/templates/frr-sysctl.conf.j2 ]; then
++        sonic-cfggen -d -t /usr/share/sonic/templates/frr-sysctl.conf.j2 > /etc/sysctl.d/99-frr-sysctl.conf
++        sysctl -p /etc/sysctl.d/99-frr-sysctl.conf
++    fi
++}
++
+ # Reload existing config db file on disk
+ # Usage: reload_configdb <config_file>
+ reload_configdb()
+@@ -494,4 +503,8 @@ if [ "$CMD" = "apply_tacacs" ]; then
+     apply_tacacs
+ fi
+ 
++if [ "$CMD" = "apply_bgp" ]; then
++    apply_bgp
++fi
++
+ exit 0
+-- 
+2.25.1
+

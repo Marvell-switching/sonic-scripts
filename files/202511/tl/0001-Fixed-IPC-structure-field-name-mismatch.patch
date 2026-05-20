@@ -1,0 +1,60 @@
+From eae103929821bb51fc5da241fcb2a423a4ba862c Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Tue, 3 Feb 2026 10:47:14 +0530
+Subject: [PATCH] Fixed IPC structure field name mismatch
+
+Changed field name from edge_port to edge in STP_PORT_CONFIG_MSG structure to match the receiver-side definition in stp_ipc.h
+
+Fixed IPC field access to match structure definition
+Updated edge port configuration to use msg->edge instead of msg->edge_port to align with the corrected structure definition
+
+Removed duplicate code artifacts
+Removed duplicate SWSS_LOG_INFO statement for VLAN count logging
+Removed duplicate if condition check for VLAN count validation
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ cfgmgr/stpmgr.cpp | 5 +----
+ cfgmgr/stpmgr.h   | 2 +-
+ 2 files changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/cfgmgr/stpmgr.cpp b/cfgmgr/stpmgr.cpp
+index f0cb6316..890574b9 100644
+--- a/cfgmgr/stpmgr.cpp
++++ b/cfgmgr/stpmgr.cpp
+@@ -541,10 +541,7 @@ void StpMgr::processStpPortAttr(const string op,
+     strncpy(msg->intf_name, intfName.c_str(), IFNAMSIZ - 1);
+     msg->count = vlanCnt;
+     SWSS_LOG_INFO("VLAN count for %s is %d", intfName.c_str(), vlanCnt);
+-    SWSS_LOG_INFO("VLAN count for %s is %d", intfName.c_str(), vlanCnt);
+ 
+-    // If there are VLANs, copy them into the message structure.
+-    if (msg->count > 0)
+     // If there are VLANs, copy them into the message structure.
+     if (msg->count > 0)
+     {
+@@ -606,7 +603,7 @@ void StpMgr::processStpPortAttr(const string op,
+             }
+             else if (field == "edge_port" && l2ProtoEnabled ==L2_MSTP)
+             {
+-                msg->edge_port = (value == "true") ? 1 : 0;
++                msg->edge = (value == "true") ? 1 : 0;
+             }
+             else if (field== "link_type" && l2ProtoEnabled == L2_MSTP)
+             {
+diff --git a/cfgmgr/stpmgr.h b/cfgmgr/stpmgr.h
+index 263bac46..1f908ce4 100644
+--- a/cfgmgr/stpmgr.h
++++ b/cfgmgr/stpmgr.h
+@@ -178,7 +178,7 @@ typedef struct STP_PORT_CONFIG_MSG {
+     uint8_t     bpdu_guard_do_disable;
+     uint8_t     portfast;           // PVST only
+     uint8_t     uplink_fast;        // PVST only
+-    uint8_t     edge_port;          // MSTP only
++    uint8_t     edge;               // MSTP only (renamed from edge_port to match stp_ipc.h)
+     LinkType    link_type;          // MSTP only
+     int         path_cost;
+     int         priority;
+-- 
+2.25.1
+

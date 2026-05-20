@@ -1,0 +1,20 @@
+From cac274d1f1b9fbeecffe4ddef6f987ef064cc5c3 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 10 Feb 2026 11:34:37 +0530
+Subject: [PATCH] Update sonic-platform-marvell-teralynx submodule
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-teralynx/sonic-platform-marvell-teralynx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-marvell-teralynx b/platform/marvell-teralynx/sonic-platform-marvell-teralynx
+index b5638dfe5..1cd0b6f30 160000
+--- a/platform/marvell-teralynx/sonic-platform-marvell-teralynx
++++ b/platform/marvell-teralynx/sonic-platform-marvell-teralynx
+@@ -1 +1 @@
+-Subproject commit b5638dfe5587cb2a5c37f78cf99d89a2a081be23
++Subproject commit 1cd0b6f30a7289d50bd19b1440974aff9afb529b
+-- 
+2.25.1
+

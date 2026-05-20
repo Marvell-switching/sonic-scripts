@@ -1,0 +1,234 @@
+From dd8bba86150337c19d0aaa5eca385fcbb32ab6a1 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@bglp-swdev081.marvell.com>
+Date: Thu, 30 Oct 2025 12:23:00 +0530
+Subject: [PATCH] [SONICDC-635]: show vlan brief optimized for single pass of
+ input data
+
+---
+ show/vlan.py | 187 ++++++++++++++++++++++-----------------------------
+ 1 file changed, 79 insertions(+), 108 deletions(-)
+
+diff --git a/show/vlan.py b/show/vlan.py
+index 171f2adc..bf636688 100644
+--- a/show/vlan.py
++++ b/show/vlan.py
+@@ -11,109 +11,20 @@ def vlan():
+     pass
+ 
+ 
+-def get_vlan_id(ctx, vlan):
+-    vlan_prefix, vid = vlan.split('Vlan')
+-    return vid
+-
+-
+-def get_vlan_ip_address(ctx, vlan):
+-    cfg, _ = ctx
+-    _, vlan_ip_data, _ = cfg
+-    ip_address = ""
+-    for key in vlan_ip_data:
+-        if not clicommon.is_ip_prefix_in_key(key):
+-            continue
+-        ifname, address = key
+-        if vlan == ifname:
+-            ip_address += "\n{}".format(address)
+-
+-    return ip_address
+-
+-
+-def get_vlan_ports(ctx, vlan):
+-    cfg, db = ctx
+-    _, _, vlan_ports_data = cfg
+-    vlan_ports = []
+-    iface_alias_converter = clicommon.InterfaceAliasConverter(db)
+-    # Here natsorting is important in relation to another
+-    # column which prints port tagging mode.
+-    # If we sort both in the same way using same keys
+-    # we will result in right order in both columns.
+-    # This should be fixed by cli code autogeneration tool
+-    # and we won't need this specific approach with
+-    # VlanBrief.COLUMNS anymore.
+-    for key in natsorted(list(vlan_ports_data.keys())):
+-        ports_key, ports_value = key
+-        if vlan != ports_key:
+-            continue
+-
+-        if clicommon.get_interface_naming_mode() == "alias":
+-            ports_value = iface_alias_converter.name_to_alias(ports_value)
+-
+-        vlan_ports.append(ports_value)
+-
+-    return '\n'.join(vlan_ports)
+-
+-
+-def get_vlan_ports_tagging(ctx, vlan):
+-    cfg, db = ctx
+-    _, _, vlan_ports_data = cfg
+-    vlan_ports_tagging = []
+-    # Here natsorting is important in relation to another
+-    # column which prints vlan ports.
+-    # If we sort both in the same way using same keys
+-    # we will result in right order in both columns.
+-    # This should be fixed by cli code autogeneration tool
+-    # and we won't need this specific approach with
+-    # VlanBrief.COLUMNS anymore.
+-    for key in natsorted(list(vlan_ports_data.keys())):
+-        ports_key, ports_value = key
+-        if vlan != ports_key:
+-            continue
+-
+-        tagging_value = vlan_ports_data[key]["tagging_mode"]
+-        vlan_ports_tagging.append(tagging_value)
+-
+-    return '\n'.join(vlan_ports_tagging)
+-
+-
+-def get_proxy_arp(ctx, vlan):
+-    cfg, _ = ctx
+-    _, vlan_ip_data, _ = cfg
+-    proxy_arp = "disabled"
+-    for key in vlan_ip_data:
+-        if clicommon.is_ip_prefix_in_key(key):
+-            continue
+-        if vlan == key:
+-            proxy_arp = vlan_ip_data[key].get("proxy_arp", "disabled")
+-
+-    return proxy_arp
+-
+-def get_static_anycast_gateway(ctx, vlan):
+-    cfg, _ = ctx
+-    _, vlan_ip_data, _ = cfg
+-
+-    if vlan in vlan_ip_data:
+-        if vlan_ip_data[vlan].get("static_anycast_gateway") == "true":
+-            return "enabled"
+-
+-    return "disabled"
+-
+-class VlanBrief:
+-    """ This class is used as a namespace to
+-    define columns for "show vlan brief" command.
+-    The usage of this class is for external plugin
+-    (in this case dhcp-relay) to append new columns
+-    to this list.
+-    """
+-
++class VlanBrRow:
++    '''
++    COLUMNS constitude of its title and a plugin function call
++    In case of vlan module attributes the function call can be None
++    For external modules, it registers with a function call. To this function
++    call the dict is passed in to fillup the column that plugin handles.
++    '''
+     COLUMNS = [
+-        ("VLAN ID", get_vlan_id),
+-        ("IP Address", get_vlan_ip_address),
+-        ("Ports", get_vlan_ports),
+-        ("Port Tagging", get_vlan_ports_tagging),
+-        ("Proxy ARP", get_proxy_arp),
+-        ("Static Anycast Gateway", get_static_anycast_gateway)
++        ("VLAN ID", None),
++        ("IP Address", None),
++        ("Ports", None),
++        ("Port Tagging", None),
++        ("Proxy ARP", None),
++        ("Static Anycast Gateway", None)
+     ]
+ 
+     @classmethod
+@@ -124,13 +35,36 @@ class VlanBrief:
+ 
+         cls.COLUMNS.append((column_name, callback))
+ 
++    def __init__ (self, vlanid):
++       self.params = dict()
++       self.params["VLAN ID"] = vlanid
++       self.params["IP Address"] = ""
++       self.params["Ports"] = ""
++       self.params["Port Tagging"] = ""
++       self.params["Proxy ARP"] = "disabled"
++       self.params["Static Anycast Gateway"] = "disabled"
++
++    def appendparam (self, key, value):
++       if self.params[key] != "":
++          self.params[key] += "\n"
++       self.params[key] += value
++
++    def setparam (self, key, value):
++       self.params[key] = value
++
++    def vinfo(self):
++       row=[]
++       for key in self.COLUMNS:
++           row.append(self.params[key[0]])
++
++       return row
+ 
+ @vlan.command()
+ @click.option('--verbose', is_flag=True, help="Enable verbose output")
+ @clicommon.pass_db
+ def brief(db, verbose):
+     """Show all bridge information"""
+-    header = [colname for colname, getter in VlanBrief.COLUMNS]
++    header = [colname for colname, getter in VlanBrRow.COLUMNS]
+     body = []
+ 
+     # Fetching data from config db for VLAN, VLAN_INTERFACE and VLAN_MEMBER
+@@ -138,13 +72,50 @@ def brief(db, verbose):
+     vlan_ip_data = db.cfgdb.get_table('VLAN_INTERFACE')
+     vlan_ports_data = db.cfgdb.get_table('VLAN_MEMBER')
+     vlan_cfg = (vlan_data, vlan_ip_data, vlan_ports_data)
++    vlan_dict = dict()
+ 
+     for vlan in natsorted(vlan_data):
+-        row = []
+-        for column in VlanBrief.COLUMNS:
+-            column_name, getter = column
+-            row.append(getter((vlan_cfg, db), vlan))
+-        body.append(row)
++        vlan_prefix, vid = vlan.split('Vlan')
++        vlan_dict[vid] = VlanBrRow(vid)
++
++    for key in vlan_ip_data:
++        ip_address = ""
++        if not clicommon.is_ip_prefix_in_key(key):
++            vlan_prefix, vid = key.split('Vlan')
++            proxy_arp = vlan_ip_data[key].get("proxy_arp", "disabled")
++            static_ag = vlan_ip_data[key].get("static_anycast_gateway", "disabled")
++            if static_ag == "true":
++                static_ag = "enabled"
++            elif static_ag == "false":
++                static_ag = "disabled"
++            if vid in vlan_dict:
++               vlan_dict[vid].setparam("Proxy ARP", proxy_arp)
++               vlan_dict[vid].setparam("Static Anycast Gateway", static_ag)
++        else:
++            ifname, address = key
++            vlan_prefix, vid = ifname.split('Vlan')
++            if vid in vlan_dict:
++                vlan_dict[vid].appendparam("IP Address", address)
++
++    iface_alias_converter = clicommon.InterfaceAliasConverter(db)
++    for key in natsorted(list(vlan_ports_data.keys())):
++        ports_key, ports_value = key
++        vlan_prefix, vid = ports_key.split('Vlan')
++
++        if clicommon.get_interface_naming_mode() == "alias":
++            ports_value = iface_alias_converter.name_to_alias(ports_value)
++        tagging_value = vlan_ports_data[key]["tagging_mode"]
++        if vid in vlan_dict:
++            vlan_dict[vid].appendparam("Ports", ports_value)
++            vlan_dict[vid].appendparam("Port Tagging", tagging_value)
++
++    for row in VlanBrRow.COLUMNS:
++        if row[1] != None :
++           row[1]((vlan_cfg, db), vlan_dict)
++
++    body = []
++    for vid, row in vlan_dict.items():
++        body.append(row.vinfo())
+ 
+     click.echo(tabulate(body, header, tablefmt="grid"))
+ 
+-- 
+2.25.1
+

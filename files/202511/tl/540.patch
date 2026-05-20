@@ -1,0 +1,1720 @@
+From 729e1d1252929eea93df257dba948557d1d5975e Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Tue, 31 Mar 2026 22:25:00 +0530
+Subject: [PATCH] EVPN MH kernel patch
+
+Why I did it
+=============
+This PR adds three critical Linux kernel patches required to enable
+EVPN VXLAN Multihoming in SONiC. These kernel enhancements provide
+the necessary infrastructure for:
+
+- Extended neighbor flags for multi-homing peer synchronization
+- Protocol field tracking in bridge FDB entries to distinguish
+  control plane vs data plane learned MACs
+- External validation flag to prevent kernel from invalidating
+  externally managed neighbor entries
+
+These patches are essential for implementing the EVPN-MH feature
+as described in the EVPN VXLAN Multihoming HLD.
+
+How I did it
+=============
+Added three kernel patches to patches-sonic directory:
+
+1. NDA_FLAGS_EXT Support with NTF_EXT_MH_PEER_SYNC
+   (0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch)
+
+   Adds extended flags support for VXLAN and bridge FDB entries to
+   enable multi-homing peer synchronization:
+   - New field: ext_flags in vxlan_fdb structure
+   - New flag: NTF_EXT_MH_PEER_SYNC - Indicates FDB entry is
+     synchronized across EVPN-MH peers
+   - New neighbor update flag: NEIGH_UPDATE_F_EXT_MH_PEER_SYNC
+   - Modified functions: vxlan_fdb_alloc(), vxlan_fdb_create(),
+     vxlan_fdb_update_existing(), vxlan_fdb_update_create(),
+     vxlan_fdb_info(), and bridge FDB functions
+   - Files: drivers/net/vxlan/vxlan_core.c, vxlan_private.h,
+     vxlan_vnifilter.c, include/net/neighbour.h,
+     include/uapi/linux/neighbour.h, net/bridge/br.c, br_fdb.c,
+     br_private.h, net/core/neighbour.c
+
+2. Protocol Field in Bridge FDB
+   (0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch)
+
+   Introduces an optional "protocol" field for bridge FDB entries to
+   distinguish between control plane and data plane learned MACs:
+   - Control plane (ZEBRA protocol): Static MACs distributed by FRR/BGP
+   - Data plane (HW protocol): Dynamic MACs learned from traffic
+   - Enables proper state machine management during MAC transitions,
+     traffic hashing between EVPN-MH peers, MAC mobility handling,
+     and control/data plane synchronization
+   - New field: protocol in net_bridge_fdb_entry and vxlan_fdb
+   - Default: RTPROT_UNSPEC when not specified (backward compatible)
+   - Files: drivers/net/vxlan/vxlan_core.c, vxlan_private.h,
+     vxlan_vnifilter.c, net/bridge/br.c, br_fdb.c, br_private.h
+
+3. NTF_EXT_VALIDATED Flag for External Validation
+   (0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch)
+
+   Adds "extern_valid" neighbor flag for entries learned and validated
+   externally that should not be invalidated by the kernel:
+   - In EVPN-MH, neighbor entries are distributed to ES peers using
+     EVPN MAC/IP advertisement routes
+   - Based on draft-rbickhart-evpn-ip-mac-proxy-adv-03
+   - ES peers install neighbor entries and inject proxy advertisements
+   - When ES link goes down, peers start aging timers instead of
+     immediately withdrawing (prevents intermittent routing failures)
+   - Kernel will NOT remove or invalidate extern_valid entries
+   - Control plane (FRR) manages entry lifecycle
+   - Files: neighbor subsystem, netlink attributes, state machine
+
+How to verify it
+=================
+Build kernel with these patches applied:
+  cd sonic-linux-kernel
+  make BLDENV=bookworm
+
+Verify NDA_FLAGS_EXT support:
+  bridge fdb add <mac> dev <vxlan-dev> dst <vtep-ip> vni <vni> extern_learn
+  bridge -d fdb show | grep <mac>
+
+Verify protocol field support:
+  bridge fdb add <mac> dev <device> vlan <vid> master dynamic extern_learn proto hw
+  bridge -d fdb show dev <device> | grep <mac>
+  # Expected output includes: proto hw
+  bridge fdb replace <mac> dev <device> vlan <vid> master dynamic extern_learn proto zebra
+  # Expected output includes: proto zebra
+
+Verify extern_valid flag:
+  # Neighbor entries with extern_valid remain in "stale" state
+  ip -d neigh show
+
+Integration testing with EVPN-MH:
+  - Configure EVPN multi-homing with ES peers
+  - Verify MAC/neighbor synchronization across peers
+  - Test ES link failure scenarios
+  - Verify proxy advertisements and aging behavior
+  - Confirm no intermittent routing/ARP failures during transitions
+  - Verify existing bridge/VXLAN functionality (backward compatible)
+
+Description for the changelog
+==============================
+Add kernel patches for EVPN VXLAN Multihoming: extended FDB flags
+(NTF_EXT_MH_PEER_SYNC), protocol field for bridge FDB entries, and
+extern_valid flag for externally validated neighbor entries.
+
+Depends on
+===========
+- iproute2 patches for protocol field support
+- sonic-swss-common PR: Add L2 nexthop group table and raw netlink
+  message handling support
+- sonic-swss PR: EVPN-MH infrastructure and orchestration agents
+- sonic-utilities PR: EVPN-MH CLI commands
+
+Related upstream work
+======================
+- EVPN MAC/IP proxy advertisement: draft-rbickhart-evpn-ip-mac-proxy-adv-03
+- Kernel patch for protocol field: Authored by Mrinmoy Ghosh (mrghosh@cisco.com)
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ ..._EXT_VALIDATED-flag-for-externally-v.patch | 385 +++++++++++
+ ...e-vxlan-Protocol-field-in-bridge-fdb.patch | 536 +++++++++++++++
+ ...-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch | 632 ++++++++++++++++++
+ patches-sonic/series                          |   5 +
+ 4 files changed, 1558 insertions(+)
+ create mode 100644 patches-sonic/0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch
+ create mode 100644 patches-sonic/0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch
+ create mode 100644 patches-sonic/0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch
+
+diff --git a/patches-sonic/0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch b/patches-sonic/0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch
+new file mode 100644
+index 0000000..557de01
+--- /dev/null
++++ b/patches-sonic/0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch
+@@ -0,0 +1,385 @@
++From fe8cb206bf32a211cdf0675a1a7d3bf484ab660e Mon Sep 17 00:00:00 2001
++From: "Barry Friedman (friedman)" <friedman@cisco.com>
++Date: Fri, 13 Feb 2026 19:51:25 -0800
++Subject: [PATCH] neighbor: Add NTF_EXT_VALIDATED flag for externally validated
++ entries
++
++tl;dr
++=====
++
++Add a new neighbor flag ("extern_valid") that can be used to indicate to
++the kernel that a neighbor entry was learned and determined to be valid
++externally. The kernel will not try to remove or invalidate such an
++entry, leaving these decisions to the user space control plane. This is
++needed for EVPN multi-homing where a neighbor entry for a multi-homed
++host needs to be synced across all the VTEPs among which the host is
++multi-homed.
++
++Background
++==========
++
++In a typical EVPN multi-homing setup each host is multi-homed using a
++set of links called ES (Ethernet Segment, i.e., LAG) to multiple leaf
++switches (VTEPs). VTEPs that are connected to the same ES are called ES
++peers.
++
++When a neighbor entry is learned on a VTEP, it is distributed to both ES
++peers and remote VTEPs using EVPN MAC/IP advertisement routes. ES peers
++use the neighbor entry when routing traffic towards the multi-homed host
++and remote VTEPs use it for ARP/NS suppression.
++
++Motivation
++==========
++
++If the ES link between a host and the VTEP on which the neighbor entry
++was locally learned goes down, the EVPN MAC/IP advertisement route will
++be withdrawn and the neighbor entries will be removed from both ES peers
++and remote VTEPs. Routing towards the multi-homed host and ARP/NS
++suppression can fail until another ES peer locally learns the neighbor
++entry and distributes it via an EVPN MAC/IP advertisement route.
++
++"draft-rbickhart-evpn-ip-mac-proxy-adv-03" [1] suggests avoiding these
++intermittent failures by having the ES peers install the neighbor
++entries as before, but also injecting EVPN MAC/IP advertisement routes
++with a proxy indication. When the previously mentioned ES link goes down
++and the original EVPN MAC/IP advertisement route is withdrawn, the ES
++peers will not withdraw their neighbor entries, but instead start aging
++timers for the proxy indication.
++
++If an ES peer locally learns the neighbor entry (i.e., it becomes
++"reachable"), it will restart its aging timer for the entry and emit an
++EVPN MAC/IP advertisement route without a proxy indication. An ES peer
++will stop its aging timer for the proxy indication if it observes the
++removal of the proxy indication from at least one of the ES peers
++advertising the entry.
++
++In the event that the aging timer for the proxy indication expired, an
++ES peer will withdraw its EVPN MAC/IP advertisement route. If the timer
++expired on all ES peers and they all withdrew their proxy
++advertisements, the neighbor entry will be completely removed from the
++EVPN fabric.
++
++Implementation
++==============
++
++In the above scheme, when the control plane (e.g., FRR) advertises a
++neighbor entry with a proxy indication, it expects the corresponding
++entry in the data plane (i.e., the kernel) to remain valid and not be
++removed due to garbage collection or loss of carrier. The control plane
++also expects the kernel to notify it if the entry was learned locally
++(i.e., became "reachable") so that it will remove the proxy indication
++from the EVPN MAC/IP advertisement route. That is why these entries
++cannot be programmed with dummy states such as "permanent" or "noarp".
++
++Instead, add a new neighbor flag ("extern_valid") which indicates that
++the entry was learned and determined to be valid externally and should
++not be removed or invalidated by the kernel. The kernel can probe the
++entry and notify user space when it becomes "reachable" (it is initially
++installed as "stale"). However, if the kernel does not receive a
++confirmation, have it return the entry to the "stale" state instead of
++the "failed" state.
++
++In other words, an entry marked with the "extern_valid" flag behaves
++like any other dynamically learned entry other than the fact that the
++kernel cannot remove or invalidate it.
++
++One can argue that the "extern_valid" flag should not prevent garbage
++collection and that instead a neighbor entry should be programmed with
++both the "extern_valid" and "extern_learn" flags. There are two reasons
++for not doing that:
++
++1. Unclear why a control plane would like to program an entry that the
++   kernel cannot invalidate but can completely remove.
++
++2. The "extern_learn" flag is used by FRR for neighbor entries learned
++   on remote VTEPs (for ARP/NS suppression) whereas here we are
++   concerned with local entries. This distinction is currently irrelevant
++   for the kernel, but might be relevant in the future.
++
++Given that the flag only makes sense when the neighbor has a valid
++state, reject attempts to add a neighbor with an invalid state and with
++this flag set. For example:
++
++ # ip neigh add 192.0.2.1 nud none dev br0.10 extern_valid
++ Error: Cannot create externally validated neighbor with an invalid state.
++ # ip neigh add 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid
++ # ip neigh replace 192.0.2.1 nud failed dev br0.10 extern_valid
++ Error: Cannot mark neighbor as externally validated with an invalid state.
++
++The above means that a neighbor cannot be created with the
++"extern_valid" flag and flags such as "use" or "managed" as they result
++in a neighbor being created with an invalid state ("none") and
++immediately getting probed:
++
++ # ip neigh add 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid use
++ Error: Cannot create externally validated neighbor with an invalid state.
++
++However, these flags can be used together with "extern_valid" after the
++neighbor was created with a valid state:
++
++ # ip neigh add 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid
++ # ip neigh replace 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid use
++
++One consequence of preventing the kernel from invalidating a neighbor
++entry is that by default it will only try to determine reachability
++using unicast probes. This can be changed using the "mcast_resolicit"
++sysctl:
++
++ # sysctl net.ipv4.neigh.br0/10.mcast_resolicit
++ 0
++ # tcpdump -nn -e -i br0.10 -Q out arp &
++ # ip neigh replace 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid use
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ # sysctl -wq net.ipv4.neigh.br0/10.mcast_resolicit=3
++ # ip neigh replace 192.0.2.1 lladdr 00:11:22:33:44:55 nud stale dev br0.10 extern_valid use
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > 00:11:22:33:44:55, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++ 62:50:1d:11:93:6f > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 42: Request who-has 192.0.2.1 tell 192.0.2.2, length 28
++
++iproute2 patches can be found here [2].
++
++[1] https://datatracker.ietf.org/doc/html/draft-rbickhart-evpn-ip-mac-proxy-adv-03
++[2] https://github.com/idosch/iproute2/tree/submit/extern_valid_v1
++
++Signed-off-by: Ido Schimmel <idosch@nvidia.com>
++Acked-by: Daniel Borkmann <daniel@iogearbox.net>
++Link: https://patch.msgid.link/20250626073111.244534-2-idosch@nvidia.com
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ include/net/neighbour.h        |  5 +-
++ include/uapi/linux/neighbour.h |  5 ++
++ net/core/neighbour.c           | 84 +++++++++++++++++++++++++++++-----
++ 3 files changed, 82 insertions(+), 12 deletions(-)
++
++diff --git a/include/net/neighbour.h b/include/net/neighbour.h
++index 5c6f52831..54c1333a9 100644
++--- a/include/net/neighbour.h
+++++ b/include/net/neighbour.h
++@@ -267,14 +267,17 @@ static inline void *neighbour_priv(const struct neighbour *n)
++ #define NEIGH_UPDATE_F_ISROUTER			BIT(6)
++ #define NEIGH_UPDATE_F_ADMIN			BIT(7)
++ #define NEIGH_UPDATE_F_EXT_MH_PEER_SYNC BIT(8)
+++#define NEIGH_UPDATE_F_EXT_VALIDATED BIT(9)
++ 
++ /* In-kernel representation for NDA_FLAGS_EXT flags: */
++ #define NTF_OLD_MASK		0xff
++ #define NTF_EXT_SHIFT		8
++-#define NTF_EXT_MASK (NTF_EXT_MANAGED | NTF_EXT_MH_PEER_SYNC)
+++#define NTF_EXT_MASK \
+++	(NTF_EXT_MANAGED | NTF_EXT_MH_PEER_SYNC | NTF_EXT_EXT_VALIDATED)
++ 
++ #define NTF_MANAGED		(NTF_EXT_MANAGED << NTF_EXT_SHIFT)
++ #define NTF_MH_PEER_SYNC (NTF_EXT_MH_PEER_SYNC << NTF_EXT_SHIFT)
+++#define NTF_EXT_VALIDATED (NTF_EXT_EXT_VALIDATED << NTF_EXT_SHIFT)
++ 
++ extern const struct nla_policy nda_policy[];
++ 
++diff --git a/include/uapi/linux/neighbour.h b/include/uapi/linux/neighbour.h
++index dce82ed78..2c897c012 100644
++--- a/include/uapi/linux/neighbour.h
+++++ b/include/uapi/linux/neighbour.h
++@@ -55,6 +55,7 @@ enum {
++ #define NTF_EXT_MANAGED		(1 << 0)
++ #define NTF_EXT_LOCKED		(1 << 1)
++ #define NTF_EXT_MH_PEER_SYNC (1 << 2)
+++#define NTF_EXT_EXT_VALIDATED (1 << 3)
++ 
++ /*
++  *	Neighbor Cache Entry States.
++@@ -93,6 +94,10 @@ enum {
++  * bridge in response to a host trying to communicate via a locked bridge port
++  * with MAB enabled. Their purpose is to notify user space that a host requires
++  * authentication.
+++ *
+++ * NTF_EXT_EXT_VALIDATED flagged neighbor entries were externally validated by
+++ * a user space control plane. The kernel will not remove or invalidate them,
+++ * but it can probe them and notify user space when they become reachable.
++  */
++ 
++ struct nda_cacheinfo {
++diff --git a/net/core/neighbour.c b/net/core/neighbour.c
++index 019aec2ea..888a46faf 100644
++--- a/net/core/neighbour.c
+++++ b/net/core/neighbour.c
++@@ -135,11 +135,12 @@ static void neigh_update_gc_list(struct neighbour *n)
++ 	if (n->dead)
++ 		goto out;
++ 
++-	/* remove from the gc list if new state is permanent or if neighbor
++-	 * is externally learned; otherwise entry should be on the gc list
+++	/* remove from the gc list if new state is permanent or if neighbor is
+++	 * externally learned / validated; otherwise entry should be on the gc
+++	 * list
++ 	 */
++ 	exempt_from_gc = n->nud_state & NUD_PERMANENT ||
++-			 n->flags & NTF_EXT_LEARNED;
+++			 n->flags & (NTF_EXT_LEARNED | NTF_EXT_VALIDATED);
++ 	on_gc_list = !list_empty(&n->gc_list);
++ 
++ 	if (exempt_from_gc && on_gc_list) {
++@@ -189,6 +190,8 @@ static void neigh_update_flags(struct neighbour *neigh, u32 flags, int *notify,
++ 	ndm_flags |= (flags & NEIGH_UPDATE_F_EXT_MH_PEER_SYNC) ?
++ 			     NTF_MH_PEER_SYNC :
++ 			     0;
+++	ndm_flags |=
+++		(flags & NEIGH_UPDATE_F_EXT_VALIDATED) ? NTF_EXT_VALIDATED : 0;
++ 
++ 	if ((old_flags ^ ndm_flags) & NTF_EXT_LEARNED) {
++ 		if (ndm_flags & NTF_EXT_LEARNED)
++@@ -214,6 +217,14 @@ static void neigh_update_flags(struct neighbour *neigh, u32 flags, int *notify,
++ 			neigh->flags &= ~NTF_MH_PEER_SYNC;
++ 		*notify = 1;
++ 	}
+++	if ((old_flags ^ ndm_flags) & NTF_EXT_VALIDATED) {
+++		if (ndm_flags & NTF_EXT_VALIDATED)
+++			neigh->flags |= NTF_EXT_VALIDATED;
+++		else
+++			neigh->flags &= ~NTF_EXT_VALIDATED;
+++		*notify = 1;
+++		*gc_update = true;
+++	}
++ }
++ 
++ static bool neigh_del(struct neighbour *n, struct neighbour __rcu **np,
++@@ -407,7 +418,8 @@ static void neigh_flush_dev(struct neigh_table *tbl, struct net_device *dev,
++ 				np = &n->next;
++ 				continue;
++ 			}
++-			if (skip_perm && n->nud_state & NUD_PERMANENT) {
+++			if (skip_perm && (n->nud_state & NUD_PERMANENT ||
+++					  n->flags & NTF_EXT_VALIDATED)) {
++ 				np = &n->next;
++ 				continue;
++ 			}
++@@ -997,7 +1009,8 @@ static void neigh_periodic_work(struct work_struct *work)
++ 
++ 			state = n->nud_state;
++ 			if ((state & (NUD_PERMANENT | NUD_IN_TIMER)) ||
++-			    (n->flags & NTF_EXT_LEARNED)) {
+++			    (n->flags &
+++			     (NTF_EXT_LEARNED | NTF_EXT_VALIDATED))) {
++ 				write_unlock(&n->lock);
++ 				goto next_elt;
++ 			}
++@@ -1154,9 +1167,15 @@ static void neigh_timer_handler(struct timer_list *t)
++ 
++ 	if ((neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE)) &&
++ 	    atomic_read(&neigh->probes) >= neigh_max_probes(neigh)) {
++-		WRITE_ONCE(neigh->nud_state, NUD_FAILED);
+++		if (neigh->nud_state == NUD_PROBE &&
+++		    neigh->flags & NTF_EXT_VALIDATED) {
+++			WRITE_ONCE(neigh->nud_state, NUD_STALE);
+++			neigh->updated = jiffies;
+++		} else {
+++			WRITE_ONCE(neigh->nud_state, NUD_FAILED);
+++			neigh_invalidate(neigh);
+++		}
++ 		notify = 1;
++-		neigh_invalidate(neigh);
++ 		goto out;
++ 	}
++ 
++@@ -1304,6 +1323,8 @@ static void neigh_update_hhs(struct neighbour *neigh)
++ 				NTF_ROUTER flag.
++ 	NEIGH_UPDATE_F_ISROUTER	indicates if the neighbour is known as
++ 				a router.
+++	NEIGH_UPDATE_F_EXT_VALIDATED means that the entry will not be removed
+++				or invalidated.
++ 
++    Caller MUST hold reference count on the entry.
++  */
++@@ -2043,7 +2064,7 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 	if (ndm_flags & NTF_PROXY) {
++ 		struct pneigh_entry *pn;
++ 
++-		if (ndm_flags & NTF_MANAGED) {
+++		if (ndm_flags & (NTF_MANAGED | NTF_EXT_VALIDATED)) {
++ 			NL_SET_ERR_MSG(extack, "Invalid NTF_* flag combination");
++ 			goto out;
++ 		}
++@@ -2072,8 +2093,9 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 	neigh = neigh_lookup(tbl, dst, dev);
++ 	if (neigh == NULL) {
++ 		bool ndm_permanent  = ndm->ndm_state & NUD_PERMANENT;
++-		bool exempt_from_gc = ndm_permanent ||
++-				      ndm_flags & NTF_EXT_LEARNED;
+++		bool exempt_from_gc =
+++			ndm_permanent ||
+++			ndm_flags & (NTF_EXT_LEARNED | NTF_EXT_VALIDATED);
++ 
++ 		if (!(nlh->nlmsg_flags & NLM_F_CREATE)) {
++ 			err = -ENOENT;
++@@ -2084,10 +2106,28 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 			err = -EINVAL;
++ 			goto out;
++ 		}
+++		if (ndm_flags & NTF_EXT_VALIDATED) {
+++			u8 state = ndm->ndm_state;
+++
+++			/* NTF_USE and NTF_MANAGED will result in the neighbor
+++			 * being created with an invalid state (NUD_NONE).
+++			 */
+++			if (ndm_flags & (NTF_USE | NTF_MANAGED))
+++				state = NUD_NONE;
+++
+++			if (!(state & NUD_VALID)) {
+++				NL_SET_ERR_MSG(
+++					extack,
+++					"Cannot create externally validated neighbor with an invalid state");
+++				err = -EINVAL;
+++				goto out;
+++			}
+++		}
++ 
++ 		neigh = ___neigh_create(tbl, dst, dev,
++ 					ndm_flags &
++-					(NTF_EXT_LEARNED | NTF_MANAGED),
+++						(NTF_EXT_LEARNED | NTF_MANAGED |
+++						 NTF_EXT_VALIDATED),
++ 					exempt_from_gc, true);
++ 		if (IS_ERR(neigh)) {
++ 			err = PTR_ERR(neigh);
++@@ -2099,6 +2139,26 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 			neigh_release(neigh);
++ 			goto out;
++ 		}
+++		if (ndm_flags & NTF_EXT_VALIDATED) {
+++			u8 state = ndm->ndm_state;
+++
+++			/* NTF_USE and NTF_MANAGED do not update the existing
+++			 * state other than clearing it if it was
+++			 * NUD_PERMANENT.
+++			 */
+++			if (ndm_flags & (NTF_USE | NTF_MANAGED))
+++				state = READ_ONCE(neigh->nud_state) &
+++					~NUD_PERMANENT;
+++
+++			if (!(state & NUD_VALID)) {
+++				NL_SET_ERR_MSG(
+++					extack,
+++					"Cannot mark neighbor as externally validated with an invalid state");
+++				err = -EINVAL;
+++				neigh_release(neigh);
+++				goto out;
+++			}
+++		}
++ 
++ 		if (!(nlh->nlmsg_flags & NLM_F_REPLACE))
++ 			flags &= ~(NEIGH_UPDATE_F_OVERRIDE |
++@@ -2117,6 +2177,8 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 		flags |= NEIGH_UPDATE_F_USE;
++ 	if (ndm_flags & NTF_MH_PEER_SYNC)
++ 		flags |= NEIGH_UPDATE_F_EXT_MH_PEER_SYNC;
+++	if (ndm_flags & NTF_EXT_VALIDATED)
+++		flags |= NEIGH_UPDATE_F_EXT_VALIDATED;
++ 
++ 	err = __neigh_update(neigh, lladdr, ndm->ndm_state, flags,
++ 			     NETLINK_CB(skb).portid, extack);
++-- 
++2.34.1
++
+diff --git a/patches-sonic/0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch b/patches-sonic/0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch
+new file mode 100644
+index 0000000..8483997
+--- /dev/null
++++ b/patches-sonic/0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch
+@@ -0,0 +1,536 @@
++From 68ffb9bebaf40bd843bd3c55a8642f9bc2e2558e Mon Sep 17 00:00:00 2001
++From: "Barry Friedman (friedman)" <friedman@cisco.com>
++Date: Fri, 13 Feb 2026 18:48:25 -0800
++Subject: [PATCH] net: bridge: vxlan: Protocol field in bridge fdb
++
++This is to add optional "protocol" field for bridge fdb entries.
++The introduction of the 'protocol' field in the bridge FDB for EVPN Multihome, addresses the need to distinguish between MAC addresses learned via the control plane and those learned via the data plane with data plane aging. Specifically:
++* A MAC address in an EVPN Multihome environment can be learned either through the control plane (static MAC) or the data plane (dynamic MAC with aging).
++* The 'protocol' field uses values such as 'HW' for data plane dynamic MACs and 'ZEBRA' for control plane static MACs.
++* This distinction allows the application to manage the MAC address state machine effectively during transitions, which can occur due to traffic hashing between EVPN Multihome peers or mobility of MAC addresses across EVPN peers.
++* By identifying the source of the MAC learning (control plane vs. data plane), the system can handle MAC aging and mobility more accurately, ensuring synchronization between control and data planes and improving stability and reliability in MAC route handling.
++
++This mechanism supports the complex state transitions and synchronization required in EVPN Multihome scenarios, where MAC addresses may move or be learned differently depending on network events and traffic patterns.
++
++Change Summary:
++vxlan_core.c:  Encode NDA_PROTOCOL, and create and update fdb protocol field
++               Use RTPROT_UNSPEC when protocol not specified (default)
++vxlan_private.h: protocol field in vxlan_fdb, function signature updates
++vxlan_vnifilter.c: Use default RTPROT_UNSPEC, for default fdb create
++br.c: Use default RTPROT_UNSPEC as protocol, for swdev event
++br_fdb.c: Set NDA_PROTOCOL from protocol for fdb fill.
++          bridge fdb add, delete, learn update of protocol field
++br_private.h: protocol field in net_bridge_fdb_entry
++
++e.g:
++Test along with iproute2 change i.e https://lore.kernel.org/netdev/20250816031145.1153429-1-mrghosh@cisco.com/T/#u
++
++$ bridge fdb add 00:00:00:00:00:88 dev hostbond2 vlan 1000 master dynamic extern_learn proto hw
++
++$ bridge -d fdb show dev hostbond2 | grep 00:00:00:00:00:88
++00:00:00:00:00:88 vlan 1000 extern_learn master br1000 proto hw
++
++$ bridge -d -j -p fdb show dev hostbond2
++
++...
++
++[ {
++        "mac": "00:00:00:00:00:88",
++        "vlan": 1000,
++        "flags": [ "extern_learn" ],
++        "master": "br1000",
++        "flags_ext": [ ],
++        "protocol": "hw",
++        "state": ""
++    },{
++...
++
++Transition to Zebra:
++$ bridge fdb replace  00:00:00:00:00:88 dev hostbond2 vlan 1000 master dynamic extern_learn proto zebra
++
++$ bridge -d fdb show dev hostbond2 | grep 00:00:00:00:00:88
++00:00:00:00:00:88 vlan 1000 extern_learn master br1000 proto zebra
++
++$ bridge -d -j -p fdb show dev hostbond2 ...
++[ {
++        "mac": "00:00:00:00:00:88",
++        "vlan": 1000,
++        "flags": [ "extern_learn" ],
++        "master": "br1000",
++        "flags_ext": [ ],
++        "protocol": "zebra",
++        "state": ""
++    },
++...
++
++iproute2 review: https://lore.kernel.org/netdev/20250816031145.1153429-1-mrghosh@cisco.com/T/#u
++
++Signed-off-by: Mrinmoy Ghosh <mrghosh@cisco.com>
++---
++ drivers/net/vxlan/vxlan_core.c      | 55 +++++++++++++++++++----------
++ drivers/net/vxlan/vxlan_private.h   |  5 +--
++ drivers/net/vxlan/vxlan_vnifilter.c |  4 +--
++ net/bridge/br.c                     |  2 +-
++ net/bridge/br_fdb.c                 | 55 ++++++++++++++++++++---------
++ net/bridge/br_private.h             |  5 +--
++ 6 files changed, 85 insertions(+), 41 deletions(-)
++
++diff --git a/drivers/net/vxlan/vxlan_core.c b/drivers/net/vxlan/vxlan_core.c
++index de1b3fa96..c34b9f75c 100644
++--- a/drivers/net/vxlan/vxlan_core.c
+++++ b/drivers/net/vxlan/vxlan_core.c
++@@ -200,6 +200,8 @@ static int vxlan_fdb_info(struct sk_buff *skb, struct vxlan_dev *vxlan,
++ 			peernet2id(dev_net(vxlan->dev), vxlan->net)))
++ 		goto nla_put_failure;
++ 
+++	if (nla_put_u8(skb, NDA_PROTOCOL, fdb->protocol))
+++		goto nla_put_failure;
++ 	if (send_eth && nla_put(skb, NDA_LLADDR, ETH_ALEN, &fdb->eth_addr))
++ 		goto nla_put_failure;
++ 	if (nh) {
++@@ -888,7 +890,7 @@ static int vxlan_fdb_nh_update(struct vxlan_dev *vxlan, struct vxlan_fdb *fdb,
++ int vxlan_fdb_create(struct vxlan_dev *vxlan, const u8 *mac,
++ 		     union vxlan_addr *ip, __u16 state, __be16 port,
++ 		     __be32 src_vni, __be32 vni, __u32 ifindex, __u16 ndm_flags,
++-		     u32 nhid, struct vxlan_fdb **fdb,
+++		     u32 nhid, u8 protocol, struct vxlan_fdb **fdb,
++ 		     struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	struct vxlan_rdst *rd = NULL;
++@@ -904,6 +906,7 @@ int vxlan_fdb_create(struct vxlan_dev *vxlan, const u8 *mac,
++ 	if (!f)
++ 		return -ENOMEM;
++ 
+++	f->protocol = protocol;
++ 	if (nhid)
++ 		rc = vxlan_fdb_nh_update(vxlan, f, nhid, extack);
++ 	else
++@@ -981,7 +984,7 @@ static int
++ vxlan_fdb_update_existing(struct vxlan_dev *vxlan, union vxlan_addr *ip,
++ 			  __u16 state, __u16 flags, __be16 port, __be32 vni,
++ 			  __u32 ifindex, __u16 ndm_flags, struct vxlan_fdb *f,
++-			  u32 nhid, bool swdev_notify,
+++			  u32 nhid, u8 protocol, bool swdev_notify,
++ 			  struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	__u16 fdb_flags = (ndm_flags & ~NTF_USE);
++@@ -1019,6 +1022,11 @@ vxlan_fdb_update_existing(struct vxlan_dev *vxlan, union vxlan_addr *ip,
++ 			WRITE_ONCE(f->updated, jiffies);
++ 			notify = 1;
++ 		}
+++		if (f->protocol != protocol) {
+++			f->protocol = protocol;
+++			WRITE_ONCE(f->updated, jiffies);
+++			notify = 1;
+++		}
++ 	}
++ 
++ 	if ((old_ext_flags ^ ext_flags) & NTF_EXT_MH_PEER_SYNC) {
++@@ -1088,7 +1096,7 @@ static int vxlan_fdb_update_create(struct vxlan_dev *vxlan, const u8 *mac,
++ 				   union vxlan_addr *ip, __u16 state,
++ 				   __u16 flags, __be16 port, __be32 src_vni,
++ 				   __be32 vni, __u32 ifindex, __u16 ndm_flags,
++-				   u32 nhid, bool swdev_notify,
+++				   u32 nhid, u8 protocol, bool swdev_notify,
++ 				   struct netlink_ext_ack *extack,
++ 				   u32 ext_flags)
++ {
++@@ -1103,7 +1111,8 @@ static int vxlan_fdb_update_create(struct vxlan_dev *vxlan, const u8 *mac,
++ 
++ 	netdev_dbg(vxlan->dev, "add %pM -> %pIS\n", mac, ip);
++ 	rc = vxlan_fdb_create(vxlan, mac, ip, state, port, src_vni, vni,
++-			      ifindex, fdb_flags, nhid, &f, extack, ext_flags);
+++			      ifindex, fdb_flags, nhid, protocol, &f, extack,
+++			      ext_flags);
++ 	if (rc < 0)
++ 		return rc;
++ 
++@@ -1124,7 +1133,7 @@ static int vxlan_fdb_update_create(struct vxlan_dev *vxlan, const u8 *mac,
++ int vxlan_fdb_update(struct vxlan_dev *vxlan, const u8 *mac,
++ 		     union vxlan_addr *ip, __u16 state, __u16 flags,
++ 		     __be16 port, __be32 src_vni, __be32 vni, __u32 ifindex,
++-		     __u16 ndm_flags, u32 nhid, bool swdev_notify,
+++		     __u16 ndm_flags, u32 nhid, u8 protocol, bool swdev_notify,
++ 		     struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	struct vxlan_fdb *f;
++@@ -1139,16 +1148,16 @@ int vxlan_fdb_update(struct vxlan_dev *vxlan, const u8 *mac,
++ 
++ 		return vxlan_fdb_update_existing(vxlan, ip, state, flags, port,
++ 						 vni, ifindex, ndm_flags, f,
++-						 nhid, swdev_notify, extack,
++-						 ext_flags);
+++						 nhid, protocol, swdev_notify,
+++						 extack, ext_flags);
++ 	} else {
++ 		if (!(flags & NLM_F_CREATE))
++ 			return -ENOENT;
++ 
++ 		return vxlan_fdb_update_create(vxlan, mac, ip, state, flags,
++ 					       port, src_vni, vni, ifindex,
++-					       ndm_flags, nhid, swdev_notify,
++-					       extack, ext_flags);
+++					       ndm_flags, nhid, protocol,
+++					       swdev_notify, extack, ext_flags);
++ 	}
++ }
++ 
++@@ -1162,7 +1171,7 @@ static void vxlan_fdb_dst_destroy(struct vxlan_dev *vxlan, struct vxlan_fdb *f,
++ 
++ static int vxlan_fdb_parse(struct nlattr *tb[], struct vxlan_dev *vxlan,
++ 			   union vxlan_addr *ip, __be16 *port, __be32 *src_vni,
++-			   __be32 *vni, u32 *ifindex, u32 *nhid,
+++			   __be32 *vni, u32 *ifindex, u32 *nhid, u8 *protocol,
++ 			   struct netlink_ext_ack *extack, u32 *ext_flags)
++ {
++ 	struct net *net = dev_net(vxlan->dev);
++@@ -1252,6 +1261,11 @@ static int vxlan_fdb_parse(struct nlattr *tb[], struct vxlan_dev *vxlan,
++ 		*ext_flags = 0;
++ 	}
++ 
+++	if (tb[NDA_PROTOCOL])
+++		*protocol = nla_get_u8(tb[NDA_PROTOCOL]);
+++	else
+++		*protocol = RTPROT_UNSPEC;
+++
++ 	return 0;
++ }
++ 
++@@ -1269,6 +1283,7 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 	u32 ifindex, nhid;
++ 	u32 hash_index;
++ 	u32 ext_flags;
+++	u8 protocol;
++ 	int err;
++ 
++ 	if (!(ndm->ndm_state & (NUD_PERMANENT|NUD_REACHABLE))) {
++@@ -1281,7 +1296,7 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 		return -EINVAL;
++ 
++ 	err = vxlan_fdb_parse(tb, vxlan, &ip, &port, &src_vni, &vni, &ifindex,
++-			      &nhid, extack, &ext_flags);
+++			      &nhid, &protocol, extack, &ext_flags);
++ 	if (err)
++ 		return err;
++ 
++@@ -1293,7 +1308,7 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 	err = vxlan_fdb_update(vxlan, addr, &ip, ndm->ndm_state, flags, port,
++ 			       src_vni, vni, ifindex,
++ 			       ndm->ndm_flags | NTF_VXLAN_ADDED_BY_USER, nhid,
++-			       true, extack, ext_flags);
+++			       protocol, true, extack, ext_flags);
++ 	spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 
++ 	return err;
++@@ -1345,10 +1360,11 @@ static int vxlan_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
++ 	u32 hash_index;
++ 	u32 ext_flags;
++ 	__be16 port;
+++	u8 protocol;
++ 	int err;
++ 
++ 	err = vxlan_fdb_parse(tb, vxlan, &ip, &port, &src_vni, &vni, &ifindex,
++-			      &nhid, extack, &ext_flags);
+++			      &nhid, &protocol, extack, &ext_flags);
++ 	if (err)
++ 		return err;
++ 
++@@ -1508,7 +1524,8 @@ static bool vxlan_snoop(struct net_device *dev,
++ 					 NLM_F_EXCL | NLM_F_CREATE,
++ 					 vxlan->cfg.dst_port, vni,
++ 					 vxlan->default_dst.remote_vni, ifindex,
++-					 NTF_SELF, 0, true, NULL, 0);
+++					 NTF_SELF, 0, RTPROT_UNSPEC, true, NULL,
+++					 0);
++ 		spin_unlock(&vxlan->hash_lock[hash_index]);
++ 	}
++ 
++@@ -3960,7 +3977,8 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
++ 				       NUD_REACHABLE | NUD_PERMANENT,
++ 				       vxlan->cfg.dst_port, dst->remote_vni,
++ 				       dst->remote_vni, dst->remote_ifindex,
++-				       NTF_SELF, 0, &f, extack, 0);
+++				       NTF_SELF, 0, RTPROT_UNSPEC, &f, extack,
+++				       0);
++ 		if (err)
++ 			return err;
++ 	}
++@@ -4393,7 +4411,8 @@ static int vxlan_changelink(struct net_device *dev, struct nlattr *tb[],
++ 					       NLM_F_APPEND | NLM_F_CREATE,
++ 					       vxlan->cfg.dst_port, conf.vni,
++ 					       conf.vni, conf.remote_ifindex,
++-					       NTF_SELF, 0, true, extack, 0);
+++					       NTF_SELF, 0, RTPROT_UNSPEC, true,
+++					       extack, 0);
++ 			if (err) {
++ 				spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 				netdev_adjacent_change_abort(dst->remote_dev,
++@@ -4745,8 +4764,8 @@ vxlan_fdb_external_learn_add(struct net_device *dev,
++ 			       NUD_REACHABLE, NLM_F_CREATE | NLM_F_REPLACE,
++ 			       fdb_info->remote_port, fdb_info->vni,
++ 			       fdb_info->remote_vni, fdb_info->remote_ifindex,
++-			       NTF_USE | NTF_SELF | NTF_EXT_LEARNED, 0, false,
++-			       extack, 0);
+++			       NTF_USE | NTF_SELF | NTF_EXT_LEARNED, 0,
+++			       RTPROT_UNSPEC, false, extack, 0);
++ 	spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 
++ 	return err;
++diff --git a/drivers/net/vxlan/vxlan_private.h b/drivers/net/vxlan/vxlan_private.h
++index 7789af637..77ffbc856 100644
++--- a/drivers/net/vxlan/vxlan_private.h
+++++ b/drivers/net/vxlan/vxlan_private.h
++@@ -36,6 +36,7 @@ struct vxlan_fdb {
++ 	__be32		  vni;
++ 	u16		  flags;	/* see ndm_flags and below */
++ 	u32 ext_flags;
+++	u8 protocol;
++ 	struct list_head  nh_list;
++ 	struct nexthop __rcu *nh;
++ 	struct vxlan_dev  __rcu *vdev;
++@@ -179,7 +180,7 @@ vxlan_vnifilter_lookup(struct vxlan_dev *vxlan, __be32 vni)
++ int vxlan_fdb_create(struct vxlan_dev *vxlan, const u8 *mac,
++ 		     union vxlan_addr *ip, __u16 state, __be16 port,
++ 		     __be32 src_vni, __be32 vni, __u32 ifindex, __u16 ndm_flags,
++-		     u32 nhid, struct vxlan_fdb **fdb,
+++		     u32 nhid, u8 protocol, struct vxlan_fdb **fdb,
++ 		     struct netlink_ext_ack *extack, u32 ext_flags);
++ int __vxlan_fdb_delete(struct vxlan_dev *vxlan,
++ 		       const unsigned char *addr, union vxlan_addr ip,
++@@ -190,7 +191,7 @@ u32 fdb_head_index(struct vxlan_dev *vxlan, const u8 *mac, __be32 vni);
++ int vxlan_fdb_update(struct vxlan_dev *vxlan, const u8 *mac,
++ 		     union vxlan_addr *ip, __u16 state, __u16 flags,
++ 		     __be16 port, __be32 src_vni, __be32 vni, __u32 ifindex,
++-		     __u16 ndm_flags, u32 nhid, bool swdev_notify,
+++		     __u16 ndm_flags, u32 nhid, u8 protocol, bool swdev_notify,
++ 		     struct netlink_ext_ack *extack, u32 ext_flags);
++ void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
++ 		    __be32 default_vni, struct vxlan_rdst *rdst, bool did_rsc);
++diff --git a/drivers/net/vxlan/vxlan_vnifilter.c b/drivers/net/vxlan/vxlan_vnifilter.c
++index ad1a46242..f8396be44 100644
++--- a/drivers/net/vxlan/vxlan_vnifilter.c
+++++ b/drivers/net/vxlan/vxlan_vnifilter.c
++@@ -493,8 +493,8 @@ static int vxlan_update_default_fdb_entry(struct vxlan_dev *vxlan, __be32 vni,
++ 				       NUD_REACHABLE | NUD_PERMANENT,
++ 				       NLM_F_APPEND | NLM_F_CREATE,
++ 				       vxlan->cfg.dst_port, vni, vni,
++-				       dst->remote_ifindex, NTF_SELF, 0, true,
++-				       extack, 0);
+++				       dst->remote_ifindex, NTF_SELF, 0,
+++				       RTPROT_UNSPEC, true, extack, 0);
++ 		if (err) {
++ 			spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 			return err;
++diff --git a/net/bridge/br.c b/net/bridge/br.c
++index 6b8c782f2..ab533d843 100644
++--- a/net/bridge/br.c
+++++ b/net/bridge/br.c
++@@ -167,7 +167,7 @@ static int br_switchdev_event(struct notifier_block *unused,
++ 		fdb_info = ptr;
++ 		err = br_fdb_external_learn_add(br, p, fdb_info->addr,
++ 						fdb_info->vid, fdb_info->locked,
++-						false, 0);
+++						false, 0, RTPROT_UNSPEC);
++ 		if (err) {
++ 			err = notifier_from_errno(err);
++ 			break;
++diff --git a/net/bridge/br_fdb.c b/net/bridge/br_fdb.c
++index 202d79183..4648ca1cd 100644
++--- a/net/bridge/br_fdb.c
+++++ b/net/bridge/br_fdb.c
++@@ -132,6 +132,8 @@ static int fdb_fill_info(struct sk_buff *skb, const struct net_bridge *br,
++ 		goto nla_put_failure;
++ 	if (nla_put_u32(skb, NDA_MASTER, br->dev->ifindex))
++ 		goto nla_put_failure;
+++	if (nla_put_u8(skb, NDA_PROTOCOL, fdb->protocol))
+++		goto nla_put_failure;
++ 	if (nla_put_u32(skb, NDA_FLAGS_EXT, ext_flags))
++ 		goto nla_put_failure;
++ 
++@@ -1163,7 +1165,8 @@ static int fdb_add_entry(struct net_bridge *br, struct net_bridge_port *source,
++ 
++ static int __br_fdb_add(struct ndmsg *ndm, struct net_bridge *br,
++ 			struct net_bridge_port *p, const unsigned char *addr,
++-			u16 nlh_flags, u16 vid, struct nlattr *nfea_tb[],
+++			u16 nlh_flags, u16 vid, u8 protocol,
+++			struct nlattr *nfea_tb[],
++ 			struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	int err = 0;
++@@ -1188,8 +1191,8 @@ static int __br_fdb_add(struct ndmsg *ndm, struct net_bridge *br,
++ 					   "FDB entry towards bridge must be permanent");
++ 			return -EINVAL;
++ 		}
++-		err = br_fdb_external_learn_add(br, p, addr, vid, false, true,
++-						ext_flags);
+++		err = br_fdb_external_learn_add(br, p, addr, vid, protocol,
+++						false, true, ext_flags);
++ 	} else {
++ 		spin_lock_bh(&br->hash_lock);
++ 		err = fdb_add_entry(br, p, addr, ndm, nlh_flags, vid, nfea_tb);
++@@ -1215,6 +1218,7 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 	struct net_bridge_port *p = NULL;
++ 	struct net_bridge_vlan *v;
++ 	struct net_bridge *br = NULL;
+++	u8 protocol = RTPROT_UNSPEC;
++ 	u32 ext_flags = 0;
++ 	int err = 0;
++ 
++@@ -1273,11 +1277,11 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 		}
++ 
++ 		/* VID was specified, so use it. */
++-		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, vid, nfea_tb,
++-				   extack, ext_flags);
+++		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, vid, protocol,
+++				   nfea_tb, extack, ext_flags);
++ 	} else {
++-		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, 0, nfea_tb,
++-				   extack, ext_flags);
+++		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, 0, protocol,
+++				   nfea_tb, extack, ext_flags);
++ 		if (err || !vg || !vg->num_vlans)
++ 			goto out;
++ 
++@@ -1289,7 +1293,8 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 			if (!br_vlan_should_use(v))
++ 				continue;
++ 			err = __br_fdb_add(ndm, br, p, addr, nlh_flags, v->vid,
++-					   nfea_tb, extack, ext_flags);
+++					   protocol, nfea_tb, extack,
+++					   ext_flags);
++ 			if (err)
++ 				goto out;
++ 		}
++@@ -1301,7 +1306,7 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 
++ static int fdb_delete_by_addr_and_port(struct net_bridge *br,
++ 				       const struct net_bridge_port *p,
++-				       const u8 *addr, u16 vlan)
+++				       const u8 *addr, u16 vlan, u8 protocol)
++ {
++ 	struct net_bridge_fdb_entry *fdb;
++ 
++@@ -1309,6 +1314,14 @@ static int fdb_delete_by_addr_and_port(struct net_bridge *br,
++ 	if (!fdb || READ_ONCE(fdb->dst) != p)
++ 		return -ENOENT;
++ 
+++	/* If the delete comes from a different protocol type,
+++	* that type is used in the notification as some software
+++	* may be expecting multiple deletes (control learned +
+++	* hardware datapath learned)
+++	*/
+++	if (protocol != RTPROT_UNSPEC)
+++		fdb->protocol = protocol;
+++
++ 	fdb_delete(br, fdb, true);
++ 
++ 	return 0;
++@@ -1316,12 +1329,12 @@ static int fdb_delete_by_addr_and_port(struct net_bridge *br,
++ 
++ static int __br_fdb_delete(struct net_bridge *br,
++ 			   const struct net_bridge_port *p,
++-			   const unsigned char *addr, u16 vid)
+++			   const unsigned char *addr, u16 vid, u8 protocol)
++ {
++ 	int err;
++ 
++ 	spin_lock_bh(&br->hash_lock);
++-	err = fdb_delete_by_addr_and_port(br, p, addr, vid);
+++	err = fdb_delete_by_addr_and_port(br, p, addr, vid, protocol);
++ 	spin_unlock_bh(&br->hash_lock);
++ 
++ 	return err;
++@@ -1335,10 +1348,14 @@ int br_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
++ {
++ 	struct net_bridge_vlan_group *vg;
++ 	struct net_bridge_port *p = NULL;
+++	u8 protocol = RTPROT_UNSPEC;
++ 	struct net_bridge_vlan *v;
++ 	struct net_bridge *br;
++ 	int err;
++ 
+++	if (tb[NDA_PROTOCOL])
+++		protocol = nla_get_u8(tb[NDA_PROTOCOL]);
+++
++ 	if (netif_is_bridge_master(dev)) {
++ 		br = netdev_priv(dev);
++ 		vg = br_vlan_group(br);
++@@ -1360,17 +1377,17 @@ int br_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
++ 			return -EINVAL;
++ 		}
++ 
++-		err = __br_fdb_delete(br, p, addr, vid);
+++		err = __br_fdb_delete(br, p, addr, vid, protocol);
++ 	} else {
++ 		err = -ENOENT;
++-		err &= __br_fdb_delete(br, p, addr, 0);
+++		err &= __br_fdb_delete(br, p, addr, 0, protocol);
++ 		if (!vg || !vg->num_vlans)
++ 			return err;
++ 
++ 		list_for_each_entry(v, &vg->vlan_list, vlist) {
++ 			if (!br_vlan_should_use(v))
++ 				continue;
++-			err &= __br_fdb_delete(br, p, addr, v->vid);
+++			err &= __br_fdb_delete(br, p, addr, v->vid, protocol);
++ 		}
++ 	}
++ 
++@@ -1430,8 +1447,8 @@ void br_fdb_unsync_static(struct net_bridge *br, struct net_bridge_port *p)
++ }
++ 
++ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++-			      const unsigned char *addr, u16 vid, bool locked,
++-			      bool swdev_notify, u32 ext_flags)
+++			      const unsigned char *addr, u16 vid, u8 protocol,
+++			      bool locked, bool swdev_notify, u32 ext_flags)
++ {
++ 	struct net_bridge_fdb_entry *fdb;
++ 	bool modified = false;
++@@ -1465,6 +1482,7 @@ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++ 			err = -ENOMEM;
++ 			goto err_unlock;
++ 		}
+++		fdb->protocol = protocol;
++ 		fdb_notify(br, fdb, RTM_NEWNEIGH, swdev_notify);
++ 	} else {
++ 		if (locked &&
++@@ -1512,6 +1530,11 @@ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++ 		    test_and_clear_bit(BR_FDB_DYNAMIC_LEARNED, &fdb->flags))
++ 			atomic_dec(&br->fdb_n_learned);
++ 
+++		if (fdb->protocol != protocol) {
+++			modified = true;
+++			fdb->protocol = protocol;
+++		}
+++
++ 		if (modified)
++ 			fdb_notify(br, fdb, RTM_NEWNEIGH, swdev_notify);
++ 	}
++diff --git a/net/bridge/br_private.h b/net/bridge/br_private.h
++index 2376178ec..c69efd1e4 100644
++--- a/net/bridge/br_private.h
+++++ b/net/bridge/br_private.h
++@@ -292,6 +292,7 @@ struct net_bridge_fdb_entry {
++ 	struct net_bridge_fdb_key	key;
++ 	struct hlist_node		fdb_node;
++ 	unsigned long			flags;
+++	u8 protocol;
++ 
++ 	/* write-heavy members should not affect lookups */
++ 	unsigned long			updated ____cacheline_aligned_in_smp;
++@@ -869,8 +870,8 @@ int br_fdb_get(struct sk_buff *skb, struct nlattr *tb[], struct net_device *dev,
++ int br_fdb_sync_static(struct net_bridge *br, struct net_bridge_port *p);
++ void br_fdb_unsync_static(struct net_bridge *br, struct net_bridge_port *p);
++ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++-			      const unsigned char *addr, u16 vid, bool locked,
++-			      bool swdev_notify, u32 ext_flags);
+++			      const unsigned char *addr, u16 vid, u8 protocol,
+++			      bool locked, bool swdev_notify, u32 ext_flags);
++ int br_fdb_external_learn_del(struct net_bridge *br, struct net_bridge_port *p,
++ 			      const unsigned char *addr, u16 vid,
++ 			      bool swdev_notify);
++-- 
++2.34.1
++
+diff --git a/patches-sonic/0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch b/patches-sonic/0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch
+new file mode 100644
+index 0000000..d58602e
+--- /dev/null
++++ b/patches-sonic/0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch
+@@ -0,0 +1,632 @@
++From ef2205ef9ff492a8b83dc0ff2727f941c3385e2b Mon Sep 17 00:00:00 2001
++From: "Barry Friedman (friedman)" <friedman@cisco.com>
++Date: Fri, 13 Feb 2026 14:47:17 -0800
++Subject: [PATCH] vxlan/bridge: Add NDA_FLAGS_EXT support with
++ NTF_EXT_MH_PEER_SYNC
++
++Add support for NDA_FLAGS_EXT attribute in VXLAN and bridge FDB entries
++to support multi-homing peer synchronization.
++
++This patch adds:
++- ext_flags field to vxlan_fdb structure
++- NTF_EXT_MH_PEER_SYNC flag and associated infrastructure
++- Propagation of ext_flags through vxlan_fdb_create/update/parse
++- NEIGH_UPDATE_F_EXT_MH_PEER_SYNC for neighbor updates
++---
++ drivers/net/vxlan/vxlan_core.c      | 140 +++++++++++++++-------------
++ drivers/net/vxlan/vxlan_private.h   |  21 ++---
++ drivers/net/vxlan/vxlan_vnifilter.c |  11 +--
++ include/net/neighbour.h             |   4 +-
++ include/uapi/linux/neighbour.h      |   1 +
++ net/bridge/br.c                     |   4 +-
++ net/bridge/br_fdb.c                 |  35 +++++--
++ net/bridge/br_private.h             |   5 +-
++ net/core/neighbour.c                |  13 +++
++ 9 files changed, 138 insertions(+), 96 deletions(-)
++
++diff --git a/drivers/net/vxlan/vxlan_core.c b/drivers/net/vxlan/vxlan_core.c
++index 1a7077093..de1b3fa96 100644
++--- a/drivers/net/vxlan/vxlan_core.c
+++++ b/drivers/net/vxlan/vxlan_core.c
++@@ -227,6 +227,9 @@ static int vxlan_fdb_info(struct sk_buff *skb, struct vxlan_dev *vxlan,
++ 			be32_to_cpu(fdb->vni)))
++ 		goto nla_put_failure;
++ 
+++	if (fdb->ext_flags && nla_put_u32(skb, NDA_FLAGS_EXT, fdb->ext_flags))
+++		goto nla_put_failure;
+++
++ 	ci.ndm_used	 = jiffies_to_clock_t(now - READ_ONCE(fdb->used));
++ 	ci.ndm_confirmed = 0;
++ 	ci.ndm_updated	 = jiffies_to_clock_t(now - READ_ONCE(fdb->updated));
++@@ -791,7 +794,7 @@ static int vxlan_gpe_gro_complete(struct sock *sk, struct sk_buff *skb, int nhof
++ 
++ static struct vxlan_fdb *vxlan_fdb_alloc(struct vxlan_dev *vxlan, const u8 *mac,
++ 					 __u16 state, __be32 src_vni,
++-					 __u16 ndm_flags)
+++					 __u16 ndm_flags, __u32 ext_flags)
++ {
++ 	struct vxlan_fdb *f;
++ 
++@@ -803,6 +806,7 @@ static struct vxlan_fdb *vxlan_fdb_alloc(struct vxlan_dev *vxlan, const u8 *mac,
++ 	f->updated = f->used = jiffies;
++ 	f->vni = src_vni;
++ 	f->nh = NULL;
+++	f->ext_flags = ext_flags;
++ 	RCU_INIT_POINTER(f->vdev, vxlan);
++ 	INIT_LIST_HEAD(&f->nh_list);
++ 	INIT_LIST_HEAD(&f->remotes);
++@@ -881,12 +885,11 @@ static int vxlan_fdb_nh_update(struct vxlan_dev *vxlan, struct vxlan_fdb *fdb,
++ 	return err;
++ }
++ 
++-int vxlan_fdb_create(struct vxlan_dev *vxlan,
++-		     const u8 *mac, union vxlan_addr *ip,
++-		     __u16 state, __be16 port, __be32 src_vni,
++-		     __be32 vni, __u32 ifindex, __u16 ndm_flags,
+++int vxlan_fdb_create(struct vxlan_dev *vxlan, const u8 *mac,
+++		     union vxlan_addr *ip, __u16 state, __be16 port,
+++		     __be32 src_vni, __be32 vni, __u32 ifindex, __u16 ndm_flags,
++ 		     u32 nhid, struct vxlan_fdb **fdb,
++-		     struct netlink_ext_ack *extack)
+++		     struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	struct vxlan_rdst *rd = NULL;
++ 	struct vxlan_fdb *f;
++@@ -897,7 +900,7 @@ int vxlan_fdb_create(struct vxlan_dev *vxlan,
++ 		return -ENOSPC;
++ 
++ 	netdev_dbg(vxlan->dev, "add %pM -> %pIS\n", mac, ip);
++-	f = vxlan_fdb_alloc(vxlan, mac, state, src_vni, ndm_flags);
+++	f = vxlan_fdb_alloc(vxlan, mac, state, src_vni, ndm_flags, ext_flags);
++ 	if (!f)
++ 		return -ENOMEM;
++ 
++@@ -974,14 +977,12 @@ static void vxlan_dst_free(struct rcu_head *head)
++ 	kfree(rd);
++ }
++ 
++-static int vxlan_fdb_update_existing(struct vxlan_dev *vxlan,
++-				     union vxlan_addr *ip,
++-				     __u16 state, __u16 flags,
++-				     __be16 port, __be32 vni,
++-				     __u32 ifindex, __u16 ndm_flags,
++-				     struct vxlan_fdb *f, u32 nhid,
++-				     bool swdev_notify,
++-				     struct netlink_ext_ack *extack)
+++static int
+++vxlan_fdb_update_existing(struct vxlan_dev *vxlan, union vxlan_addr *ip,
+++			  __u16 state, __u16 flags, __be16 port, __be32 vni,
+++			  __u32 ifindex, __u16 ndm_flags, struct vxlan_fdb *f,
+++			  u32 nhid, bool swdev_notify,
+++			  struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	__u16 fdb_flags = (ndm_flags & ~NTF_USE);
++ 	struct vxlan_rdst *rd = NULL;
++@@ -989,6 +990,7 @@ static int vxlan_fdb_update_existing(struct vxlan_dev *vxlan,
++ 	int notify = 0;
++ 	int rc = 0;
++ 	int err;
+++	u32 old_ext_flags = f->ext_flags;
++ 
++ 	if (nhid && !rcu_access_pointer(f->nh)) {
++ 		NL_SET_ERR_MSG(extack,
++@@ -1019,6 +1021,14 @@ static int vxlan_fdb_update_existing(struct vxlan_dev *vxlan,
++ 		}
++ 	}
++ 
+++	if ((old_ext_flags ^ ext_flags) & NTF_EXT_MH_PEER_SYNC) {
+++		notify = 1;
+++		if (ext_flags & NTF_EXT_MH_PEER_SYNC)
+++			f->ext_flags |= NTF_EXT_MH_PEER_SYNC;
+++		else
+++			f->ext_flags &= ~NTF_EXT_MH_PEER_SYNC;
+++	}
+++
++ 	if ((flags & NLM_F_REPLACE)) {
++ 		/* Only change unicasts */
++ 		if (!(is_multicast_ether_addr(f->eth_addr) ||
++@@ -1074,13 +1084,13 @@ static int vxlan_fdb_update_existing(struct vxlan_dev *vxlan,
++ 	return err;
++ }
++ 
++-static int vxlan_fdb_update_create(struct vxlan_dev *vxlan,
++-				   const u8 *mac, union vxlan_addr *ip,
++-				   __u16 state, __u16 flags,
++-				   __be16 port, __be32 src_vni, __be32 vni,
++-				   __u32 ifindex, __u16 ndm_flags, u32 nhid,
++-				   bool swdev_notify,
++-				   struct netlink_ext_ack *extack)
+++static int vxlan_fdb_update_create(struct vxlan_dev *vxlan, const u8 *mac,
+++				   union vxlan_addr *ip, __u16 state,
+++				   __u16 flags, __be16 port, __be32 src_vni,
+++				   __be32 vni, __u32 ifindex, __u16 ndm_flags,
+++				   u32 nhid, bool swdev_notify,
+++				   struct netlink_ext_ack *extack,
+++				   u32 ext_flags)
++ {
++ 	__u16 fdb_flags = (ndm_flags & ~NTF_USE);
++ 	struct vxlan_fdb *f;
++@@ -1092,8 +1102,8 @@ static int vxlan_fdb_update_create(struct vxlan_dev *vxlan,
++ 		return -EOPNOTSUPP;
++ 
++ 	netdev_dbg(vxlan->dev, "add %pM -> %pIS\n", mac, ip);
++-	rc = vxlan_fdb_create(vxlan, mac, ip, state, port, src_vni,
++-			      vni, ifindex, fdb_flags, nhid, &f, extack);
+++	rc = vxlan_fdb_create(vxlan, mac, ip, state, port, src_vni, vni,
+++			      ifindex, fdb_flags, nhid, &f, extack, ext_flags);
++ 	if (rc < 0)
++ 		return rc;
++ 
++@@ -1111,13 +1121,11 @@ static int vxlan_fdb_update_create(struct vxlan_dev *vxlan,
++ }
++ 
++ /* Add new entry to forwarding table -- assumes lock held */
++-int vxlan_fdb_update(struct vxlan_dev *vxlan,
++-		     const u8 *mac, union vxlan_addr *ip,
++-		     __u16 state, __u16 flags,
++-		     __be16 port, __be32 src_vni, __be32 vni,
++-		     __u32 ifindex, __u16 ndm_flags, u32 nhid,
++-		     bool swdev_notify,
++-		     struct netlink_ext_ack *extack)
+++int vxlan_fdb_update(struct vxlan_dev *vxlan, const u8 *mac,
+++		     union vxlan_addr *ip, __u16 state, __u16 flags,
+++		     __be16 port, __be32 src_vni, __be32 vni, __u32 ifindex,
+++		     __u16 ndm_flags, u32 nhid, bool swdev_notify,
+++		     struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	struct vxlan_fdb *f;
++ 
++@@ -1131,7 +1139,8 @@ int vxlan_fdb_update(struct vxlan_dev *vxlan,
++ 
++ 		return vxlan_fdb_update_existing(vxlan, ip, state, flags, port,
++ 						 vni, ifindex, ndm_flags, f,
++-						 nhid, swdev_notify, extack);
+++						 nhid, swdev_notify, extack,
+++						 ext_flags);
++ 	} else {
++ 		if (!(flags & NLM_F_CREATE))
++ 			return -ENOENT;
++@@ -1139,7 +1148,7 @@ int vxlan_fdb_update(struct vxlan_dev *vxlan,
++ 		return vxlan_fdb_update_create(vxlan, mac, ip, state, flags,
++ 					       port, src_vni, vni, ifindex,
++ 					       ndm_flags, nhid, swdev_notify,
++-					       extack);
+++					       extack, ext_flags);
++ 	}
++ }
++ 
++@@ -1154,7 +1163,7 @@ static void vxlan_fdb_dst_destroy(struct vxlan_dev *vxlan, struct vxlan_fdb *f,
++ static int vxlan_fdb_parse(struct nlattr *tb[], struct vxlan_dev *vxlan,
++ 			   union vxlan_addr *ip, __be16 *port, __be32 *src_vni,
++ 			   __be32 *vni, u32 *ifindex, u32 *nhid,
++-			   struct netlink_ext_ack *extack)
+++			   struct netlink_ext_ack *extack, u32 *ext_flags)
++ {
++ 	struct net *net = dev_net(vxlan->dev);
++ 	int err;
++@@ -1237,6 +1246,12 @@ static int vxlan_fdb_parse(struct nlattr *tb[], struct vxlan_dev *vxlan,
++ 	else
++ 		*nhid = 0;
++ 
+++	if (tb[NDA_FLAGS_EXT]) {
+++		*ext_flags = nla_get_u32(tb[NDA_FLAGS_EXT]);
+++	} else {
+++		*ext_flags = 0;
+++	}
+++
++ 	return 0;
++ }
++ 
++@@ -1253,6 +1268,7 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 	__be32 src_vni, vni;
++ 	u32 ifindex, nhid;
++ 	u32 hash_index;
+++	u32 ext_flags;
++ 	int err;
++ 
++ 	if (!(ndm->ndm_state & (NUD_PERMANENT|NUD_REACHABLE))) {
++@@ -1265,7 +1281,7 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 		return -EINVAL;
++ 
++ 	err = vxlan_fdb_parse(tb, vxlan, &ip, &port, &src_vni, &vni, &ifindex,
++-			      &nhid, extack);
+++			      &nhid, extack, &ext_flags);
++ 	if (err)
++ 		return err;
++ 
++@@ -1274,10 +1290,10 @@ static int vxlan_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 
++ 	hash_index = fdb_head_index(vxlan, addr, src_vni);
++ 	spin_lock_bh(&vxlan->hash_lock[hash_index]);
++-	err = vxlan_fdb_update(vxlan, addr, &ip, ndm->ndm_state, flags,
++-			       port, src_vni, vni, ifindex,
++-			       ndm->ndm_flags | NTF_VXLAN_ADDED_BY_USER,
++-			       nhid, true, extack);
+++	err = vxlan_fdb_update(vxlan, addr, &ip, ndm->ndm_state, flags, port,
+++			       src_vni, vni, ifindex,
+++			       ndm->ndm_flags | NTF_VXLAN_ADDED_BY_USER, nhid,
+++			       true, extack, ext_flags);
++ 	spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 
++ 	return err;
++@@ -1327,11 +1343,12 @@ static int vxlan_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
++ 	__be32 src_vni, vni;
++ 	u32 ifindex, nhid;
++ 	u32 hash_index;
+++	u32 ext_flags;
++ 	__be16 port;
++ 	int err;
++ 
++ 	err = vxlan_fdb_parse(tb, vxlan, &ip, &port, &src_vni, &vni, &ifindex,
++-			      &nhid, extack);
+++			      &nhid, extack, &ext_flags);
++ 	if (err)
++ 		return err;
++ 
++@@ -1487,13 +1504,11 @@ static bool vxlan_snoop(struct net_device *dev,
++ 
++ 		/* close off race between vxlan_flush and incoming packets */
++ 		if (netif_running(dev))
++-			vxlan_fdb_update(vxlan, src_mac, src_ip,
++-					 NUD_REACHABLE,
++-					 NLM_F_EXCL|NLM_F_CREATE,
++-					 vxlan->cfg.dst_port,
++-					 vni,
++-					 vxlan->default_dst.remote_vni,
++-					 ifindex, NTF_SELF, 0, true, NULL);
+++			vxlan_fdb_update(vxlan, src_mac, src_ip, NUD_REACHABLE,
+++					 NLM_F_EXCL | NLM_F_CREATE,
+++					 vxlan->cfg.dst_port, vni,
+++					 vxlan->default_dst.remote_vni, ifindex,
+++					 NTF_SELF, 0, true, NULL, 0);
++ 		spin_unlock(&vxlan->hash_lock[hash_index]);
++ 	}
++ 
++@@ -3941,14 +3956,11 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
++ 
++ 	/* create an fdb entry for a valid default destination */
++ 	if (!vxlan_addr_any(&dst->remote_ip)) {
++-		err = vxlan_fdb_create(vxlan, all_zeros_mac,
++-				       &dst->remote_ip,
+++		err = vxlan_fdb_create(vxlan, all_zeros_mac, &dst->remote_ip,
++ 				       NUD_REACHABLE | NUD_PERMANENT,
++-				       vxlan->cfg.dst_port,
++-				       dst->remote_vni,
++-				       dst->remote_vni,
++-				       dst->remote_ifindex,
++-				       NTF_SELF, 0, &f, extack);
+++				       vxlan->cfg.dst_port, dst->remote_vni,
+++				       dst->remote_vni, dst->remote_ifindex,
+++				       NTF_SELF, 0, &f, extack, 0);
++ 		if (err)
++ 			return err;
++ 	}
++@@ -4379,10 +4391,9 @@ static int vxlan_changelink(struct net_device *dev, struct nlattr *tb[],
++ 					       &conf.remote_ip,
++ 					       NUD_REACHABLE | NUD_PERMANENT,
++ 					       NLM_F_APPEND | NLM_F_CREATE,
++-					       vxlan->cfg.dst_port,
++-					       conf.vni, conf.vni,
++-					       conf.remote_ifindex,
++-					       NTF_SELF, 0, true, extack);
+++					       vxlan->cfg.dst_port, conf.vni,
+++					       conf.vni, conf.remote_ifindex,
+++					       NTF_SELF, 0, true, extack, 0);
++ 			if (err) {
++ 				spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 				netdev_adjacent_change_abort(dst->remote_dev,
++@@ -4731,14 +4742,11 @@ vxlan_fdb_external_learn_add(struct net_device *dev,
++ 
++ 	spin_lock_bh(&vxlan->hash_lock[hash_index]);
++ 	err = vxlan_fdb_update(vxlan, fdb_info->eth_addr, &fdb_info->remote_ip,
++-			       NUD_REACHABLE,
++-			       NLM_F_CREATE | NLM_F_REPLACE,
++-			       fdb_info->remote_port,
++-			       fdb_info->vni,
++-			       fdb_info->remote_vni,
++-			       fdb_info->remote_ifindex,
++-			       NTF_USE | NTF_SELF | NTF_EXT_LEARNED,
++-			       0, false, extack);
+++			       NUD_REACHABLE, NLM_F_CREATE | NLM_F_REPLACE,
+++			       fdb_info->remote_port, fdb_info->vni,
+++			       fdb_info->remote_vni, fdb_info->remote_ifindex,
+++			       NTF_USE | NTF_SELF | NTF_EXT_LEARNED, 0, false,
+++			       extack, 0);
++ 	spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 
++ 	return err;
++diff --git a/drivers/net/vxlan/vxlan_private.h b/drivers/net/vxlan/vxlan_private.h
++index 76a351a99..7789af637 100644
++--- a/drivers/net/vxlan/vxlan_private.h
+++++ b/drivers/net/vxlan/vxlan_private.h
++@@ -35,6 +35,7 @@ struct vxlan_fdb {
++ 	u16		  state;	/* see ndm_state */
++ 	__be32		  vni;
++ 	u16		  flags;	/* see ndm_flags and below */
+++	u32 ext_flags;
++ 	struct list_head  nh_list;
++ 	struct nexthop __rcu *nh;
++ 	struct vxlan_dev  __rcu *vdev;
++@@ -175,24 +176,22 @@ vxlan_vnifilter_lookup(struct vxlan_dev *vxlan, __be32 vni)
++ }
++ 
++ /* vxlan_core.c */
++-int vxlan_fdb_create(struct vxlan_dev *vxlan,
++-		     const u8 *mac, union vxlan_addr *ip,
++-		     __u16 state, __be16 port, __be32 src_vni,
++-		     __be32 vni, __u32 ifindex, __u16 ndm_flags,
+++int vxlan_fdb_create(struct vxlan_dev *vxlan, const u8 *mac,
+++		     union vxlan_addr *ip, __u16 state, __be16 port,
+++		     __be32 src_vni, __be32 vni, __u32 ifindex, __u16 ndm_flags,
++ 		     u32 nhid, struct vxlan_fdb **fdb,
++-		     struct netlink_ext_ack *extack);
+++		     struct netlink_ext_ack *extack, u32 ext_flags);
++ int __vxlan_fdb_delete(struct vxlan_dev *vxlan,
++ 		       const unsigned char *addr, union vxlan_addr ip,
++ 		       __be16 port, __be32 src_vni, __be32 vni,
++ 		       u32 ifindex, bool swdev_notify);
++ u32 eth_vni_hash(const unsigned char *addr, __be32 vni);
++ u32 fdb_head_index(struct vxlan_dev *vxlan, const u8 *mac, __be32 vni);
++-int vxlan_fdb_update(struct vxlan_dev *vxlan,
++-		     const u8 *mac, union vxlan_addr *ip,
++-		     __u16 state, __u16 flags,
++-		     __be16 port, __be32 src_vni, __be32 vni,
++-		     __u32 ifindex, __u16 ndm_flags, u32 nhid,
++-		     bool swdev_notify, struct netlink_ext_ack *extack);
+++int vxlan_fdb_update(struct vxlan_dev *vxlan, const u8 *mac,
+++		     union vxlan_addr *ip, __u16 state, __u16 flags,
+++		     __be16 port, __be32 src_vni, __be32 vni, __u32 ifindex,
+++		     __u16 ndm_flags, u32 nhid, bool swdev_notify,
+++		     struct netlink_ext_ack *extack, u32 ext_flags);
++ void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
++ 		    __be32 default_vni, struct vxlan_rdst *rdst, bool did_rsc);
++ int vxlan_vni_in_use(struct net *src_net, struct vxlan_dev *vxlan,
++diff --git a/drivers/net/vxlan/vxlan_vnifilter.c b/drivers/net/vxlan/vxlan_vnifilter.c
++index 06d19e90e..ad1a46242 100644
++--- a/drivers/net/vxlan/vxlan_vnifilter.c
+++++ b/drivers/net/vxlan/vxlan_vnifilter.c
++@@ -489,15 +489,12 @@ static int vxlan_update_default_fdb_entry(struct vxlan_dev *vxlan, __be32 vni,
++ 	hash_index = fdb_head_index(vxlan, all_zeros_mac, vni);
++ 	spin_lock_bh(&vxlan->hash_lock[hash_index]);
++ 	if (remote_ip && !vxlan_addr_any(remote_ip)) {
++-		err = vxlan_fdb_update(vxlan, all_zeros_mac,
++-				       remote_ip,
+++		err = vxlan_fdb_update(vxlan, all_zeros_mac, remote_ip,
++ 				       NUD_REACHABLE | NUD_PERMANENT,
++ 				       NLM_F_APPEND | NLM_F_CREATE,
++-				       vxlan->cfg.dst_port,
++-				       vni,
++-				       vni,
++-				       dst->remote_ifindex,
++-				       NTF_SELF, 0, true, extack);
+++				       vxlan->cfg.dst_port, vni, vni,
+++				       dst->remote_ifindex, NTF_SELF, 0, true,
+++				       extack, 0);
++ 		if (err) {
++ 			spin_unlock_bh(&vxlan->hash_lock[hash_index]);
++ 			return err;
++diff --git a/include/net/neighbour.h b/include/net/neighbour.h
++index a44f262a7..5c6f52831 100644
++--- a/include/net/neighbour.h
+++++ b/include/net/neighbour.h
++@@ -266,13 +266,15 @@ static inline void *neighbour_priv(const struct neighbour *n)
++ #define NEIGH_UPDATE_F_EXT_LEARNED		BIT(5)
++ #define NEIGH_UPDATE_F_ISROUTER			BIT(6)
++ #define NEIGH_UPDATE_F_ADMIN			BIT(7)
+++#define NEIGH_UPDATE_F_EXT_MH_PEER_SYNC BIT(8)
++ 
++ /* In-kernel representation for NDA_FLAGS_EXT flags: */
++ #define NTF_OLD_MASK		0xff
++ #define NTF_EXT_SHIFT		8
++-#define NTF_EXT_MASK		(NTF_EXT_MANAGED)
+++#define NTF_EXT_MASK (NTF_EXT_MANAGED | NTF_EXT_MH_PEER_SYNC)
++ 
++ #define NTF_MANAGED		(NTF_EXT_MANAGED << NTF_EXT_SHIFT)
+++#define NTF_MH_PEER_SYNC (NTF_EXT_MH_PEER_SYNC << NTF_EXT_SHIFT)
++ 
++ extern const struct nla_policy nda_policy[];
++ 
++diff --git a/include/uapi/linux/neighbour.h b/include/uapi/linux/neighbour.h
++index 5e67a7eaf..dce82ed78 100644
++--- a/include/uapi/linux/neighbour.h
+++++ b/include/uapi/linux/neighbour.h
++@@ -54,6 +54,7 @@ enum {
++ /* Extended flags under NDA_FLAGS_EXT: */
++ #define NTF_EXT_MANAGED		(1 << 0)
++ #define NTF_EXT_LOCKED		(1 << 1)
+++#define NTF_EXT_MH_PEER_SYNC (1 << 2)
++ 
++ /*
++  *	Neighbor Cache Entry States.
++diff --git a/net/bridge/br.c b/net/bridge/br.c
++index 2cab878e0..6b8c782f2 100644
++--- a/net/bridge/br.c
+++++ b/net/bridge/br.c
++@@ -166,8 +166,8 @@ static int br_switchdev_event(struct notifier_block *unused,
++ 	case SWITCHDEV_FDB_ADD_TO_BRIDGE:
++ 		fdb_info = ptr;
++ 		err = br_fdb_external_learn_add(br, p, fdb_info->addr,
++-						fdb_info->vid,
++-						fdb_info->locked, false);
+++						fdb_info->vid, fdb_info->locked,
+++						false, 0);
++ 		if (err) {
++ 			err = notifier_from_errno(err);
++ 			break;
++diff --git a/net/bridge/br_fdb.c b/net/bridge/br_fdb.c
++index 642b8ccaa..202d79183 100644
++--- a/net/bridge/br_fdb.c
+++++ b/net/bridge/br_fdb.c
++@@ -125,6 +125,8 @@ static int fdb_fill_info(struct sk_buff *skb, const struct net_bridge *br,
++ 		ndm->ndm_flags |= NTF_STICKY;
++ 	if (test_bit(BR_FDB_LOCKED, &fdb->flags))
++ 		ext_flags |= NTF_EXT_LOCKED;
+++	if (test_bit(BR_FDB_REMOTE_SYNC, &fdb->flags))
+++		ext_flags |= NTF_EXT_MH_PEER_SYNC;
++ 
++ 	if (nla_put(skb, NDA_LLADDR, ETH_ALEN, &fdb->key.addr))
++ 		goto nla_put_failure;
++@@ -920,9 +922,12 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
++ 				fdb_modified = true;
++ 				/* Take over HW learned entry */
++ 				if (unlikely(test_bit(BR_FDB_ADDED_BY_EXT_LEARN,
++-						      &fdb->flags)))
+++						      &fdb->flags))) {
++ 					clear_bit(BR_FDB_ADDED_BY_EXT_LEARN,
++ 						  &fdb->flags);
+++					clear_bit(BR_FDB_REMOTE_SYNC,
+++						  &fdb->flags);
+++				}
++ 				/* Clear locked flag when roaming to an
++ 				 * unlocked port.
++ 				 */
++@@ -1159,7 +1164,7 @@ static int fdb_add_entry(struct net_bridge *br, struct net_bridge_port *source,
++ static int __br_fdb_add(struct ndmsg *ndm, struct net_bridge *br,
++ 			struct net_bridge_port *p, const unsigned char *addr,
++ 			u16 nlh_flags, u16 vid, struct nlattr *nfea_tb[],
++-			struct netlink_ext_ack *extack)
+++			struct netlink_ext_ack *extack, u32 ext_flags)
++ {
++ 	int err = 0;
++ 
++@@ -1183,7 +1188,8 @@ static int __br_fdb_add(struct ndmsg *ndm, struct net_bridge *br,
++ 					   "FDB entry towards bridge must be permanent");
++ 			return -EINVAL;
++ 		}
++-		err = br_fdb_external_learn_add(br, p, addr, vid, false, true);
+++		err = br_fdb_external_learn_add(br, p, addr, vid, false, true,
+++						ext_flags);
++ 	} else {
++ 		spin_lock_bh(&br->hash_lock);
++ 		err = fdb_add_entry(br, p, addr, ndm, nlh_flags, vid, nfea_tb);
++@@ -1246,6 +1252,9 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 		return -EINVAL;
++ 	}
++ 
+++	if (tb[NDA_FLAGS_EXT])
+++		ext_flags = nla_get_u32(tb[NDA_FLAGS_EXT]);
+++
++ 	if (tb[NDA_FDB_EXT_ATTRS]) {
++ 		attr = tb[NDA_FDB_EXT_ATTRS];
++ 		err = nla_parse_nested(nfea_tb, NFEA_MAX, attr,
++@@ -1265,10 +1274,10 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 
++ 		/* VID was specified, so use it. */
++ 		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, vid, nfea_tb,
++-				   extack);
+++				   extack, ext_flags);
++ 	} else {
++ 		err = __br_fdb_add(ndm, br, p, addr, nlh_flags, 0, nfea_tb,
++-				   extack);
+++				   extack, ext_flags);
++ 		if (err || !vg || !vg->num_vlans)
++ 			goto out;
++ 
++@@ -1280,7 +1289,7 @@ int br_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
++ 			if (!br_vlan_should_use(v))
++ 				continue;
++ 			err = __br_fdb_add(ndm, br, p, addr, nlh_flags, v->vid,
++-					   nfea_tb, extack);
+++					   nfea_tb, extack, ext_flags);
++ 			if (err)
++ 				goto out;
++ 		}
++@@ -1422,7 +1431,7 @@ void br_fdb_unsync_static(struct net_bridge *br, struct net_bridge_port *p)
++ 
++ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++ 			      const unsigned char *addr, u16 vid, bool locked,
++-			      bool swdev_notify)
+++			      bool swdev_notify, u32 ext_flags)
++ {
++ 	struct net_bridge_fdb_entry *fdb;
++ 	bool modified = false;
++@@ -1448,6 +1457,9 @@ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++ 		if (locked)
++ 			flags |= BIT(BR_FDB_LOCKED);
++ 
+++		if (ext_flags & NTF_EXT_MH_PEER_SYNC)
+++			flags |= BIT(BR_FDB_REMOTE_SYNC);
+++
++ 		fdb = fdb_create(br, p, addr, vid, flags);
++ 		if (!fdb) {
++ 			err = -ENOMEM;
++@@ -1481,6 +1493,15 @@ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++ 			modified = true;
++ 		}
++ 
+++		if (test_bit(BR_FDB_REMOTE_SYNC, &fdb->flags) !=
+++		    !!(ext_flags & NTF_EXT_MH_PEER_SYNC)) {
+++			modified = true;
+++			if (ext_flags & NTF_EXT_MH_PEER_SYNC)
+++				set_bit(BR_FDB_REMOTE_SYNC, &fdb->flags);
+++			else
+++				clear_bit(BR_FDB_REMOTE_SYNC, &fdb->flags);
+++		}
+++
++ 		if (swdev_notify)
++ 			set_bit(BR_FDB_ADDED_BY_USER, &fdb->flags);
++ 
++diff --git a/net/bridge/br_private.h b/net/bridge/br_private.h
++index 6a1bce895..2376178ec 100644
++--- a/net/bridge/br_private.h
+++++ b/net/bridge/br_private.h
++@@ -277,6 +277,7 @@ enum {
++ 	BR_FDB_NOTIFY_INACTIVE,
++ 	BR_FDB_LOCKED,
++ 	BR_FDB_DYNAMIC_LEARNED,
+++	BR_FDB_REMOTE_SYNC,
++ };
++ 
++ struct net_bridge_fdb_key {
++@@ -868,8 +869,8 @@ int br_fdb_get(struct sk_buff *skb, struct nlattr *tb[], struct net_device *dev,
++ int br_fdb_sync_static(struct net_bridge *br, struct net_bridge_port *p);
++ void br_fdb_unsync_static(struct net_bridge *br, struct net_bridge_port *p);
++ int br_fdb_external_learn_add(struct net_bridge *br, struct net_bridge_port *p,
++-			      const unsigned char *addr, u16 vid,
++-			      bool locked, bool swdev_notify);
+++			      const unsigned char *addr, u16 vid, bool locked,
+++			      bool swdev_notify, u32 ext_flags);
++ int br_fdb_external_learn_del(struct net_bridge *br, struct net_bridge_port *p,
++ 			      const unsigned char *addr, u16 vid,
++ 			      bool swdev_notify);
++diff --git a/net/core/neighbour.c b/net/core/neighbour.c
++index 8082cc6be..019aec2ea 100644
++--- a/net/core/neighbour.c
+++++ b/net/core/neighbour.c
++@@ -186,6 +186,9 @@ static void neigh_update_flags(struct neighbour *neigh, u32 flags, int *notify,
++ 
++ 	ndm_flags  = (flags & NEIGH_UPDATE_F_EXT_LEARNED) ? NTF_EXT_LEARNED : 0;
++ 	ndm_flags |= (flags & NEIGH_UPDATE_F_MANAGED) ? NTF_MANAGED : 0;
+++	ndm_flags |= (flags & NEIGH_UPDATE_F_EXT_MH_PEER_SYNC) ?
+++			     NTF_MH_PEER_SYNC :
+++			     0;
++ 
++ 	if ((old_flags ^ ndm_flags) & NTF_EXT_LEARNED) {
++ 		if (ndm_flags & NTF_EXT_LEARNED)
++@@ -203,6 +206,14 @@ static void neigh_update_flags(struct neighbour *neigh, u32 flags, int *notify,
++ 		*notify = 1;
++ 		*managed_update = true;
++ 	}
+++
+++	if ((old_flags ^ ndm_flags) & NTF_MH_PEER_SYNC) {
+++		if (ndm_flags & NTF_MH_PEER_SYNC)
+++			neigh->flags |= NTF_MH_PEER_SYNC;
+++		else
+++			neigh->flags &= ~NTF_MH_PEER_SYNC;
+++		*notify = 1;
+++	}
++ }
++ 
++ static bool neigh_del(struct neighbour *n, struct neighbour __rcu **np,
++@@ -2104,6 +2115,8 @@ static int neigh_add(struct sk_buff *skb, struct nlmsghdr *nlh,
++ 		flags |= NEIGH_UPDATE_F_MANAGED;
++ 	if (ndm_flags & NTF_USE)
++ 		flags |= NEIGH_UPDATE_F_USE;
+++	if (ndm_flags & NTF_MH_PEER_SYNC)
+++		flags |= NEIGH_UPDATE_F_EXT_MH_PEER_SYNC;
++ 
++ 	err = __neigh_update(neigh, lladdr, ndm->ndm_state, flags,
++ 			     NETLINK_CB(skb).portid, extack);
++-- 
++2.34.1
++
+diff --git a/patches-sonic/series b/patches-sonic/series
+index 67e24b2..b1ea75a 100644
+--- a/patches-sonic/series
++++ b/patches-sonic/series
+@@ -227,6 +227,11 @@ cisco-npu-disable-other-bars.patch
+ 0011-PCI-AER-Fix-NULL-pointer-access-by-aer_info.patch
+ 0012-PCI-AER-Avoid-NULL-pointer-dereference-in-aer_rateli.patch
+ 
++# Patches for EVPN MH
++0001-vxlan-bridge-Add-NDA_FLAGS_EXT-support-with-NTF_EXT_.patch
++0001-net-bridge-vxlan-Protocol-field-in-bridge-fdb.patch
++0001-neighbor-Add-NTF_EXT_VALIDATED-flag-for-externally-v.patch
++
+ # QID-45097: Crackarmor fixes
+ qsa-2026-apparmor/0001-apparmor-validate-DFA-start-states-are-in-bounds-in-.patch
+ qsa-2026-apparmor/0002-apparmor-fix-memory-leak-in-verify_header.patch
+-- 
+2.25.1
+

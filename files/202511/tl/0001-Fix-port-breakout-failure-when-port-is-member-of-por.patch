@@ -1,0 +1,287 @@
+From 7a0379a99fa552c5f2aea2b49301d01571a1ab23 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Fri, 6 Mar 2026 18:57:28 +0530
+Subject: [PATCH] Fix port breakout failure when port is member of port-channel
+
+Problem:
+During port breakout of a port-channel member (in force mode), the CLI
+removes both the port and port-channel member config from CONFIG_DB,
+then waits up to 60 seconds for the port to be deleted from ASIC_DB.
+
+A race condition between portmgrd (swss docker) and teammgrd (teamd
+docker) causes breakout failure:
+1. portmgrd processes the port DEL and removes the port from APP_DB
+2. teammgrd's removeLagMember() writes admin_status/mtu to APP_DB,
+   inadvertently re-creating the port entry
+3. orchagent sees the port still in APP_DB and never deletes it from
+   ASIC_DB, causing the 60-second timeout and breakout failure as shown
+   below.
+
+$config interface breakout Ethernet176 "2x400G[200G,100G]" -y -f
+Running Breakout Mode : 1x800G[400G,200G]
+Target Breakout Mode : 2x400G[200G,100G]
+Ports to be deleted : { "Ethernet176": "800000" }
+Ports to be added : {
+      "Ethernet176": "400000", "Ethernet180": "400000"
+}
+!!!  Critical Failure, Ports are not Deleted from ASIC DB, Bail Out !!!
+Ports are present in ASIC DB after 60 secs
+Ports are present in ASIC DB after 60 secs
+[ERROR] Port breakout Failed!!! Opting Out
+Failed to break out Port. Error:}
+
+So here main issue cfgmgrs writing to same APP_PORT_TABLE then ordering
+of event plays role here and need special handling
+
+Root cause - two cfgmgrs writing to the SAME APP_DB table:
+The core issue is that both portmgrd and teammgrd write to the SAME
+APP_PORT_TABLE in APP_DB. When two processes operate on the same table,
+the ordering of operations becomes critical - a SET from teammgrd can
+undo a DEL from portmgrd, effectively re-creating a port entry that was
+just deleted.
+
+Contrast this with QoS/buffer configuration, where there is no such
+ordering problem: buffermgrd writes to SEPARATE APP_DB tables such as
+APP_BUFFER_PG_TABLE, APP_BUFFER_QUEUE_TABLE, APP_BUFFER_POOL_TABLE, and
+APP_BUFFER_PROFILE_TABLE - all different from APP_PORT_TABLE. When a port
+is deleted, it does not matter whether buffermgrd removes the buffer/QoS
+entries before or after portmgrd deletes the port from APP_PORT_TABLE.
+This is because orchagent internally maintains reference counts and
+ will not delete the port from ASIC_DB until all dependent
+objects (buffer PGs, queues, QoS maps etc.) referencing that port are
+removed first. The cross-table dependency resolution is handled entirely
+by orchagent'\''s reference counting mechanism, making the ordering of
+DEL operations between different cfgmgrs irrelevant.
+
+Fix:
+
+In portmgr, defer port deletion from APP_DB if the port is still a
+member of LAG in APP_DB LAG_MEMBER_TABLE. The deletion is retried
+on subsequent doTask() cycles. Once teamsyncd removes the LAG member
+entry, portmgrd proceeds with the port deletion, ensuring proper
+sequencing and successful breakout.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ cfgmgr/portmgr.cpp              |  31 ++++++++
+ cfgmgr/portmgr.h                |   2 +
+ tests/mock_tests/portmgr_ut.cpp | 125 ++++++++++++++++++++++++++++++++
+ 3 files changed, 158 insertions(+)
+
+diff --git a/cfgmgr/portmgr.cpp b/cfgmgr/portmgr.cpp
+index e3ac0e85..402e6595 100644
+--- a/cfgmgr/portmgr.cpp
++++ b/cfgmgr/portmgr.cpp
+@@ -17,6 +17,7 @@ PortMgr::PortMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, c
+         m_cfgSendToIngressPortTable(cfgDb, CFG_SEND_TO_INGRESS_PORT_TABLE_NAME),
+         m_cfgLagMemberTable(cfgDb, CFG_LAG_MEMBER_TABLE_NAME),
+         m_statePortTable(stateDb, STATE_PORT_TABLE_NAME),
++        m_appLagMemberTable(appDb, APP_LAG_MEMBER_TABLE_NAME),
+         m_appSendToIngressPortTable(appDb, APP_SEND_TO_INGRESS_PORT_TABLE_NAME),
+         m_appPortTable(appDb, APP_PORT_TABLE_NAME)
+ {
+@@ -240,6 +241,17 @@ void PortMgr::doTask(Consumer &consumer)
+         }
+         else if (op == DEL_COMMAND)
+         {
++            /* if the port is still a member of a LAG in APPDB, defer the port deletion to avoid a race
++             * condition where portmgrd deletes the port from APPDB, but teammgrd's removeLagMember()
++             * subsequently re-creates the port entry by writing admin_status/mtu. This re-creation
++             * prevents orchagent from deleting the port from ASIC-DB, causing port breakout failure.
++             */
++            if (isPortPartOfLag(alias))
++            {
++                SWSS_LOG_NOTICE("Port %s is still part of a LAG in APPDB, deferring deletion", alias.c_str());
++                it++;
++                continue;
++            }
+             SWSS_LOG_NOTICE("Delete Port: %s", alias.c_str());
+             m_appPortTable.del(alias);
+             m_portList.erase(alias);
+@@ -249,6 +261,25 @@ void PortMgr::doTask(Consumer &consumer)
+     }
+ }
+ 
++bool PortMgr::isPortPartOfLag(const string &alias)
++{
++    SWSS_LOG_ENTER();
++
++    /* Check if the port is a member of any LAG in APPDB LAG_MEMBER_TABLE.  */
++    vector<string> keys;
++    m_appLagMemberTable.getKeys(keys);
++    for (const auto &key : keys)
++    {
++        auto tokens = tokenize(key, delimiter);
++        if (tokens.size() == 2 && tokens[1] == alias)
++        {
++            return true;
++        }
++    }
++
++    return false;
++}
++
+ bool PortMgr::writeConfigToAppDb(const std::string &alias, const std::string &field, const std::string &value)
+ {
+     vector<FieldValueTuple> fvs;
+diff --git a/cfgmgr/portmgr.h b/cfgmgr/portmgr.h
+index 3d6f0365..d5719495 100644
+--- a/cfgmgr/portmgr.h
++++ b/cfgmgr/portmgr.h
+@@ -25,6 +25,7 @@ private:
+     Table m_cfgSendToIngressPortTable;
+     Table m_cfgLagMemberTable;
+     Table m_statePortTable;
++    Table m_appLagMemberTable;
+     ProducerStateTable m_appPortTable;
+     ProducerStateTable m_appSendToIngressPortTable;
+ 
+@@ -37,6 +38,7 @@ private:
+     bool setPortMtu(const std::string &alias, const std::string &mtu);
+     bool setPortAdminStatus(const std::string &alias, const bool up);
+     bool isPortStateOk(const std::string &alias);
++    bool isPortPartOfLag(const std::string &alias);
+ };
+ 
+ }
+diff --git a/tests/mock_tests/portmgr_ut.cpp b/tests/mock_tests/portmgr_ut.cpp
+index b7b83590..e92ba9f5 100644
+--- a/tests/mock_tests/portmgr_ut.cpp
++++ b/tests/mock_tests/portmgr_ut.cpp
+@@ -1,3 +1,6 @@
++#define protected public
++#include "orch.h"
++#undef protected
+ #include "portmgr.h"
+ #include "gtest/gtest.h"
+ #include "mock_table.h"
+@@ -201,4 +204,126 @@ namespace portmgr_ut
+         ASSERT_TRUE(value_opt);
+         ASSERT_EQ("template2", value_opt.get());
+     }
++
++    TEST_F(PortMgrTest, PortDeleteDeferredWhenPartOfLag)
++    {
++        Table state_port_table(m_state_db.get(), STATE_PORT_TABLE_NAME);
++        Table app_port_table(m_app_db.get(), APP_PORT_TABLE_NAME);
++        Table cfg_port_table(m_config_db.get(), CFG_PORT_TABLE_NAME);
++        Table app_lag_member_table(m_app_db.get(), APP_LAG_MEMBER_TABLE_NAME);
++
++        // Create port and make it operational
++        cfg_port_table.set("Ethernet0", {
++            {"speed", "100000"},
++            {"index", "1"}
++        });
++        mockCallArgs.clear();
++        m_portMgr->addExistingData(&cfg_port_table);
++        m_portMgr->doTask();
++
++        state_port_table.set("Ethernet0", {
++            {"state", "ok"}
++        });
++        m_portMgr->doTask();
++
++        // Add Ethernet0 as a LAG member in APPDB
++        app_lag_member_table.set("PortChannel0001:Ethernet0", {
++            {"status", "enabled"}
++        });
++
++        // Try to delete port while it is still part of LAG
++        std::deque<KeyOpFieldsValuesTuple> entries;
++        entries.push_back({"Ethernet0", DEL_COMMAND, {}});
++        auto consumer = dynamic_cast<Consumer *>(m_portMgr->getExecutor(CFG_PORT_TABLE_NAME));
++        ASSERT_NE(consumer, nullptr);
++        consumer->addToSync(entries);
++        m_portMgr->doTask();
++
++        // Port should still exist in APPDB because deletion was deferred
++        std::vector<FieldValueTuple> values;
++        bool exists = app_port_table.get("Ethernet0", values);
++        ASSERT_TRUE(exists);
++    }
++
++    TEST_F(PortMgrTest, PortDeleteSucceedsWhenNotPartOfLag)
++    {
++        Table state_port_table(m_state_db.get(), STATE_PORT_TABLE_NAME);
++        Table app_port_table(m_app_db.get(), APP_PORT_TABLE_NAME);
++        Table cfg_port_table(m_config_db.get(), CFG_PORT_TABLE_NAME);
++
++        // Create port and make it operational
++        cfg_port_table.set("Ethernet0", {
++            {"speed", "100000"},
++            {"index", "1"}
++        });
++        mockCallArgs.clear();
++        m_portMgr->addExistingData(&cfg_port_table);
++        m_portMgr->doTask();
++
++        state_port_table.set("Ethernet0", {
++            {"state", "ok"}
++        });
++        m_portMgr->doTask();
++
++        // Delete port with no LAG membership
++        std::deque<KeyOpFieldsValuesTuple> entries;
++        entries.push_back({"Ethernet0", DEL_COMMAND, {}});
++        auto consumer = dynamic_cast<Consumer *>(m_portMgr->getExecutor(CFG_PORT_TABLE_NAME));
++        ASSERT_NE(consumer, nullptr);
++        consumer->addToSync(entries);
++        m_portMgr->doTask();
++
++        // Port should be removed from APPDB
++        std::vector<FieldValueTuple> values;
++        bool exists = app_port_table.get("Ethernet0", values);
++        ASSERT_FALSE(exists);
++    }
++
++    TEST_F(PortMgrTest, PortDeleteSucceedsAfterLagMemberRemoved)
++    {
++        Table state_port_table(m_state_db.get(), STATE_PORT_TABLE_NAME);
++        Table app_port_table(m_app_db.get(), APP_PORT_TABLE_NAME);
++        Table cfg_port_table(m_config_db.get(), CFG_PORT_TABLE_NAME);
++        Table app_lag_member_table(m_app_db.get(), APP_LAG_MEMBER_TABLE_NAME);
++
++        // Create port and make it operational
++        cfg_port_table.set("Ethernet0", {
++            {"speed", "100000"},
++            {"index", "1"}
++        });
++        mockCallArgs.clear();
++        m_portMgr->addExistingData(&cfg_port_table);
++        m_portMgr->doTask();
++
++        state_port_table.set("Ethernet0", {
++            {"state", "ok"}
++        });
++        m_portMgr->doTask();
++
++        // Add Ethernet0 as a LAG member in APPDB
++        app_lag_member_table.set("PortChannel0001:Ethernet0", {
++            {"status", "enabled"}
++        });
++
++        // Try to delete port while it is still part of LAG — should be deferred
++        std::deque<KeyOpFieldsValuesTuple> entries;
++        entries.push_back({"Ethernet0", DEL_COMMAND, {}});
++        auto consumer = dynamic_cast<Consumer *>(m_portMgr->getExecutor(CFG_PORT_TABLE_NAME));
++        ASSERT_NE(consumer, nullptr);
++        consumer->addToSync(entries);
++        m_portMgr->doTask();
++
++        std::vector<FieldValueTuple> values;
++        bool exists = app_port_table.get("Ethernet0", values);
++        ASSERT_TRUE(exists);
++
++        // Remove the LAG member entry from APPDB
++        app_lag_member_table.del("PortChannel0001:Ethernet0");
++
++        // Retry doTask — port deletion should now succeed
++        m_portMgr->doTask();
++
++        exists = app_port_table.get("Ethernet0", values);
++        ASSERT_FALSE(exists);
++    }
+ }
+-- 
+2.25.1
+

@@ -1,0 +1,56 @@
+From 18b1c65413b4d0033d7f79cad4c1731b3a65235c Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 11 Mar 2026 13:59:09 +0530
+Subject: [PATCH] GR Timer CLI Range - Max value is not accepted
+
+In python, range(x,y) takes values from x to y-1.
+Hence all the CLIs have the same issue. updating the same.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ config/main.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/config/main.py b/config/main.py
+index e9689173..d3ac9b74 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -3790,7 +3790,7 @@ def warm_restart_disable(ctx, module):
+ def warm_restart_neighsyncd_timer(ctx, seconds):
+     db = ValidatedConfigDBConnector(ctx.obj['db'])
+     if ADHOC_VALIDATION:
+-        if seconds not in range(1, 9999):
++        if seconds not in range(1, 10000):
+             ctx.fail("neighsyncd warm restart timer must be in range 1-9999")
+     try:
+         db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
+@@ -3803,7 +3803,7 @@ def warm_restart_neighsyncd_timer(ctx, seconds):
+ def warm_restart_bgp_timer(ctx, seconds):
+     db = ValidatedConfigDBConnector(ctx.obj['db'])
+     if ADHOC_VALIDATION:
+-        if seconds not in range(1, 3600):
++        if seconds not in range(1, 3601):
+             ctx.fail("bgp warm restart timer must be in range 1-3600")
+     try:
+         entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
+@@ -3819,7 +3819,7 @@ def warm_restart_bgp_timer(ctx, seconds):
+ def warm_restart_teamsyncd_timer(ctx, seconds):
+     db = ValidatedConfigDBConnector(ctx.obj['db'])
+     if ADHOC_VALIDATION:
+-        if seconds not in range(1, 3600):
++        if seconds not in range(1, 3601):
+             ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
+     try:
+         db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
+@@ -3887,7 +3887,7 @@ def warm_restart_ospf_timer(ctx, seconds):
+     if metadata.get('frr_mgmt_framework_config') != 'true':
+         ctx.fail("OSPF GR requires frr_mgmt_framework_config to be enabled in DEVICE_METADATA")
+     if ADHOC_VALIDATION:
+-        if seconds not in range(1, 3600):
++        if seconds not in range(1, 3601):
+             ctx.fail("ospf warm restart timer must be in range 1-3600")
+     try:
+         entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
+-- 
+2.25.1
+

@@ -1,0 +1,98 @@
+From b94545f1b1fc76ea849e399b4dbc2bd51c85ee42 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Mon, 20 Apr 2026 17:49:35 +0530
+Subject: [PATCH] EVPN MH static MAC flush fix
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ ...ocal_mac-BGP-withdrawal-in-ext-learn.patch | 68 +++++++++++++++++++
+ src/sonic-frr/patch/series                    |  1 +
+ 2 files changed, 69 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
+
+diff --git a/src/sonic-frr/patch/0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch b/src/sonic-frr/patch/0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
+new file mode 100644
+index 000000000..81ec20b90
+--- /dev/null
++++ b/src/sonic-frr/patch/0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
+@@ -0,0 +1,68 @@
++From f949a1a0efed640add8e58109d219a3df052f478 Mon Sep 17 00:00:00 2001
++From: apannerselva <apannerselva@marvell.com>
++Date: Wed, 15 Apr 2026 18:52:22 +0530
++Subject: [PATCH] zebra: fix del_local_mac BGP withdrawal in ext-learn mode
++
++In ext-learn mode, when a locally-learned MAC ages out in the ASIC,
++zebra_evpn_del_local_mac() is called. If PEER_ACTIVE is set from
++the peer VTEP Type-2 route, the MAC is considered static.
++
++The bug: zebra_evpn_mac_is_ready_for_bgp() returns true even after
++setting LOCAL_INACTIVE, because PEER_ACTIVE overrides the inactive
++check. BGP never withdraws the Type-2 route, creating a deadlock.
++
++Fix: In ext-learn mode, force new_bgp_ready=false so BGP sends a
++withdrawal. Skip the kernel re-install to prevent the fdbsyncd to
++ASIC STATIC deadlock loop.
++
++Signed-off-by: SONiC EVPN-MH <evpn-mh@sonic.net>
++Signed-off-by: apannerselva <apannerselva@marvell.com>
++---
++ zebra/zebra_evpn_mac.c | 26 +++++++++++++++++++++-----
++ 1 file changed, 21 insertions(+), 5 deletions(-)
++
++diff --git a/zebra/zebra_evpn_mac.c b/zebra/zebra_evpn_mac.c
++index cb7c13e19..9416a3245 100644
++--- a/zebra/zebra_evpn_mac.c
+++++ b/zebra/zebra_evpn_mac.c
++@@ -2392,16 +2392,32 @@ int zebra_evpn_del_local_mac(struct zebra_evpn *zevpn, struct zebra_mac *mac,
++ 		/* inform-bgp about change in local-activity if any */
++ 		if (!CHECK_FLAG(mac->flags, ZEBRA_MAC_LOCAL_INACTIVE)) {
++ 			SET_FLAG(mac->flags, ZEBRA_MAC_LOCAL_INACTIVE);
++-			new_bgp_ready =
++-				zebra_evpn_mac_is_ready_for_bgp(mac->flags);
+++			if (zebra_mac_ext_learn_mode()) {
+++				/* In ext-learn mode, ASIC aging is authoritative.
+++				 * Force BGP withdrawal so peer VTEP removes its
+++				 * static entry. is_ready_for_bgp() would return
+++				 * true here because PEER_ACTIVE overrides
+++				 * INACTIVE, but the host is genuinely gone.
+++				 */
+++				new_bgp_ready = false;
+++			} else {
+++				new_bgp_ready =
+++					zebra_evpn_mac_is_ready_for_bgp(
+++						mac->flags);
+++			}
++ 			zebra_evpn_mac_send_add_del_to_client(mac, old_bgp_ready,
++ 							      new_bgp_ready);
++ 		}
++ 
++-		/* In EXT-LEARN mode as well, the MAC will be reprogrammed as static,
++-		 * post age out, until proxy is withdrawn
+++		/* In EXT-LEARN mode, do NOT re-install the MAC in the
+++		 * kernel. Re-installing would cause fdbsyncd to program
+++		 * it as STATIC in the ASIC, preventing aging and creating
+++		 * a deadlock. The MAC will be cleaned up when the peer
+++		 * withdraws its Type-2 route.
++ 		 */
++-		zebra_evpn_sync_mac_dp_install(mac, true, false, __func__);
+++		if (!zebra_mac_ext_learn_mode())
+++			zebra_evpn_sync_mac_dp_install(mac, true, false,
+++						       __func__);
++ 
++ 		return 0;
++ 	}
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index e6747586f..055f4cdac 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -78,3 +78,4 @@
+ 0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
+ 0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+ 0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
++0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
+-- 
+2.25.1
+

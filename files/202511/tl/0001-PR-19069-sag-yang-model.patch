@@ -1,0 +1,297 @@
+From 88c7b526b5c0f982474743546e084b2f12c5b432 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Fri, 21 Nov 2025 23:22:42 +0530
+Subject: [PATCH] PR 19069 sag yang model
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ src/sonic-yang-models/setup.py                |   1 +
+ .../tests/files/sample_config_db.json         |   6 +
+ .../tests/static_anycast_gateway.json         |   9 ++
+ .../tests/yang_model_tests/tests/vlan.json    |   7 ++
+ .../tests_config/static_anycast_gateway.json  |  20 ++++
+ .../yang_model_tests/tests_config/vlan.json   | 104 ++++++++++++++++++
+ .../sonic-static-anycast-gateway.yang         |  30 +++++
+ .../yang-models/sonic-vlan.yang               |  10 ++
+ 8 files changed, 187 insertions(+)
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests/static_anycast_gateway.json
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests_config/static_anycast_gateway.json
+ create mode 100644 src/sonic-yang-models/yang-models/sonic-static-anycast-gateway.yang
+
+diff --git a/src/sonic-yang-models/setup.py b/src/sonic-yang-models/setup.py
+index d21cd79bb..2c78bdc11 100644
+--- a/src/sonic-yang-models/setup.py
++++ b/src/sonic-yang-models/setup.py
+@@ -213,6 +213,7 @@ yang_files = [
+     'sonic-vrf.yang',
+     'sonic-vxlan.yang',
+     'sonic-warm-restart.yang',
++    'sonic-static-anycast-gateway.yang',
+     'sonic-wred-profile.yang',
+     'sonic-xcvrd-log.yang',
+     'sonic-ztp.yang',
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 76a40b570..34cbb9b32 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -157,6 +157,7 @@
+         "VLAN_INTERFACE": {
+             "Vlan111": {
+                 "nat_zone": "0",
++                "static_anycast_gateway": "true",
+                 "loopback_action": "forward",
+                 "ipv6_use_link_local_only": "disable",
+                 "mac_addr": "02:ab:cd:ef:12:34"
+@@ -2228,6 +2229,11 @@
+                 ]
+             }
+         },
++        "SAG": {
++            "GLOBAL": {
++                "gateway_mac": "00:11:22:33:44:55"
++            }
++        },
+         "SCHEDULER": {
+             "TEST@0": {
+                 "cbs": "256",
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/static_anycast_gateway.json b/src/sonic-yang-models/tests/yang_model_tests/tests/static_anycast_gateway.json
+new file mode 100644
+index 000000000..2d5733ea4
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/static_anycast_gateway.json
+@@ -0,0 +1,9 @@
++{
++    "SAG_GLOBAL_MAC_TEST": {
++        "desc": "Configure a entry in SAG table."
++    },
++    "SAG_GLOBAL_WITH_INVALID_MAC_TEST": {
++        "desc": "Configure a invalid MAC address format in SAG table.",
++        "eStrKey" : "Pattern"
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/vlan.json b/src/sonic-yang-models/tests/yang_model_tests/tests/vlan.json
+index 05d8281e6..bae69bcee 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests/vlan.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/vlan.json
+@@ -55,6 +55,13 @@
+     "VLAN_INTERFACE_VALID_NAT_ZONE_RANGE": {
+         "desc": "Configure valid value for nat zone."
+     },
++    "VLAN_INTERFACE_VALID_STATIC_ANYCAST_GATEWAY": {
++        "desc": "Configure valid value for static anycast gateway"
++    },
++    "VLAN_INTERFACE_INVALID_STATIC_ANYCAST_GATEWAY": {
++        "desc": "Configure invalid value for static anycast gateway",
++        "eStrKey": "InvalidValue"
++    },
+     "DHCP_SERVER_VALID_FORMAT": {
+         "desc": "Add dhcp_server in correct format."
+     },
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/static_anycast_gateway.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/static_anycast_gateway.json
+new file mode 100644
+index 000000000..5f2b098d2
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/static_anycast_gateway.json
+@@ -0,0 +1,20 @@
++{
++    "SAG_GLOBAL_MAC_TEST": {
++        "sonic-static-anycast-gateway:sonic-static-anycast-gateway": {
++            "sonic-static-anycast-gateway:SAG": {
++                "sonic-static-anycast-gateway:GLOBAL": {
++                    "gateway_mac": "00:11:22:33:44:55"
++                }
++            }
++        }
++    },
++    "SAG_GLOBAL_WITH_INVALID_MAC_TEST": {
++        "sonic-static-anycast-gateway:sonic-static-anycast-gateway": {
++            "sonic-static-anycast-gateway:SAG": {
++                "sonic-static-anycast-gateway:GLOBAL": {
++                    "gateway_mac": "001122334455"
++                }
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/vlan.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/vlan.json
+index e81809119..40d05274b 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests_config/vlan.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/vlan.json
+@@ -433,6 +433,110 @@
+             }
+         }
+     },
++    "VLAN_INTERFACE_VALID_STATIC_ANYCAST_GATEWAY": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "eth0",
++                        "description": "Ethernet0",
++                        "mtu": 9000,
++                        "lanes": "1",
++                        "name": "Ethernet0",
++                        "speed": 25000
++                    }
++                ]
++            }
++        },
++        "sonic-vlan:sonic-vlan": {
++            "sonic-vlan:VLAN": {
++                "VLAN_LIST": [
++                    {
++                        "description": "vlan_nat",
++                        "name": "Vlan100"
++                    }
++                ]
++            },
++            "sonic-vlan:VLAN_MEMBER": {
++                "VLAN_MEMBER_LIST": [
++                    {
++                        "port": "Ethernet0",
++                        "tagging_mode": "tagged",
++                        "name": "Vlan100"
++                    }
++                ]
++            },
++            "sonic-vlan:VLAN_INTERFACE": {
++                "VLAN_INTERFACE_IPPREFIX_LIST": [
++                    {
++                        "family": "IPv4",
++                        "ip-prefix": "10.0.0.1/24",
++                        "scope": "global",
++                        "name": "Vlan100"
++                    }
++                ],
++                "VLAN_INTERFACE_LIST": [
++                    {
++                         "name": "Vlan100",
++                         "static_anycast_gateway": "true"
++                    }
++                ]
++            }
++        }
++    },
++    "VLAN_INTERFACE_INVALID_STATIC_ANYCAST_GATEWAY": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "eth0",
++                        "description": "Ethernet0",
++                        "mtu": 9000,
++                        "lanes": "1",
++                        "name": "Ethernet0",
++                        "speed": 25000
++                    }
++                ]
++            }
++        },
++        "sonic-vlan:sonic-vlan": {
++            "sonic-vlan:VLAN": {
++                "VLAN_LIST": [
++                    {
++                        "description": "vlan_nat",
++                        "name": "Vlan100"
++                    }
++                ]
++            },
++            "sonic-vlan:VLAN_MEMBER": {
++                "VLAN_MEMBER_LIST": [
++                    {
++                        "port": "Ethernet0",
++                        "tagging_mode": "tagged",
++                        "name": "Vlan100"
++                    }
++                ]
++            },
++            "sonic-vlan:VLAN_INTERFACE": {
++                "VLAN_INTERFACE_IPPREFIX_LIST": [
++                    {
++                        "family": "IPv4",
++                        "ip-prefix": "10.0.0.1/24",
++                        "scope": "global",
++                        "name": "Vlan100"
++                    }
++                ],
++                "VLAN_INTERFACE_LIST": [
++                    {
++                        "name": "Vlan100",
++                        "static_anycast_gateway": "enabled"
++                    }
++                ]
++            }
++        }
++    },
+     "DHCP_SERVER_VALID_FORMAT": {
+         "sonic-port:sonic-port": {
+             "sonic-port:PORT": {
+diff --git a/src/sonic-yang-models/yang-models/sonic-static-anycast-gateway.yang b/src/sonic-yang-models/yang-models/sonic-static-anycast-gateway.yang
+new file mode 100644
+index 000000000..5c5e153ff
+--- /dev/null
++++ b/src/sonic-yang-models/yang-models/sonic-static-anycast-gateway.yang
+@@ -0,0 +1,30 @@
++module sonic-static-anycast-gateway {
++
++    yang-version 1.1;
++
++    namespace "http://github.com/sonic-net/sonic-static-anycast-gateway";
++    prefix sag;
++
++    import ietf-yang-types {
++        prefix yang;
++    }
++
++    description "SAG yang Module for SONiC OS";
++
++    revision 2025-04-22 {
++        description
++            "Initial version";
++    }
++
++    container sonic-static-anycast-gateway {
++        container SAG {
++            container GLOBAL {
++                description "Global static anycast gateway configuration";
++
++                leaf gateway_mac {
++                    type yang:mac-address;
++                }
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/yang-models/sonic-vlan.yang b/src/sonic-yang-models/yang-models/sonic-vlan.yang
+index 7191b962a..6757a5341 100644
+--- a/src/sonic-yang-models/yang-models/sonic-vlan.yang
++++ b/src/sonic-yang-models/yang-models/sonic-vlan.yang
+@@ -47,6 +47,10 @@ module sonic-vlan {
+ 
+ 	description "VLAN yang Module for SONiC OS";
+ 
++	revision 2025-04-22 {
++		description "Add SAG support";
++	}
++
+ 	revision 2025-03-06 {
+ 		description "Add leaf vnet_name";
+ 	}
+@@ -137,6 +141,12 @@ module sonic-vlan {
+ 					default disable;
+ 				}
+ 
++				leaf static_anycast_gateway {
++					description "Enable/disable static anycast gateway for the vlan interface";
++					type boolean;
++					default false;
++				}
++
+ 				leaf mac_addr {
+ 					description "Assign administrator-provided MAC address to Interface";
+ 					type yang:mac-address;
+-- 
+2.25.1
+

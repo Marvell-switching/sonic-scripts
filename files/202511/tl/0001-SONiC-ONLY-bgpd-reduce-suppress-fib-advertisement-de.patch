@@ -1,0 +1,100 @@
+From 5e146e78539a409bd748f72c895c0fa755ebf7b5 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Wed, 6 May 2026 15:19:40 +0530
+Subject: [PATCH] 
+ SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ ...advertisement-delay-to-50ms-modified.patch | 61 +++++++++++++++++++
+ src/sonic-frr/patch/series                    |  2 +-
+ 2 files changed, 62 insertions(+), 1 deletion(-)
+ create mode 100644 src/sonic-frr/patch/0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
+
+diff --git a/src/sonic-frr/patch/0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch b/src/sonic-frr/patch/0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
+new file mode 100644
+index 000000000..4ef89d880
+--- /dev/null
++++ b/src/sonic-frr/patch/0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
+@@ -0,0 +1,61 @@
++From 0891a48c653f5cf4b521223bcba3b2553297d759 Mon Sep 17 00:00:00 2001
++From: Deepak Singhal <deepsinghal@microsoft.com>
++Date: Sat, 4 Apr 2026 06:43:05 +0000
++Subject: [PATCH] SONiC-ONLY: bgpd: reduce suppress-fib advertisement delay to
++ 50ms
++
++When bgp suppress-fib-pending is enabled, BGP_UPDATE_GROUP_TIMER_ON adds
++a batching delay after FIB confirmation before advertising routes. The
++default value of BGP_DEFAULT_UPDATE_ADVERTISEMENT_TIME (1 second) causes
++an additional 1-second delay on every route relay.
++
++This is a SONiC-only interim patch. The upstream FRR PR
++(FRRouting/frr#21384) adds a configurable knob. Once that lands in
++the FRR version used by SONiC (target: 202611), this patch should be
++removed and replaced with the upstream knob.
++
++Replace BGP_DEFAULT_UPDATE_ADVERTISEMENT_TIME with a new constant
++BGP_SUPPRESS_FIB_ADV_DELAY_MSEC (50ms) and reference it in the
++BGP_UPDATE_GROUP_TIMER_ON macro. Remove the now-unused
++BGP_DEFAULT_UPDATE_ADVERTISEMENT_TIME define.
++
++Ticket: sonic-net/sonic-buildimage#26345
++Ticket: FRRouting/frr#21298
++Signed-off-by: Deepak Singhal <deepsinghal@microsoft.com>
++---
++ bgpd/bgp_fsm.h | 3 +--
++ bgpd/bgpd.h    | 4 +++-
++ 2 files changed, 4 insertions(+), 3 deletions(-)
++
++diff --git a/bgpd/bgp_fsm.h b/bgpd/bgp_fsm.h
++index fcc0bfe2a..e39d0f28a 100644
++--- a/bgpd/bgp_fsm.h
+++++ b/bgpd/bgp_fsm.h
++@@ -33,8 +33,7 @@ enum bgp_fsm_state_progress {
++ 		if (BGP_SUPPRESS_FIB_ENABLED(peer->bgp) &&                            \
++ 		    PEER_ROUTE_ADV_DELAY(peer))                                       \
++ 			event_add_timer_msec(bm->master, (F), connection,             \
++-					     (BGP_DEFAULT_UPDATE_ADVERTISEMENT_TIME * \
++-					      1000),                                  \
+++					     BGP_SUPPRESS_FIB_ADV_DELAY_MSEC,         \
++ 					     (T));                                    \
++ 		else                                                                  \
++ 			event_add_timer_msec(bm->master, (F), connection, 0,          \
++diff --git a/bgpd/bgpd.h b/bgpd/bgpd.h
++index 0701b024f..77a8bda3b 100644
++--- a/bgpd/bgpd.h
+++++ b/bgpd/bgpd.h
++@@ -2341,7 +2341,9 @@ struct bgp_nlri {
++ #define BGP_DEFAULT_STALEPATH_TIME             360
++ #define BGP_DEFAULT_SELECT_DEFERRAL_TIME       240
++ #define BGP_DEFAULT_RIB_STALE_TIME             500
++-#define BGP_DEFAULT_UPDATE_ADVERTISEMENT_TIME  1
+++/* Post-FIB-confirmation batching delay for suppress-fib advertisement (ms) */
+++#define BGP_SUPPRESS_FIB_ADV_DELAY_MSEC       50
+++
++ 
++ /* BGP Long-lived Graceful Restart */
++ #define BGP_DEFAULT_LLGR_STALE_TIME 0
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index eebb5e7ac..85176756b 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -73,7 +73,6 @@
+ 0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch
+ 0084-support-vrrp6-commands-and-tracking-interface.patch
+ 0102-staticd-Fix-SRv6-SID-use-after-free-on-locator-deletion.patch
+-0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms.patch
+ 0104-SONiC-ONLY-zebra-skip-if-add-update-in-speed-timer-for-unready-ifp.patch
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
+ 0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+@@ -83,3 +82,4 @@
+ 0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+ 0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+ 0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
++0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
+-- 
+2.25.1
+

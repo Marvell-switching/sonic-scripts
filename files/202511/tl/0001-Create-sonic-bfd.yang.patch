@@ -1,0 +1,682 @@
+From 7d2de7792104dbf971c3288e2f31710bc944c08c Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Tue, 16 Dec 2025 16:14:25 +0530
+Subject: [PATCH] Create sonic-bfd.yang
+
+This yang is created based on already existing infra that is being
+used by frrcfgd.py
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ src/sonic-yang-models/setup.py                |   1 +
+ .../tests/files/sample_config_db.json         |  32 ++
+ .../tests/yang_model_tests/tests/bfd.json     |  63 ++++
+ .../yang_model_tests/tests_config/bfd.json    | 329 ++++++++++++++++++
+ .../yang-models/sonic-bfd.yang                | 194 +++++++++++
+ 5 files changed, 619 insertions(+)
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests/bfd.json
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests_config/bfd.json
+ create mode 100644 src/sonic-yang-models/yang-models/sonic-bfd.yang
+
+diff --git a/src/sonic-yang-models/setup.py b/src/sonic-yang-models/setup.py
+index 20b06b898..8f8cacf89 100644
+--- a/src/sonic-yang-models/setup.py
++++ b/src/sonic-yang-models/setup.py
+@@ -82,6 +82,7 @@ yang_files = [
+     'sonic-ars.yang',
+     'sonic-auto_techsupport.yang',
+     'sonic-banner.yang',
++    'sonic-bfd.yang',
+     'sonic-bgp-aggregate-address.yang',
+     'sonic-bgp-allowed-prefix.yang',
+     'sonic-bgp-bbr.yang',
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 4d1050804..102728597 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -1857,6 +1857,38 @@
+                 "local_ip": "12.12.0.2"
+             }
+         },
++        "BFD_PEER": {
++            "192.168.1.1|192.168.1.2|Ethernet0|singlehop": {
++                "transmit_interval": "300",
++                "receive_interval": "300",
++                "multiplier": "3",
++                "type": "async_active",
++                "admin_status": "up"
++            },
++            "10.0.0.121|10.0.0.120|Ethernet490|multihop": {
++                "transmit_interval": "5000",
++                "receive_interval": "5000",
++                "multiplier": "3",
++                "type": "async_passive",
++                "hw_lookup_valid": "true",
++                "shutdown_bfd_during_tsa": "true",
++                "admin_status": "up"
++            },
++            "2001:db8::1|2001:db8::2|Ethernet32|multihop": {
++                "vrf": "Vrf_blue",
++                "transmit_interval": "2000",
++                "receive_interval": "2000",
++                "multiplier": "4",
++                "echo_interval": "50",
++                "echo_mode": "true",
++                "type": "demand_active",
++                "hw_lookup_valid": "false",
++                "dst_mac": "00:11:22:33:44:55",
++                "shutdown_bfd_during_tsa": "false",
++                "label": "IPv6 BFD Session",
++                "admin_status": "up"
++            }
++        },        
+         "BGP_AGGREGATE_ADDRESS": {
+             "192.168.0.0/24": {
+                 "bbr-required": "true",
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/bfd.json b/src/sonic-yang-models/tests/yang_model_tests/tests/bfd.json
+new file mode 100644
+index 000000000..4d162a5a4
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/bfd.json
+@@ -0,0 +1,63 @@
++{
++    "BFD_PEER_SINGLEHOP_TEST": {
++        "desc": "Configure BFD single-hop peer in BFD_PEER table."
++    },
++    "BFD_PEER_MULTIHOP_TEST": {
++        "desc": "Configure BFD multi-hop peer in BFD_PEER table."
++    },
++    "BFD_PEER_WITH_VRF_TEST": {
++        "desc": "Configure BFD peer with non-default VRF in BFD_PEER table."
++    },
++    "BFD_PEER_WITH_HW_LOOKUP_TEST": {
++        "desc": "Configure BFD peer with hardware lookup enabled in BFD_PEER table."
++    },
++    "BFD_PEER_WITH_HW_LOOKUP_DISABLED_TEST": {
++        "desc": "Configure BFD peer with hardware lookup disabled in BFD_PEER table."
++    },
++    "BFD_PEER_INVALID_IP_TEST": {
++        "desc": "Configure BFD peer with invalid IP address.",
++        "eStr": ["Invalid"]
++    },
++    "BFD_PEER_INVALID_INTERFACE_TEST": {
++        "desc": "Configure BFD peer with invalid interface name.",
++        "eStr": ["Invalid", "interface"]
++    },
++    "BFD_PEER_WITH_ALL_PARAMS_TEST": {
++        "desc": "Configure BFD peer with all optional parameters."
++    },
++    "BFD_PEER_ADMIN_DOWN_TEST": {
++        "desc": "Configure BFD peer with admin status down."
++    },
++    "BFD_PEER_WITH_TYPE_TEST": {
++        "desc": "Configure BFD peer with specific session type."
++    },
++    "BFD_PEER_WITH_TSA_SHUTDOWN_TEST": {
++        "desc": "Configure BFD peer with TSA shutdown enabled."
++    },
++    "BFD_PEER_DEMAND_PASSIVE_TEST": {
++        "desc": "Configure BFD peer with demand_passive session type."
++    },
++    "BFD_PEER_INVALID_TYPE_TEST": {
++        "desc": "Configure BFD peer with invalid session type.",
++        "eStr": ["Invalid"]
++    },
++    "BFD_PEER_INVALID_TRANSMIT_INTERVAL_LOW_TEST": {
++        "desc": "Configure BFD peer with transmit_interval below minimum (< 10).",
++        "eStr": ["range"]
++    },
++    "BFD_PEER_INVALID_RECEIVE_INTERVAL_LOW_TEST": {
++        "desc": "Configure BFD peer with receive_interval below minimum (< 10).",
++        "eStr": ["range"]
++    },
++    "BFD_PEER_INVALID_ECHO_INTERVAL_LOW_TEST": {
++        "desc": "Configure BFD peer with echo_interval below minimum (< 10).",
++        "eStr": ["range"]
++    },
++    "BFD_PEER_WITH_DST_MAC_TEST": {
++        "desc": "Configure BFD peer with destination MAC address."
++    },
++    "BFD_PEER_INVALID_DST_MAC_TEST": {
++        "desc": "Configure BFD peer with invalid MAC address format.",
++        "eStr": ["Unsatisfied pattern"]
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/bfd.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/bfd.json
+new file mode 100644
+index 000000000..0c69dd3ad
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/bfd.json
+@@ -0,0 +1,329 @@
++{
++    "BFD_PEER_SINGLEHOP_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.1.1",
++                    "local_addr": "192.168.1.2",
++                    "interface": "Ethernet0",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_MULTIHOP_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "10.0.0.121",
++                    "local_addr": "10.0.0.120",
++                    "interface": "Ethernet490",
++                    "hop_type": "multihop",
++                    "transmit_interval": "5000",
++                    "receive_interval": "5000",
++                    "multiplier": "3",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_VRF_TEST": {
++        "sonic-vrf:sonic-vrf": {
++            "sonic-vrf:VRF": {
++                "VRF_LIST": [{
++                    "name": "Vrf_blue"
++                }]
++            }
++        },
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "172.16.1.1",
++                    "local_addr": "172.16.1.2",
++                    "interface": "Ethernet64",
++                    "hop_type": "singlehop",
++                    "vrf": "Vrf_blue",
++                    "transmit_interval": "1000",
++                    "receive_interval": "1000",
++                    "multiplier": "5",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_HW_LOOKUP_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "10.1.1.1",
++                    "local_addr": "10.1.1.2",
++                    "interface": "Ethernet8",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "hw_lookup_valid": "true",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_HW_LOOKUP_DISABLED_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "10.2.2.1",
++                    "local_addr": "10.2.2.2",
++                    "interface": "Ethernet16",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "hw_lookup_valid": "false",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_IP_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "999.999.999.999",
++                    "local_addr": "192.168.1.2",
++                    "interface": "Ethernet0",
++                    "hop_type": "singlehop",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_INTERFACE_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.1.1",
++                    "local_addr": "192.168.1.2",
++                    "interface": "InvalidInterface123",
++                    "hop_type": "singlehop",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_ALL_PARAMS_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "2001:db8::1",
++                    "local_addr": "2001:db8::2",
++                    "interface": "Ethernet32",
++                    "hop_type": "multihop",
++                    "vrf": "default",
++                    "transmit_interval": "2000",
++                    "receive_interval": "2000",
++                    "multiplier": "4",
++                    "echo_interval": "50",
++                    "echo_mode": "true",
++                    "type": "demand_active",
++                    "hw_lookup_valid": "true",
++                    "dst_mac": "00:11:22:33:44:55",
++                    "shutdown_bfd_during_tsa": "false",
++                    "label": "Test BFD Session",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_ADMIN_DOWN_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.2.1",
++                    "local_addr": "192.168.2.2",
++                    "interface": "Ethernet48",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "admin_status": "down"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_TYPE_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.3.1",
++                    "local_addr": "192.168.3.2",
++                    "interface": "Ethernet56",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "type": "async_passive",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_TSA_SHUTDOWN_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.4.1",
++                    "local_addr": "192.168.4.2",
++                    "interface": "Ethernet64",
++                    "hop_type": "multihop",
++                    "transmit_interval": "1000",
++                    "receive_interval": "1000",
++                    "multiplier": "5",
++                    "type": "async_active",
++                    "hw_lookup_valid": "true",
++                    "shutdown_bfd_during_tsa": "true",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_DEMAND_PASSIVE_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "10.10.10.1",
++                    "local_addr": "10.10.10.2",
++                    "interface": "Ethernet72",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "500",
++                    "receive_interval": "500",
++                    "multiplier": "3",
++                    "type": "demand_passive",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_TYPE_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.5.1",
++                    "local_addr": "192.168.5.2",
++                    "interface": "Ethernet80",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "type": "invalid_mode",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_TRANSMIT_INTERVAL_LOW_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.6.1",
++                    "local_addr": "192.168.6.2",
++                    "interface": "Ethernet88",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "5",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_RECEIVE_INTERVAL_LOW_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.7.1",
++                    "local_addr": "192.168.7.2",
++                    "interface": "Ethernet96",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "9",
++                    "multiplier": "3",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_ECHO_INTERVAL_LOW_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.8.1",
++                    "local_addr": "192.168.8.2",
++                    "interface": "Ethernet104",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "echo_interval": "8",
++                    "echo_mode": "true",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_WITH_DST_MAC_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.9.1",
++                    "local_addr": "192.168.9.2",
++                    "interface": "Ethernet112",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "dst_mac": "aa:bb:cc:dd:ee:ff",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    },
++
++    "BFD_PEER_INVALID_DST_MAC_TEST": {
++        "sonic-bfd:sonic-bfd": {
++            "sonic-bfd:BFD_PEER": {
++                "BFD_PEER_LIST": [{
++                    "remote_addr": "192.168.10.1",
++                    "local_addr": "192.168.10.2",
++                    "interface": "Ethernet120",
++                    "hop_type": "singlehop",
++                    "transmit_interval": "300",
++                    "receive_interval": "300",
++                    "multiplier": "3",
++                    "dst_mac": "invalid-mac-address",
++                    "admin_status": "up"
++                }]
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/yang-models/sonic-bfd.yang b/src/sonic-yang-models/yang-models/sonic-bfd.yang
+new file mode 100644
+index 000000000..c2abbd8a4
+--- /dev/null
++++ b/src/sonic-yang-models/yang-models/sonic-bfd.yang
+@@ -0,0 +1,194 @@
++module sonic-bfd {
++    yang-version 1.1;
++    namespace "http://github.com/Azure/sonic-bfd";
++    prefix bfd;
++
++    import ietf-yang-types {
++        prefix yang;
++    }
++
++    import ietf-inet-types {
++        prefix inet;
++    }
++
++    import sonic-types {
++        prefix stypes;
++    }
++
++    import sonic-vrf {
++        prefix vrf;
++    }
++
++    organization
++        "SONiC";
++
++    contact
++        "SONiC";
++
++    description
++        "SONIC BFD YANG Module for SONiC OS";
++
++    revision "2025-12-02" {
++        description
++            "Initial revision for BFD YANG model";
++    }
++
++    container sonic-bfd {
++        description
++            "Top-level container for BFD configuration tables.";
++
++        container BFD_PEER {
++            description
++                "BFD peer configuration table.
++                Keys correspond to Config DB entries consumed.";
++
++            list BFD_PEER_LIST {
++                key "remote_addr local_addr interface hop_type";
++
++                leaf remote_addr {
++                    type inet:ip-address;
++                    description
++                        "Remote BFD peer address (IPv4 or IPv6).";
++                }
++
++                leaf local_addr {
++                    type inet:ip-address;
++                    description
++                        "Local BFD address (IPv4 or IPv6).";
++                }
++
++                leaf interface {
++                    type stypes:interface_name;
++                    description
++                        "Interface name for BFD session.";
++                }
++
++                leaf hop_type {
++                    type enumeration {
++                        enum "singlehop" {
++                            description "Single-hop BFD session.";
++                        }
++                        enum "multihop" {
++                            description "Multi-hop BFD session.";
++                        }
++                    }
++                    description
++                        "Hop type for BFD session.";
++                }
++
++                leaf vrf {
++                    type union {
++                        type leafref {
++                            path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                        }
++                        type enumeration {
++                            enum "default" {
++                                description "Default VRF (global routing table).";
++                            }
++                        }
++                    }
++                    default "default";
++                    description
++                        "VRF name for this BFD peer.";
++                }
++
++                leaf admin_status {
++                    type enumeration {
++                        enum "up" {
++                            description "BFD session is administratively up.";
++                        }
++                        enum "down" {
++                            description "BFD session is administratively down.";
++                        }
++                    }
++                    default "up";
++                    description
++                        "Administrative status of the BFD peer.";
++                }
++
++                leaf transmit_interval {
++                    type uint32 {
++                        range "10..4294967";
++                    }
++                    description
++                        "Minimum transmit interval in milliseconds.";
++                }
++
++                leaf receive_interval {
++                    type uint32 {
++                        range "10..4294967";
++                    }
++                    description
++                        "Minimum receive interval in milliseconds.";
++                }
++
++                leaf multiplier {
++                    type uint8;
++                    description
++                        "Detection multiplier.";
++                }
++
++                leaf echo_interval {
++                    type uint32 {
++                        range "10..4294967";
++                    }
++                    description
++                        "Echo interval in milliseconds.";
++                }
++
++                leaf echo_mode {
++                    type stypes:boolean_type;
++                    description
++                        "Enable or disable BFD echo mode for this peer.";
++                }
++
++                leaf label {
++                    type string;
++                    description
++                        "Description/label for the BFD peer.";
++                }
++
++                leaf hw_lookup_valid {
++                    type stypes:boolean_type;
++                    description
++                        "Enable or disable hardware lookup for this BFD peer.";
++                    default "false";
++                }
++
++                leaf dst_mac {
++                    type yang:mac-address;
++                    description
++                        "Destination MAC address for BFD packets.";
++                }
++
++                leaf type {
++                    type enumeration {
++                        enum "async_active" {
++                            description "Asynchronous active mode BFD session.";
++                        }
++                        enum "async_passive" {
++                            description "Asynchronous passive mode BFD session.";
++                        }
++                        enum "demand_active" {
++                            description "Demand active mode BFD session.";
++                        }
++                        enum "demand_passive" {
++                            description "Demand passive mode BFD session.";
++                        }
++                    }
++                    default "async_active";
++                    description
++                        "BFD session type.";
++                }
++
++                leaf shutdown_bfd_during_tsa {
++                    type stypes:boolean_type;
++                    description
++                        "Shutdown BFD session when device enters TSA (Traffic Shift Away) state.
++                        If set to true, the BFD session will be removed when TSA is enabled
++                        and recreated when TSA is disabled.";
++                }
++            }
++        }
++    }
++}
+-- 
+2.25.1
+

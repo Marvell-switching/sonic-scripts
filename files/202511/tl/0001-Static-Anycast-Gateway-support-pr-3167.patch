@@ -1,0 +1,1836 @@
+From 99c45b1842738b946a99c1a997fd8854b2e49d1d Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Wed, 8 Oct 2025 22:59:33 +0530
+Subject: [PATCH] Static Anycast Gateway support pr 3167
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ cfgmgr/intfmgr.cpp                            | 235 ++++++++++++-
+ cfgmgr/intfmgr.h                              |  13 +-
+ cfgmgr/intfmgrd.cpp                           |  15 +
+ orchagent/intfsorch.cpp                       | 242 +++++++++++--
+ orchagent/intfsorch.h                         |  11 +-
+ orchagent/orchdaemon.cpp                      |   7 +-
+ orchagent/p4orch/tests/Makefile.am            |   2 +
+ .../p4orch/tests/fake_producerstatetable.cpp  |  36 ++
+ orchagent/p4orch/tests/fake_routeorch.cpp     | 233 +++++++++++++
+ orchagent/p4orch/tests/test_main.cpp          |  15 +
+ orchagent/routeorch.cpp                       |   6 +-
+ orchagent/routeorch.h                         |   2 +-
+ orchagent/vrforch.cpp                         |  31 ++
+ orchagent/vrforch.h                           |  11 +
+ tests/mock_tests/aclorch_ut.cpp               |   7 +-
+ tests/mock_tests/bufferorch_ut.cpp            |   7 +-
+ tests/mock_tests/flexcounter_ut.cpp           |   6 +-
+ tests/mock_tests/flowcounterrouteorch_ut.cpp  |   7 +-
+ tests/mock_tests/mock_orch_test.cpp           |   6 +-
+ tests/mock_tests/mock_orchagent_main.cpp      |   1 +
+ tests/mock_tests/portsorch_ut.cpp             |   7 +-
+ tests/mock_tests/qosorch_ut.cpp               |   7 +-
+ tests/mock_tests/routeorch_ut.cpp             |   7 +-
+ tests/test_sag.py                             | 319 ++++++++++++++++++
+ 24 files changed, 1187 insertions(+), 46 deletions(-)
+ create mode 100644 orchagent/p4orch/tests/fake_producerstatetable.cpp
+ create mode 100644 orchagent/p4orch/tests/fake_routeorch.cpp
+ create mode 100644 tests/test_sag.py
+
+diff --git a/cfgmgr/intfmgr.cpp b/cfgmgr/intfmgr.cpp
+index b0dbc84e..8bee1f22 100644
+--- a/cfgmgr/intfmgr.cpp
++++ b/cfgmgr/intfmgr.cpp
+@@ -27,6 +27,8 @@ using namespace swss;
+ 
+ #define LOOPBACK_DEFAULT_MTU_STR "65536"
+ #define DEFAULT_MTU_STR 9100
++extern MacAddress gMacAddress;
++extern MacAddress gSagMacAddress;
+ 
+ IntfMgr::IntfMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, const vector<string> &tableNames) :
+         Orch(cfgDb, tableNames),
+@@ -34,13 +36,16 @@ IntfMgr::IntfMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, c
+         m_cfgVlanIntfTable(cfgDb, CFG_VLAN_INTF_TABLE_NAME),
+         m_cfgLagIntfTable(cfgDb, CFG_LAG_INTF_TABLE_NAME),
+         m_cfgLoopbackIntfTable(cfgDb, CFG_LOOPBACK_INTERFACE_TABLE_NAME),
++        m_cfgSagTable(cfgDb, CFG_SAG_TABLE_NAME),
+         m_statePortTable(stateDb, STATE_PORT_TABLE_NAME),
+         m_stateLagTable(stateDb, STATE_LAG_TABLE_NAME),
+         m_stateVlanTable(stateDb, STATE_VLAN_TABLE_NAME),
+         m_stateVrfTable(stateDb, STATE_VRF_TABLE_NAME),
+         m_stateIntfTable(stateDb, STATE_INTERFACE_TABLE_NAME),
+         m_appIntfTableProducer(appDb, APP_INTF_TABLE_NAME),
+-        m_neighTable(appDb, APP_NEIGH_TABLE_NAME)
++        m_appSagTableProducer(appDb, APP_SAG_TABLE_NAME),
++        m_neighTable(appDb, APP_NEIGH_TABLE_NAME),
++        m_appLagTable(appDb, APP_LAG_TABLE_NAME)
+ {
+     auto subscriberStateTable = new swss::SubscriberStateTable(stateDb,
+             STATE_PORT_TABLE_NAME, TableConsumable::DEFAULT_POP_BATCH_SIZE, 100);
+@@ -132,6 +137,42 @@ void IntfMgr::setIntfIp(const string &alias, const string &opCmd,
+     }
+ }
+ 
++void IntfMgr::setSagFdbEntry(const string &op, const string &alias, const string &mac_str)
++{
++    stringstream cmd;
++    string res;
++
++    if (mac_str == gMacAddress.to_string())
++    {
++        // Don't add or del for global system MAC address
++        return;
++    }
++
++    if (!alias.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++    {
++        /* Ensure the key starts with "Vlan" otherwise ignore */
++        int vlan_id;
++        try
++        {
++            vlan_id = stoi(alias.substr(4));
++        }
++        catch (...)
++        {
++            SWSS_LOG_ERROR("Invalid Vlan alias format. Not a number after 'Vlan' prefix: %s", alias.c_str());
++            return;
++        }
++
++        // cmd format: bridge fdb add 00:11:22:33:44:55 dev Bridge vlan 3 permanent
++        cmd << "bridge fdb " << op << " " << mac_str << " dev Bridge vlan " << vlan_id << " permanent";
++
++        int ret = swss::exec(cmd.str(), res);
++        if (ret)
++        {
++            SWSS_LOG_ERROR("Command '%s' failed with rc %d", cmd.str().c_str(), ret);
++        }
++    }
++}
++
+ void IntfMgr::setIntfMac(const string &alias, const string &mac_str)
+ {
+     stringstream cmd;
+@@ -193,6 +234,27 @@ bool IntfMgr::setIntfMpls(const string &alias, const string& mpls)
+     return true;
+ }
+ 
++void IntfMgr::setIntfState(const string &alias, bool isUp)
++{
++    stringstream cmd;
++    string res;
++
++    if (isUp)
++    {
++        cmd << IP_CMD << " link set " << shellquote(alias) << " up";
++    }
++    else
++    {
++        cmd << IP_CMD << " link set " << shellquote(alias) << " down";
++    }
++
++    int ret = swss::exec(cmd.str(), res);
++    if (ret)
++    {
++        SWSS_LOG_ERROR("Command '%s' failed with rc %d", cmd.str().c_str(), ret);
++    }
++}
++
+ void IntfMgr::addLoopbackIntf(const string &alias)
+ {
+     stringstream cmd;
+@@ -779,6 +841,7 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+     string grat_arp = "";
+     string mpls = "";
+     string ipv6_link_local_mode = "";
++    string sag = "";
+     string loopback_action = "";
+ 
+     for (auto idx : data)
+@@ -818,6 +881,10 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+         {
+             ipv6_link_local_mode = value;
+         }
++        else if (field == "static_anycast_gateway")
++        {
++            sag = value;
++        }
+         else if (field == "vlan")
+         {
+             vlanId = value;
+@@ -1016,8 +1083,52 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+         }
+         else
+         {
+-            FieldValueTuple fvTuple("mac_addr", MacAddress().to_string());
+-            data.push_back(fvTuple);
++            if (!sag.empty())
++            {
++                // only VLAN interface can set static anycast gateway
++                if (!alias.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++                {
++                    string gwmac = "";
++                    if (m_cfgSagTable.hget("GLOBAL", "gateway_mac", gwmac))
++                    {
++                        // before change interface MAC, set interface down and up to regenerate IPv6 LL by MAC
++                        if (sag == "true")
++                        {
++                            m_sagIntfList[alias] = true;
++
++                            setIntfState(alias, false);
++                            setIntfMac(alias, gwmac);
++                            setIntfState(alias, true);
++                            // add this MAC fdb into bridge
++                            setSagFdbEntry("replace", alias, gwmac);
++
++                            FieldValueTuple fvTuple("mac_addr", gwmac);
++                            data.push_back(fvTuple);
++                        }
++                        else if (sag == "false")
++                        {
++                            m_sagIntfList[alias] = false;
++
++                            // del the sag MAC fdb from bridge
++                            setSagFdbEntry("del", alias, gSagMacAddress.to_string());
++
++                            setIntfState(alias, false);
++                            setIntfMac(alias, gMacAddress.to_string());
++                            setIntfState(alias, true);
++
++                            FieldValueTuple fvTuple("mac_addr", MacAddress().to_string());
++                            data.push_back(fvTuple);
++                        } else {
++                            SWSS_LOG_ERROR("invalid SAG config \"%s\", it should be \"true\" or \"false\"", sag.c_str());
++                        }
++                    }
++                }
++            }
++            else
++            {
++                FieldValueTuple fvTuple("mac_addr", MacAddress().to_string());
++                data.push_back(fvTuple);
++            }
+         }
+ 
+         if (!proxy_arp.empty())
+@@ -1085,6 +1196,21 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+             SWSS_LOG_INFO("Erased ipv6 link local mode list for %s", alias.c_str());
+         }
+ 
++        if (m_sagIntfList.find(alias) != m_sagIntfList.end())
++        {
++            if (m_sagIntfList[alias] == true)
++            {
++                // del the sag MAC fdb from bridge
++                setSagFdbEntry("del", alias, gSagMacAddress.to_string());
++
++                // recover to global mac address
++                setIntfState(alias, false);
++                setIntfMac(alias, gMacAddress.to_string());
++                setIntfState(alias, true);
++            }
++            m_sagIntfList.erase(alias);
++        }
++
+         m_appIntfTableProducer.del(alias);
+         m_stateIntfTable.del(alias);
+     }
+@@ -1152,6 +1278,42 @@ bool IntfMgr::doIntfAddrTask(const vector<string>& keys,
+     return true;
+ }
+ 
++void IntfMgr::doSagTask(const vector<string>& keys,
++        const vector<FieldValueTuple> &data,
++        const string& op)
++{
++    SWSS_LOG_ENTER();
++
++    string mac = "";
++    for (auto idx : data)
++    {
++        const auto &field = fvField(idx);
++        const auto &value = fvValue(idx);
++
++        if (field == "gateway_mac")
++        {
++            mac = value;
++        }
++    }
++
++    vector<FieldValueTuple> fvAppSag;
++    if (op == SET_COMMAND)
++    {
++        FieldValueTuple gwmac("gateway_mac", MacAddress(mac).to_string());
++        fvAppSag.push_back(gwmac);
++        m_appSagTableProducer.set("GLOBAL", fvAppSag);
++
++        updateSagMac(mac);
++    }
++    else if (op == DEL_COMMAND)
++    {
++        m_appSagTableProducer.del("GLOBAL");
++
++        // reset mac address for enabled static-anycast-gateway's VLAN interfaces
++        updateSagMac(gMacAddress.to_string());
++    }
++}
++
+ void IntfMgr::doTask(Consumer &consumer)
+ {
+     SWSS_LOG_ENTER();
+@@ -1184,6 +1346,14 @@ void IntfMgr::doTask(Consumer &consumer)
+                     it = consumer.m_toSync.erase(it);
+                     continue;
+                 }
++
++                if (table_name == CFG_SAG_TABLE_NAME)
++                {
++                    doSagTask(keys, data, op);
++                    it = consumer.m_toSync.erase(it);
++                    continue;
++                }
++
+                 if (!doIntfGeneralTask(keys, data, op))
+                 {
+                     it++;
+@@ -1255,3 +1425,62 @@ bool IntfMgr::enableIpv6Flag(const string &alias)
+     SWSS_LOG_INFO("disable_ipv6 flag is set to 0 for iface: %s, cmd: %s, ret: %d", alias.c_str(), cmd.str().c_str(), ret);
+     return (ret == 0) ? true : false;
+ }
++
++void IntfMgr::updateSagMac(const std::string &macAddr)
++{
++    vector<string> keys;
++    m_cfgVlanIntfTable.getKeys(keys);
++    for (auto &key: keys)
++    {
++        vector<string> entryKeys = tokenize(key, config_db_key_delimiter);
++        if (key.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++        {
++            continue;
++        }
++
++        // only process the entry includes the SAG's config
++        // e.g. VLAN_INTERFACE|Vlan201
++        if (entryKeys.size() != 1)
++        {
++            continue;
++        }
++
++        string value = "";
++        if (m_cfgVlanIntfTable.hget(key, "static_anycast_gateway", value))
++        {
++            if (value == "true")
++            {
++                SWSS_LOG_NOTICE("set %s mac address to %s", key.c_str(), macAddr.c_str());
++
++                // enable SAG, set device down and up to regenerate IPv6 LL by MAC
++                setIntfState(key, false);
++                setIntfMac(key, macAddr);
++                setIntfState(key, true);
++
++                // remove the previous sag MAC fdb from bridge
++                setSagFdbEntry("del", key, gSagMacAddress.to_string());
++                // add this new MAC fdb into bridge, the "replace" could cover both "add" and "replace" cases.
++                setSagFdbEntry("replace", key, macAddr);
++
++                vector<FieldValueTuple> vlanIntFv;
++
++                // Get other fields to set them all together
++                m_cfgVlanIntfTable.get(key, vlanIntFv);
++
++                // keep consistent with default MAC 00:00:00:00:00:00
++                string entryMac = MacAddress().to_string();
++                if (macAddr != gMacAddress.to_string())
++                {
++                    entryMac = macAddr;
++                }
++
++                FieldValueTuple fvTuple("mac_addr", entryMac);
++                vlanIntFv.push_back(fvTuple);
++                m_appIntfTableProducer.set(key, vlanIntFv);
++            }
++        } else {
++            SWSS_LOG_INFO("can't get %s in VLAN_INTERFACE table", key.c_str());
++        }
++    }
++    gSagMacAddress = MacAddress(macAddr);
++}
+diff --git a/cfgmgr/intfmgr.h b/cfgmgr/intfmgr.h
+index b2afbd31..2796c0e2 100644
+--- a/cfgmgr/intfmgr.h
++++ b/cfgmgr/intfmgr.h
+@@ -18,6 +18,7 @@ struct SubIntfInfo
+ };
+ 
+ typedef std::map<std::string, SubIntfInfo>             SubIntfMap;
++typedef std::map<std::string, bool>                    SagIntfMap;
+ 
+ namespace swss {
+ 
+@@ -28,12 +29,14 @@ public:
+     using Orch::doTask;
+ 
+ private:
+-    ProducerStateTable m_appIntfTableProducer;
+-    Table m_cfgIntfTable, m_cfgVlanIntfTable, m_cfgLagIntfTable, m_cfgLoopbackIntfTable;
+-    Table m_statePortTable, m_stateLagTable, m_stateVlanTable, m_stateVrfTable, m_stateIntfTable;
++    ProducerStateTable m_appIntfTableProducer, m_appSagTableProducer;
++    Table m_cfgIntfTable, m_cfgVlanIntfTable, m_cfgLagIntfTable, m_cfgLoopbackIntfTable, m_cfgSagTable;
++    Table m_statePortTable, m_stateLagTable, m_stateVlanTable, m_stateVrfTable, m_stateIntfTable, m_appLagTable;
++
+     Table m_neighTable;
+ 
+     SubIntfMap m_subIntfList;
++    SagIntfMap m_sagIntfList;
+     std::set<std::string> m_loopbackIntfList;
+     std::set<std::string> m_pendingReplayIntfList;
+     std::set<std::string> m_ipv6LinkLocalModeList;
+@@ -43,9 +46,12 @@ private:
+     void setIntfVrf(const std::string &alias, const std::string &vrfName);
+     void setIntfMac(const std::string &alias, const std::string &macAddr);
+     bool setIntfMpls(const std::string &alias, const std::string &mpls);
++    void setIntfState(const std::string &alias, bool isUp);
++    void setSagFdbEntry(const std::string &op, const std::string &alias, const std::string &mac_str);
+ 
+     bool doIntfGeneralTask(const std::vector<std::string>& keys, std::vector<FieldValueTuple> data, const std::string& op);
+     bool doIntfAddrTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
++    void doSagTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
+     void doTask(Consumer &consumer);
+     void doPortTableTask(const std::string& key, std::vector<FieldValueTuple> data, std::string op);
+ 
+@@ -76,6 +82,7 @@ private:
+ 
+     void updateSubIntfAdminStatus(const std::string &alias, const std::string &admin);
+     void updateSubIntfMtu(const std::string &alias, const std::string &mtu);
++    void updateSagMac(const std::string &macAddr);
+     bool enableIpv6Flag(const std::string&);
+ 
+     bool m_replayDone {false};
+diff --git a/cfgmgr/intfmgrd.cpp b/cfgmgr/intfmgrd.cpp
+index e4145909..db9c9f19 100644
+--- a/cfgmgr/intfmgrd.cpp
++++ b/cfgmgr/intfmgrd.cpp
+@@ -1,6 +1,7 @@
+ #include <unistd.h>
+ #include <vector>
+ #include <mutex>
++#include <algorithm>
+ #include "dbconnector.h"
+ #include "select.h"
+ #include "exec.h"
+@@ -16,6 +17,9 @@ using namespace swss;
+ /* select() function timeout retry time, in millisecond */
+ #define SELECT_TIMEOUT 1000
+ 
++MacAddress gMacAddress;
++MacAddress gSagMacAddress;
++
+ int main(int argc, char **argv)
+ {
+     Logger::linkToDbNative("intfmgrd");
+@@ -32,6 +36,7 @@ int main(int argc, char **argv)
+             CFG_LOOPBACK_INTERFACE_TABLE_NAME,
+             CFG_VLAN_SUB_INTF_TABLE_NAME,
+             CFG_VOQ_INBAND_INTERFACE_TABLE_NAME,
++            CFG_SAG_TABLE_NAME,
+         };
+ 
+         DBConnector cfgDb("CONFIG_DB", 0);
+@@ -50,6 +55,16 @@ int main(int argc, char **argv)
+             s.addSelectables(o->getSelectables());
+         }
+ 
++        Table table(&cfgDb, "DEVICE_METADATA");
++        string mac = "";
++        if (!table.hget("localhost", "mac", mac))
++        {
++            throw runtime_error("couldn't find MAC address of the device from config DB");
++        }
++
++        gMacAddress = MacAddress(mac);
++        gSagMacAddress = gMacAddress;
++
+         SWSS_LOG_NOTICE("starting main loop");
+         while (true)
+         {
+diff --git a/orchagent/intfsorch.cpp b/orchagent/intfsorch.cpp
+index a19100f7..dff074a1 100644
+--- a/orchagent/intfsorch.cpp
++++ b/orchagent/intfsorch.cpp
+@@ -37,10 +37,11 @@ extern bool gIsNatSupported;
+ extern NeighOrch *gNeighOrch;
+ extern string gMySwitchType;
+ extern int32_t gVoqMySwitchId;
++extern RouteOrch *gRouteOrch;
+ extern bool gTraditionalFlexCounter;
+ extern bool isChassisDbInUse();
+ 
+-const int intfsorch_pri = 35;
++const int IntfsOrch::intfsorch_pri = 35;
+ 
+ #define UPDATE_MAPS_SEC 1
+ 
+@@ -58,8 +59,8 @@ static const vector<sai_router_interface_stat_t> rifStatIds =
+     SAI_ROUTER_INTERFACE_STAT_OUT_ERROR_OCTETS,
+ };
+ 
+-IntfsOrch::IntfsOrch(DBConnector *db, string tableName, VRFOrch *vrf_orch, DBConnector *chassisAppDb) :
+-        Orch(db, tableName, intfsorch_pri), m_vrfOrch(vrf_orch)
++IntfsOrch::IntfsOrch(DBConnector *db, vector<table_name_with_pri_t> tableNames, VRFOrch *vrf_orch, DBConnector *chassisAppDb) :
++        Orch(db, tableNames), m_vrfOrch(vrf_orch)
+ {
+     SWSS_LOG_ENTER();
+ 
+@@ -102,7 +103,7 @@ IntfsOrch::IntfsOrch(DBConnector *db, string tableName, VRFOrch *vrf_orch, DBCon
+     if(isChassisDbInUse())
+     {
+         //Add subscriber to process VOQ system interface
+-        tableName = CHASSIS_APP_SYSTEM_INTERFACE_TABLE_NAME;
++        string tableName = CHASSIS_APP_SYSTEM_INTERFACE_TABLE_NAME;
+         Orch::addExecutor(new Consumer(new SubscriberStateTable(chassisAppDb, tableName, TableConsumable::DEFAULT_POP_BATCH_SIZE, 0), this, tableName));
+         m_tableVoqSystemInterfaceTable = unique_ptr<Table>(new Table(chassisAppDb, CHASSIS_APP_SYSTEM_INTERFACE_TABLE_NAME));
+     }
+@@ -500,6 +501,17 @@ bool IntfsOrch::setIntf(const string& alias, sai_object_id_t vrf_id, const IpPre
+             intfs_entry.ref_count = 0;
+             intfs_entry.proxy_arp = false;
+             intfs_entry.vrf_id = vrf_id;
++            intfs_entry.sag_enabled = false;
++            // use the configured MAC address for setting router interface's attribute via SAI api
++            // or use the system's MAC address instead
++            if (port.m_mac)
++            {
++                intfs_entry.mac = port.m_mac;
++            }
++            else
++            {
++                intfs_entry.mac = gMacAddress;
++            }
+             m_syncdIntfses[alias] = intfs_entry;
+             m_vrfOrch->increaseVrfRefCount(vrf_id);
+         }
+@@ -636,6 +648,14 @@ bool IntfsOrch::removeIntf(const string& alias, sai_object_id_t vrf_id, const Ip
+         if (m_syncdIntfses[alias].ip_addresses.size() == 0 && removeRouterIntfs(port))
+         {
+             gPortsOrch->decreasePortRefCount(alias);
++
++            if (m_syncdIntfses[alias].sag_enabled)
++            {
++                removeLinkLocalRouteToMeSag(vrf_id);
++                SWSS_LOG_NOTICE("Remove Interface %s vrf %s -- removed link local",
++                                alias.c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++            }
++
+             m_syncdIntfses.erase(alias);
+             m_vrfOrch->decreaseVrfRefCount(vrf_id);
+ 
+@@ -693,7 +713,7 @@ void IntfsOrch::doTask(Consumer &consumer)
+             ip_prefix_in_key = true;
+         }
+ 
+-        if(table_name == CHASSIS_APP_SYSTEM_INTERFACE_TABLE_NAME)
++        if (table_name == CHASSIS_APP_SYSTEM_INTERFACE_TABLE_NAME)
+         {
+             if(isLocalSystemPortIntf(alias))
+             {
+@@ -703,6 +723,17 @@ void IntfsOrch::doTask(Consumer &consumer)
+             }
+         }
+ 
++        //TODO: consider to refactor for different private function
++        if (table_name == APP_SAG_TABLE_NAME)
++        {
++            const vector<FieldValueTuple>& data = kfvFieldsValues(t);
++            string op = kfvOp(t);
++            doSagTask(data, op);
++
++            it = consumer.m_toSync.erase(it);
++            continue;
++        }
++
+         const vector<FieldValueTuple>& data = kfvFieldsValues(t);
+         string vrf_name = "", vnet_name = "", nat_zone = "";
+         MacAddress mac;
+@@ -716,11 +747,26 @@ void IntfsOrch::doTask(Consumer &consumer)
+         bool mpls = false;
+         string vlan = "";
+         string loopbackAction = "";
++
++        bool sag_enabled = false;
++        bool sagChanged = false;
++
+         string oper_status ="";
+         for (auto idx : data)
+         {
+             const auto &field = fvField(idx);
+             const auto &value = fvValue(idx);
++            string op = kfvOp(t);
++
++            if (field == "static_anycast_gateway")
++            {
++                if (value == "true")
++                {
++                    sag_enabled = true;
++                }
++                sagChanged = true;
++            }
++
+             if (field == "vrf_name")
+             {
+                 vrf_name = value;
+@@ -968,6 +1014,25 @@ void IntfsOrch::doTask(Consumer &consumer)
+                     continue;
+                 }
+ 
++                if (!ip_prefix_in_key && sagChanged) {
++                    SWSS_LOG_NOTICE("SAG changed to %u from %u for %s", sag_enabled,
++                                    m_syncdIntfses[alias].sag_enabled, alias.c_str());
++                    m_syncdIntfses[alias].sag_enabled = sag_enabled;
++
++                    if (sag_enabled)
++                    {
++                        addLinkLocalRouteToMeSag(m_syncdIntfses[alias].vrf_id);
++                        SWSS_LOG_NOTICE("SAG Added %s vrf %s -- adding link local",
++                                        alias.c_str(), m_vrfOrch->getVRFname(port.m_vr_id).c_str());
++                    }
++                    else
++                    {
++                        removeLinkLocalRouteToMeSag(m_syncdIntfses[alias].vrf_id);
++                        SWSS_LOG_NOTICE("SAG Removed %s vrf %s -- removing link local",
++                                        alias.c_str(), m_vrfOrch->getVRFname(port.m_vr_id).c_str());
++                    }
++                }
++
+                 if (gPortsOrch->getPort(alias, port))
+                 {
+                     /* Set nat zone id */
+@@ -1003,38 +1068,48 @@ void IntfsOrch::doTask(Consumer &consumer)
+                 }
+             }
+ 
+-            if (mac)
++            if (!mac)
+             {
+-                /* Get mac information and update mac of the interface*/
+-                sai_attribute_t attr;
+-                attr.id = SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS;
+-                memcpy(attr.value.mac, mac.getMac(), sizeof(sai_mac_t));
++                mac = gMacAddress;
++            }
+ 
+-                /*port.m_rif_id is set in setIntf(), need get port again*/
+-                if (gPortsOrch->getPort(alias, port))
++            // update mac if it is changed
++            if (m_syncdIntfses.find(alias) != m_syncdIntfses.end())
++            {
++                if ((!ip_prefix_in_key) && (m_syncdIntfses[alias].mac != mac))
+                 {
+-                    sai_status_t status = sai_router_intfs_api->set_router_interface_attribute(port.m_rif_id, &attr);
+-                    if (status != SAI_STATUS_SUCCESS)
++                    // port.m_rif_id is set in setIntf(), need to get port again
++                    if (gPortsOrch->getPort(alias, port))
+                     {
+-                        SWSS_LOG_ERROR("Failed to set router interface mac %s for port %s, rv:%d",
+-                                                     mac.to_string().c_str(), port.m_alias.c_str(), status);
+-                        if (handleSaiSetStatus(SAI_API_ROUTER_INTERFACE, status) == task_need_retry)
++                        sai_attribute_t attr;
++                        attr.id = SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS;
++
++                        memcpy(attr.value.mac, mac.getMac(), sizeof(sai_mac_t));
++                        sai_status_t status = sai_router_intfs_api->set_router_interface_attribute(port.m_rif_id, &attr);
++
++                        if (status != SAI_STATUS_SUCCESS)
+                         {
+-                            it++;
+-                            continue;
++                            SWSS_LOG_ERROR("Failed to set router interface mac %s for port %s, rv:%d",
++                                                        mac.to_string().c_str(), port.m_alias.c_str(), status);
++                            if (handleSaiSetStatus(SAI_API_ROUTER_INTERFACE, status) == task_need_retry)
++                            {
++                                it++;
++                                continue;
++                            }
++                        }
++                        else
++                        {
++                            SWSS_LOG_NOTICE("Set router interface mac %s for port %s success",
++                                                        mac.to_string().c_str(), alias.c_str());
++                            m_syncdIntfses[alias].mac = mac;
+                         }
+                     }
+                     else
+                     {
+-                        SWSS_LOG_NOTICE("Set router interface mac %s for port %s success",
+-                                                      mac.to_string().c_str(), port.m_alias.c_str());
++                        SWSS_LOG_ERROR("Failed to set router interface mac %s for port %s, get port fail",
++                                                        mac.to_string().c_str(), alias.c_str());
+                     }
+                 }
+-                else
+-                {
+-                    SWSS_LOG_ERROR("Failed to set router interface mac %s for port %s, getPort fail",
+-                                                     mac.to_string().c_str(), alias.c_str());
+-                }
+             }
+ 
+             if (!proxy_arp.empty())
+@@ -1164,6 +1239,121 @@ bool IntfsOrch::getSaiLoopbackAction(const string &actionStr, sai_packet_action_
+     }
+ }
+ 
++void IntfsOrch::doSagTask(vector<FieldValueTuple> data, const string& op)
++{
++    if (op == SET_COMMAND)
++    {
++        for (auto idx : data)
++        {
++            string sag_mac_str = "";
++            const auto &field = fvField(idx);
++            const auto &value = fvValue(idx);
++            SWSS_LOG_NOTICE("process key %s, value %s", field.c_str(), value.c_str());
++            if (field == "gateway_mac")
++            {
++                sag_mac_str = value;
++            }
++
++            if (!sag_mac_str.empty())
++            {
++                MacAddress sag_mac;
++                try
++                {
++                    sag_mac = MacAddress(sag_mac_str);
++                }
++                catch (const std::invalid_argument &e)
++                {
++                    SWSS_LOG_ERROR("Invalid mac argument %s to %s()", sag_mac_str.c_str(), e.what());
++                    return;
++                }
++
++                m_sagMac = sag_mac;
++            }
++        }
++    }
++    else if (op == DEL_COMMAND)
++    {
++        for (auto sag_vrf_table : SagVrfRefTable)
++        {
++            IpPrefix linklocal_prefix = gRouteOrch->getLinkLocalEui64Addr(m_sagMac);
++            sai_object_id_t vrf_id = sag_vrf_table.first;
++
++            // remove link local route for this vrf
++            gRouteOrch->delLinkLocalRouteToMe(vrf_id, linklocal_prefix);
++            SWSS_LOG_NOTICE("Removed link local ipv6 route %s to cpu in VRF %s",
++                            linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++
++        }
++
++        SagVrfRefTable.clear();
++        m_sagMac = MacAddress();
++    }
++}
++
++void IntfsOrch::addLinkLocalRouteToMeSag(sai_object_id_t vrf_id)
++{
++    if (!m_sagMac)
++    {
++        SWSS_LOG_NOTICE("SAG MAC not set, doing nothing in VRF %s in add", m_vrfOrch->getVRFname(vrf_id).c_str());
++        return;
++    }
++
++    IpPrefix linklocal_prefix = gRouteOrch->getLinkLocalEui64Addr(m_sagMac);
++
++    auto it = SagVrfRefTable.find(vrf_id);
++    if (it == SagVrfRefTable.end())
++    {
++        SagVrfRefTable[vrf_id] = 1;
++
++        SWSS_LOG_NOTICE("Created link local ipv6 route %s to cpu in VRF %s",
++                        linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++        // add link local route for this vrf
++        gRouteOrch->addLinkLocalRouteToMe(vrf_id, linklocal_prefix);
++
++        SWSS_LOG_NOTICE("Ref count (%u) for link local ipv6 route %s to cpu in VRF %s",
++                        SagVrfRefTable[vrf_id], linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++    }
++    else
++    {
++        it->second++;
++        SWSS_LOG_NOTICE("Ref count (%u) for link local ipv6 route %s to cpu in VRF %s",
++                        it->second, linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++    }
++}
++
++void IntfsOrch::removeLinkLocalRouteToMeSag(sai_object_id_t vrf_id)
++{
++    if (!m_sagMac)
++    {
++        SWSS_LOG_NOTICE("SAG MAC not set, doing nothing in vrf %s in remove", m_vrfOrch->getVRFname(vrf_id).c_str());
++        return;
++    }
++
++    IpPrefix linklocal_prefix = gRouteOrch->getLinkLocalEui64Addr(m_sagMac);
++
++    auto it = SagVrfRefTable.find(vrf_id);
++    if (it != SagVrfRefTable.end())
++    {
++        if (--(it->second) == 0)
++        {
++            SWSS_LOG_NOTICE("Removed link local ipv6 route %s to cpu in VRF %s",
++                            linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++
++            // remove link local route for this vrf
++            gRouteOrch->delLinkLocalRouteToMe(vrf_id, linklocal_prefix);
++
++            SagVrfRefTable.erase(vrf_id);
++        }
++        SWSS_LOG_NOTICE("Ref count (%u) for link local ipv6 route %s to cpu in VRF %s",
++                        it->second, linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++    }
++    else
++    {
++       SWSS_LOG_NOTICE("Unable to find entry for link local ipv6 route %s to cpu in VRF %s",
++                        linklocal_prefix.to_string().c_str(), m_vrfOrch->getVRFname(vrf_id).c_str());
++    }
++}
++
+ bool IntfsOrch::addRouterIntfs(sai_object_id_t vrf_id, Port &port, string loopbackActionStr)
+ {
+     SWSS_LOG_ENTER();
+diff --git a/orchagent/intfsorch.h b/orchagent/intfsorch.h
+index aa5129be..d0179e7c 100644
+--- a/orchagent/intfsorch.h
++++ b/orchagent/intfsorch.h
+@@ -26,6 +26,8 @@ struct IntfsEntry
+     int                 ref_count;
+     sai_object_id_t     vrf_id;
+     bool                proxy_arp;
++    bool                sag_enabled;
++    MacAddress          mac;
+ };
+ 
+ typedef map<string, IntfsEntry> IntfsTable;
+@@ -33,7 +35,9 @@ typedef map<string, IntfsEntry> IntfsTable;
+ class IntfsOrch : public Orch
+ {
+ public:
+-    IntfsOrch(DBConnector *db, string tableName, VRFOrch *vrf_orch, DBConnector *chassisAppDb);
++    IntfsOrch(DBConnector *db, vector<table_name_with_pri_t> tableNames, VRFOrch *vrf_orch, DBConnector *chassisAppDb);
++    static const int intfsorch_pri;
++    std::map<sai_object_id_t, uint32_t> SagVrfRefTable;
+ 
+     sai_object_id_t getRouterIntfsId(const string&);
+     bool isPrefixSubnet(const IpPrefix&, const string&);
+@@ -82,8 +86,11 @@ private:
+     VRFOrch *m_vrfOrch;
+     IntfsTable m_syncdIntfses;
+     map<string, string> m_vnetInfses;
++    MacAddress m_sagMac;
++
+     void doTask(Consumer &consumer);
+     void doTask(SelectableTimer &timer);
++    void doSagTask(std::vector<FieldValueTuple> data, const std::string& op);
+ 
+     shared_ptr<DBConnector> m_counter_db;
+     shared_ptr<DBConnector> m_asic_db;
+@@ -108,6 +115,8 @@ private:
+     void voqSyncAddIntf(string &alias);
+     void voqSyncDelIntf(string &alias);
+ 
++    void addLinkLocalRouteToMeSag(sai_object_id_t vrf_id);
++    void removeLinkLocalRouteToMeSag(sai_object_id_t vrf_id);
+ };
+ 
+ #endif /* SWSS_INTFSORCH_H */
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index 0502ccbe..7b71e36a 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -267,7 +267,12 @@ bool OrchDaemon::init()
+     ChassisOrch* chassis_frontend_orch = new ChassisOrch(m_configDb, m_applDb, chassis_frontend_tables, vnet_rt_orch);
+     gDirectory.set(chassis_frontend_orch);
+ 
+-    gIntfsOrch = new IntfsOrch(m_applDb, APP_INTF_TABLE_NAME, vrf_orch, m_chassisAppDb);
++    vector<table_name_with_pri_t> intf_tables = {
++        { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++        { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++    };
++
++    gIntfsOrch = new IntfsOrch(m_applDb, intf_tables, vrf_orch, m_chassisAppDb);
+     gDirectory.set(gIntfsOrch);
+     gNeighOrch = new NeighOrch(m_applDb, APP_NEIGH_TABLE_NAME, gIntfsOrch, gFdbOrch, gPortsOrch, m_chassisAppDb);
+     gDirectory.set(gNeighOrch);
+diff --git a/orchagent/p4orch/tests/Makefile.am b/orchagent/p4orch/tests/Makefile.am
+index 19ec88a6..7dba3d32 100644
+--- a/orchagent/p4orch/tests/Makefile.am
++++ b/orchagent/p4orch/tests/Makefile.am
+@@ -50,12 +50,14 @@ p4orch_tests_SOURCES = $(ORCHAGENT_DIR)/orch.cpp \
+ 		       $(P4ORCH_DIR)/l3_admit_manager.cpp \
+ 		       $(P4ORCH_DIR)/ext_tables_manager.cpp \
+ 		       $(top_srcdir)/tests/mock_tests/fake_response_publisher.cpp \
++		       fake_routeorch.cpp \
+ 		       fake_portorch.cpp \
+ 		       fake_crmorch.cpp \
+ 		       fake_flexcounterorch.cpp \
+ 		       fake_flowcounterrouteorch.cpp \
+ 		       fake_dbconnector.cpp \
+ 		       fake_producertable.cpp \
++		       fake_producerstatetable.cpp \
+ 		       fake_consumerstatetable.cpp \
+ 		       fake_subscriberstatetable.cpp \
+ 		       fake_notificationconsumer.cpp \
+diff --git a/orchagent/p4orch/tests/fake_producerstatetable.cpp b/orchagent/p4orch/tests/fake_producerstatetable.cpp
+new file mode 100644
+index 00000000..e347e8e0
+--- /dev/null
++++ b/orchagent/p4orch/tests/fake_producerstatetable.cpp
+@@ -0,0 +1,36 @@
++#include <string>
++#include <vector>
++
++#include "producerstatetable.h"
++
++namespace swss
++{
++
++ProducerStateTable::ProducerStateTable(DBConnector *db, const std::string &tableName)
++    : TableBase(tableName, ":"), TableName_KeySet(tableName)
++{
++}
++
++ProducerStateTable::ProducerStateTable(RedisPipeline *pipeline, const std::string &tableName, bool buffered)
++    : TableBase(tableName, ":"), TableName_KeySet(tableName)
++{
++}
++
++ProducerStateTable::ProducerStateTable(RedisPipeline *pipeline, const std::string &tableName, bool buffered, bool flushPub)
++    : TableBase(tableName, ":"), TableName_KeySet(tableName)
++{
++}
++
++ProducerStateTable::~ProducerStateTable()
++{
++}
++
++void ProducerStateTable::set(const std::string &key, const std::vector<FieldValueTuple> &values, const std::string &op, const std::string &prefix)
++{
++}
++
++void ProducerStateTable::del(const std::string &key, const std::string &op, const std::string &prefix)
++{
++}
++
++} // namespace swss
+diff --git a/orchagent/p4orch/tests/fake_routeorch.cpp b/orchagent/p4orch/tests/fake_routeorch.cpp
+new file mode 100644
+index 00000000..f6fa1f05
+--- /dev/null
++++ b/orchagent/p4orch/tests/fake_routeorch.cpp
+@@ -0,0 +1,233 @@
++extern "C"
++{
++#include "sai.h"
++}
++#include <inttypes.h>
++#include "routeorch.h"
++#include "nhgorch.h"
++
++/* Default maximum number of next hop groups */
++#define DEFAULT_NUMBER_OF_ECMP_GROUPS   128
++#define DEFAULT_MAX_ECMP_GROUP_SIZE     32
++
++extern sai_object_id_t gVirtualRouterId;
++extern sai_object_id_t gSwitchId;
++
++extern sai_next_hop_group_api_t*    sai_next_hop_group_api;
++extern sai_route_api_t*             sai_route_api;
++extern sai_mpls_api_t*              sai_mpls_api;
++extern sai_switch_api_t*            sai_switch_api;
++extern size_t gMaxBulkSize;
++
++RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames, SwitchOrch *switchOrch, NeighOrch *neighOrch, IntfsOrch *intfsOrch, VRFOrch *vrfOrch, FgNhgOrch *fgNhgOrch, Srv6Orch *srv6Orch) :
++        gRouteBulker(sai_route_api, gMaxBulkSize),
++        gLabelRouteBulker(sai_mpls_api, gMaxBulkSize),
++        gNextHopGroupMemberBulker(sai_next_hop_group_api, gSwitchId, gMaxBulkSize),
++        Orch(db, tableNames),
++        m_appTunnelDecapTermProducer(db, "TUNNEL_DECAP_TERM_TABLE")
++{
++
++}
++
++std::string RouteOrch::getLinkLocalEui64Addr(const MacAddress &mac)
++{
++    SWSS_LOG_ENTER();
++
++    string        ip_prefix;
++    const uint8_t *gmac = mac.getMac();
++
++    uint8_t        eui64_interface_id[EUI64_INTF_ID_LEN];
++    char           ipv6_ll_addr[INET6_ADDRSTRLEN] = {0};
++
++    /* Link-local IPv6 address autogenerated by kernel with eui64 interface-id
++     * derived from the MAC address of the host interface.
++     */
++    eui64_interface_id[0] = gmac[0] ^ 0x02;
++    eui64_interface_id[1] = gmac[1];
++    eui64_interface_id[2] = gmac[2];
++    eui64_interface_id[3] = 0xff;
++    eui64_interface_id[4] = 0xfe;
++    eui64_interface_id[5] = gmac[3];
++    eui64_interface_id[6] = gmac[4];
++    eui64_interface_id[7] = gmac[5];
++
++    snprintf(ipv6_ll_addr, INET6_ADDRSTRLEN, "fe80::%02x%02x:%02x%02x:%02x%02x:%02x%02x",
++             eui64_interface_id[0], eui64_interface_id[1], eui64_interface_id[2],
++             eui64_interface_id[3], eui64_interface_id[4], eui64_interface_id[5],
++             eui64_interface_id[6], eui64_interface_id[7]);
++
++    ip_prefix = string(ipv6_ll_addr);
++
++    return ip_prefix;
++}
++
++void RouteOrch::addLinkLocalRouteToMe(sai_object_id_t vrf_id, IpPrefix linklocal_prefix)
++{
++
++}
++
++void RouteOrch::delLinkLocalRouteToMe(sai_object_id_t vrf_id, IpPrefix linklocal_prefix)
++{
++
++}
++
++void RouteOrch::updateDefRouteState(string ip, bool add)
++{
++}
++
++bool RouteOrch::hasNextHopGroup(const NextHopGroupKey& nexthops) const
++{
++    return true;
++}
++
++void RouteOrch::attach(Observer *observer, const IpAddress& dstAddr, sai_object_id_t vrf_id)
++{
++}
++
++void RouteOrch::detach(Observer *observer, const IpAddress& dstAddr, sai_object_id_t vrf_id)
++{
++
++}
++
++bool RouteOrch::validnexthopinNextHopGroup(const NextHopKey &nexthop, uint32_t& count)
++{
++    return true;
++}
++
++bool RouteOrch::invalidnexthopinNextHopGroup(const NextHopKey &nexthop, uint32_t& count)
++{
++    return true;
++}
++
++void RouteOrch::doTask(Consumer& consumer)
++{
++
++}
++
++void RouteOrch::notifyNextHopChangeObservers(sai_object_id_t vrf_id, const IpPrefix &prefix, const NextHopGroupKey &nexthops, bool add)
++{
++
++}
++
++void RouteOrch::increaseNextHopRefCount(const NextHopGroupKey &nexthops)
++{
++
++}
++
++void RouteOrch::decreaseNextHopRefCount(const NextHopGroupKey &nexthops)
++{
++
++}
++
++bool RouteOrch::isRefCounterZero(const NextHopGroupKey &nexthops) const
++{
++    return true;
++}
++
++bool RouteOrch::createFineGrainedNextHopGroup(sai_object_id_t &next_hop_group_id, vector<sai_attribute_t> &nhg_attrs)
++{
++    return true;
++}
++
++bool RouteOrch::removeFineGrainedNextHopGroup(sai_object_id_t &next_hop_group_id)
++{
++    return true;
++}
++
++bool RouteOrch::addNextHopGroup(const NextHopGroupKey &nexthops)
++{
++    return true;
++}
++
++bool RouteOrch::removeNextHopGroup(const NextHopGroupKey &nexthops, const bool is_default_route_nh_swap)
++{
++    return true;
++}
++
++void RouteOrch::addNextHopRoute(const NextHopKey& nextHop, const RouteKey& routeKey)
++{
++
++}
++
++void RouteOrch::removeNextHopRoute(const NextHopKey& nextHop, const RouteKey& routeKey)
++{
++
++}
++
++bool RouteOrch::updateNextHopRoutes(const NextHopKey& nextHop, uint32_t& numRoutes)
++{
++    return true;
++}
++
++bool RouteOrch::getRoutesForNexthop(std::set<RouteKey>& routeKeys, const NextHopKey& nexthopKey)
++{
++    return true;
++}
++
++void RouteOrch::addTempRoute(RouteBulkContext& ctx, const NextHopGroupKey &nextHops)
++{
++
++}
++
++bool RouteOrch::addRoute(RouteBulkContext& ctx, const NextHopGroupKey &nextHops)
++{
++    return true;
++}
++
++bool RouteOrch::addRoutePost(const RouteBulkContext& ctx, const NextHopGroupKey &nextHops)
++{
++    return true;
++}
++
++bool RouteOrch::removeRoute(RouteBulkContext& ctx)
++{
++    return true;
++}
++
++bool RouteOrch::removeRoutePost(const RouteBulkContext& ctx)
++{
++    return true;
++}
++
++bool RouteOrch::createRemoteVtep(sai_object_id_t vrf_id, const NextHopKey &nextHop)
++{
++    return true;
++}
++
++bool RouteOrch::deleteRemoteVtep(sai_object_id_t vrf_id, const NextHopKey &nextHop)
++{
++    return true;
++}
++
++bool RouteOrch::removeOverlayNextHops(sai_object_id_t vrf_id, const NextHopGroupKey &ol_nextHops)
++{
++    return true;
++}
++
++void RouteOrch::increaseNextHopGroupCount()
++{
++}
++
++void RouteOrch::decreaseNextHopGroupCount()
++{
++}
++
++bool RouteOrch::checkNextHopGroupCount()
++{
++    return true;
++}
++
++
++void RouteOrch::incNhgRefCount(const std::string &nhg_index, const std::string &context_index)
++{
++}
++
++void RouteOrch::decNhgRefCount(const std::string &nhg_index, const std::string &context_index)
++{
++
++}
++
++void RouteOrch::publishRouteState(const RouteBulkContext& ctx, const ReturnCode& status)
++{
++
++}
+diff --git a/orchagent/p4orch/tests/test_main.cpp b/orchagent/p4orch/tests/test_main.cpp
+index 976cc9ec..ead5b20b 100644
+--- a/orchagent/p4orch/tests/test_main.cpp
++++ b/orchagent/p4orch/tests/test_main.cpp
+@@ -15,6 +15,7 @@ extern "C"
+ #include "mock_sai_virtual_router.h"
+ #include "p4orch.h"
+ #include "portsorch.h"
++#include "routeorch.h"
+ #include "sai_serialize.h"
+ #include "switchorch.h"
+ #include "vrforch.h"
+@@ -57,6 +58,7 @@ PortsOrch *gPortsOrch;
+ CrmOrch *gCrmOrch;
+ P4Orch *gP4Orch;
+ VRFOrch *gVrfOrch;
++RouteOrch *gRouteOrch;
+ FlowCounterRouteOrch *gFlowCounterRouteOrch;
+ SwitchOrch *gSwitchOrch;
+ Directory<Orch *> gDirectory;
+@@ -65,12 +67,14 @@ swss::DBConnector *gStateDb;
+ swss::DBConnector *gConfigDb;
+ swss::DBConnector *gCountersDb;
+ MacAddress gVxlanMacAddress;
++MacAddress gMacAddress;
+ 
+ sai_router_interface_api_t *sai_router_intfs_api;
+ sai_neighbor_api_t *sai_neighbor_api;
+ sai_next_hop_api_t *sai_next_hop_api;
+ sai_next_hop_group_api_t *sai_next_hop_group_api;
+ sai_route_api_t *sai_route_api;
++sai_mpls_api_t *sai_mpls_api;
+ sai_acl_api_t *sai_acl_api;
+ sai_policer_api_t *sai_policer_api;
+ sai_virtual_router_api_t *sai_virtual_router_api;
+@@ -197,6 +201,7 @@ int main(int argc, char *argv[])
+     sai_next_hop_api_t next_hop_api;
+     sai_next_hop_group_api_t next_hop_group_api;
+     sai_route_api_t route_api;
++    sai_mpls_api_t mpls_api;
+     sai_acl_api_t acl_api;
+     sai_policer_api_t policer_api;
+     sai_virtual_router_api_t virtual_router_api;
+@@ -215,6 +220,7 @@ int main(int argc, char *argv[])
+     sai_next_hop_api = &next_hop_api;
+     sai_next_hop_group_api = &next_hop_group_api;
+     sai_route_api = &route_api;
++    sai_mpls_api = &mpls_api;
+     sai_acl_api = &acl_api;
+     sai_policer_api = &policer_api;
+     sai_virtual_router_api = &virtual_router_api;
+@@ -247,6 +253,15 @@ int main(int argc, char *argv[])
+     gVrfOrch = &vrf_orch;
+     gDirectory.set(static_cast<VRFOrch *>(&vrf_orch));
+ 
++    const int routeorch_pri = 5;
++    vector<table_name_with_pri_t> route_tables = {
++        { APP_ROUTE_TABLE_NAME,        routeorch_pri },
++        { APP_LABEL_ROUTE_TABLE_NAME,  routeorch_pri }
++    };
++    RouteOrch route_orch(gAppDb, route_tables, NULL, NULL, NULL, NULL, NULL, NULL);
++    gRouteOrch = &route_orch;
++    gDirectory.set(static_cast<RouteOrch *>(&route_orch));
++
+     FlowCounterRouteOrch flow_counter_route_orch(gConfigDb, std::vector<std::string>{});
+     gFlowCounterRouteOrch = &flow_counter_route_orch;
+     gDirectory.set(static_cast<FlowCounterRouteOrch *>(&flow_counter_route_orch));
+diff --git a/orchagent/routeorch.cpp b/orchagent/routeorch.cpp
+index 0e34deca..d2a50e02 100644
+--- a/orchagent/routeorch.cpp
++++ b/orchagent/routeorch.cpp
+@@ -176,7 +176,7 @@ RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames,
+      * Hence add a single /128 route entry for the link-local interface
+      * address pointing to the CPU port.
+      */
+-    IpPrefix linklocal_prefix = getLinkLocalEui64Addr();
++    IpPrefix linklocal_prefix = getLinkLocalEui64Addr(gMacAddress);
+ 
+     addLinkLocalRouteToMe(gVirtualRouterId, linklocal_prefix);
+     SWSS_LOG_NOTICE("Created link local ipv6 route %s to cpu", linklocal_prefix.to_string().c_str());
+@@ -189,12 +189,12 @@ RouteOrch::RouteOrch(DBConnector *db, vector<table_name_with_pri_t> &tableNames,
+     SWSS_LOG_NOTICE("Created link local ipv6 route %s to cpu", default_link_local_prefix.to_string().c_str());
+ }
+ 
+-std::string RouteOrch::getLinkLocalEui64Addr(void)
++std::string RouteOrch::getLinkLocalEui64Addr(const MacAddress &mac)
+ {
+     SWSS_LOG_ENTER();
+ 
+     string        ip_prefix;
+-    const uint8_t *gmac = gMacAddress.getMac();
++    const uint8_t *gmac = mac.getMac();
+ 
+     uint8_t        eui64_interface_id[EUI64_INTF_ID_LEN];
+     char           ipv6_ll_addr[INET6_ADDRSTRLEN] = {0};
+diff --git a/orchagent/routeorch.h b/orchagent/routeorch.h
+index 54ddaf2b..9569bb0a 100644
+--- a/orchagent/routeorch.h
++++ b/orchagent/routeorch.h
+@@ -258,7 +258,7 @@ public:
+ 
+     void addLinkLocalRouteToMe(sai_object_id_t vrf_id, IpPrefix linklocal_prefix);
+     void delLinkLocalRouteToMe(sai_object_id_t vrf_id, IpPrefix linklocal_prefix);
+-    std::string getLinkLocalEui64Addr(void);
++    std::string getLinkLocalEui64Addr(const MacAddress &mac);
+ 
+     unsigned int getNhgCount() { return m_nextHopGroupCount; }
+     unsigned int getMaxNhgCount() { return m_maxNextHopGroupCount; }
+diff --git a/orchagent/vrforch.cpp b/orchagent/vrforch.cpp
+index a4766141..e7a6228c 100644
+--- a/orchagent/vrforch.cpp
++++ b/orchagent/vrforch.cpp
+@@ -13,12 +13,14 @@
+ #include "vxlanorch.h"
+ #include "flowcounterrouteorch.h"
+ #include "directory.h"
++#include "routeorch.h"
+ 
+ using namespace std;
+ using namespace swss;
+ 
+ extern sai_virtual_router_api_t* sai_virtual_router_api;
+ extern sai_object_id_t gSwitchId;
++extern MacAddress gMacAddress;
+ 
+ extern Directory<Orch*>      gDirectory;
+ extern PortsOrch*            gPortsOrch;
+@@ -104,6 +106,22 @@ bool VRFOrch::addOperation(const Request& request)
+             }
+         }
+ 
++        RouteOrch* routeOrch = gDirectory.get<RouteOrch*>();
++
++        /* Add link-local fe80::/10 CPU route for the VRF. */
++        IpPrefix default_link_local_prefix("fe80::/10");
++        routeOrch->addLinkLocalRouteToMe(router_id, default_link_local_prefix);
++        SWSS_LOG_NOTICE("Created link local ipv6 route %s to cpu in VRF %s", default_link_local_prefix.to_string().c_str(), vrf_name.c_str());
++
++        /* All the interfaces have the same MAC address and hence the same
++         * auto-generated link-local ipv6 address with eui64 interface-id.
++         * Hence add a single /128 route entry for the link-local interface
++         * address pointing to the CPU port.
++         */
++        IpPrefix linklocal_prefix = routeOrch->getLinkLocalEui64Addr(gMacAddress);
++        routeOrch->addLinkLocalRouteToMe(router_id, linklocal_prefix);
++        SWSS_LOG_NOTICE("Created link local ipv6 route %s to cpu in VRF %s", linklocal_prefix.to_string().c_str(), vrf_name.c_str());
++
+         vrf_table_[vrf_name].vrf_id = router_id;
+         vrf_table_[vrf_name].ref_count = 0;
+         vrf_id_table_[router_id] = vrf_name;
+@@ -170,6 +188,19 @@ bool VRFOrch::delOperation(const Request& request)
+         return false;
+ 
+     sai_object_id_t router_id = vrf_table_[vrf_name].vrf_id;
++
++    RouteOrch* routeOrch = gDirectory.get<RouteOrch*>();
++
++    /* Delete link-local ipv6 address with eui64 /128 CPU route for the VRF. */
++    IpPrefix linklocal_prefix = routeOrch->getLinkLocalEui64Addr(gMacAddress);
++    routeOrch->delLinkLocalRouteToMe(router_id, linklocal_prefix);
++    SWSS_LOG_NOTICE("Deleted link local ipv6 route %s to cpu in VRF %s", linklocal_prefix.to_string().c_str(), vrf_name.c_str());
++
++    /* Delete link-local fe80::/10 CPU route for the VRF. */
++    IpPrefix default_link_local_prefix("fe80::/10");
++    routeOrch->delLinkLocalRouteToMe(router_id, default_link_local_prefix);
++    SWSS_LOG_NOTICE("Deleted link local ipv6 route %s to cpu in VRF %s", default_link_local_prefix.to_string().c_str(), vrf_name.c_str());
++
+     sai_status_t status = sai_virtual_router_api->remove_virtual_router(router_id);
+     if (status != SAI_STATUS_SUCCESS)
+     {
+diff --git a/orchagent/vrforch.h b/orchagent/vrforch.h
+index 07e0df55..2238e1f2 100644
+--- a/orchagent/vrforch.h
++++ b/orchagent/vrforch.h
+@@ -88,6 +88,17 @@ public:
+         }
+     }
+ 
++    std::vector<sai_object_id_t> getVRFids(void) const
++    {
++        std::vector<sai_object_id_t> vrf_ids;
++        for (auto kv: vrf_id_table_)
++        {
++            vrf_ids.push_back(kv.first);
++        }
++
++        return vrf_ids;
++    }
++
+     void increaseVrfRefCount(const std::string& name)
+     {
+         if (vrf_table_.find(name) != std::end(vrf_table_))
+diff --git a/tests/mock_tests/aclorch_ut.cpp b/tests/mock_tests/aclorch_ut.cpp
+index 9827d0a7..dc3f3106 100755
+--- a/tests/mock_tests/aclorch_ut.cpp
++++ b/tests/mock_tests/aclorch_ut.cpp
+@@ -388,8 +388,13 @@ namespace aclorch_test
+             ASSERT_EQ(gVrfOrch, nullptr);
+             gVrfOrch = new VRFOrch(m_app_db.get(), APP_VRF_TABLE_NAME, m_state_db.get(), STATE_VRF_OBJECT_TABLE_NAME);
+ 
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/mock_tests/bufferorch_ut.cpp b/tests/mock_tests/bufferorch_ut.cpp
+index 07432705..cc33489a 100644
+--- a/tests/mock_tests/bufferorch_ut.cpp
++++ b/tests/mock_tests/bufferorch_ut.cpp
+@@ -319,8 +319,13 @@ namespace bufferorch_test
+             ASSERT_EQ(gVrfOrch, nullptr);
+             gVrfOrch = new VRFOrch(m_app_db.get(), APP_VRF_TABLE_NAME, m_state_db.get(), STATE_VRF_OBJECT_TABLE_NAME);
+ 
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/mock_tests/flexcounter_ut.cpp b/tests/mock_tests/flexcounter_ut.cpp
+index 80a400a0..c5df58f3 100644
+--- a/tests/mock_tests/flexcounter_ut.cpp
++++ b/tests/mock_tests/flexcounter_ut.cpp
+@@ -392,7 +392,11 @@ namespace flexcounter_test
+             static_cast<Orch *>(gPortsOrch)->doTask();
+ 
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+         }
+ 
+         virtual void TearDown() override
+diff --git a/tests/mock_tests/flowcounterrouteorch_ut.cpp b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+index 089d681b..37f81b21 100644
+--- a/tests/mock_tests/flowcounterrouteorch_ut.cpp
++++ b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+@@ -157,8 +157,13 @@ namespace flowcounterrouteorch_test
+             gVrfOrch = new VRFOrch(m_app_db.get(), APP_VRF_TABLE_NAME, m_state_db.get(), STATE_VRF_OBJECT_TABLE_NAME);
+             gDirectory.set(gVrfOrch);
+ 
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/mock_tests/mock_orch_test.cpp b/tests/mock_tests/mock_orch_test.cpp
+index a5894227..3c26cfdb 100644
+--- a/tests/mock_tests/mock_orch_test.cpp
++++ b/tests/mock_tests/mock_orch_test.cpp
+@@ -120,7 +120,11 @@ void MockOrchTest::SetUp()
+     ut_orch_list.push_back((Orch **)&gVrfOrch);
+     global_orch_list.insert((Orch **)&gVrfOrch);
+ 
+-    gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++    vector<table_name_with_pri_t> intf_tables = {
++        { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++        { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++    };
++    gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+     gDirectory.set(gIntfsOrch);
+     ut_orch_list.push_back((Orch **)&gIntfsOrch);
+     global_orch_list.insert((Orch **)&gIntfsOrch);
+diff --git a/tests/mock_tests/mock_orchagent_main.cpp b/tests/mock_tests/mock_orchagent_main.cpp
+index 6fa8b19a..16d7a6ca 100644
+--- a/tests/mock_tests/mock_orchagent_main.cpp
++++ b/tests/mock_tests/mock_orchagent_main.cpp
+@@ -10,6 +10,7 @@ sai_object_id_t gVirtualRouterId;
+ sai_object_id_t gUnderlayIfId;
+ sai_object_id_t gSwitchId = SAI_NULL_OBJECT_ID;
+ MacAddress gMacAddress;
++MacAddress gSagMacAddress;
+ MacAddress gVxlanMacAddress;
+ 
+ string gMySwitchType = "switch";
+diff --git a/tests/mock_tests/portsorch_ut.cpp b/tests/mock_tests/portsorch_ut.cpp
+index 026a1cd0..2b8b2039 100644
+--- a/tests/mock_tests/portsorch_ut.cpp
++++ b/tests/mock_tests/portsorch_ut.cpp
+@@ -471,7 +471,12 @@ namespace portsorch_test
+             gBufferOrch = new BufferOrch(m_app_db.get(), m_config_db.get(), m_state_db.get(), buffer_tables);
+ 
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/mock_tests/qosorch_ut.cpp b/tests/mock_tests/qosorch_ut.cpp
+index 0cdda781..aadb1432 100644
+--- a/tests/mock_tests/qosorch_ut.cpp
++++ b/tests/mock_tests/qosorch_ut.cpp
+@@ -406,8 +406,13 @@ namespace qosorch_test
+             ASSERT_EQ(gVrfOrch, nullptr);
+             gVrfOrch = new VRFOrch(m_app_db.get(), APP_VRF_TABLE_NAME, m_state_db.get(), STATE_VRF_OBJECT_TABLE_NAME);
+ 
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/mock_tests/routeorch_ut.cpp b/tests/mock_tests/routeorch_ut.cpp
+index 103dd888..a25d0b5c 100644
+--- a/tests/mock_tests/routeorch_ut.cpp
++++ b/tests/mock_tests/routeorch_ut.cpp
+@@ -251,7 +251,12 @@ namespace routeorch_test
+             gDirectory.set(evpn_orch);
+ 
+             ASSERT_EQ(gIntfsOrch, nullptr);
+-            gIntfsOrch = new IntfsOrch(m_app_db.get(), APP_INTF_TABLE_NAME, gVrfOrch, m_chassis_app_db.get());
++
++            vector<table_name_with_pri_t> intf_tables = {
++                { APP_INTF_TABLE_NAME,  IntfsOrch::intfsorch_pri},
++                { APP_SAG_TABLE_NAME,   IntfsOrch::intfsorch_pri}
++            };
++            gIntfsOrch = new IntfsOrch(m_app_db.get(), intf_tables, gVrfOrch, m_chassis_app_db.get());
+ 
+             const int fdborch_pri = 20;
+ 
+diff --git a/tests/test_sag.py b/tests/test_sag.py
+new file mode 100644
+index 00000000..206292d3
+--- /dev/null
++++ b/tests/test_sag.py
+@@ -0,0 +1,319 @@
++import pytest
++import time
++import re
++import json
++import ipaddress
++from swsscommon import swsscommon
++
++@pytest.mark.usefixtures('testlog')
++class TestSag(object):
++    def setup_db(self, dvs):
++        dvs.setup_db()
++        self.app_db = dvs.get_app_db()
++        self.cfg_db = dvs.get_config_db()
++        self.asic_db = dvs.get_asic_db()
++
++    def setup_interface(self, dvs, interface, vlan):
++        # bring up interface
++        dvs.set_interface_status(interface, "up")
++
++        # create VLAN
++        vlan_intf = "Vlan{}".format(vlan)
++        dvs.create_vlan(vlan)
++        dvs.create_vlan_member(vlan, interface)
++        dvs.set_interface_status(vlan_intf, "up")
++
++    def reset_interface(self, dvs, interface, vlan):
++        # remove VLAN
++        dvs.remove_vlan_member(vlan, interface)
++        dvs.remove_vlan(vlan)
++
++    def create_vrf(self, vrf_name):
++        initial_entries = set(self.asic_db.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER"))
++        self.cfg_db.create_entry(swsscommon.CFG_VRF_TABLE_NAME, vrf_name, {"empty": "empty"})
++        time.sleep(2)
++
++        current_entries = set(self.asic_db.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER"))
++        assert len(current_entries - initial_entries) == 1
++        return list(current_entries - initial_entries)[0]
++
++    def remove_vrf(self, vrf_name):
++        self.cfg_db.delete_entry(swsscommon.CFG_VRF_TABLE_NAME, vrf_name)
++        time.sleep(2)
++
++    def add_sag_mac(self, mac):
++        self.cfg_db.create_entry(swsscommon.CFG_SAG_TABLE_NAME, "GLOBAL", {"gateway_mac": mac})
++        time.sleep(2)
++
++    def remove_sag_mac(self):
++        self.cfg_db.delete_entry(swsscommon.CFG_SAG_TABLE_NAME, "GLOBAL")
++        time.sleep(2)
++
++    def enable_sag(self, vlan):
++        vlan_intf = "Vlan{}".format(vlan)
++        self.cfg_db.update_entry(swsscommon.CFG_VLAN_INTF_TABLE_NAME, vlan_intf, {"static_anycast_gateway": "true"})
++        time.sleep(2)
++
++    def disable_sag(self, vlan):
++        vlan_intf = "Vlan{}".format(vlan)
++        self.cfg_db.update_entry(swsscommon.CFG_VLAN_INTF_TABLE_NAME, vlan_intf, {"static_anycast_gateway": "false"})
++        time.sleep(2)
++
++    def get_system_mac(self, dvs):
++        (exit_code, result) = dvs.runcmd(["sh", "-c", "ip link show eth0 | grep ether | awk '{print $2}'"])
++        assert exit_code == 0
++        return result.rstrip().lower()
++
++    def get_asic_db_default_vrf_oid(self):
++        vrf_entries = self.asic_db.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER")
++        assert len(vrf_entries) == 1
++        return list(set(vrf_entries))[0]
++        return set(vrf_entries)
++
++    def generate_ipv6_link_local_addr(self, mac, prefix_len):
++        eui64 = re.sub(r'[.:-]', '', mac).lower()
++        eui64 = eui64[0:6] + 'fffe' + eui64[6:]
++        eui64 = hex(int(eui64[0:2], 16) ^ 2)[2:].zfill(2) + eui64[2:]
++        eui64_str = ':'.join(re.findall(r'.{4}', eui64))
++        return ipaddress.IPv6Interface("fe80::{}/{}".format(eui64_str, str(prefix_len)))
++
++    def check_kernel_intf_mac(self, dvs, interface, mac):
++        (exit_code, result) = dvs.runcmd(["sh", "-c", "ip link show {}".format(interface)])
++        assert exit_code == 0
++        assert mac in result
++
++    def check_kernel_intf_ipv6_addr(self, dvs, interface, addr):
++        (exit_code, result) = dvs.runcmd(["sh", "-c", "ip -6 address show {}".format(interface)])
++        assert exit_code == 0
++        assert addr in result
++
++    def check_app_db_sag_mac(self, fvs, mac):
++        assert fvs.get("gateway_mac") == mac
++
++    def check_app_db_intf(self, fvs, mac, sag):
++        assert fvs.get("mac_addr") == mac and fvs.get("static_anycast_gateway") == sag
++
++    def check_object_exist(self, db, table, expected_attributes):
++        keys = db.get_keys(table)
++        found = False
++        for key in keys:
++            fvs = db.get_entry(table, key)
++            found |= all(fvs.get(k).casefold() == v.casefold() for k, v in expected_attributes.items())
++            if found:
++                break
++        assert found, f"Expected field/value pairs not found: expcted={expected_attributes}"
++
++    def check_asic_db_router_interface(self, vlan_oid, mac, vrf_oid):
++        self.check_object_exist(self.asic_db,
++            "ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE",
++            {
++                "SAI_ROUTER_INTERFACE_ATTR_TYPE": "SAI_ROUTER_INTERFACE_TYPE_VLAN",
++                "SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS": mac,
++                "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": vrf_oid,
++                "SAI_ROUTER_INTERFACE_ATTR_VLAN_ID": vlan_oid
++            }
++        )
++
++    def check_asic_db_route_entry(self, destination, vrf_oid, exist):
++        route_entries = self.asic_db.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
++        dest_vrf = [(json.loads(route_entry)["dest"], json.loads(route_entry)["vr"])
++                        for route_entry in route_entries]
++
++        if exist:
++            assert (destination, vrf_oid) in dest_vrf
++        else:
++            assert (destination, vrf_oid) not in dest_vrf
++
++
++    def test_SagAddRemove(self, dvs):
++        self.setup_db(dvs)
++
++        default_mac = "00:00:00:00:00:00"
++        default_vrf_oid = self.get_asic_db_default_vrf_oid()
++        system_mac = self.get_system_mac(dvs)
++
++        interface = "Ethernet0"
++        vlan = "100"
++        vlan_intf = "Vlan{}".format(vlan)
++        self.setup_interface(dvs, interface, vlan)
++
++        ip = "1.1.1.1/24"
++        dvs.add_ip_address(vlan_intf, ip)
++
++        # add SAG global MAC address
++        mac = "00:11:22:33:44:55"
++        self.add_sag_mac(mac)
++        fvs = dvs.get_app_db().wait_for_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++        self.check_app_db_sag_mac(fvs, mac)
++
++        # enable SAG on the VLAN interface
++        self.enable_sag(vlan)
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": mac})
++
++        self.check_app_db_intf(fvs, mac, "true")
++        self.check_kernel_intf_mac(dvs, vlan_intf, mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), mac, default_vrf_oid)
++
++        # disable SAG on the VLAN interface
++        self.disable_sag(vlan)
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"NULL": "NULL"}
++        )
++
++        self.check_app_db_intf(fvs, default_mac, "false")
++        self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), system_mac, default_vrf_oid)
++
++        # delete SAG global MAC address
++        self.remove_sag_mac()
++        self.app_db.wait_for_deleted_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++
++        ipv6_ll_route = self.generate_ipv6_link_local_addr(mac, 128)
++        self.check_asic_db_route_entry(str(ipv6_ll_route), default_vrf_oid, exist=False)
++
++        # remove ip
++        dvs.remove_ip_address(vlan_intf, ip)
++
++        # reset interface
++        self.reset_interface(dvs, interface, vlan)
++
++    def test_SagRemoveWhenSagVlanEnabled(self, dvs):
++        self.setup_db(dvs)
++
++        default_mac = "00:00:00:00:00:00"
++        default_vrf_oid = self.get_asic_db_default_vrf_oid()
++        system_mac = self.get_system_mac(dvs)
++
++        interface = "Ethernet0"
++        vlan = "100"
++        vlan_intf = "Vlan{}".format(vlan)
++        self.setup_interface(dvs, interface, vlan)
++
++        ip = "1.1.1.1/24"
++        dvs.add_ip_address(vlan_intf, ip)
++
++        # add SAG global MAC address
++        mac = "00:11:22:33:44:55"
++        self.add_sag_mac(mac)
++        fvs = dvs.get_app_db().wait_for_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++        self.check_app_db_sag_mac(fvs, mac)
++
++        # enable SAG on the VLAN interface
++        self.enable_sag(vlan)
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": mac})
++
++        self.check_app_db_intf(fvs, mac, "true")
++        self.check_kernel_intf_mac(dvs, vlan_intf, mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), mac, default_vrf_oid)
++
++        # delete SAG global MAC address
++        self.remove_sag_mac()
++        self.app_db.wait_for_deleted_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++
++        ipv6_ll_route = self.generate_ipv6_link_local_addr(mac, 128)
++        self.check_asic_db_route_entry(str(ipv6_ll_route), default_vrf_oid, exist=False)
++
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"NULL": "NULL"}
++        )
++
++        self.check_app_db_intf(fvs, default_mac, "true")
++        self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), system_mac, default_vrf_oid)
++
++        # remove ip
++        dvs.remove_ip_address(vlan_intf, ip)
++
++        # reset interface
++        self.reset_interface(dvs, interface, vlan)
++
++
++    def test_SagAddRemoveInVrf(self, dvs):
++        self.setup_db(dvs)
++
++        default_mac = "00:00:00:00:00:00"
++        default_vrf_oid = self.get_asic_db_default_vrf_oid()
++        system_mac = self.get_system_mac(dvs)
++
++        interface = "Ethernet0"
++        vlan = "100"
++        vlan_intf = "Vlan{}".format(vlan)
++        self.setup_interface(dvs, interface, vlan)
++
++        vrf_name = "Vrf1"
++        vrf_oid = self.create_vrf(vrf_name)
++
++        ip = "1.1.1.1/24"
++        dvs.add_ip_address(vlan_intf, ip, vrf_name)
++
++        # add SAG global MAC address
++        mac = "00:11:22:33:44:55"
++        self.add_sag_mac(mac)
++        fvs = dvs.get_app_db().wait_for_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++        self.check_app_db_sag_mac(fvs, mac)
++
++        # enable SAG on the VLAN interface
++        self.enable_sag(vlan)
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": mac,
++             "vrf_name": vrf_name})
++
++        self.check_app_db_intf(fvs, mac, "true")
++        self.check_kernel_intf_mac(dvs, vlan_intf, mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), mac, vrf_oid)
++
++        # disable SAG on the VLAN interface
++        self.disable_sag(vlan)
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"vrf_name": vrf_name}
++        )
++
++        self.check_app_db_intf(fvs, default_mac, "false")
++        self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
++
++        ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
++        self.check_kernel_intf_ipv6_addr(dvs, vlan_intf, str(ipv6_ll))
++        self.check_asic_db_router_interface(dvs.getVlanOid(vlan), system_mac, vrf_oid)
++
++        # delete SAG global MAC address
++        self.remove_sag_mac()
++        self.app_db.wait_for_deleted_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++
++        ipv6_ll_route = self.generate_ipv6_link_local_addr(mac, 128)
++        self.check_asic_db_route_entry(str(ipv6_ll_route), default_vrf_oid, exist=False)
++        self.check_asic_db_route_entry(str(ipv6_ll_route), vrf_oid, exist=False)
++
++        # remove ip
++        dvs.remove_ip_address(vlan_intf, ip)
++
++        # reset interface
++        self.reset_interface(dvs, interface, vlan)
+-- 
+2.25.1
+

@@ -1,0 +1,43 @@
+From 4648910c46ad5f3640593a808976a1b0bfb049ab Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 14:00:49 +0530
+Subject: [PATCH] OSPF GR: Enabling OSPF in finalize-warmboot script
+
+Enabling OSPF GR in finalize-warmboot script
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../warmboot-finalizer/finalize-warmboot.sh            | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/files/image_config/warmboot-finalizer/finalize-warmboot.sh b/files/image_config/warmboot-finalizer/finalize-warmboot.sh
+index 492ad4792..3ac096c3e 100755
+--- a/files/image_config/warmboot-finalizer/finalize-warmboot.sh
++++ b/files/image_config/warmboot-finalizer/finalize-warmboot.sh
+@@ -126,6 +126,9 @@ function finalize_warm_boot()
+     debug "Finalizing warmboot..."
+     finalize_common
+     sudo config warm_restart disable
++    for service in ${!RECONCILE_COMPONENTS[@]}; do
++        sudo config warm_restart disable ${service}
++    done
+ }
+ 
+ function finalize_fast_reboot()
+@@ -173,6 +176,13 @@ if [[ (x"${WARM_BOOT}" == x"true") && (x"${FAST_REBOOT}" != x"true") ]]; then
+     restore_counters_folder
+ fi
+ 
++# If warm restart protocol is set to ospf, fpmsyncd drives
++# WARM_RESTART_TABLE|ospf instead of WARM_RESTART_TABLE|bgp
++WR_PROTOCOL=$(sonic-db-cli CONFIG_DB HGET "WARM_RESTART|bgp" "warm_restart_protocol")
++if [[ x"${WR_PROTOCOL}" == x"ospf" ]]; then
++    RECONCILE_COMPONENTS["bgp"]="ospf"
++fi
++
+ get_component_list
+ 
+ debug "Waiting for components: '${COMPONENT_LIST}' to reconcile ..."
+-- 
+2.25.1
+

@@ -1,0 +1,25 @@
+From 01689bcd25f4954b9f207304ccafc4788604c907 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Fri, 13 Mar 2026 12:13:57 +0530
+Subject: [PATCH] Added bmp feature configuration
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ files/build_templates/init_cfg.json.j2 | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/files/build_templates/init_cfg.json.j2 b/files/build_templates/init_cfg.json.j2
+index 442620414..f292f6c2e 100644
+--- a/files/build_templates/init_cfg.json.j2
++++ b/files/build_templates/init_cfg.json.j2
+@@ -66,6 +66,7 @@
+                    ("pmon", "enabled", "{% if 'type' in DEVICE_METADATA['localhost'] and DEVICE_METADATA['localhost']['type'] == 'SpineRouter' %}False{% else %}True{% endif %}", "enabled"),
+                    ("swss", "enabled", false, "enabled"),
+                    ("syncd", "enabled", false, "enabled")] %}
++{%- if include_system_bmp == "y" %}{% do features.append(("bmp", "disabled", false, "enabled")) %}{% endif %}
+ {%- if include_router_advertiser == "y" %}{% do features.append(("radv", "enabled", false, "enabled")) %}{% endif %}
+ {%- if include_lldp == "y" %}{% do features.append(("lldp", "enabled", true, "enabled")) %}{% endif %}
+ {%- if include_snmp == "y" %}{% do features.append(("snmp", "enabled", true, "enabled")) %}{% endif %}
+-- 
+2.25.1
+

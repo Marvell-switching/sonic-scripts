@@ -1,0 +1,118 @@
+From a893c53cb6457820537ddca7a2eca38a1e809899 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Sun, 22 Mar 2026 21:58:54 +0530
+Subject: [PATCH] BFD Tx/Rx intervals not updating even with Polling complete
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Note: This change is already present in FRR Master. However, none of the FRR
+branches have it as of this date, i.e., not present until FRR 10.6.0.
+It is temporary change. Need to remove once it is taken into a branch that is
+merged with SONiC.
+
+RCA: As per RFC-5880, section 6.8.3 requires a higher DesiredMinTxInterval in UP
+state to be deferred only until the local Poll Sequence terminates. From section
+6.5, that happens when the poll initiator receives a packet with the Final bit
+set. Since bs_final_handler() is invoked both for local-poll completion and
+while responding to a peer Poll, the defer logic must be conditioned on
+bs->polling as well (currently this is not happening), not just on
+(ses_state == Up && new > old). Otherwise the new interval is incorrectly
+suppressed even after poll completion. This also conflicts with section 6.8.3’s
+rule that all other timing changes take effect immediately and section 6.8.7’s
+requirement to recalculate tx interval as
+max(DesiredMinTxInterval, RemoteMinRxInterval).
+
+Refer to the below table for different scenarios which are encountered.
+
+Scenario                                                    Polling                                   Effect
+--------------------------------------------------------------------------------------------------------------------------
+Call site 1 (our poll done, F received)            0 (cleared before call)            Condition false → applies new timer
+Call site 2 (peer's poll, our poll done)           0                                  Condition false → applies new timer
+Call site 2 (peer's poll, our poll still active)   1                                  If increasing, defers → correct per RFC
+Down→Up transition, F received                     0 (cleared before call)            Applies configured timer → fixes the original bug
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ ...oes-not-get-deleted-with-bfd-config.patch} |  0
+ ...als-not-updating-even-with-Polling-c.patch | 50 +++++++++++++++++++
+ src/sonic-frr/patch/series                    |  3 +-
+ 3 files changed, 52 insertions(+), 1 deletion(-)
+ rename src/sonic-frr/patch/{0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch => 0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch} (100%)
+ create mode 100644 src/sonic-frr/patch/0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
+
+diff --git a/src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch b/src/sonic-frr/patch/0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+similarity index 100%
+rename from src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+rename to src/sonic-frr/patch/0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+diff --git a/src/sonic-frr/patch/0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch b/src/sonic-frr/patch/0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
+new file mode 100644
+index 000000000..c2cccc012
+--- /dev/null
++++ b/src/sonic-frr/patch/0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
+@@ -0,0 +1,50 @@
++From a0dff99fb6b03a8d4e601b27d7609a2dbbc96a8e Mon Sep 17 00:00:00 2001
++From: sarabjeets <sarabjeets@marvell.com>
++Date: Thu, 19 Mar 2026 12:01:19 +0530
++Subject: [PATCH] BFD Tx/Rx intervals not updating, even with Polling complete
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++As per RFC-5880, section 6.8.3 requires a higher DesiredMinTxInterval in UP
++state to be deferred only until the local Poll Sequence terminates. From section
++6.5, that happens when the poll initiator receives a packet with the Final bit
++set. Since bs_final_handler() is invoked both for local-poll completion and
++while responding to a peer Poll, the defer logic must be conditioned on
++bs->polling as well (currently this is not happening), not just on
++(ses_state == Up && new > old). Otherwise the new interval is incorrectly
++suppressed even after poll completion. This also conflicts with section 6.8.3’s
++rule that all other timing changes take effect immediately and section 6.8.7’s
++requirement to recalculate tx interval as
++max(DesiredMinTxInterval, RemoteMinRxInterval).
++
++Refer to the below table for different scenarios which are encountered.
++
++Scenario	                                            Polling	                              Effect
++--------------------------------------------------------------------------------------------------------------------------
++Call site 1 (our poll done, F received)	           0 (cleared before call)	      Condition false → applies new timer
++Call site 2 (peer's poll, our poll done)	   0	                              Condition false → applies new timer
++Call site 2 (peer's poll, our poll still active)   1	                              If increasing, defers → correct per RFC
++Down→Up transition, F received	                   0 (cleared before call)	      Applies configured timer → fixes the original bug
++
++Signed-off-by: sarabjeets <sarabjeets@marvell.com>
++---
++ bfdd/bfd.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/bfdd/bfd.c b/bfdd/bfd.c
++index d9514ab5a..305e1c37b 100644
++--- a/bfdd/bfd.c
+++++ b/bfdd/bfd.c
++@@ -1470,7 +1470,7 @@ void bs_final_handler(struct bfd_session *bs)
++ 		bs->xmt_TO = bs->remote_timers.required_min_rx;
++ 	
++ 	/* Only apply increased transmission interval after Poll Sequence */
++-	if (bs->ses_state == PTM_BFD_UP && bs->xmt_TO > old_xmt_TO) {
+++	if (bs->polling && bs->ses_state == PTM_BFD_UP && bs->xmt_TO > old_xmt_TO) {
++ 		bs->xmt_TO = old_xmt_TO;  /* Keep old timing until Poll Sequence done */
++ 		return;
++ 	}
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index bf0047248..b151da354 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -66,5 +66,6 @@
+ 0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms.patch
+ 0104-SONiC-ONLY-zebra-skip-if-add-update-in-speed-timer-for-unready-ifp.patch
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
+-0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
++0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
++0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
+ evpn-mh-frr-zebra.patch
+-- 
+2.25.1
+

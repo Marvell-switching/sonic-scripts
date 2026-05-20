@@ -1,0 +1,29 @@
+From a1598edce210a684dac91396500463ef0974aeee Mon Sep 17 00:00:00 2001
+From: Jithender Kondam <jreddy@marvell.com>
+Date: Wed, 11 Mar 2026 08:04:01 +0530
+Subject: [PATCH] Update ivm_start.sh script to unify Marvell QoS templates
+ file names.
+
+Signed-off-by: Jithender Kondam <jreddy@marvell.com>
+---
+ .../marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh  | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
+index 896d20970..0965c940d 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
+@@ -8,8 +8,8 @@ else
+ fi
+ 
+ if [ ${topo} != "none" ]; then
+-    BUFFER_CONFIG=/usr/share/sonic/hwsku/buffers_defaults_${topo}.j2
+-    QOS_CONFIG=/usr/share/sonic/hwsku/qos_defaults_${topo}.j2
++    BUFFER_CONFIG=/usr/share/sonic/hwsku/buffers.json.j2
++    QOS_CONFIG=/usr/share/sonic/hwsku/qos.json.j2
+ 
+     if [ "$(/usr/local/bin/sonic-cfggen -d -v TC_TO_PRIORITY_GROUP_MAP)" ] || \
+        [ "$(/usr/local/bin/sonic-cfggen -d -v MAP_PFC_PRIORITY_TO_QUEUE)" ] || \
+-- 
+2.25.1
+

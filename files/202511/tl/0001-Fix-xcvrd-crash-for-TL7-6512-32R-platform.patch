@@ -1,0 +1,37 @@
+From d1d21d888a697a6ffe19a6c25619b422d64c5e56 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Tue, 7 Apr 2026 16:40:15 +0530
+Subject: [PATCH] Fix xcvrd crash for TL7 6512-32R platform
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ .../6512-32r/sonic_platform/chassis.py                      | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/chassis.py b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/chassis.py
+index d27b26b98..fac5697c5 100755
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/chassis.py
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/chassis.py
+@@ -205,11 +205,6 @@ class Chassis(ChassisBase):
+         c = sfp._read_eeprom_specific_bytes(0,1)
+         return c != ['ff'] and c != ['00']
+ 
+-    def _clear_sfp_eeprom_buffer(self, port):
+-        sfp = self._sfp_list[port]
+-        return sfp.clear_eeprom_buffer()
+-
+-
+     def get_change_event(self, timeout=0):
+         port_dict = {}
+         ret_dict = {'sfp': port_dict}
+@@ -244,7 +239,6 @@ class Chassis(ChassisBase):
+                             self._transceiver_presence[port] = 0
+                     else:
+                         port_dict[port] = '0'
+-                        self._clear_sfp_eeprom_buffer(port)
+                         self._transceiver_presence[port] = 0
+ 
+             #self._transceiver_presence = cur_presence
+-- 
+2.25.1
+

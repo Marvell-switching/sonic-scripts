@@ -1,0 +1,25 @@
+From ec80585f906c35d07ea955e32c2d336c331def20 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Fri, 21 Nov 2025 01:39:19 +0530
+Subject: [PATCH] Add MCLAG_INTF_TABLE
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ common/schema.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/common/schema.h b/common/schema.h
+index c2efb93..ba641c4 100644
+--- a/common/schema.h
++++ b/common/schema.h
+@@ -113,6 +113,7 @@ namespace swss {
+ #define APP_STP_FASTAGEING_FLUSH_TABLE_NAME "STP_FASTAGEING_FLUSH_TABLE"
+ #define APP_STP_BPDU_GUARD_TABLE_NAME       "STP_BPDU_GUARD_TABLE"
+ #define APP_MCLAG_FDB_TABLE_NAME            "MCLAG_FDB_TABLE"
++#define APP_MCLAG_INTF_TABLE_NAME           "MCLAG_INTF_TABLE"
+ #define APP_ISOLATION_GROUP_TABLE_NAME      "ISOLATION_GROUP_TABLE"
+ #define APP_BFD_SESSION_TABLE_NAME          "BFD_SESSION_TABLE"
+ #define APP_ICMP_ECHO_SESSION_TABLE_NAME    "ICMP_ECHO_SESSION_TABLE"
+-- 
+2.25.1
+

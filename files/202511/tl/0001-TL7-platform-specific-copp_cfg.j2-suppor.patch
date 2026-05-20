@@ -1,0 +1,65 @@
+From 5b6b5369f6e90c95f8e8c9e9fcd1817213983e2e Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Thu, 21 Aug 2025 12:49:08 +0530
+Subject: [PATCH] [SONICDC-325][TL7] platform specific copp_cfg.j2 support
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ .../debian/platform-modules-midstone-200i.postinst     | 10 +++++++++-
+ .../debian/sonic-platform-wistron-6512-32r.postinst    |  5 +++++
+ .../debian/sonic-platform-wistron-sw-to3200k.postinst  |  5 +++++
+ 3 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-cel/debian/platform-modules-midstone-200i.postinst b/platform/marvell-teralynx/sonic-platform-modules-cel/debian/platform-modules-midstone-200i.postinst
+index 213661ea1..03e427837 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-cel/debian/platform-modules-midstone-200i.postinst
++++ b/platform/marvell-teralynx/sonic-platform-modules-cel/debian/platform-modules-midstone-200i.postinst
+@@ -1,3 +1,11 @@
++
++DEVICE="/usr/share/sonic/device"
++PLATFORM=$(/usr/local/bin/sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
++if [ -f $DEVICE/$PLATFORM/copp_cfg.j2 ]; then
++    cp $DEVICE/$PLATFORM/copp_cfg.j2 /usr/share/sonic/templates/
++    sync
++fi
++
+ depmod -a
+ systemctl enable platform-modules-midstone-200i.service
+-systemctl start platform-modules-midstone-200i.service
+\ No newline at end of file
++systemctl start platform-modules-midstone-200i.service
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-6512-32r.postinst b/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-6512-32r.postinst
+index b1cef228e..86ee3e3ad 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-6512-32r.postinst
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-6512-32r.postinst
+@@ -31,6 +31,11 @@ if [ -e $DEVICE/$PLATFORM/sonic_platform-1.0-py3-none-any.whl ]; then
+     pip3 install $DEVICE/$PLATFORM/sonic_platform-1.0-py3-none-any.whl
+ fi
+ 
++if [ -f $DEVICE/$PLATFORM/copp_cfg.j2 ]; then
++    cp $DEVICE/$PLATFORM/copp_cfg.j2 /usr/share/sonic/templates/
++    sync
++fi
++
+ systemctl enable platform-modules-6512-32r.service
+ systemctl start platform-modules-6512-32r.service
+ systemctl enable 6512-32r-platform.service
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-sw-to3200k.postinst b/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-sw-to3200k.postinst
+index 9a1d167da..5b6929ce5 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-sw-to3200k.postinst
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/debian/sonic-platform-wistron-sw-to3200k.postinst
+@@ -31,6 +31,11 @@ if [ -e $DEVICE/$PLATFORM/sonic_platform-1.0-py3-none-any.whl ]; then
+     pip3 install $DEVICE/$PLATFORM/sonic_platform-1.0-py3-none-any.whl
+ fi
+ 
++if [ -f $DEVICE/$PLATFORM/copp_cfg.j2 ]; then
++    cp $DEVICE/$PLATFORM/copp_cfg.j2 /usr/share/sonic/templates/
++    sync
++fi
++
+ systemctl enable platform-modules-sw-to3200k.service
+ systemctl start platform-modules-sw-to3200k.service
+ systemctl enable sw-to3200k-firmware_ver.service
+-- 
+2.25.1
+

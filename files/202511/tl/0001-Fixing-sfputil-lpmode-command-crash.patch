@@ -1,0 +1,31 @@
+From 5a0a423498ee6ce9b8600c53ebf84780776a6148 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Wed, 22 Oct 2025 18:24:37 +0530
+Subject: [PATCH] [SONICDC-650] Fixing sfputil lpmode command crash
+
+- power_mode sysfs is not present under sfp device /sys/bus/i2c/devices/0-00<>/
+  due to this sfputil lpmode command crashes which is accessed in set_power_override
+  function.
+- Commenting the call to set_power_override function to fix this crash.
+  This change would be revisted if special handling or set_power_override call
+  is really needed while testing with non-DAC transceivers.
+---
+ .../6512-32r/sonic_platform/sfp.py                              | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/sfp.py b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/sfp.py
+index 226cf6eab..ae4f96903 100755
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/sfp.py
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/sfp.py
+@@ -217,7 +217,7 @@ class Sfp(SfpOptoeBase):
+             val_file = open(lpmode_path, 'w')
+             val_file.write('1' if lpmode else '0')
+             val_file.close()
+-            self.set_power_override(True, True if lpmode is True else False)
++            #self.set_power_override(True, True if lpmode is True else False)
+             return True
+         except IOError:
+             val_file.close()
+-- 
+2.25.1
+

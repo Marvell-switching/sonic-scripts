@@ -1,0 +1,48 @@
+From 3980753b0ffcd71dce39bc70a6e5ecbfd3b1724b Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Wed, 29 Oct 2025 17:09:39 +0530
+Subject: [PATCH] Implement LT query with backward compatibility
+
+Added support to query link training operational state
+while ensuring backward compatibility with older
+platforms that may not expose the capability directly.
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ orchagent/portsorch.cpp | 20 +++++++++++++++-----
+ 1 file changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 5bb9b226..42589c7d 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -2941,11 +2941,21 @@ void PortsOrch::initPortCapAutoNeg(Port &port)
+ 
+ void PortsOrch::initPortCapLinkTraining(Port &port)
+ {
+-    // TODO:
+-    // Add SAI_PORT_ATTR_SUPPORTED_LINK_TRAINING_MODE query when it is
+-    // available in the saiport.h of SAI.
+-    port.m_cap_lt = 1;
+-    SWSS_LOG_WARN("Unable to get %s LT support capability", port.m_alias.c_str());
++    sai_status_t status;
++    sai_attribute_t attr;
++
++    attr.id = SAI_PORT_ATTR_SUPPORTED_LINK_TRAINING_MODE;
++    status = sai_port_api->get_port_attribute(port.m_port_id, 1, &attr);
++    if (status == SAI_STATUS_SUCCESS)
++    {
++        port.m_cap_lt = attr.value.booldata ? 1 : 0;
++    }
++    else
++    {
++        // To avoid breakage on the existing platforms, LT should be 1 by default
++        port.m_cap_lt = 1;
++        SWSS_LOG_WARN("Unable to get %s LT support capability", port.m_alias.c_str());
++    }
+ }
+ 
+ bool PortsOrch::isFecModeSupported(const Port &port, sai_port_fec_mode_t fec_mode)
+-- 
+2.25.1
+

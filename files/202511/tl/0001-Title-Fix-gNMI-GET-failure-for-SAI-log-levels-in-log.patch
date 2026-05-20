@@ -1,0 +1,144 @@
+From 8bf614049f8a09d99a40f9d3b3db4593046baa24 Mon Sep 17 00:00:00 2001
+From: Rakshitha SK <rsk@marvell.com>
+Date: Mon, 23 Mar 2026 09:53:35 +0530
+Subject: [PATCH] Fix gNMI GET failure for SAI log levels in logger
+
+Problem:
+SONiC sonic-logger.yang defines LOGLEVEL as a union of two enum typedefs
+(swss_loglevel and sai_loglevel). During gNMI GET, values like
+SAI_LOG_LEVEL_DEBUG fail to unmarshal, as the generated ocbinds.go
+contains only swss enum values and misses SAI enums.
+
+Root Cause:
+1. In goyang, enum typedefs with identical structure are treated as equal
+   (Name field is ignored), so sai_loglevel gets dropped during deduplication.
+
+2. In ygot:
+   - Multiple enum typedefs in a union are not handled correctly.
+   - Even if processed, both enums start from 0, causing value conflicts.
+
+Fix:
+- goyang: Include Name in equality check to avoid dropping distinct typedefs.
+- ygot:
+  - Allow multiple enum typedefs in union.
+  - Merge enums by rebasing values of the second typedef to avoid conflicts.
+
+Impact:
+- Both swss and SAI enum values are generated correctly.
+- gNMI GET works for all log levels.
+
+Note:
+Upgrading ygot/goyang was avoided due to compatibility issues with existing
+patches. A minimal patch approach was used instead.
+Signed-off-by: Rakshitha SK <rsk@marvell.com>
+---
+ patches/goyang/goyang.patch | 16 ++++++++++++++
+ patches/ygot/ygot.patch     | 42 ++++++++++++++++++++++++++++++++-----
+ 2 files changed, 53 insertions(+), 5 deletions(-)
+
+diff --git a/patches/goyang/goyang.patch b/patches/goyang/goyang.patch
+index 87df16e..2004343 100644
+--- a/patches/goyang/goyang.patch
++++ b/patches/goyang/goyang.patch
+@@ -660,6 +660,22 @@ index 307610a..ffb59a6 100644
+  	}
+  	if prefix != "" {
+  		name = prefix + ":" + name
++@@ -368,14 +377,14 @@ func (y *YangType) resolve() (errs []error) {
++ 	// I don't know of an easy way to use a type as a key to a map,
++ 	// so we have to check equality the hard way.
++ looking:
++ 	for _, ut := range t.Type {
++ 		errs = append(errs, ut.resolve()...)
++ 		if ut.YangType != nil {
++ 			for _, yt := range y.Type {
++-				if ut.YangType.Equal(yt) {
+++				if ut.YangType.Equal(yt) && ut.YangType.Name == yt.Name {
++ 					continue looking
++ 				}
++ 			}
++ 			y.Type = append(y.Type, ut.YangType)
++ 		}
++ 	}
+ diff --git a/yang.go b/yang.go
+ index 2480a4e..515d1b3 100644
+ --- a/yang.go
+diff --git a/patches/ygot/ygot.patch b/patches/ygot/ygot.patch
+index 0b3ccb4..44f0c9c 100644
+--- a/patches/ygot/ygot.patch
++++ b/patches/ygot/ygot.patch
+@@ -433,7 +433,7 @@ index e39c478..b7766f0 100644
+  
+  	for _, t := range util.EnumeratedUnionTypes(e.Type.Type) {
+  		var en *yangEnum
+-@@ -111,20 +115,36 @@ func (s *enumGenState) enumeratedUnionEntry(e *yang.Entry, compressPaths, noUnde
++@@ -111,20 +115,54 @@ func (s *enumGenState) enumeratedUnionEntry(e *yang.Entry, compressPaths, noUnde
+  				}
+  			}
+  
+@@ -447,15 +447,32 @@ index e39c478..b7766f0 100644
+ -						Enum: t.Enum,
+ +			if tmpEn, ok := enumSet[enumName]; ok {
+ +				enumTmp := yang.NewEnumType()
+-+				for eNm, eVal := range t.Enum.NameMap() {
+++				// Copy existing (first typedef) values unchanged, track max value
+++				var maxVal int64
+++				for eNm, eVal := range tmpEn.entry.Type.Enum.NameMap() {
+ +					if err := enumTmp.Set(eNm, eVal); err != nil {
+ +						return nil, fmt.Errorf("%v", err)
+ +					}
+++					if eVal > maxVal {
+++						maxVal = eVal
+++					}
+ +				}
+-+				for eNm, eVal := range tmpEn.entry.Type.Enum.NameMap() {
+-+					if err := enumTmp.Set(eNm, eVal); err != nil {
+++				// Re-base second typedef values after first typedef's max to avoid conflicts
+++				type eEntry struct {
+++					name string
+++					val  int64
+++				}
+++				newEntries := make([]eEntry, 0)
+++				for eNm, eVal := range t.Enum.NameMap() {
+++					newEntries = append(newEntries, eEntry{eNm, eVal})
+++				}
+++				sort.Slice(newEntries, func(i, j int) bool { return newEntries[i].val < newEntries[j].val })
+++				nextVal := maxVal + 1
+++				for _, ev := range newEntries {
+++					if err := enumTmp.Set(ev.name, nextVal); err != nil {
+ +						return nil, fmt.Errorf("%v", err)
+ +					}
+++					nextVal++
+ +				}
+ +				tmpEn.entry.Type.Enum = enumTmp
+ +				continue
+@@ -477,10 +494,25 @@ index e39c478..b7766f0 100644
+ +				enumSet[enumName] = en
+  			}
+  		}
+--
++
+  		es = append(es, en)
+  	}
+  
++@@ -480,7 +500,13 @@ func (s *enumGenState) resolveTypedefEnumeratedName(e *yang.Entry, noUnderscores bool) (string, error) {
++ 		case 0:
++ 			return "", fmt.Errorf("enumerated type had an empty union within it, path: %v, type: %v, enumerated: %v", e.Path(), e.Type, enumTypes)
++ 		default:
++-			return "", fmt.Errorf("multiple enumerated types within a single enumeration not supported, path: %v, type: %v, enumerated: %v", e.Path(), e.Type, enumTypes)
+++			// Multiple enum typedefs in union (e.g. swss_loglevel + sai_loglevel).
+++			// Use the first typedef name; values are merged in enumeratedUnionEntry.
+++			if noUnderscores {
+++				typeName = fmt.Sprintf("%sEnum", enumTypes[0].Name)
+++			} else {
+++				typeName = fmt.Sprintf("%s_Enum", enumTypes[0].Name)
+++			}
++ 		}
++ 	}
++ 	if e.Node == nil {
+ diff --git a/ygen/schemaparse.go b/ygen/schemaparse.go
+ index f71e7e6..1183fb8 100644
+ --- a/ygen/schemaparse.go
+-- 
+2.25.1
+

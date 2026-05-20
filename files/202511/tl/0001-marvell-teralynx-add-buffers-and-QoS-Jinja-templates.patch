@@ -1,0 +1,45 @@
+From cac11664766c2bbc3fc04aa858f2396e0fe187b4 Mon Sep 17 00:00:00 2001
+From: Jithender Kondam <jreddy@marvell.com>
+Date: Wed, 1 Apr 2026 05:10:04 +0530
+Subject: [PATCH] marvell-teralynx: add buffers and QoS Jinja templates to
+ syncd Docker images
+
+Copy buffers_config.j2 and qos_config.j2 from files/build_templates into
+/usr/share/sonic/templates in both docker-syncd-mrvl-teralynx and
+docker-syncd-mrvl-teralynx-rpc so config generation has the same
+templates
+as other SONiC images.
+
+Signed-off-by: Jithender Kondam <jreddy@marvell.com>
+---
+ platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk         | 2 ++
+ .../marvell-teralynx/docker-syncd-mrvl-teralynx/Dockerfile.j2   | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
+index 4ed4ea182..c42d97ac0 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx.mk
+@@ -15,4 +15,6 @@ $(DOCKER_SYNCD_BASE)_VERSION = 1.0.0
+ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
+ $(DOCKER_SYNCD_BASE)_MACHINE = marvell-teralynx
+ 
++$(DOCKER_SYNCD_BASE)_FILES += $(BUFFERS_CONFIG_TEMPLATE) $(QOS_CONFIG_TEMPLATE)
++
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/warmboot:/var/warmboot
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/Dockerfile.j2 b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/Dockerfile.j2
+index 5f91e8a7b..b072f6cd5 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/Dockerfile.j2
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/Dockerfile.j2
+@@ -30,6 +30,8 @@ COPY ["start.sh", "/usr/bin/"]
+ COPY ["ivm_start.sh", "/usr/bin/"]
+ COPY ["supervisord.conf", "/etc/supervisor/conf.d/"]
+ COPY ["critical_processes", "/etc/supervisor/"]
++COPY ["files/buffers_config.j2", "/usr/share/sonic/templates/"]
++COPY ["files/qos_config.j2", "/usr/share/sonic/templates/"]
+ 
+ FROM $BASE
+ 
+-- 
+2.25.1
+

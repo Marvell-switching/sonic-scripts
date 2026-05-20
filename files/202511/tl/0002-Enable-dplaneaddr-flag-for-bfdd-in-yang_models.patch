@@ -1,0 +1,78 @@
+From 03db2dcde3d6d5f9c21cd3d88e7096e5a7d1f1a5 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Tue, 16 Dec 2025 16:15:49 +0530
+Subject: [PATCH 2/2] Enable --dplaneaddr flag for bfdd in yang_models
+
+Right now, protocols are by default not aware if HW OFFLOAD bfd is
+enabled or not. For the same, we need to start bfdd process with
+--dplaneaddr flag.
+
+/usr/lib/frr/bfdd -A 127.0.0.1 -P 0 --dplaneaddr ipv4:127.0.0.1:50700
+
+If the bfdd is running with the flag, protocols won't be starting their
+own software bfd, instead will leverage the HW BFD being run.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../yang_model_tests/tests/device_metadata.json      |  3 +++
+ .../tests_config/device_metadata.json                | 12 ++++++++++++
+ .../yang-models/sonic-device_metadata.yang           |  6 ++++++
+ 3 files changed, 21 insertions(+)
+
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/device_metadata.json b/src/sonic-yang-models/tests/yang_model_tests/tests/device_metadata.json
+index fffc712a6..37deb2525 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests/device_metadata.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/device_metadata.json
+@@ -109,6 +109,9 @@
+     "DEVICE_METADATA_FRR_MGMT_FWK_CONFIG": {
+         "desc": "Verifying FRR MGMT framework configuration."
+     },
++    "DEVICE_METADATA_BFD_DATA_PLANE_MODE": {
++        "desc": "Verifying BFD data plane mode configuration."
++    },
+     "DEVICE_METADATA_CORRECT_CLOUDTYPE_REGION_CONFIG": {
+         "desc": "Verifying cloudtype and region configuration."
+     },
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/device_metadata.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/device_metadata.json
+index 8342bd559..b0969cd54 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests_config/device_metadata.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/device_metadata.json
+@@ -319,6 +319,18 @@
+             }
+         }
+     },
++    "DEVICE_METADATA_BFD_DATA_PLANE_MODE": {
++        "sonic-device_metadata:sonic-device_metadata": {
++            "sonic-device_metadata:DEVICE_METADATA": {
++                "sonic-device_metadata:localhost": {
++                    "frr_mgmt_framework_config": true,
++                    "bfd_data_plane_mode": "enabled",
++                    "hostname": "DUT-CSW",
++                    "platform": "Stone-DX010"
++                }
++            }
++        }
++    },
+     "DEVICE_METADATA_CORRECT_CLOUDTYPE_REGION_CONFIG": {
+         "sonic-device_metadata:sonic-device_metadata": {
+             "sonic-device_metadata:DEVICE_METADATA": {
+diff --git a/src/sonic-yang-models/yang-models/sonic-device_metadata.yang b/src/sonic-yang-models/yang-models/sonic-device_metadata.yang
+index 3ed838b5b..8cae32130 100644
+--- a/src/sonic-yang-models/yang-models/sonic-device_metadata.yang
++++ b/src/sonic-yang-models/yang-models/sonic-device_metadata.yang
+@@ -123,6 +123,12 @@ module sonic-device_metadata {
+                     default "false";
+                 }
+ 
++                leaf bfd_data_plane_mode {
++                    type stypes:admin_mode;
++                    description "Enable BFD data plane mode to start bfdd with --dplaneaddr parameter for hardware-accelerated BFD.";
++                    default "disabled";
++                }
++
+                 leaf synchronous_mode {
+                     type enumeration {
+                         enum enable;
+-- 
+2.25.1
+

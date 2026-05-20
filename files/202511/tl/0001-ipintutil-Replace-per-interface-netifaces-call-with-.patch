@@ -1,0 +1,462 @@
+From 2c47c42ba82fd09b0a0a56a7702f89e62c33ac42 Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Tue, 10 Mar 2026 01:34:23 +0530
+Subject: [PATCH]  ipintutil: Replace per-interface netifaces call with bulk
+ `ip -json addr show` to fix `show ip int` hang at VLAN scale
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ Issue
+ `show ip int` hangs indefinitely (appears stuck in an infinite loop) on setups with 4K VLANs. The CLI must be killed with Ctrl+C.
+
+ Root Cause
+ `get_ip_intfs_in_namespace()` called `multi_asic_get_ip_intf_addr_from_ns(namespace, iface)` inside a per-interface for-loop. That function internally invoked `netifaces. ifaddresses(iface)` wrapped in `pyroute2.netns.pushns/popns` — producing 4000+ sequential blocking kernel round-trips at 4K VLAN scale, making the CLI appear hung.
+
+ The helper function `multi_asic_get_addr_info_from_ns()` — which fetches all interface addresses via a single `ip -json addr show` subprocess call — was already present   in `multi_asic.py` from a prior partial fix, but the call-site in `ipintutil` had been inadvertently reverted to the old per-interface path during a rewrite.
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ scripts/ipintutil                     | 183 ++++++++++++--------------
+ tests/mock_tables/mock_multi_asic.py  |  42 ++++++
+ tests/mock_tables/mock_single_asic.py |  44 ++++++-
+ utilities_common/multi_asic.py        |  72 ++++++++++
+ 4 files changed, 238 insertions(+), 103 deletions(-)
+
+diff --git a/scripts/ipintutil b/scripts/ipintutil
+index 193f44eb..381d7b26 100755
+--- a/scripts/ipintutil
++++ b/scripts/ipintutil
+@@ -4,8 +4,8 @@ import os
+ import subprocess
+ import sys
+ 
+-import netaddr
+ import netifaces
++
+ from natsort import natsorted
+ from tabulate import tabulate
+ 
+@@ -74,65 +74,6 @@ def skip_ip_intf_display(interface, display_option):
+     return False
+ 
+ 
+-def get_if_admin_state(iface, namespace):
+-    """
+-    Given an interface name, return its admin state reported by the kernel
+-    """
+-    cmd = ["cat", "/sys/class/net/{0}/flags".format(iface)]
+-    if namespace != constants.DEFAULT_NAMESPACE:
+-        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
+-    try:
+-        proc = subprocess.Popen(
+-            cmd,
+-            stderr=subprocess.STDOUT,
+-            stdout=subprocess.PIPE,
+-            text=True)
+-        state_file = proc.communicate()[0]
+-        proc.wait()
+-
+-    except OSError:
+-        print("Error: unable to get admin state for {}".format(iface))
+-        return "error"
+-
+-    try:
+-        content = state_file.rstrip()
+-        flags = int(content, 16)
+-    except ValueError:
+-        return "error"
+-
+-    if flags & 0x1:
+-        return "up"
+-    else:
+-        return "down"
+-
+-
+-def get_if_oper_state(iface, namespace):
+-    """
+-    Given an interface name, return its oper state reported by the kernel.
+-    """
+-    cmd = ["cat", "/sys/class/net/{0}/carrier".format(iface)]
+-    if namespace != constants.DEFAULT_NAMESPACE:
+-        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
+-    try:
+-        proc = subprocess.Popen(
+-            cmd,
+-            stderr=subprocess.STDOUT,
+-            stdout=subprocess.PIPE,
+-            text=True)
+-        state_file = proc.communicate()[0]
+-        proc.wait()
+-
+-    except OSError:
+-        print("Error: unable to get oper state for {}".format(iface))
+-        return "error"
+-
+-    oper_state = state_file.rstrip()
+-    if oper_state == "1":
+-        return "up"
+-    else:
+-        return "down"
+-
+-
+ def get_if_master(iface):
+     """
+     Given an interface name, return its master reported by the kernel.
+@@ -147,56 +88,94 @@ def get_if_master(iface):
+ 
+ def get_ip_intfs_in_namespace(af, namespace, display):
+     """
+-    Get all the ip intefaces from the kernel for the given namespace
++    Get all the IP interfaces from the kernel for the given namespace.
++    Uses a single bulk 'ip -json addr show' call to avoid per-interface
++    netifaces.ifaddresses() blocking at scale (e.g. 4K VLANs).
+     """
+     ip_intfs = {}
+     interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+     bgp_peer = get_bgp_peer()
++
++    # Explicit mapping from netifaces AF constant to the family string used by
++    # 'ip -json addr show'.  An unknown AF is caught explicitly rather than
++    # silently falling through to an incorrect family string.
++    _AF_TO_FAMILY = {
++        netifaces.AF_INET:  "inet",
++        netifaces.AF_INET6: "inet6",
++    }
++    af_family_str = _AF_TO_FAMILY.get(af)
++    if af_family_str is None:
++        print("Warning: unsupported address family {}, skipping namespace {}".format(af, namespace),
++              file=sys.stderr)
++        return ip_intfs
++
++    # Fetch address data for ALL interfaces in this namespace in one shot.
++    # If the bulk call fails (e.g. subprocess error, JSON parse error), fall
++    # back to an empty dict so that we degrade gracefully rather than aborting
++    # the entire 'show ip int' command.
++    try:
++        all_addr_info = multi_asic_util.multi_asic_get_addr_info_from_ns(namespace)
++    except Exception as e:
++        print("Warning: failed to get address info for namespace {}: {}".format(namespace, e),
++              file=sys.stderr)
++        all_addr_info = {}
++
+     for iface in interfaces:
+-        ip_intf_attr = []
+         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
+             continue
+-        try:
+-            ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
+-        except ValueError:
++
++        iface_data = all_addr_info.get(iface, {})
++        addr_info_list = iface_data.get("addr_info", [])
++
++        ifaddresses = []
++        bgp_neighs = {}
++
++        for addr_info in addr_info_list:
++            if addr_info.get("family") != af_family_str:
++                continue
++
++            # 'ip -json addr show' provides the local IP and an integer prefix
++            # length directly — no netmask-to-prefixlen conversion needed.
++            local_ip = addr_info["local"]
++            prefixlen = addr_info["prefixlen"]
++
++            # 'ip -json' does not embed the scope suffix in the 'local' field.
++            # Reconstruct it from the 'scope' field for IPv6 link-local addresses
++            # (scope == "link") so the display matches prior netifaces behaviour
++            # (e.g. "fe80::1%eth0/64").  BGP peer lookup always uses the plain IP.
++            scopestr = ""
++            if addr_info.get("scope") == "link" and af_family_str == "inet6":
++                scopestr = "%{}".format(iface)
++            local_ip_with_mask = "{}{}/{}".format(local_ip, scopestr, prefixlen)
++            lookup_ip = local_ip
++
++            ifaddresses.append(["", local_ip_with_mask])
++
++            neighbor_name = 'N/A'
++            neighbor_ip = 'N/A'
++            try:
++                neighbor_name = bgp_peer[lookup_ip][0]
++                neighbor_ip = bgp_peer[lookup_ip][1]
++            except KeyError:
++                pass
++
++            bgp_neighs[local_ip_with_mask] = [neighbor_name, neighbor_ip]
++
++        if not ifaddresses:
+             continue
+-        if af in ipaddresses:
+-            ifaddresses = []
+-            bgp_neighs = {}
+-            ip_intf_attr = []
+-            for ipaddr in ipaddresses[af]:
+-                neighbor_name = 'N/A'
+-                neighbor_ip = 'N/A'
+-                local_ip = str(ipaddr['addr'])
+-                if af == netifaces.AF_INET:
+-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
+-                else:
+-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
+-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
+-                ifaddresses.append(["", local_ip_with_mask])
+-                try:
+-                    neighbor_name = bgp_peer[local_ip][0]
+-                    neighbor_ip = bgp_peer[local_ip][1]
+-                except KeyError:
+-                    pass
+-
+-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+-
+-            if len(ifaddresses) > 0:
+-                admin = get_if_admin_state(iface, namespace)
+-                oper = get_if_oper_state(iface, namespace)
+-                master = get_if_master(iface)
+-
+-            ip_intf_attr = {
+-                "vrf": master,
+-                "ipaddr": natsorted(ifaddresses),
+-                "admin": admin,
+-                "oper": oper,
+-                "bgp_neighs": bgp_neighs,
+-                "ns": namespace
+-            }
+-
+-            ip_intfs[iface] = ip_intf_attr
++
++        admin = multi_asic_util.get_if_admin_state(iface, namespace)
++        oper = multi_asic_util.get_if_oper_state(iface, namespace)
++        master = get_if_master(iface)
++
++        ip_intfs[iface] = {
++            "vrf": master,
++            "ipaddr": natsorted(ifaddresses),
++            "admin": admin,
++            "oper": oper,
++            "bgp_neighs": bgp_neighs,
++            "ns": namespace
++        }
+     return ip_intfs
+ 
+ 
+diff --git a/tests/mock_tables/mock_multi_asic.py b/tests/mock_tables/mock_multi_asic.py
+index 0e5589c3..be6bbf74 100644
+--- a/tests/mock_tables/mock_multi_asic.py
++++ b/tests/mock_tables/mock_multi_asic.py
+@@ -1,4 +1,6 @@
+ # MONKEY PATCH!!!
++import ipaddress as _ipaddress
++import netifaces
+ from unittest import mock
+ 
+ from sonic_py_common import multi_asic
+@@ -86,9 +88,49 @@ def mock_multi_asic_get_ip_intf_addr_from_ns(namespace, iface):
+     return ipaddresses
+ 
+ 
++def _netifaces_to_ip_json(namespace):
++    """Convert mock_intf_table[namespace] from netifaces format to ip -json addr show format."""
++    result = {}
++    for ifname, af_dict in mock_intf_table.get(namespace, {}).items():
++        addr_info = []
++        for af, addrs in af_dict.items():
++            if af == netifaces.AF_INET:
++                for a in addrs:
++                    try:
++                        pl = _ipaddress.IPv4Network('0.0.0.0/' + a['netmask'], strict=False).prefixlen
++                    except Exception:
++                        pl = 32
++                    addr_info.append({'family': 'inet', 'local': a['addr'], 'prefixlen': pl})
++            elif af == netifaces.AF_INET6:
++                for a in addrs:
++                    nm = a['netmask']
++                    if '/' in nm:
++                        pl = int(nm.split('/')[-1])
++                    else:
++                        try:
++                            pl = _ipaddress.IPv6Network('::/' + nm, strict=False).prefixlen
++                        except Exception:
++                            pl = 64
++                    raw_addr = a['addr']
++                    local_addr = raw_addr.split('%')[0]
++                    entry = {'family': 'inet6', 'local': local_addr, 'prefixlen': pl}
++                    if '%' in raw_addr:
++                        entry['scope'] = 'link'
++                    addr_info.append(entry)
++        result[ifname] = {'ifname': ifname, 'addr_info': addr_info}
++    return result
++
++
++def mock_multi_asic_get_addr_info_from_ns(namespace):
++    return _netifaces_to_ip_json(namespace)
++
++
+ multi_asic.get_num_asics = mock_get_num_asics
+ multi_asic.is_multi_asic = mock_is_multi_asic
+ multi_asic.get_namespace_list = mock_get_namespace_list
+ multi_asic.get_namespaces_from_linux = mock_get_namespace_list
+ multi_asic_util.multi_asic_get_ip_intf_from_ns = mock_multi_asic_get_ip_intf_from_ns
+ multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = mock_multi_asic_get_ip_intf_addr_from_ns
++multi_asic_util.multi_asic_get_addr_info_from_ns = mock_multi_asic_get_addr_info_from_ns
++multi_asic_util.get_if_admin_state = lambda iface, namespace: "error"
++multi_asic_util.get_if_oper_state = lambda iface, namespace: "down"
+diff --git a/tests/mock_tables/mock_single_asic.py b/tests/mock_tables/mock_single_asic.py
+index ac97c4bc..6be9a219 100644
+--- a/tests/mock_tables/mock_single_asic.py
++++ b/tests/mock_tables/mock_single_asic.py
+@@ -1,4 +1,6 @@
+ # MONKEY PATCH!!!
++import ipaddress as _ipaddress
++import netifaces
+ from unittest import mock
+ 
+ from sonic_py_common import multi_asic
+@@ -79,8 +81,48 @@ def mock_single_asic_get_ip_intf_addr_from_ns(namespace, iface):
+     return ipaddresses
+ 
+ 
++def _netifaces_to_ip_json(namespace):
++    """Convert mock_intf_table[namespace] from netifaces format to ip -json addr show format."""
++    result = {}
++    for ifname, af_dict in mock_intf_table.get(namespace, {}).items():
++        addr_info = []
++        for af, addrs in af_dict.items():
++            if af == netifaces.AF_INET:
++                for a in addrs:
++                    try:
++                        pl = _ipaddress.IPv4Network('0.0.0.0/' + a['netmask'], strict=False).prefixlen
++                    except Exception:
++                        pl = 32
++                    addr_info.append({'family': 'inet', 'local': a['addr'], 'prefixlen': pl})
++            elif af == netifaces.AF_INET6:
++                for a in addrs:
++                    nm = a['netmask']
++                    if '/' in nm:
++                        pl = int(nm.split('/')[-1])
++                    else:
++                        try:
++                            pl = _ipaddress.IPv6Network('::/' + nm, strict=False).prefixlen
++                        except Exception:
++                            pl = 64
++                    raw_addr = a['addr']
++                    local_addr = raw_addr.split('%')[0]
++                    entry = {'family': 'inet6', 'local': local_addr, 'prefixlen': pl}
++                    if '%' in raw_addr:
++                        entry['scope'] = 'link'
++                    addr_info.append(entry)
++        result[ifname] = {'ifname': ifname, 'addr_info': addr_info}
++    return result
++
++
++def mock_single_asic_get_addr_info_from_ns(namespace):
++    return _netifaces_to_ip_json(namespace)
++
++
+ multi_asic.is_multi_asic = mock_is_multi_asic
+ multi_asic.get_num_asics = mock_get_num_asics
+ multi_asic.get_namespace_list = mock_get_namespace_list
+ multi_asic_util.multi_asic_get_ip_intf_from_ns = mock_single_asic_get_ip_intf_from_ns
+-multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = mock_single_asic_get_ip_intf_addr_from_ns
+\ No newline at end of file
++multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = mock_single_asic_get_ip_intf_addr_from_ns
++multi_asic_util.multi_asic_get_addr_info_from_ns = mock_single_asic_get_addr_info_from_ns
++multi_asic_util.get_if_admin_state = lambda iface, namespace: "error"
++multi_asic_util.get_if_oper_state = lambda iface, namespace: "down"
+diff --git a/utilities_common/multi_asic.py b/utilities_common/multi_asic.py
+index acad87e0..f6a85643 100644
+--- a/utilities_common/multi_asic.py
++++ b/utilities_common/multi_asic.py
+@@ -7,6 +7,8 @@ from natsort import natsorted
+ from sonic_py_common import multi_asic, device_info
+ from utilities_common import constants
+ from utilities_common.general import load_db_config
++import subprocess
++import json
+ 
+ 
+ class MultiAsic(object):
+@@ -165,6 +167,17 @@ def multi_asic_args(parser=None):
+                         help='Display interfaces for specific namespace')
+     return parser
+ 
++### Function to get the address info for all interfaces in a namespace
++def multi_asic_get_addr_info_from_ns(namespace):
++    ip_addr_db_ns_cmd = f"ip netns exec {namespace} " if namespace != constants.DEFAULT_NAMESPACE else ""
++    ip_addr_db_ns_cmd += " ip -json addr show"
++    out = subprocess.check_output(ip_addr_db_ns_cmd, shell=True)
++    data = json.loads(out)
++    if_db = {}
++    for item in data:
++        if_db[item["ifname"]] = item
++    return if_db
++
+ def multi_asic_get_ip_intf_from_ns(namespace):
+     import pyroute2
+     if namespace != constants.DEFAULT_NAMESPACE:
+@@ -187,3 +200,62 @@ def multi_asic_get_ip_intf_addr_from_ns(namespace, iface):
+         pyroute2.netns.popns()
+ 
+     return ipaddresses
++
++
++def get_if_admin_state(iface, namespace):
++    """
++    Given an interface name, return its admin state reported by the kernel
++    """
++    cmd = ["cat", "/sys/class/net/{0}/flags".format(iface)]
++    if namespace != constants.DEFAULT_NAMESPACE:
++        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
++    try:
++        proc = subprocess.Popen(
++            cmd,
++            stderr=subprocess.STDOUT,
++            stdout=subprocess.PIPE,
++            text=True)
++        state_file = proc.communicate()[0]
++        proc.wait()
++
++    except OSError:
++        print("Error: unable to get admin state for {}".format(iface))
++        return "error"
++
++    try:
++        content = state_file.rstrip()
++        flags = int(content, 16)
++    except ValueError:
++        return "error"
++
++    if flags & 0x1:
++        return "up"
++    else:
++        return "down"
++
++
++def get_if_oper_state(iface, namespace):
++    """
++    Given an interface name, return its oper state reported by the kernel.
++    """
++    cmd = ["cat", "/sys/class/net/{0}/carrier".format(iface)]
++    if namespace != constants.DEFAULT_NAMESPACE:
++        cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
++    try:
++        proc = subprocess.Popen(
++            cmd,
++            stderr=subprocess.STDOUT,
++            stdout=subprocess.PIPE,
++            text=True)
++        state_file = proc.communicate()[0]
++        proc.wait()
++
++    except OSError:
++        print("Error: unable to get oper state for {}".format(iface))
++        return "error"
++
++    oper_state = state_file.rstrip()
++    if oper_state == "1":
++        return "up"
++    else:
++        return "down"
+-- 
+2.25.1
+

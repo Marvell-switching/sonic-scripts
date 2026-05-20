@@ -1,0 +1,279 @@
+From 11d7e85c2f3b553bec2667f39e749df0bb24019c Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Mon, 6 Apr 2026 20:34:45 +0530
+Subject: [PATCH] EVPN MH Static MAC sync programming
+
+Root Cause:
+In EVPN MH, Zebra installs sync-MACs on local ES ports (PortChannels)
+with the NTF_EXT_LEARNED kernel flag. These MAC entries are not
+associated with VxLAN interfaces and do not contain a remote VTEP
+attribute. The existing fdbsyncd logic only processed MAC notifications
+from VxLAN interfaces and therefore silently dropped EVPN-MH sync-MAC
+events, preventing them from reaching APP_DB and being programmed by
+FdbOrch.
+
+Fix:
+Extend fdbsyncd to detect NTF_EXT_LEARNED MACs on non-VxLAN interfaces
+and handle them as EVPN-MH sync-MACs:
+  - Resolve ifindex to interface name for ES ports
+  - Program these entries via macAddVxlan() using dest_type = IFNAME
+  - Handle deletions with macDelVxlan()
+  - Remove unnecessary "proto hw" / "proto zebra" from bridge FDB
+    commands to avoid kernel compatibility issues
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fdbsyncd/fdbsync.cpp | 90 ++++++++++++++++++++++++++++++++------------
+ 1 file changed, 65 insertions(+), 25 deletions(-)
+
+diff --git a/fdbsyncd/fdbsync.cpp b/fdbsyncd/fdbsync.cpp
+index 513b7558..7d525e0d 100644
+--- a/fdbsyncd/fdbsync.cpp
++++ b/fdbsyncd/fdbsync.cpp
+@@ -4,6 +4,7 @@
+ #include <string>
+ #include <algorithm>
+ #include <netinet/in.h>
++#include <net/if.h>
+ #include <linux/nexthop.h>
+ #include <netlink/route/link.h>
+ #include <netlink/route/neighbour.h>
+@@ -332,7 +333,6 @@ void FdbSync::updateLocalMac (struct m_fdb_info *info)
+ {
+     char *op;
+     char *type;
+-    char *proto_string;
+     string port_name = "";
+     string key = info->vid + ":" + info->mac;
+     short fdb_type;    /*dynamic or static*/
+@@ -361,7 +361,6 @@ void FdbSync::updateLocalMac (struct m_fdb_info *info)
+     if (fdb_type == FDB_TYPE_DYNAMIC)
+     {
+         type = "dynamic extern_learn";
+-        proto_string = " proto hw";
+     }
+     else
+     {
+@@ -370,7 +369,7 @@ void FdbSync::updateLocalMac (struct m_fdb_info *info)
+ 
+     const std::string cmds = std::string("")
+         + " bridge fdb " + op + " " + info->mac + " dev "
+-        + port_name + " master " + type + " vlan " + info->vid.substr(4) + proto_string;
++        + port_name + " master " + type + " vlan " + info->vid.substr(4);
+ 
+     std::string res;
+     int ret = swss::exec(cmds, res);
+@@ -404,7 +403,6 @@ void FdbSync::addLocalMac(string key, string op)
+     string mac = "";
+     string vlan = "";
+     size_t str_loc = string::npos;
+-    std::string proto_string = "";
+ 
+     str_loc = key.find(":");
+     if (str_loc == string::npos)
+@@ -429,7 +427,6 @@ void FdbSync::addLocalMac(string key, string op)
+         if (m_fdb_mac[key].type == FDB_TYPE_DYNAMIC)
+         {
+             type = "dynamic extern_learn";
+-            proto_string = " proto hw";
+         }
+         else
+         {
+@@ -438,8 +435,7 @@ void FdbSync::addLocalMac(string key, string op)
+ 
+         const std::string cmds = std::string("")
+                 + " bridge fdb " + op + " " + mac + " dev "
+-                + port_name + " master " + type  + " vlan " + vlan
+-                + proto_string;
++                + port_name + " master " + type  + " vlan " + vlan;
+ 
+         std::string res;
+         int ret = swss::exec(cmds, res);
+@@ -460,7 +456,6 @@ void FdbSync::updateMclagRemoteMac (struct m_fdb_info *info)
+     string port_name = "";
+     string key = info->vid + ":" + info->mac;
+     short fdb_type;    /*dynamic or static*/
+-    std::string proto_string = "";
+ 
+     if (info->op_type == FDB_OPER_ADD)
+     {
+@@ -480,7 +475,6 @@ void FdbSync::updateMclagRemoteMac (struct m_fdb_info *info)
+     if (fdb_type == FDB_TYPE_DYNAMIC)
+     {
+         type = "dynamic extern_learn";
+-        proto_string = " proto hw";
+     }
+     else
+     {
+@@ -489,7 +483,7 @@ void FdbSync::updateMclagRemoteMac (struct m_fdb_info *info)
+ 
+     const std::string cmds = std::string("")
+         + " bridge fdb " + op + " " + info->mac + " dev "
+-        + port_name + " master " + type + " vlan " + info->vid.substr(4) + proto_string;
++        + port_name + " master " + type + " vlan " + info->vid.substr(4);
+ 
+     std::string res;
+     int ret = swss::exec(cmds, res);
+@@ -504,7 +498,6 @@ void FdbSync::updateMclagRemoteMacPort(int ifindex, int vlan, std::string mac, u
+     string key = "Vlan" + to_string(vlan) + ":" + mac;
+     int type = 0;
+     string port_name = "";
+-    std::string proto_string = "";
+ 
+     SWSS_LOG_INFO("Updating Intf %d, Vlan:%d MAC:%s Key %s", ifindex, vlan, mac.c_str(), key.c_str());
+ 
+@@ -512,18 +505,13 @@ void FdbSync::updateMclagRemoteMacPort(int ifindex, int vlan, std::string mac, u
+     {
+         type = m_mclag_remote_fdb_mac[key].type;
+         port_name = m_mclag_remote_fdb_mac[key].port_name;
+-        if (protocol == RTPROT_ZEBRA)
+-            proto_string = " proto zebra";
+-        else if (protocol == 193)/*RTPRO_HW might not be in swss inc rtnetlink.h*/
+-            /* Unlikely this can happen, but keeping just in case */
+-            proto_string = " proto hw";
+-        SWSS_LOG_INFO(" port %s, type %d %s\n", port_name.c_str(), type, proto_string.c_str());
++        SWSS_LOG_INFO(" port %s, type %d\n", port_name.c_str(), type);
+ 
+         if (type == FDB_TYPE_STATIC)
+         {
+             const std::string cmds = std::string("")
+                 + " bridge fdb replace" + " " + mac + " dev "
+-                + port_name + " master static vlan " + to_string(vlan) + proto_string;
++                + port_name + " master static vlan " + to_string(vlan);
+ 
+             std::string res;
+             int ret = swss::exec(cmds, res);
+@@ -551,7 +539,6 @@ void FdbSync::macRefreshStateDB(int vlan, string kmac, uint8_t protocol)
+     string key = "Vlan" + to_string(vlan) + ":" + kmac;
+     char *type;
+     string port_name = "";
+-    std::string proto_string = "";
+ 
+     SWSS_LOG_INFO("Refreshing Vlan:%d MAC route MAC:%s Key %s", vlan, kmac.c_str(), key.c_str());
+ 
+@@ -573,14 +560,9 @@ void FdbSync::macRefreshStateDB(int vlan, string kmac, uint8_t protocol)
+             type = "static";
+         }
+ 
+-        if (protocol == RTPROT_ZEBRA)
+-            proto_string = " proto zebra";
+-        else if (protocol == 193)/*RTPRO_HW might not be in swss inc rtnetlink.h*/
+-            proto_string = " proto hw";
+-
+         const std::string cmds = std::string("")
+             + " bridge fdb " + "replace" + " " + kmac + " dev "
+-            + port_name + " master " + type  + " vlan " + to_string(vlan) + proto_string;
++            + port_name + " master " + type  + " vlan " + to_string(vlan);
+ 
+         std::string res;
+         int ret = swss::exec(cmds, res);
+@@ -899,6 +881,7 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+         if (nexthop_group != "0")
+         {
+             dest_type = NEXTHOPGROUP;
++            SWSS_LOG_NOTICE("EVPN-MH-DBG: NDA_NH_ID present: nhg=%s mac=%s", nexthop_group.c_str(), macStr);
+         }
+     }
+ 
+@@ -909,8 +892,14 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+         ifname = m_intf_info[ifindex].ifname;
+     }
+ 
++    SWSS_LOG_NOTICE("EVPN-MH-DBG: onMsgNbr entry: mac=%s ifindex=%d isVxlan=%d nlmsg_type=%d state=0x%x flags=0x%x delete_key=%d dest_type=%d",
++                    macStr, ifindex, isVxlanIntf, nlmsg_type, state, nm->ndm_flags, delete_key, dest_type);
++
+     if (isVxlanIntf == false)
+     {
++        SWSS_LOG_NOTICE("EVPN-MH-DBG: non-VxLAN path: mac=%s ifindex=%d nlmsg_type=%d state=0x%x flags=0x%x",
++                        macStr, ifindex, nlmsg_type, state, nm->ndm_flags);
++
+         if (nlmsg_type == RTM_NEWNEIGH)
+         {
+             int vid = rtnl_neigh_get_vlan(neigh);
+@@ -918,10 +907,47 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+             {
+                 updateMclagRemoteMacPort(ifindex, vid, macStr, RTPROT_UNSPEC);
+             }
++
++            /*
++             * EVPN-MH sync-MAC: zebra installs MACs on the local ES port
++             * (e.g. PortChannel) with NTF_EXT_LEARNED flag. These need to
++             * be forwarded to APP_DB so FdbOrch can program them in SAI.
++             */
++            if (nm->ndm_flags & NTF_EXT_LEARNED)
++            {
++                char ifnamebuf[IF_NAMESIZE] = {0};
++                if (if_indextoname(ifindex, ifnamebuf))
++                {
++                    int vid = rtnl_neigh_get_vlan(neigh);
++                    vlan_id = "Vlan" + to_string(vid);
++                    key = vlan_id + ":" + macStr;
++                    ifname = ifnamebuf;
++                    dest_type = IFNAME;
++                    type = (state & NUD_NOARP) ? "static" : "dynamic";
++
++                    SWSS_LOG_NOTICE("EVPN-MH sync-MAC ADD: mac=%s ifname=%s vlan=%d type=%s",
++                                    macStr, ifnamebuf, vid, type.c_str());
++
++                    if (!delete_key)
++                    {
++                        macAddVxlan(key, NULL, type, 0, ifname, "0", dest_type, RTPROT_UNSPEC);
++                    }
++                    else
++                    {
++                        macDelVxlan(key);
++                    }
++                }
++                else
++                {
++                    SWSS_LOG_ERROR("EVPN-MH sync-MAC: if_indextoname failed for ifindex=%d", ifindex);
++                }
++                return;
++            }
+         }
+ 
+         if (nlmsg_type != RTM_DELNEIGH)
+         {
++            SWSS_LOG_INFO("EVPN-MH-DBG: non-VxLAN non-DEL non-sync, skipping mac=%s", macStr);
+             return;
+         }
+     }
+@@ -948,10 +974,21 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+     if (isVxlanIntf == false)
+     {
+         vlan = rtnl_neigh_get_vlan(neigh);
++        SWSS_LOG_NOTICE("EVPN-MH-DBG: non-VxLAN DELETE path: mac=%s vlan=%d flags=0x%x nvoExist=%d",
++                        macStr, vlan, nm->ndm_flags, m_isEvpnNvoExist);
+         if (m_isEvpnNvoExist)
+         {
+             macRefreshStateDB(vlan, macStr, RTPROT_UNSPEC);
+         }
++
++        /* EVPN-MH: handle delete of sync-MACs on ES port */
++        if (nm->ndm_flags & NTF_EXT_LEARNED)
++        {
++            vlan_id = "Vlan" + to_string(vlan);
++            key = vlan_id + ":" + macStr;
++            SWSS_LOG_NOTICE("EVPN-MH sync-MAC DEL: mac=%s vlan=%d key=%s", macStr, vlan, key.c_str());
++            macDelVxlan(key);
++        }
+         return;
+     }
+ 
+@@ -1020,10 +1057,13 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+ 
+     if (!delete_key)
+     {
++        SWSS_LOG_NOTICE("EVPN-MH-DBG: VxLAN macAddVxlan: key=%s dest_type=%d nhg=%s vni=%d ifname=%s type=%s",
++                        key.c_str(), dest_type, nexthop_group.c_str(), vni, ifname.c_str(), type.c_str());
+         macAddVxlan(key, vtep_addr, type, vni, ifname, nexthop_group, dest_type, RTPROT_UNSPEC);
+     }
+     else
+     {
++        SWSS_LOG_NOTICE("EVPN-MH-DBG: VxLAN macDelVxlan: key=%s", key.c_str());
+         macDelVxlan(key);
+     }
+     return;
+-- 
+2.25.1
+

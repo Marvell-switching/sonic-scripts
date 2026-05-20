@@ -1,0 +1,39 @@
+From 514eee5c272206a0d452377d830d273d9ac2452c Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Wed, 3 Sep 2025 18:28:38 +0530
+Subject: [PATCH] SONICDC-544 determine reboot cause fix
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ .../6512-32r/service/platform-modules-6512-32r.service         | 1 -
+ .../sw-to3200k/service/platform-modules-sw-to3200k.service     | 3 +--
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
+index cf3ac32ec..35e03f35a 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
+@@ -1,7 +1,6 @@
+ [Unit]
+ Description=Wistron 6512-32R Platform modules
+ Before=watchdog-control.service determine-reboot-cause.service pmon.service
+-After=sysinit.target
+ DefaultDependencies=no
+ 
+ [Service]
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/service/platform-modules-sw-to3200k.service b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/service/platform-modules-sw-to3200k.service
+index 0e7a679b9..0a7f31244 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/service/platform-modules-sw-to3200k.service
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/service/platform-modules-sw-to3200k.service
+@@ -1,7 +1,6 @@
+ [Unit]
+ Description=Wistron SW-TO3200K Platform modules
+-Before=pmon.service
+-After=sysinit.target
++Before=watchdog-control.service determine-reboot-cause.service pmon.service
+ DefaultDependencies=no
+ 
+ [Service]
+-- 
+2.25.1
+

@@ -1,0 +1,74 @@
+From 3db852e1f394e20f62e07e7fa4d998d21851c3ca Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Fri, 17 Apr 2026 17:22:27 +0530
+Subject: [PATCH] VXLAN RemoteMac display for L2 NHG
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ show/vxlan.py | 38 ++++++++++++++++++++++++++++++--------
+ 1 file changed, 30 insertions(+), 8 deletions(-)
+
+diff --git a/show/vxlan.py b/show/vxlan.py
+index 46f97cdc..6f337571 100644
+--- a/show/vxlan.py
++++ b/show/vxlan.py
+@@ -271,6 +271,24 @@ def remotevni(remote_vtep_ip, count):
+       output += ('%s\n' % (str(num)))
+       click.echo(output)
+ 
++def _resolve_nhg_vtep_ips(db, nhg_id):
++    """Resolve a L2 NHG ID to its set of member VTEP IPs."""
++    vtep_ips = set()
++    nhg_entry = db.get_all(db.APPL_DB, 'L2_NEXTHOP_GROUP_TABLE:{}'.format(nhg_id))
++    if nhg_entry is None:
++        return vtep_ips
++    vtep = nhg_entry.get('remote_vtep')
++    if vtep:
++        vtep_ips.add(vtep)
++        return vtep_ips
++    members = nhg_entry.get('nexthop_group')
++    if members:
++        for member_id in members.split(','):
++            member_id = member_id.strip()
++            if member_id:
++                vtep_ips.update(_resolve_nhg_vtep_ips(db, member_id))
++    return vtep_ips
++
+ @vxlan.command()
+ @click.argument('remote_vtep_ip', required=True)
+ @click.argument('count', required=False)
+@@ -316,19 +334,23 @@ def remotemac(remote_vtep_ip, count):
+             vxlan_table = db.get_all(db.APPL_DB, key);
+             if vxlan_table is None:
+              continue
+-            rmtip = vxlan_table.get('remote_vtep')
+-            nhg = vxlan_table.get('nexthop_group')
++            rmtip = vxlan_table.get('remote_vtep') or None
++            nhg = vxlan_table.get('nexthop_group') or None
+             if rmtip is None and nhg is None:
+                continue
+             if vni_filter is not None and vni_filter != 'all':
+                if vxlan_table.get('vni') != vni_filter:
+                   continue
+-            dest = rmtip if rmtip else 'NHG:' + nhg
+-            if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip:
+-               if rmtip is not None:
+-                  continue
+-               if remote_vtep_ip != 'all':
+-                  continue
++            if rmtip:
++                if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip:
++                    continue
++                dest = rmtip
++            else:
++                dest = 'NHG:' + nhg
++                if remote_vtep_ip != 'all':
++                    nhg_member_ips = _resolve_nhg_vtep_ips(db, nhg)
++                    if remote_vtep_ip not in nhg_member_ips:
++                        continue
+             if count is None:
+                body.append([vlan, mac, dest, vxlan_table['vni'], vxlan_table['type']])
+             num += 1
+-- 
+2.25.1
+

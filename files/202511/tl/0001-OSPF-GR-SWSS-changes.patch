@@ -1,0 +1,349 @@
+From 83078543c308fe7e01b514249a42294ed8937d10 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Sun, 5 Apr 2026 06:56:55 +0530
+Subject: [PATCH] OSPF GR SWSS changes
+
+SWSS changes to enable OSPF GR
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ debian/swss.install          |   1 +
+ fpmsyncd/fpmsyncd.cpp        |  58 ++++++++++-
+ fpmsyncd/ospf_eoiu_marker.py | 184 +++++++++++++++++++++++++++++++++++
+ fpmsyncd/routesync.cpp       |   4 +-
+ fpmsyncd/routesync.h         |   2 +-
+ 5 files changed, 243 insertions(+), 6 deletions(-)
+ create mode 100644 fpmsyncd/ospf_eoiu_marker.py
+
+diff --git a/debian/swss.install b/debian/swss.install
+index bda357cd..a78a2a60 100644
+--- a/debian/swss.install
++++ b/debian/swss.install
+@@ -1,4 +1,5 @@
+ swssconfig/sample/netbouncer.json etc/swss/config.d
+ neighsyncd/restore_neighbors.py usr/bin
+ fpmsyncd/bgp_eoiu_marker.py  usr/bin
++fpmsyncd/ospf_eoiu_marker.py  usr/bin
+ target/release/countersyncd usr/bin
+diff --git a/fpmsyncd/fpmsyncd.cpp b/fpmsyncd/fpmsyncd.cpp
+index 53001191..e099a242 100644
+--- a/fpmsyncd/fpmsyncd.cpp
++++ b/fpmsyncd/fpmsyncd.cpp
+@@ -48,7 +48,7 @@ const uint32_t DEFAULT_ROUTING_RESTART_INTERVAL = 120;
+ // TODO: support eoiu hold interval config
+ const uint32_t DEFAULT_EOIU_HOLD_INTERVAL = 3;
+ 
+-// Check if eoiu state reached by both ipv4 and ipv6
++// Check if eoiu state reached by both ipv4 and ipv6 (BGP)
+ static bool eoiuFlagsSet(Table &bgpStateTable)
+ {
+     string value;
+@@ -69,6 +69,21 @@ static bool eoiuFlagsSet(Table &bgpStateTable)
+     return true;
+ }
+ 
++// Check if eoiu state reached for ipv4 only (OSPFv2).
++static bool ospfEoiuFlagSet(Table &ospfStateTable)
++{
++    string value;
++
++    ospfStateTable.hget("IPv4|eoiu", "state", value);
++    if (value != "reached")
++    {
++        SWSS_LOG_DEBUG("OSPF IPv4|eoiu state: %s", value.c_str());
++        return false;
++    }
++    SWSS_LOG_NOTICE("Warm-Restart ospf eoiu reached for ipv4");
++    return true;
++}
++
+ int main(int argc, char **argv)
+ {
+     swss::Logger::linkToDbNative("fpmsyncd");
+@@ -82,11 +97,46 @@ int main(int argc, char **argv)
+     DBConnector applStateDb("APPL_STATE_DB", 0);
+     std::unique_ptr<NotificationConsumer> routeResponseChannel;
+ 
++    /* Determine warm restart protocol: "ospf" or "bgp" (default) */
++    Table cfgWarmRestartTable(&cfgDb, CFG_WARM_RESTART_TABLE_NAME);
++    std::string warmRestartProtocol;
++    cfgWarmRestartTable.hget("bgp", "warm_restart_protocol", warmRestartProtocol);
++    std::string appName = (warmRestartProtocol == "ospf") ? "ospf" : "bgp";
++    bool ospfMode = (appName == "ospf");
++    SWSS_LOG_NOTICE("Warm-Restart protocol: %s (appName: %s)", warmRestartProtocol.c_str(), appName.c_str());
++
+     RedisPipeline pipeline(&db, ROUTE_SYNC_PPL_SIZE);
+-    RouteSync sync(&pipeline);
++    RouteSync sync(&pipeline, appName);
+ 
+     DBConnector stateDb("STATE_DB", 0);
+     Table bgpStateTable(&stateDb, STATE_BGP_TABLE_NAME);
++    Table ospfStateTable(&stateDb, STATE_OSPF_TABLE_NAME);
++
++    /* Initialize WARM_RESTART_TABLE for the active protocol to handle
++     * the first warm boot after a protocol switch. Without this,
++     * WarmStart::checkWarmStart() would find no restore_count and
++     * fall back to cold start. */
++    {
++        Table warmRestartStateTable(&stateDb, STATE_WARM_RESTART_TABLE_NAME);
++        std::string restoreCount;
++        if (!warmRestartStateTable.hget(appName, "restore_count", restoreCount))
++        {
++            warmRestartStateTable.hset(appName, "restore_count", "0");
++            SWSS_LOG_NOTICE("Initialized %s|%s restore_count=0", STATE_WARM_RESTART_TABLE_NAME, appName.c_str());
++        }
++
++        /* Clean up stale state from the inactive protocol's entry.
++         * After switching protocols, the old entry retains state=reconciled
++         * from a previous boot, which is misleading in "show warm_restart state". */
++        std::string inactiveApp = ospfMode ? "bgp" : "ospf";
++        std::string staleState;
++        if (warmRestartStateTable.hget(inactiveApp, "state", staleState))
++        {
++            warmRestartStateTable.hdel(inactiveApp, "state");
++            SWSS_LOG_NOTICE("Cleared stale state '%s' from %s|%s",
++                            staleState.c_str(), STATE_WARM_RESTART_TABLE_NAME, inactiveApp.c_str());
++        }
++    }
+ 
+     NetLink netlink;
+ 
+@@ -211,7 +261,9 @@ int main(int argc, char **argv)
+                 {
+                     if (sync.getWarmStartHelper().inProgress())
+                     {
+-                        if (eoiuFlagsSet(bgpStateTable))
++                        bool eoiuReached = ospfMode ? ospfEoiuFlagSet(ospfStateTable)
++                                                    : eoiuFlagsSet(bgpStateTable);
++                        if (eoiuReached)
+                         {
+                             /* Obtain eoiu hold timer defined for bgp docker */
+                             uintmax_t eoiuHoldIval = WarmStart::getWarmStartTimer("eoiu_hold", "bgp");
+diff --git a/fpmsyncd/ospf_eoiu_marker.py b/fpmsyncd/ospf_eoiu_marker.py
+new file mode 100644
+index 00000000..cf0e4af5
+--- /dev/null
++++ b/fpmsyncd/ospf_eoiu_marker.py
+@@ -0,0 +1,184 @@
++#!/usr/bin/env python3
++
++"""
++Description: ospf_eoiu_marker.py -- populating OSPF EOIU marker flag in STATE_DB during warm reboot.
++    The script is started by supervisord in the bgp (routing) docker when the docker is started.
++    It does not do anything if neither system nor bgp warm restart is enabled.
++
++    The script checks OSPF neighbor state via vtysh CLI periodically (every 1 second).
++    It checks whether all OSPF neighbors have reached the "Full" adjacency state
++    using `show ip ospf neighbor json`.
++
++    Once all neighbors are Full (or there are no neighbors), it sets an EOIU flag
++    in STATE_DB at OSPF_STATE_TABLE|IPv4|eoiu.
++
++    fpmsyncd may hold a few seconds (2~5 seconds) after getting the flag before
++    starting routing reconciliation. This should be enough for all routes to be
++    synced to fpmsyncd from ospf via zebra/FPM. If not, the system is probably
++    already in a wrong state.
++
++    For any reason the script fails to set the EOIU flag in STATE_DB,
++    the warm_restart ospf_timer will kick in later as a safety net.
++
++Note: OSPFv2 is IPv4-only, so only OSPF_STATE_TABLE|IPv4|eoiu is used.
++    Future OSPFv3 support should use a separate OSPF6_STATE_TABLE.
++"""
++
++import sys
++import time
++import syslog
++import subprocess
++import traceback
++import json
++from swsscommon import swsscommon
++from time import gmtime, strftime
++
++THIS_MODULE = "ospf_eoiu_marker"
++
++
++class OspfStateCheck():
++    # Timeout the check process in 120 seconds if not finished.
++    # Consistent with the default timeout for routing warm restart in fpmsyncd.
++    DEF_TIME_OUT = 120
++
++    # Check OSPF neighbor state every 1 second
++    CHECK_INTERVAL = 1
++
++    def __init__(self):
++        self.ospf_eoiu = False
++
++    def set_ospf_eoiu_marker(self, state):
++        """Write OSPF_STATE_TABLE|IPv4|eoiu in STATE_DB."""
++        db = swsscommon.SonicV2Connector(host='127.0.0.1')
++        db.connect(db.STATE_DB, False)
++        key = "OSPF_STATE_TABLE|IPv4|eoiu"
++        db.set(db.STATE_DB, key, 'state', state)
++        timestamp = strftime("%Y-%m-%d %H:%M:%S", gmtime())
++        db.set(db.STATE_DB, key, 'timestamp', timestamp)
++        db.close(db.STATE_DB)
++
++    def clean_ospf_eoiu_marker(self):
++        """Delete OSPF_STATE_TABLE|IPv4|eoiu from STATE_DB."""
++        db = swsscommon.SonicV2Connector(host='127.0.0.1')
++        db.connect(db.STATE_DB, False)
++        db.delete(db.STATE_DB, "OSPF_STATE_TABLE|IPv4|eoiu")
++        db.close(db.STATE_DB)
++        syslog.syslog('Cleaned OSPF IPv4 eoiu marker flag')
++
++    def check_ospf_neighbors_full(self):
++        """
++        Check if all OSPF neighbors are in Full state.
++
++        Returns:
++            True  - all neighbors are Full, or there are no neighbors
++            False - some neighbors are not yet Full, or ospfd is not reachable
++            None  - error occurred (vtysh unreachable, JSON parse failure)
++        """
++        try:
++            cmd = "vtysh -c 'show ip ospf neighbor json'"
++            output = subprocess.getoutput(cmd)
++            neighbor_info = json.loads(output)
++
++            # The JSON output has a top-level "neighbors" dict.
++            # Each key is a neighbor router-id mapping to a list of
++            # adjacencies (one per interface).
++            # Each adjacency has a "converged" field: "Full", "Init", etc.
++            #
++            # If there are no neighbors: {"neighbors": {}} or just {}
++            neighbors = neighbor_info.get("neighbors", {})
++
++            if not neighbors:
++                syslog.syslog('OSPF has no neighbors, marking EOIU reached')
++                return True
++
++            for router_id, adjacencies in neighbors.items():
++                for adj in adjacencies:
++                    converged = adj.get("converged", "")
++                    if converged != "Full":
++                        syslog.syslog(syslog.LOG_DEBUG,
++                                      'OSPF neighbor {} not Full yet (state: {})'.format(
++                                          router_id, converged))
++                        return False
++
++            syslog.syslog('All OSPF neighbors are Full')
++            return True
++
++        except Exception:
++            syslog.syslog(syslog.LOG_ERR,
++                          "*ERROR* check_ospf_neighbors_full Exception: %s" %
++                          (traceback.format_exc()))
++            return None
++
++    def wait_for_ospf_eoiu(self):
++        """
++        Poll OSPF neighbor state until all neighbors are Full or timeout.
++
++        The polling loop runs every CHECK_INTERVAL seconds and times out
++        after DEF_TIME_OUT seconds. If ospfd is not reachable initially
++        (vtysh fails), the loop retries until timeout.
++        """
++        wait_time = self.DEF_TIME_OUT
++        while wait_time >= 0:
++            result = self.check_ospf_neighbors_full()
++            if result is True:
++                self.ospf_eoiu = True
++                syslog.syslog("OSPF IPv4 EOIU reached")
++                break
++
++            time.sleep(self.CHECK_INTERVAL)
++            wait_time -= self.CHECK_INTERVAL
++
++        if not self.ospf_eoiu:
++            syslog.syslog(syslog.LOG_ERR,
++                          "OSPF IPv4 EOIU not reached within {} seconds".format(
++                              self.DEF_TIME_OUT))
++
++
++def main():
++    print("ospf_eoiu_marker service is started")
++
++    try:
++        ospf_state_check = OspfStateCheck()
++    except Exception as e:
++        syslog.syslog(syslog.LOG_ERR,
++                      "{}: error exit 1, reason {}".format(THIS_MODULE, str(e)))
++        sys.exit(1)
++
++    # Always clean the eoiu marker in STATE_DB first
++    ospf_state_check.clean_ospf_eoiu_marker()
++
++    # Use warmstart python binding to check warmstart information
++    warmstart = swsscommon.WarmStart()
++    # app_name="ospf": fpmsyncd initializes WARM_RESTART_TABLE|ospf restore_count=0
++    # on every boot (when protocol=ospf), so checkWarmStart will find the entry
++    # and not fall back to cold start.
++    # docker_name="bgp": the OSPF marker runs inside the bgp (routing) container.
++    # incr_restore_cnt=False: the marker only reads warm restart state, it does
++    # not own the restore_count lifecycle (fpmsyncd does via WarmStartHelper).
++    warmstart.initialize("ospf", "bgp")
++    warmstart.checkWarmStart("ospf", "bgp", False)
++
++    # If neither bgp nor system warm reboot is enabled, don't run
++    if not warmstart.isWarmStart():
++        syslog.syslog("ospf_eoiu_marker service is skipped as warm restart not enabled")
++        return
++
++    # Set initial EOIU state to unknown
++    ospf_state_check.set_ospf_eoiu_marker("unknown")
++
++    # Poll OSPF neighbor state
++    try:
++        ospf_state_check.wait_for_ospf_eoiu()
++    except Exception as e:
++        syslog.syslog(syslog.LOG_ERR, str(e))
++        sys.exit(1)
++
++    # Set STATE_DB to signal fpmsyncd
++    if ospf_state_check.ospf_eoiu:
++        ospf_state_check.set_ospf_eoiu_marker("reached")
++
++    syslog.syslog("ospf_eoiu_marker service is done")
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/fpmsyncd/routesync.cpp b/fpmsyncd/routesync.cpp
+index b8adcd81..e36e232d 100644
+--- a/fpmsyncd/routesync.cpp
++++ b/fpmsyncd/routesync.cpp
+@@ -145,7 +145,7 @@ static decltype(auto) makeNlAddr(const T& ip)
+ }
+ 
+ 
+-RouteSync::RouteSync(RedisPipeline *pipeline) :
++RouteSync::RouteSync(RedisPipeline *pipeline, const std::string &appName) :
+     // When the feature ORCH_NORTHBOND_ROUTE_ZMQ_ENABLED is enabled, route events must be sent to orchagent via the ZMQ channel.
+     m_zmqClient(create_local_zmq_client(ORCH_NORTHBOND_ROUTE_ZMQ_ENABLED, false)),
+     m_routeTable(createProducerStateTable(pipeline, APP_ROUTE_TABLE_NAME, true, m_zmqClient)),
+@@ -153,7 +153,7 @@ RouteSync::RouteSync(RedisPipeline *pipeline) :
+     m_label_routeTable(createProducerStateTable(pipeline, APP_LABEL_ROUTE_TABLE_NAME, true, m_zmqClient)),
+     m_vnet_routeTable(pipeline, APP_VNET_RT_TABLE_NAME, true),
+     m_vnet_tunnelTable(pipeline, APP_VNET_RT_TUNNEL_TABLE_NAME, true),
+-    m_warmStartHelper(pipeline, m_routeTable.get(), APP_ROUTE_TABLE_NAME, "bgp", "bgp"),
++    m_warmStartHelper(pipeline, m_routeTable.get(), APP_ROUTE_TABLE_NAME, "bgp", appName),
+     m_srv6MySidTable(pipeline, APP_SRV6_MY_SID_TABLE_NAME, true),
+     m_srv6SidListTable(pipeline, APP_SRV6_SID_LIST_TABLE_NAME, true),
+     m_nl_sock(NULL), m_link_cache(NULL)
+diff --git a/fpmsyncd/routesync.h b/fpmsyncd/routesync.h
+index 26412375..0527f22b 100644
+--- a/fpmsyncd/routesync.h
++++ b/fpmsyncd/routesync.h
+@@ -202,7 +202,7 @@ class RouteSync : public NetMsg
+ public:
+     enum { MAX_ADDR_SIZE = 64 };
+ 
+-    RouteSync(RedisPipeline *pipeline);
++    RouteSync(RedisPipeline *pipeline, const std::string &appName = "bgp");
+ 
+     virtual void onMsg(int nlmsg_type, struct nl_object *obj);
+ 
+-- 
+2.25.1
+

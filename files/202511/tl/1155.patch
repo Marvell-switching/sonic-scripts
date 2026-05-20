@@ -1,0 +1,152 @@
+From bdb9f88ab804640518bc8a17abfd7491273633b3 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Fri, 9 Jan 2026 15:55:46 +0530
+Subject: [PATCH] EVPN MH Shlorch Common Community Changes
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ common/netdispatcher.cpp | 41 +++++++++++++++++++++++++++++++++++++++-
+ common/netdispatcher.h   | 22 +++++++++++++++++++++
+ common/netmsg.h          |  5 +++++
+ common/schema.h          |  2 ++
+ 4 files changed, 69 insertions(+), 1 deletion(-)
+
+diff --git a/common/netdispatcher.cpp b/common/netdispatcher.cpp
+index e7f8878..dda3066 100644
+--- a/common/netdispatcher.cpp
++++ b/common/netdispatcher.cpp
+@@ -35,12 +35,49 @@ void NetDispatcher::unregisterMessageHandler(int nlmsg_type)
+     m_handlers.erase(it);
+ }
+ 
++void NetDispatcher::registerRawMessageHandler(int nlmsg_type, NetMsg *callback)
++{
++    MUTEX;
++
++    if (m_rawhandlers.find(nlmsg_type) != m_rawhandlers.end())
++        throw "Trying to registered on already registerd netlink message";
++
++    m_rawhandlers[nlmsg_type] = callback;
++}
++
++void NetDispatcher::unregisterRawMessageHandler(int nlmsg_type)
++{
++    MUTEX;
++
++    auto it = m_rawhandlers.find(nlmsg_type);
++
++    if (it == m_rawhandlers.end())
++        throw "Trying to unregister non existing handler";
++
++    m_rawhandlers.erase(it);
++
++}
++
+ void NetDispatcher::nlCallback(struct nl_object *obj, void *context)
+ {
+     NetMsg *callback = (NetMsg *)context;
+     callback->onMsg(nl_object_get_msgtype(obj), obj);
+ }
+ 
++void NetDispatcher::onNetlinkMessageRaw(struct nl_msg *msg)
++{
++    struct nlmsghdr *nlmsghdr = nlmsg_hdr(msg);
++    NetMsg *reg_callback = NULL;
++    auto callback = m_rawhandlers.find(nlmsghdr->nlmsg_type);
++
++    /* Drop not registered messages */
++    if (callback == m_rawhandlers.end())
++        return;
++
++    reg_callback = (NetMsg *)callback->second;
++    reg_callback->onMsgRaw(nlmsghdr);
++}
++
+ NetMsg* NetDispatcher::getCallback(int nlmsg_type)
+ {
+     MUTEX;
+@@ -61,7 +98,9 @@ void NetDispatcher::onNetlinkMessage(struct nl_msg *msg)
+ 
+     /* Drop not registered messages */
+     if (callback == nullptr)
++    {
++        onNetlinkMessageRaw(msg);
+         return;
+-
++    }
+     nl_msg_parse(msg, NetDispatcher::nlCallback, (callback));
+ }
+diff --git a/common/netdispatcher.h b/common/netdispatcher.h
+index 4a7e9fa..7c55385 100644
+--- a/common/netdispatcher.h
++++ b/common/netdispatcher.h
+@@ -23,9 +23,29 @@ namespace swss
+              */
+             void registerMessageHandler(int nlmsg_type, NetMsg *callback);
+ 
++            /*
++             * Register Raw Msg callback class according to message-type.
++             *
++             * Throw exception if callback is already registered
++             */
++            void registerRawMessageHandler(int nlmsg_type, NetMsg *callback);
++
++            /*
++             * Unregister Raw Msg callback class according to message-type.
++             *
++             * Throw exception if callback is not registered
++             */
++            void unregisterRawMessageHandler(int nlmsg_type);
++
++
+             /** Called by NetLink or FpmLink classes as indication of new packet arrival. */
+             void onNetlinkMessage(struct nl_msg *msg);
+ 
++            /*
++             * Called by NetLink or FpmLink classes as indication of new packet arrival
++             */
++            void onNetlinkMessageRaw(struct nl_msg *msg);
++
+             /**
+              * Unregister callback according to message-type.
+              *
+@@ -48,6 +68,8 @@ namespace swss
+ 
+             std::map<int, NetMsg*> m_handlers;
+ 
++            std::map<int, NetMsg * > m_rawhandlers;
++
+             /** Mutex protecting register, unregister and get callback methods. */
+             std::mutex m_mutex;
+     };
+diff --git a/common/netmsg.h b/common/netmsg.h
+index 5cdeae0..dda5bd8 100644
+--- a/common/netmsg.h
++++ b/common/netmsg.h
+@@ -9,5 +9,10 @@ namespace swss
+         public:
+             /* Called by NetDispatcher when netmsg matches filters */
+             virtual void onMsg(int nlmsg_type, struct nl_object *obj) = 0;
++
++            /* Called by NetDispatcher when raw msg is send for matches filters */
++            virtual void onMsgRaw(struct nlmsghdr *)
++            {
++            }
+     };
+ }
+diff --git a/common/schema.h b/common/schema.h
+index c55db4b..34a97cc 100644
+--- a/common/schema.h
++++ b/common/schema.h
+@@ -133,6 +133,8 @@ namespace swss {
+ 
+ #define APP_VNET_MONITOR_TABLE_NAME          "VNET_MONITOR_TABLE"
+ 
++#define APP_L2_NEXTHOP_GROUP_TABLE_NAME      "L2_NEXTHOP_GROUP_TABLE"
++
+ /***** ASIC DATABASE *****/
+ #define ASIC_TEMPERATURE_INFO_TABLE_NAME    "ASIC_TEMPERATURE_INFO"
+ 
+-- 
+2.25.1
+

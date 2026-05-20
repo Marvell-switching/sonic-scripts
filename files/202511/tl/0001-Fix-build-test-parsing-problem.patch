@@ -1,0 +1,131 @@
+From e1248041cb4e9cc06ba0f7470a09ab963dbc48e3 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Fri, 30 Jan 2026 16:25:29 +0530
+Subject: [PATCH] Fix-build-test-parsing-problem
+
+Signed-off-by: Anish Peter <apeter@marvell.com>
+---
+ generic_config_updater/gu_common.py           | 68 +++++++++++++++++--
+ .../files/patch_sorter_test_success.json      | 12 ----
+ 2 files changed, 64 insertions(+), 16 deletions(-)
+
+diff --git a/generic_config_updater/gu_common.py b/generic_config_updater/gu_common.py
+index eca0359f..06b76def 100644
+--- a/generic_config_updater/gu_common.py
++++ b/generic_config_updater/gu_common.py
+@@ -567,6 +567,55 @@ class PathAddressing:
+     def _create_sonic_yang_with_loaded_models(self):
+         return self.config_wrapper.create_sonic_yang_with_loaded_models()
+ 
++    def _find_key_based_dependencies(self, path, config):
++        """
++        Manually scans the config for keys that reference the data at 'path'.
++        This is a way to address libyang3 not returning backlinks for list keys (used in leafrefs).
++        """
++        dependencies = []
++        path_tokens = self.get_path_tokens(path)
++        
++        # Determine identifiers from the path
++        identifiers = set()
++        
++        if len(path_tokens) == 2: # /Table/Key
++             identifiers.add(path_tokens[1])
++        elif len(path_tokens) == 1: # /Table
++             table = path_tokens[0]
++             if table in config:
++                 identifiers.update(config[table].keys())
++        else:
++             return []
++
++        if not identifiers:
++            return []
++
++        # Scan all keys in the config
++        for table, items in config.items():
++            if not isinstance(items, dict): 
++                continue
++            for key in items:
++                # Key parts splitting
++                key_parts = key.split('|')
++                for part in key_parts:
++                    if part in identifiers:
++                         # Candidate found
++                         # Escape the path properly using create_path
++                         dep_path = self.create_path([table, key])
++                         
++                         # Filter out self-reference
++                         if dep_path == path:
++                             continue
++
++                         # Filter out children (e.g. if path is table, don't return its own keys)
++                         if dep_path.startswith(path + "/"):
++                             continue
++                            
++                         dependencies.append(dep_path)
++                         break 
++                         
++        return dependencies
++
+     def find_ref_paths(self, path, config):
+         """
+         Finds the paths referencing any line under the given 'path' within the given 'config'.
+@@ -605,7 +654,19 @@ class PathAddressing:
+             /ACL_TABLE/EVERFLOW6/ports/1
+         """
+         # TODO: Also fetch references by must statement (check similar statements)
+-        return self._find_leafref_paths(path, config)
++        ref_paths = self._find_leafref_paths(path, config)
++        # Handle libyang3's missing backlinks for keys
++        key_refs = self._find_key_based_dependencies(path, config)
++        
++        # Merge and deduplicate
++        all_refs = sorted(list(set(ref_paths + key_refs)))
++
++        if path != "":
++            # Filter out children paths when looking for references of a subtree
++            path_prefix = path + "/"
++            all_refs = [ref for ref in all_refs if ref != path and not ref.startswith(path_prefix)]
++
++        return all_refs
+ 
+     def _find_leafref_paths(self, path, config):
+         sy = self._create_sonic_yang_with_loaded_models()
+@@ -617,10 +678,9 @@ class PathAddressing:
+         xpath = self.convert_path_to_xpath(path, config, sy)
+ 
+         leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
+-
+         ref_xpaths = []
+-        for xpath in leaf_xpaths:
+-            ref_xpaths.extend(sy.find_data_dependencies(xpath))
++        for leaf_xpath in leaf_xpaths:
++            ref_xpaths.extend(sy.find_data_dependencies(leaf_xpath))
+ 
+         ref_paths = []
+         ref_paths_set = set()
+diff --git a/tests/generic_config_updater/files/patch_sorter_test_success.json b/tests/generic_config_updater/files/patch_sorter_test_success.json
+index 217737e4..4189ad65 100644
+--- a/tests/generic_config_updater/files/patch_sorter_test_success.json
++++ b/tests/generic_config_updater/files/patch_sorter_test_success.json
+@@ -2478,18 +2478,6 @@
+             }
+         ],
+         "expected_changes": [
+-            [
+-                {
+-                    "op": "remove",
+-                    "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132"
+-                }
+-            ],
+-            [
+-                {
+-                    "op": "remove",
+-                    "path": "/LOOPBACK_INTERFACE/Loopback0|1100:1::32~1128"
+-                }
+-            ],
+             [
+                 {
+                     "op": "remove",
+-- 
+2.25.1
+

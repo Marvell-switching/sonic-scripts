@@ -1,0 +1,84 @@
+From 3fba5d2a7c4c8656b63f4e3d2449791cec8109b2 Mon Sep 17 00:00:00 2001
+From: Gnanapriya Sethuramarajan <gsethuramara@marvell.com>
+Date: Thu, 20 Nov 2025 10:35:23 +0530
+Subject: [PATCH] Fixed warmboot crash during VxLAN tunnel bridge port
+ discovery
+
+Summary
+During warm boot with VxLAN configuration, syncd crashes when discovering tunnel-type bridge ports. The discovery code incorrectly queries SAI_BRIDGE_PORT_ATTR_PORT_ID, SAI_BRIDGE_PORT_ATTR_BRIDGE_ID on tunnel bridge ports, which is invalid object type per SAI spec, causing SAI objectTypeQuery() to fail with NULL object ID and resulted in syncd crash.
+
+During view comparison, bridge port conditional attributes (PORT_ID, TUNNEL_ID, RIF_ID, BRIDGE_ID) exist in the current view but not in temp view (because they're now skipped during discovery), causing comparison logic to fail when trying to handle attribute mismatches.
+
+How did you do it?
+1.Extended bridge port attribute skip logic in SaiDiscovery.cpp to include SAI_BRIDGE_PORT_ATTR_PORT_ID alongside existing TUNNEL_ID and RIF_ID skips.
+2.Added special handling in performObjectSetTransition() to transfer bridge port conditional attributes from current view to temp view when they exist in old view but not in new view (due to discovery skip), preventing comparison failures during warmboot apply_view phase.
+
+How did you verify/test it?
+Manual testing with VxLAN configuration during warm restart. Verified no crashes occur during discovery with tunnel bridge ports present.
+configs verified:
+sudo config vlan add 10
+sudo config vxlan add foo 10.1.0.32
+sudo config vxlan map add foo 10 10
+
+Any platform specific information?
+NA
+
+Signed-off-by: Gnanapriya Sethuramarajan <gsethuramara@marvell.com>
+---
+ syncd/ComparisonLogic.cpp | 23 +++++++++++++++++++++++
+ syncd/SaiDiscovery.cpp    |  4 +++-
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/syncd/ComparisonLogic.cpp b/syncd/ComparisonLogic.cpp
+index 9d2567c5..d94e165c 100644
+--- a/syncd/ComparisonLogic.cpp
++++ b/syncd/ComparisonLogic.cpp
+@@ -1595,7 +1595,30 @@ bool ComparisonLogic::performObjectSetTransition(
+ 
+                     continue;
+                 }
++                if (meta->objecttype == SAI_OBJECT_TYPE_BRIDGE_PORT &&
++                    (meta->attrid == SAI_BRIDGE_PORT_ATTR_BRIDGE_ID ||
++                     meta->attrid == SAI_BRIDGE_PORT_ATTR_PORT_ID ||
++                     meta->attrid == SAI_BRIDGE_PORT_ATTR_TUNNEL_ID ||
++                     meta->attrid == SAI_BRIDGE_PORT_ATTR_RIF_ID))
++                {
++                    /*
++                     * These attributes are skipped during discovery because they are conditional
++                     * and cause issues. If they exist in current view but not in temp view,
++                     * we need to transfer them to temp view to avoid comparison failures.
++                     */
++                    SWSS_LOG_INFO("Transferring bridge port conditional attr %s:%s from current to temp object %s",
++                            meta->attridname,
++                            currentAttr->getStrAttrValue().c_str(),
++                            currentBestMatch->m_str_object_id.c_str());
++
++                    std::shared_ptr<SaiAttr> transferedAttr = std::make_shared<SaiAttr>(
++                            currentAttr->getStrAttrId(),
++                            currentAttr->getStrAttrValue());
++
++                    temporaryObj->setAttr(transferedAttr);
+ 
++                    continue;
++                }
+                 // SAI_QUEUE_ATTR_PARENT_SCHEDULER_NODE
+                 // SAI_SCHEDULER_GROUP_ATTR_SCHEDULER_PROFILE_ID*
+                 // SAI_SCHEDULER_GROUP_ATTR_PARENT_NODE
+diff --git a/syncd/SaiDiscovery.cpp b/syncd/SaiDiscovery.cpp
+index bbb5923a..ce549e1c 100644
+--- a/syncd/SaiDiscovery.cpp
++++ b/syncd/SaiDiscovery.cpp
+@@ -169,7 +169,9 @@ void SaiDiscovery::discover(
+             if (md->objecttype == SAI_OBJECT_TYPE_BRIDGE_PORT)
+             {
+                 if (md->attrid == SAI_BRIDGE_PORT_ATTR_TUNNEL_ID ||
+-                        md->attrid == SAI_BRIDGE_PORT_ATTR_RIF_ID)
++                        md->attrid == SAI_BRIDGE_PORT_ATTR_RIF_ID ||
++                        md->attrid == SAI_BRIDGE_PORT_ATTR_PORT_ID ||
++                         md->attrid == SAI_BRIDGE_PORT_ATTR_BRIDGE_ID)
+                 {
+                     /*
+                      * We know that bridge port is bound on PORT, no need
+-- 
+2.25.1
+

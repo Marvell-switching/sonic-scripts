@@ -1,0 +1,41 @@
+From 9e6e762ebaf82316d8b855151cbe2a82127baeb7 Mon Sep 17 00:00:00 2001
+From: Jithender Kondam <jreddy@marvell.com>
+Date: Thu, 19 Feb 2026 09:52:59 +0530
+Subject: [PATCH] Add graceful handling for invalid object types during counter
+ removal
+
+Root cause:
+When deleting debug counters, the system attempts to remove counters
+from ports that no longer exist, resulting in SAI_OBJECT_TYPE_NULL
+errors.
+
+Fix:
+Fix to guard against null VID deletes before calling removeCounter in
+the flex counter removal path.
+
+Signed-off-by: Jithender Kondam <jreddy@marvell.com>
+---
+ syncd/FlexCounter.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/syncd/FlexCounter.cpp b/syncd/FlexCounter.cpp
+index d0c9a77f..00749a97 100644
+--- a/syncd/FlexCounter.cpp
++++ b/syncd/FlexCounter.cpp
+@@ -2636,6 +2636,13 @@ void FlexCounter::removeCounter(
+ 
+     auto objectType = VidManager::objectTypeQuery(vid);
+ 
++    if (objectType == SAI_OBJECT_TYPE_NULL)
++    {
++        SWSS_LOG_NOTICE("Trying to remove nonexisting VID oid:%s",
++                        sai_serialize_object_id(vid).c_str());
++        return;  // Skip gracefully
++    }
++
+     if (objectType == SAI_OBJECT_TYPE_PORT)
+     {
+         if (hasCounterContext(COUNTER_TYPE_PORT))
+-- 
+2.25.1
+

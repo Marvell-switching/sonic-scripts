@@ -1,0 +1,34 @@
+From 6e2a774549f6e7109dc3b2592373fc7705a3e6e8 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Mon, 9 Mar 2026 16:05:27 +0530
+Subject: [PATCH] Remove bfd session from FRR. Re-adding doesn't work
+
+RCA: FRR maintains a cache. As a result, if same entry comes 2nd time, it
+matches it in the cache and marked NO_OP and CLI exits without applying.
+
+Fix: Force OP_NONE fields to OP_UPDATE so that BFD peer config is
+re-applied even when values haven't changed in the cache.  This is needed
+because the BFD peer may not exist in FRR (e.g. after FRR restart or
+config remove(via FRR)-reapply(via cfgDB)) even though the local cache
+still holds the old values.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+index 64598d57a..2f8b91459 100755
+--- a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
++++ b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+@@ -3433,6 +3433,7 @@ class BGPConfigDaemon:
+                         if not self.__run_command(table, command):
+                             syslog.syslog(syslog.LOG_ERR, 'failed to delete BFD peer {}'.format(remote_addr))
+                             continue
++                        self.__delete_bfd_peer(data)
+                     else:
+                         # Handle individual field updates using standardized pipeline
+                         cmd_prefix = ['configure terminal', 'bfd']
+-- 
+2.25.1
+

@@ -1,0 +1,29 @@
+From 012806c30d7f2e62726f2a58a2287f78d2c52769 Mon Sep 17 00:00:00 2001
+From: Gnanapriya Sethuramarajan <gsethuramara@marvell.com>
+Date: Thu, 16 Oct 2025 12:47:53 +0530
+Subject: [PATCH] [SONICDC-632]: Integrating Community-PR 3645
+
+Signed-off-by: Gnanapriya Sethuramarajan <gsethuramara@marvell.com>
+---
+ orchagent/fdborch.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/orchagent/fdborch.cpp b/orchagent/fdborch.cpp
+index 1993cc61..fe376324 100644
+--- a/orchagent/fdborch.cpp
++++ b/orchagent/fdborch.cpp
+@@ -567,8 +567,9 @@ void FdbOrch::update(sai_fdb_event_t        type,
+             return;
+         }
+ 
+-        /* If the existing MAC is MCLAG remote, change its type to dynamic. */
+-        if (existing_entry->second.origin == FDB_ORIGIN_MCLAG_ADVERTIZED)
++        /* If the existing MAC is MCLAG remote or VXLAN remote, change its type to dynamic. */
++        if ((existing_entry->second.origin == FDB_ORIGIN_MCLAG_ADVERTIZED) ||
++           (existing_entry->second.origin == FDB_ORIGIN_VXLAN_ADVERTIZED))
+         {
+             if (existing_entry->second.bridge_port_id != bridge_port_id)
+             {
+-- 
+2.25.1
+

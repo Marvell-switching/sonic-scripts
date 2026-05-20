@@ -1,0 +1,2552 @@
+From b29c0c7696d540704ff203e45c589ecca356e7c5 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Sun, 14 Dec 2025 22:54:24 +0530
+Subject: [PATCH] VRRP-sonic-swss-support
+
+---
+ .gitignore                   |   1 +
+ Makefile.am                  |   4 +-
+ cfgmgr/Makefile.am           |  10 +-
+ cfgmgr/vrrpmgr.cpp           | 547 ++++++++++++++++++++++++++++++
+ cfgmgr/vrrpmgr.h             |  71 ++++
+ cfgmgr/vrrpmgrd.cpp          |  73 ++++
+ configure.ac                 |   1 +
+ lib/vrrpintf.cpp             | 178 ++++++++++
+ lib/vrrpintf.h               |  48 +++
+ orchagent/Makefile.am        |   1 +
+ orchagent/orchdaemon.cpp     |   3 +
+ orchagent/orchdaemon.h       |   1 +
+ orchagent/vrrporch.cpp       | 244 ++++++++++++++
+ orchagent/vrrporch.h         |  84 +++++
+ tests/mock_tests/Makefile.am |   1 +
+ tests/test_vrrp.py           | 209 ++++++++++++
+ vrrpsyncd/Makefile.am        |  15 +
+ vrrpsyncd/vrrpsync.cpp       | 630 +++++++++++++++++++++++++++++++++++
+ vrrpsyncd/vrrpsync.h         |  81 +++++
+ vrrpsyncd/vrrpsyncd.cpp      | 115 +++++++
+ 20 files changed, 2314 insertions(+), 3 deletions(-)
+ create mode 100644 cfgmgr/vrrpmgr.cpp
+ create mode 100644 cfgmgr/vrrpmgr.h
+ create mode 100644 cfgmgr/vrrpmgrd.cpp
+ create mode 100644 lib/vrrpintf.cpp
+ create mode 100644 lib/vrrpintf.h
+ create mode 100644 orchagent/vrrporch.cpp
+ create mode 100644 orchagent/vrrporch.h
+ create mode 100644 tests/test_vrrp.py
+ create mode 100644 vrrpsyncd/Makefile.am
+ create mode 100644 vrrpsyncd/vrrpsync.cpp
+ create mode 100644 vrrpsyncd/vrrpsync.h
+ create mode 100644 vrrpsyncd/vrrpsyncd.cpp
+
+diff --git a/.gitignore b/.gitignore
+index e115801e..ea730c8a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -59,6 +59,7 @@ cfgmgr/sflowmgrd
+ cfgmgr/macsecmgrd
+ cfgmgr/coppmgrd
+ cfgmgr/tunnelmgrd
++cfgmgr/vrrpmgrd
+ cfgmgr/fabricmgrd
+ cfgmgr/stpmgrd
+ fpmsyncd/fpmsyncd
+diff --git a/Makefile.am b/Makefile.am
+index 757db0d8..3868e033 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -1,7 +1,7 @@
+ if GCOV_ENABLED
+-SUBDIRS = gcovpreload fpmsyncd neighsyncd portsyncd mclagsyncd natsyncd fdbsyncd orchagent swssconfig cfgmgr tests gearsyncd
++SUBDIRS = gcovpreload fpmsyncd neighsyncd portsyncd mclagsyncd natsyncd fdbsyncd orchagent swssconfig cfgmgr tests gearsyncd vrrpsyncd
+ else
+-SUBDIRS = fpmsyncd neighsyncd portsyncd mclagsyncd natsyncd fdbsyncd orchagent swssconfig cfgmgr tests gearsyncd 
++SUBDIRS = fpmsyncd neighsyncd portsyncd mclagsyncd natsyncd fdbsyncd orchagent swssconfig cfgmgr tests gearsyncd vrrpsyncd 
+ endif
+ 
+ 
+diff --git a/cfgmgr/Makefile.am b/cfgmgr/Makefile.am
+index 096c2224..77f7691f 100644
+--- a/cfgmgr/Makefile.am
++++ b/cfgmgr/Makefile.am
+@@ -5,7 +5,7 @@ LIBNL_LIBS = -lnl-genl-3 -lnl-route-3 -lnl-3
+ SAIMETA_LIBS = -lsaimeta -lsaimetadata -lzmq
+ COMMON_LIBS = -lswsscommon -lpthread
+ 
+-bin_PROGRAMS = vlanmgrd teammgrd portmgrd intfmgrd buffermgrd vrfmgrd nbrmgrd vxlanmgrd sflowmgrd natmgrd coppmgrd tunnelmgrd macsecmgrd fabricmgrd stpmgrd
++bin_PROGRAMS = vlanmgrd teammgrd portmgrd intfmgrd buffermgrd vrfmgrd nbrmgrd vxlanmgrd sflowmgrd natmgrd coppmgrd tunnelmgrd macsecmgrd fabricmgrd stpmgrd vrrpmgrd
+ 
+ cfgmgrdir = $(datadir)/swss
+ 
+@@ -102,11 +102,17 @@ macsecmgrd_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(
+ macsecmgrd_LDADD = $(LDFLAGS_ASAN) $(COMMON_LIBS) $(SAIMETA_LIBS)
+ 
+ 
++vrrpmgrd_SOURCES = vrrpmgrd.cpp vrrpmgr.cpp $(COMMON_ORCH_SOURCE) shellcmd.h $(top_srcdir)/lib/vrrpintf.cpp
++vrrpmgrd_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
++vrrpmgrd_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
++vrrpmgrd_LDADD = $(LDFLAGS_ASAN) $(COMMON_LIBS) $(SAIMETA_LIBS)
++
+ stpmgrd_SOURCES = stpmgrd.cpp stpmgr.cpp $(COMMON_ORCH_SOURCE) shellcmd.h
+ stpmgrd_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
+ stpmgrd_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
+ stpmgrd_LDADD = $(LDFLAGS_ASAN) $(COMMON_LIBS) $(SAIMETA_LIBS)
+ 
++
+ if GCOV_ENABLED
+ vlanmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ teammgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+@@ -122,6 +128,7 @@ natmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ coppmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ tunnelmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ macsecmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
++vrrpmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ stpmgrd_SOURCES += ../gcovpreload/gcovpreload.cpp
+ endif
+ 
+@@ -140,6 +147,7 @@ coppmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
+ tunnelmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
+ macsecmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
+ fabricmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
++vrrpmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
+ stpmgrd_SOURCES += $(top_srcdir)/lib/asan.cpp
+ endif
+ 
+diff --git a/cfgmgr/vrrpmgr.cpp b/cfgmgr/vrrpmgr.cpp
+new file mode 100644
+index 00000000..06ed6d2a
+--- /dev/null
++++ b/cfgmgr/vrrpmgr.cpp
+@@ -0,0 +1,547 @@
++#include "logger.h"
++#include "dbconnector.h"
++#include "producerstatetable.h"
++#include "tokenize.h"
++#include "ipprefix.h"
++#include "vrrpmgr.h"
++#include "exec.h"
++#include "shellcmd.h"
++#include <swss/redisutility.h>
++#include <swss/stringutility.h>
++#include "linkcache.h"
++
++using namespace std;
++using namespace swss;
++
++#define VLAN_PREFIX         "Vlan"
++#define LAG_PREFIX          "PortChannel"
++#define SUBINTF_LAG_PREFIX  "Po"
++
++#define LOOPBACK_PREFIX     "Loopback"
++#define VRF_PREFIX          "Vrf"
++
++#define VRRP_V4_MAC_PREFIX "00:00:5e:00:01:"
++#define VRRP_V6_MAC_PREFIX "00:00:5e:00:02:"
++
++VrrpMgr::VrrpMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, const std::vector<std::string> &tableNames) : 
++        Orch(cfgDb, tableNames),
++        m_appPortTable(appDb, APP_PORT_TABLE_NAME),
++        m_stateLagTable(stateDb, STATE_LAG_TABLE_NAME),
++        m_stateVlanTable(stateDb, STATE_VLAN_TABLE_NAME),
++        m_statePortTable(stateDb, STATE_PORT_TABLE_NAME)
++{
++}
++
++bool VrrpMgr::setIntfArpAccept(const std::string &intf_alias, const bool arp_accept)
++{
++    stringstream cmd;
++    string res;
++
++    if (arp_accept)
++    {
++        cmd << ECHO_CMD << " 2 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/arp_announce && ";
++        cmd << ECHO_CMD << " 2 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/rp_filter && ";
++        cmd << ECHO_CMD << " 1 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/accept_local";
++    }
++    else
++    {
++        cmd << ECHO_CMD << " 0 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/arp_announce && ";
++        cmd << ECHO_CMD << " 0 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/rp_filter && ";
++        cmd << ECHO_CMD << " 0 > /proc/sys/net/ipv4/conf/" << shellquote(intf_alias) << "/accept_local";
++    }
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to set intf arp %s on interface[%s], retry. Runtime error: %s", arp_accept ? "accept" : "default", intf_alias.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Set vrrp arp %s on interface[%s]", arp_accept ? "accept" : "default", intf_alias.c_str());
++    return true;
++}
++
++bool VrrpMgr::setVrrpIntf(const std::string &intf_alias, const std::string &vrid, const bool is_ipv4, 
++    const std::set<IpPrefix> &vip_list, const std::string &admin_status)
++{
++    VrrpIntfConf vrrp_conf;
++    if (m_vrrpList.find(vrid) == m_vrrpList.end())
++    {
++        vrrp_conf.alias = intf_alias;
++    }
++    else
++    {
++        vrrp_conf = m_vrrpList[vrid];
++    }
++    auto &vrrp = is_ipv4 ? vrrp_conf.vrrp4 : vrrp_conf.vrrp6;
++    auto &vrrp_entry = is_ipv4 ? vrrp_conf.vrrp4_entry : vrrp_conf.vrrp6_entry;
++
++    // generate vmac
++    set<IpPrefix> vaild_vips;
++    auto is_ipv4_check = [is_ipv4](const IpPrefix &has_vip){ return has_vip.isV4() == is_ipv4; };
++    copy_if(vip_list.begin(), vip_list.end(), std::inserter(vaild_vips, vaild_vips.begin()), is_ipv4_check);
++    if (!vaild_vips.empty())
++    {
++        // add vrrp intf
++        if (!vrrp.isValid())
++        {
++            MacAddress vmac;
++            if (!parseVrrpMac(vrid, is_ipv4, vmac))
++            {
++                return false;
++            }
++            vrrp = VrrpIntf(intf_alias, vrid, is_ipv4, vmac.to_string());
++            if (!vrrp.isValid())
++            {
++                SWSS_LOG_WARN("parse new vrrp intf fail, intf: %s, vrid: %s, is ipv4:%d", intf_alias.c_str(), vrid.c_str(), is_ipv4);
++                return false;
++            }
++            if (!addVirtualInterface(intf_alias, vrrp.getVrrpName(), vmac, is_ipv4))
++            {
++                vrrp = VrrpIntf();
++                return false;
++            }
++        }
++    }
++    else
++    {
++        // del vrrp intf
++        if (vrrp.isValid())
++        {
++            if (!delVirtualInterface(intf_alias, vrrp.getVrrpName()))
++            {
++                return false;
++            }
++            vrrp = VrrpIntf();
++            vrrp_entry = VrrpIntfEntry();
++        }
++    }
++
++    if (!vrrp.isValid())
++    {
++        SWSS_LOG_WARN("set vrrp fail");
++        return false;
++    }
++
++    // set admin status
++    vrrp_entry.admin_status = admin_status;
++    if (vrrp.isValid())
++    {
++        setVirtualInterfaceAdminStatus(vrrp.getVrrpName(), admin_status);
++    }
++
++    // add/del vips
++    set<IpPrefix> original_vips = vrrp_entry.vips;
++    set<IpPrefix> diff_vips;
++    set_symmetric_difference(original_vips.begin(), original_vips.end(), vaild_vips.begin(), vaild_vips.end(), std::inserter(diff_vips, diff_vips.begin()));
++    SWSS_LOG_INFO("original_ip size:%d, apply_vips size:%d, diff size:%d", (int)original_vips.size(), (int)vaild_vips.size(), (int)diff_vips.size());
++    vrrp_entry.vips = vaild_vips;
++
++    for (const IpPrefix &diff_ip : diff_vips)
++    {
++        if (vaild_vips.find(diff_ip) != vaild_vips.end())
++        {
++            // add vip
++            addVirtualInterfaceIp(vrid, diff_ip);
++        }
++
++        if (original_vips.find(diff_ip) != original_vips.end())
++        {
++            // del vip
++            delVirtualInterfaceIp(vrid, diff_ip);
++        }
++    }
++
++    m_vrrpList[vrid] = vrrp_conf;
++    // set parent intf
++    if (!isVrrpOnIntf(intf_alias))
++    {
++        SWSS_LOG_INFO("No vrrp on interface[%s], set arp accept", intf_alias.c_str());
++        setIntfArpAccept(intf_alias);
++    }
++    // set vrrp vrf
++    auto parent_link = LinkCache::getInstance().getLinkByName(intf_alias.c_str());
++    int vrf_id = rtnl_link_get_master(parent_link);
++    if (vrf_id != 0)
++    {
++        auto vrf_name = LinkCache::getInstance().ifindexToName(vrf_id);
++        setVirtualInterfaceVrf(vrrp.getVrrpName(), vrf_name);
++        SWSS_LOG_INFO("Set vrrp on intf[%s] vrid[%s] Vrf: %s", intf_alias.c_str(), vrid.c_str(), vrf_name.c_str());
++    }
++
++    SWSS_LOG_NOTICE("Set vrrp on intf[%s] vrid[%s] is_ipv4 %d", intf_alias.c_str(), vrid.c_str(), is_ipv4);
++    return true;
++}
++
++bool VrrpMgr::removeVrrpIntf(const std::string &intf_alias, const std::string &vrid, const bool is_ipv4)
++{
++    auto it = m_vrrpList.find(vrid);
++    if (it == m_vrrpList.end())
++    {
++        SWSS_LOG_INFO("Not found vrid: %s", vrid.c_str());
++        return true;
++    }
++
++    auto &vrrp = is_ipv4 ? it->second.vrrp4 : it->second.vrrp6;
++    auto &vrrp_entry = is_ipv4 ? it->second.vrrp4_entry : it->second.vrrp6_entry;
++    if (vrrp.isValid())
++    {
++        delVirtualInterface(intf_alias, vrrp.getVrrpName());
++        vrrp = VrrpIntf();
++        vrrp_entry = VrrpIntfEntry();
++    }
++
++    if (!it->second.vrrp4.isValid() && !it->second.vrrp6.isValid())
++    {
++        m_vrrpList.erase(it);
++        if (!isVrrpOnIntf(intf_alias))
++        {
++            SWSS_LOG_INFO("No vrrp on intf[%s], arp accept back to default", intf_alias.c_str());
++            setIntfArpAccept(intf_alias, false);
++        }
++    }
++
++    SWSS_LOG_NOTICE("Remove vrrp on intf[%s] vrid[%s] is_ipv4 %d", intf_alias.c_str(), vrid.c_str(), is_ipv4);
++    return true;
++}
++
++bool VrrpMgr::addVirtualInterface(const std::string &intf_alias, const std::string &vrrp_name, const MacAddress &vrrp_mac, bool is_ipv4)
++{
++    stringstream cmd;
++    string res;
++
++    // link add vrrp type macvlan
++    cmd << IP_CMD << " link add " << shellquote(vrrp_name) << " link " << shellquote(intf_alias) << " type macvlan mode bridge && ";
++    cmd << IP_CMD << " link set dev " << shellquote(vrrp_name) << " addrgenmode " << string(is_ipv4 ? "none" : "random") << " && ";
++    cmd << IP_CMD << " link set dev " << shellquote(vrrp_name) << " address " << vrrp_mac.to_string() << " && ";
++    // create default is down, wait for admin status value(default up)
++    cmd << IP_CMD << " link set dev " << shellquote(vrrp_name) << " down";
++    SWSS_LOG_DEBUG("Add vrrp virtual intf cmd: %s", cmd.str().c_str());
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to add vitrual intf[%s] on interface[%s], retry. Runtime error: %s", vrrp_name.c_str(), intf_alias.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Add vitrual intf[%s] on interface[%s]", vrrp_name.c_str(), intf_alias.c_str());
++    return true;
++}
++
++bool VrrpMgr::delVirtualInterface(const std::string &intf_alias, const std::string &vrrp_name)
++{
++    stringstream cmd;
++    string res;
++
++    // link del vrrp
++    cmd << IP_CMD << " link del " << shellquote(vrrp_name);
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to del vitrual intf[%s] on interface[%s], retry. Runtime error: %s", vrrp_name.c_str(), intf_alias.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Del vitrual intf[%s] on interface[%s]", vrrp_name.c_str(), intf_alias.c_str());
++    return true;
++}
++
++bool swss::VrrpMgr::addVirtualInterfaceIp(const std::string &vrid, const IpPrefix &ip_addr)
++{
++    stringstream cmd;
++    string res;
++
++    bool ip_ipv4 = ip_addr.isV4();
++    string vrrp_name = join(vrrp_name_delimiter, (ip_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), vrid);
++    string ipPrefixStr = ip_addr.to_string();
++    // link add ip dev vrrp
++    cmd << IP_CMD << (ip_ipv4 ? "" : " -6 ") << " address add " << shellquote(ipPrefixStr) << " dev " << shellquote(vrrp_name);
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to add ip[%s] on vitrual intf[%s], retry. Runtime error: %s", ipPrefixStr.c_str(), vrrp_name.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Add ip[%s] on vitrual intf[%s]", ipPrefixStr.c_str(), vrrp_name.c_str());
++    return true;
++}
++
++bool swss::VrrpMgr::delVirtualInterfaceIp(const std::string &vrid, const IpPrefix &ip_addr)
++{
++    stringstream cmd;
++    string res;
++
++    bool ip_ipv4 = ip_addr.isV4();
++    string vrrp_name = join(vrrp_name_delimiter, (ip_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), vrid);
++    string ipPrefixStr = ip_addr.to_string();
++    // link del ip dev vrrp
++    cmd << IP_CMD << (ip_ipv4 ? "" : " -6 ") << " address del " << shellquote(ipPrefixStr) << " dev " << shellquote(vrrp_name);
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to del ip[%s] on vitrual intf[%s], retry. Runtime error: %s", ipPrefixStr.c_str(), vrrp_name.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Del ip[%s] on vitrual intf[%s]", ipPrefixStr.c_str(), vrrp_name.c_str());
++    return true;
++}
++
++bool VrrpMgr::setVirtualInterfaceAdminStatus(const std::string &vrrp_name, const std::string &admin_status)
++{
++    stringstream cmd;
++    string res;
++
++    cmd << IP_CMD << " link set dev " << shellquote(vrrp_name) << " " << shellquote(admin_status);
++    SWSS_LOG_DEBUG("Set vrrp virtual intf admin status cmd: %s", cmd.str().c_str());
++
++    try
++    {
++        EXEC_WITH_ERROR_THROW(cmd.str(), res);
++    }
++    catch (const std::exception &e)
++    {
++        SWSS_LOG_ERROR("Failed to add vitrual intf[%s], retry. Runtime error: %s", vrrp_name.c_str(), e.what());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Add vitrual intf[%s]", vrrp_name.c_str());
++    return true;
++}
++
++bool VrrpMgr::setVirtualInterfaceVrf(const string &vrrp_name, const string &vrf_name)
++{
++    stringstream cmd;
++    string res;
++
++    if (!vrf_name.compare(0, strlen(VRF_PREFIX), VRF_PREFIX))
++    {
++        SWSS_LOG_INFO("Vrf %s is invaild", vrf_name.c_str());
++        return false;
++    }
++
++    if (!vrf_name.empty())
++    {
++        cmd << IP_CMD << " link set " << shellquote(vrrp_name) << " master " << shellquote(vrf_name);
++    }
++    else
++    {
++        cmd << IP_CMD << " link set " << shellquote(vrrp_name) << " nomaster";
++    }
++
++    int ret = swss::exec(cmd.str(), res);
++    if (ret)
++    {
++        SWSS_LOG_ERROR("Command '%s' failed with rc %d", cmd.str().c_str(), ret);
++        return false;
++    }
++    SWSS_LOG_INFO(" %s bind vrf [%s] successful", vrrp_name.c_str(), vrf_name.c_str());
++    return true;
++}
++
++bool VrrpMgr::isIntfStateOk(const std::string &intf_alias)
++{
++    /* check router intf initialization is complete */
++    vector<FieldValueTuple> temp;
++    if (!intf_alias.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++    {
++        if (m_stateVlanTable.get(intf_alias, temp))
++        {
++            SWSS_LOG_DEBUG("Vlan %s is ready", intf_alias.c_str());
++            return true;
++        }
++    }
++    else if (!intf_alias.compare(0, strlen(LAG_PREFIX), LAG_PREFIX))
++    {
++        if (m_stateLagTable.get(intf_alias, temp))
++        {
++            SWSS_LOG_DEBUG("Lag %s is ready", intf_alias.c_str());
++            return true;
++        }
++    }
++    else if (!intf_alias.compare(0, strlen(SUBINTF_LAG_PREFIX), SUBINTF_LAG_PREFIX))
++    {
++        if (m_stateLagTable.get(intf_alias, temp))
++        {
++            SWSS_LOG_DEBUG("Lag %s is ready", intf_alias.c_str());
++            return true;
++        }
++    }
++    else if (m_statePortTable.get(intf_alias, temp))
++    {
++        auto state_opt = swss::fvsGetValue(temp, "state", true);
++        if (!state_opt)
++        {
++            return false;
++        }
++        SWSS_LOG_DEBUG("Port %s is ready", intf_alias.c_str());
++        return true;
++    }
++
++    return false;
++}
++
++bool VrrpMgr::isVrrpOnIntf(const std::string &intf_alias)
++{
++    return find_if(m_vrrpList.begin(), m_vrrpList.end(), [intf_alias](const auto &pair){ return pair.second.alias == intf_alias; }) != m_vrrpList.end();
++}
++
++bool VrrpMgr::parseVrrpMac(const std::string &vrid, const bool is_ipv4, MacAddress &vrrp_mac)
++{
++    stringstream vmac;
++    string hex_vrid;
++
++    if (!all_of(vrid.begin(), vrid.end(), ::isdigit))
++    {
++        SWSS_LOG_WARN("vrid : %s, must be a number", vrid.c_str());
++        return false;
++    }
++
++    int ivrid = stoi(vrid);
++    if (ivrid >= 256 || ivrid <= 0)
++    {
++        SWSS_LOG_WARN("vrid : %s, must less than 256, greater than 0", vrid.c_str());
++        return false;
++    }
++
++    // just need one bit to mac
++    hex_vrid = binary_to_hex(&ivrid, sizeof(char));
++    SWSS_LOG_INFO("vrid: %s, hex_vrid: %s", vrid.c_str(), hex_vrid.c_str());
++
++    if (is_ipv4)
++    {
++        vmac << VRRP_V4_MAC_PREFIX << std::setw(2) << std::setfill('0') << hex_vrid;
++    }
++    else
++    {
++        vmac << VRRP_V6_MAC_PREFIX << std::setw(2) << std::setfill('0') << hex_vrid;
++    }
++
++    vrrp_mac = MacAddress(vmac.str());
++    return true;
++}
++
++void VrrpMgr::doTask(Consumer &consumer)
++{
++    SWSS_LOG_ENTER();
++
++    auto table = consumer.getTableName();
++
++    auto it = consumer.m_toSync.begin();
++    while (it != consumer.m_toSync.end())
++    {
++        KeyOpFieldsValuesTuple t = it->second;
++        vector<string> keys = tokenize(kfvKey(t), config_db_key_delimiter);
++        const string &op = kfvOp(t);
++        const vector<FieldValueTuple> &data = kfvFieldsValues(t);
++
++        if (keys.size() != 2)
++        {
++            SWSS_LOG_WARN("vrrp table need intf and vrid, ignore it: %s", kfvKey(t).c_str());
++            it = consumer.m_toSync.erase(it);
++            continue;
++        }
++
++        string intf_alias(keys[0]);
++        string vrrp_id(keys[1]);
++
++        if (!isIntfStateOk(intf_alias))
++        {
++            SWSS_LOG_INFO("Port %s is not ready, pending...", intf_alias.c_str());
++            it++;
++            continue;
++        }
++
++        if (m_vrrpList.find(vrrp_id) != m_vrrpList.end() && m_vrrpList[vrrp_id].alias != intf_alias)
++        {
++            SWSS_LOG_WARN("vrid[%s] has been created on interface[%s], ignore it: %s",
++                          vrrp_id.c_str(), m_vrrpList[vrrp_id].alias.c_str(), kfvKey(t).c_str());
++            it = consumer.m_toSync.erase(it);
++            continue;
++        }
++
++        string vrid, vip_str, admin_status;
++        for (auto i : data)
++        {
++            if (fvField(i) == "vrid")
++            {
++                vrid = fvValue(i);
++            }
++            else if (fvField(i) == "vip")
++            {
++                vip_str = fvValue(i);
++            }
++            else if (fvField(i) == "admin_status")
++            {
++                admin_status = fvValue(i);
++            }
++        }
++        bool is_ipv4 = table == CFG_VRRP_TABLE_NAME ? true : false;
++        if (op == SET_COMMAND)
++        {
++            set<IpPrefix> vips;
++            if (!vip_str.empty())
++            {
++                vector<string> vip_list = tokenize(vip_str, list_item_delimiter);
++                try
++                {
++                    transform(vip_list.begin(), vip_list.end(), inserter(vips, vips.begin()), [](const string &vip){ return IpPrefix(vip); });
++                }
++                catch (const std::exception &e)
++                {
++                    SWSS_LOG_ERROR("vip has invalid ip addr on vrrp table %s, ignore. Runtime error: %s", kfvKey(t).c_str(), e.what());
++                    it = consumer.m_toSync.erase(it);
++                    continue;
++                }
++            }
++            else
++            {
++                SWSS_LOG_NOTICE("Create macvlan link on intf[%s] vrid[%s] without ip address", intf_alias.c_str(), vrrp_id.c_str());
++            }
++
++            if (admin_status.empty())
++            {
++                admin_status = "up";
++            }
++            else if (admin_status != "up" && admin_status != "down")
++            {
++                admin_status = "down";
++                SWSS_LOG_WARN("Invalid admin status %s on intf[%s] vrid[%s].", admin_status.c_str(), intf_alias.c_str(), vrrp_id.c_str());
++            }
++
++            if (!setVrrpIntf(intf_alias, vrrp_id, is_ipv4, vips, admin_status))
++            {
++                SWSS_LOG_WARN("Set vrrp on intf[%s] vrid[%s] failed.", intf_alias.c_str(), vrrp_id.c_str());
++            }
++        }
++        else if (op == DEL_COMMAND)
++        {
++            if (!removeVrrpIntf(intf_alias, vrrp_id, is_ipv4))
++            {
++                SWSS_LOG_WARN("Del vrrp on intf[%s] vrid[%s] failed.", intf_alias.c_str(), vrrp_id.c_str());
++            }
++        }
++
++        it = consumer.m_toSync.erase(it);
++    }
++}
+diff --git a/cfgmgr/vrrpmgr.h b/cfgmgr/vrrpmgr.h
+new file mode 100644
+index 00000000..12bb4a25
+--- /dev/null
++++ b/cfgmgr/vrrpmgr.h
+@@ -0,0 +1,71 @@
++#pragma once
++
++#include "orch.h"
++#include "producerstatetable.h"
++#include "vrrpintf.h"
++
++#include <map>
++#include <string>
++
++namespace swss {
++
++struct VrrpIntfEntry
++{
++    std::set<IpPrefix> vips;
++    std::string admin_status{};
++};
++
++struct VrrpIntfConf
++{
++    std::string alias{};
++
++    VrrpIntf vrrp4;
++    VrrpIntfEntry vrrp4_entry;
++
++    VrrpIntf vrrp6;
++    VrrpIntfEntry vrrp6_entry;
++
++    VrrpIntfConf()
++    {
++        vrrp4 = VrrpIntf();
++        vrrp4_entry = VrrpIntfEntry();
++        vrrp6 = VrrpIntf();
++        vrrp6_entry = VrrpIntfEntry();
++    }
++};
++
++class VrrpMgr : public Orch
++{
++public:
++    VrrpMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, const std::vector<std::string> &tableNames);
++    using Orch::doTask;
++
++private:
++    Table m_appPortTable;
++    Table m_statePortTable, m_stateVlanTable, m_stateLagTable;
++
++    /* <vid, VrrpIntfConf> */ 
++    std::map<std::string, VrrpIntfConf> m_vrrpList;
++
++    void doTask(Consumer &consumer);
++    
++    bool setIntfArpAccept(const std::string &intf_alias, const bool arp_accept = true);
++
++    bool setVrrpIntf(const std::string &intf_alias, const std::string &vrid, const bool is_ipv4, 
++        const std::set<IpPrefix> &vip_list, const std::string &admin_status);
++    bool removeVrrpIntf(const std::string &intf_alias, const std::string &vrid, const bool is_ipv4);
++
++    bool addVirtualInterface(const std::string &intf_alias, const std::string &vrrp_name, const MacAddress &vrrp_mac, bool is_ipv4);
++    bool delVirtualInterface(const std::string &intf_alias, const std::string &vrrp_name);
++    bool addVirtualInterfaceIp(const std::string &vrid, const IpPrefix &ip_addr);
++    bool delVirtualInterfaceIp(const std::string &vrid, const IpPrefix &ip_addr);
++    bool setVirtualInterfaceAdminStatus(const std::string &vrrp_name, const std::string &admin_status);
++    bool setVirtualInterfaceVrf(const std::string &vrrp_name, const std::string &vrf_name);
++
++    bool isIntfStateOk(const std::string &intf_alias);
++    bool isVrrpOnIntf(const std::string &intf_alias);
++
++    bool parseVrrpMac(const std::string &vrid, const bool is_ipv4, MacAddress& vrrp_mac);
++};
++
++}
+diff --git a/cfgmgr/vrrpmgrd.cpp b/cfgmgr/vrrpmgrd.cpp
+new file mode 100644
+index 00000000..19d98dc5
+--- /dev/null
++++ b/cfgmgr/vrrpmgrd.cpp
+@@ -0,0 +1,73 @@
++#include <fstream>
++#include <iostream>
++#include <mutex>
++#include <unistd.h>
++#include <vector>
++
++#include "exec.h"
++#include "vrrpmgr.h"
++#include "schema.h"
++#include "select.h"
++
++using namespace std;
++using namespace swss;
++
++/* select() function timeout retry time, in millisecond */
++#define SELECT_TIMEOUT 1000
++
++int main(int argc, char **argv)
++{
++    Logger::linkToDbNative("vrrpmgrd");
++    SWSS_LOG_ENTER();
++
++    SWSS_LOG_NOTICE("--- Starting vrrpmgrd ---");
++
++    try
++    {
++        vector<string> cfg_vrrp_tables = {
++            CFG_VRRP_TABLE_NAME,
++            CFG_VRRP6_TABLE_NAME,
++        };
++
++        DBConnector cfgDb("CONFIG_DB", 0);
++        DBConnector appDb("APPL_DB", 0);
++        DBConnector stateDb("STATE_DB", 0);
++
++        VrrpMgr vrrpmgr(&cfgDb, &appDb, &stateDb, cfg_vrrp_tables);
++
++        // TODO: add tables in stateDB which interface depends on to monitor list
++        vector<Orch *> cfgOrchList = {&vrrpmgr};
++
++        swss::Select s;
++        for (Orch *o : cfgOrchList)
++        {
++            s.addSelectables(o->getSelectables());
++        }
++
++        while (true)
++        {
++            Selectable *sel;
++            int ret;
++
++            ret = s.select(&sel, SELECT_TIMEOUT);
++            if (ret == Select::ERROR)
++            {
++                SWSS_LOG_NOTICE("Error: %s!", strerror(errno));
++                continue;
++            }
++            if (ret == Select::TIMEOUT)
++            {
++                vrrpmgr.doTask();
++                continue;
++            }
++
++            auto *c = (Executor *)sel;
++            c->execute();
++        }
++    }
++    catch (const exception &e)
++    {
++        SWSS_LOG_ERROR("Runtime error: %s", e.what());
++    }
++    return -1;
++}
+diff --git a/configure.ac b/configure.ac
+index 14523174..7dff2242 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -155,6 +155,7 @@ AC_CONFIG_FILES([
+     orchagent/Makefile
+     fpmsyncd/Makefile
+     neighsyncd/Makefile
++    vrrpsyncd/Makefile
+     gearsyncd/Makefile
+     fdbsyncd/Makefile
+     natsyncd/Makefile
+diff --git a/lib/vrrpintf.cpp b/lib/vrrpintf.cpp
+new file mode 100644
+index 00000000..b5a78cf5
+--- /dev/null
++++ b/lib/vrrpintf.cpp
+@@ -0,0 +1,178 @@
++#include "schema.h"
++#include "tokenize.h"
++#include "converter.h"
++#include "stringutility.h"
++#include "logger.h"
++
++#include "vrrpintf.h"
++
++using namespace swss;
++
++VrrpIntf::VrrpIntf()
++{
++    parent_name = "";
++    vrrp_name = "";
++    vrrp_vmac = "";
++    vrid = 0;
++    is_ipv4 = false;
++}
++
++VrrpIntf::VrrpIntf(const std::string &parentName, const int vrid, const bool isIpv4) :
++    parent_name(parentName), vrid(vrid), is_ipv4(isIpv4)
++{
++    vrrp_vmac = "";
++    vrrp_name = join(vrrp_name_delimiter, (is_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), std::to_string(vrid));
++}
++
++VrrpIntf::VrrpIntf(const std::string &parentName, const std::string &vridStr, const bool isIpv4) :
++    parent_name(parentName), is_ipv4(isIpv4)
++{
++    vrid = 0;
++    vrrp_vmac = "";
++
++    if (std::all_of(vridStr.begin(), vridStr.end(), ::isdigit))
++    {
++        vrid = to_int<int>(vridStr);
++        vrrp_name = join(vrrp_name_delimiter, (is_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), vridStr);
++    }
++}
++
++VrrpIntf::VrrpIntf(const std::string &parentName, const std::string &vridStr, const bool isIpv4, const std::string &vmacStr) :
++    parent_name(parentName), is_ipv4(isIpv4), vrrp_vmac(vmacStr)
++{
++    vrid = 0;
++
++    if (std::all_of(vridStr.begin(), vridStr.end(), ::isdigit))
++    {
++        vrid = to_int<int>(vridStr);
++        vrrp_name = join(vrrp_name_delimiter, (is_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), vridStr);
++    }
++}
++
++VrrpIntf::VrrpIntf(const std::string &parentName, const std::string &vrrpName) :
++    parent_name(parentName), vrrp_name(vrrpName)
++{
++    vrid = 0;
++    vrrp_vmac = "";
++
++    auto name_list = tokenize(vrrpName, vrrp_name_delimiter);
++    if (name_list.size() == 2)
++    {
++        std::string vrrp_name_prefix = name_list[0];
++        std::string vridStr = name_list[1];
++        if (std::all_of(vridStr.begin(), vridStr.end(), ::isdigit))
++        {
++            vrid = to_int<int>(vridStr);
++        }
++        if (vrrp_name_prefix == VRRP_V4_PREFIX)
++        {
++            is_ipv4 = true;
++        }
++        else if (vrrp_name_prefix == VRRP_V6_PREFIX)
++        {
++            is_ipv4 = false;
++        }
++        else
++        {
++            vrid = 0;
++            is_ipv4 = false;
++        }
++    }
++}
++
++VrrpIntf::VrrpIntf(const std::string &parentName, const std::string &vridStr, const std::string &ipType) :
++    parent_name(parentName)
++{
++    SWSS_LOG_INFO("parentName %s", parentName.c_str());
++    vrid = 0;
++    vrrp_vmac = "";
++
++    if (std::all_of(vridStr.begin(), vridStr.end(), ::isdigit))
++    {
++        vrid = to_int<int>(vridStr);
++    }
++    SWSS_LOG_INFO("vridStr %s, vrid %d", vridStr.c_str(), vrid);
++    if (ipType == IPV4_NAME)
++    {
++        is_ipv4 = true;
++        SWSS_LOG_INFO("ipv4 %s", ipType.c_str());
++    }
++    else if (ipType == IPV6_NAME)
++    {
++        is_ipv4 = false;
++        SWSS_LOG_INFO("ipv6 %s", ipType.c_str());
++    }
++    else
++    {
++        vrid = 0;
++        is_ipv4 = false;
++        SWSS_LOG_INFO("ip fail %s", ipType.c_str());
++    }
++    vrrp_name = join(vrrp_name_delimiter, (is_ipv4 ? VRRP_V4_PREFIX : VRRP_V6_PREFIX), vridStr);
++    SWSS_LOG_INFO("vrrp_name %s", vrrp_name.c_str());
++}
++
++bool VrrpIntf::isValid() const
++{
++    if (vrid > 255 || vrid < 1)
++    {
++        return false;
++    }
++
++    if (parent_name.empty() || vrrp_name.empty())
++    {
++        return false;
++    }
++
++    return true;
++}
++
++std::string VrrpIntf::getParentName() const
++{
++    return isValid() ? parent_name : "";
++}
++
++std::string VrrpIntf::getVrrpName() const
++{
++    return isValid() ? vrrp_name : "";
++}
++
++MacAddress swss::VrrpIntf::getMacAddress()
++{
++    if (!isValid())
++    {
++        return MacAddress();
++    }
++
++    if (!vrrp_vmac.empty())
++    {
++        return MacAddress(vrrp_vmac);
++    }
++
++    std::stringstream vmac;
++    std::string hex_vrid;
++
++    // just need one bit to mac
++    hex_vrid = binary_to_hex(&vrid, sizeof(char));
++
++    if (is_ipv4)
++    {
++        vmac << VRRP_V4_MAC_PREFIX << std::setw(2) << std::setfill('0') << hex_vrid;
++    }
++    else
++    {
++        vmac << VRRP_V6_MAC_PREFIX << std::setw(2) << std::setfill('0') << hex_vrid;
++    }
++    vrrp_vmac = vmac.str();
++    return MacAddress(vmac.str());
++}
++
++int VrrpIntf::getVrid() const
++{
++    return isValid() ? vrid : 0;
++}
++
++bool VrrpIntf::isIpv4() const
++{
++    return is_ipv4;
++}
+diff --git a/lib/vrrpintf.h b/lib/vrrpintf.h
+new file mode 100644
+index 00000000..1e392ca9
+--- /dev/null
++++ b/lib/vrrpintf.h
+@@ -0,0 +1,48 @@
++#ifndef SWSS_COMMON_VRRP_INTF_H
++#define SWSS_COMMON_VRRP_INTF_H
++
++
++#include <string>
++
++#include "ipprefix.h"
++#include "macaddress.h"
++
++#define VRRP_PREFIX "Vrrp"
++#define VRRP_V4_PREFIX "Vrrp4"
++#define VRRP_V6_PREFIX "Vrrp6"
++
++#define VRRP_V4_MAC_PREFIX "00:00:5e:00:01:"
++#define VRRP_V6_MAC_PREFIX "00:00:5e:00:02:"
++
++const char vrrp_name_delimiter = '-';
++
++namespace swss {
++
++class VrrpIntf
++{
++    public:
++        VrrpIntf();
++        VrrpIntf(const std::string &parentName, const int vrid, const bool isIpv4);
++        VrrpIntf(const std::string &parentName, const std::string &vridStr, const bool isIpv4);
++        VrrpIntf(const std::string &parentName, const std::string &vridStr, const bool isIpv4, const std::string &vmacStr);
++        VrrpIntf(const std::string &parentName, const std::string &vridStr, const std::string &ipType);
++        VrrpIntf(const std::string &parentName, const std::string &vrrpName);
++
++        bool isValid() const;
++        std::string getParentName() const;
++        std::string getVrrpName() const;
++        MacAddress getMacAddress();
++        int getVrid() const;
++        bool isIpv4() const;
++
++    private:
++        std::string parent_name;
++        std::string vrrp_name;
++        std::string vrrp_vmac;
++        int vrid;
++        bool is_ipv4;
++};
++
++}
++
++#endif /* SWSS_COMMON_VRRP_INTF_H */
+diff --git a/orchagent/Makefile.am b/orchagent/Makefile.am
+index 706fe61f..0d59dab2 100644
+--- a/orchagent/Makefile.am
++++ b/orchagent/Makefile.am
+@@ -90,6 +90,7 @@ orchagent_SOURCES = \
+             crmorch.cpp \
+             request_parser.cpp \
+             vrforch.cpp \
++            vrrporch.cpp \
+             countercheckorch.cpp \
+             vxlanorch.cpp \
+             tunneltermhelper.cpp \
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index b232ea0b..100b44f2 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -256,6 +256,8 @@ bool OrchDaemon::init()
+     gDirectory.set(vnet_rt_orch);
+     VRFOrch *vrf_orch = new VRFOrch(m_applDb, APP_VRF_TABLE_NAME, m_stateDb, STATE_VRF_OBJECT_TABLE_NAME);
+     gDirectory.set(vrf_orch);
++    VrrpOrch *vrrp_orch = new VrrpOrch(m_applDb, APP_VRRP_TABLE_NAME);
++    gDirectory.set(vrrp_orch);
+     gMonitorOrch = new MonitorOrch(m_stateDb, STATE_VNET_MONITOR_TABLE_NAME);
+     gDirectory.set(gMonitorOrch);
+     gBfdMonitorOrch = new BfdMonitorOrch(m_stateDb, STATE_BFD_SESSION_TABLE_NAME);
+@@ -552,6 +554,7 @@ bool OrchDaemon::init()
+     m_orchList.push_back(gPbhOrch);
+     m_orchList.push_back(chassis_frontend_orch);
+     m_orchList.push_back(vrf_orch);
++    m_orchList.push_back(vrrp_orch);
+     m_orchList.push_back(vxlan_tunnel_orch);
+     m_orchList.push_back(evpn_nvo_orch);
+     m_orchList.push_back(vxlan_tunnel_map_orch);
+diff --git a/orchagent/orchdaemon.h b/orchagent/orchdaemon.h
+index 9c003fc5..bb53fe95 100644
+--- a/orchagent/orchdaemon.h
++++ b/orchagent/orchdaemon.h
+@@ -28,6 +28,7 @@
+ #include "switchorch.h"
+ #include "crmorch.h"
+ #include "vrforch.h"
++#include "vrrporch.h"
+ #include "vxlanorch.h"
+ #include "vnetorch.h"
+ #include "countercheckorch.h"
+diff --git a/orchagent/vrrporch.cpp b/orchagent/vrrporch.cpp
+new file mode 100644
+index 00000000..bae21fff
+--- /dev/null
++++ b/orchagent/vrrporch.cpp
+@@ -0,0 +1,244 @@
++#include "sai.h"
++#include "macaddress.h"
++#include "orch.h"
++#include "request_parser.h"
++#include "portsorch.h"
++#include "port.h"
++#include "swssnet.h"
++#include "fdborch.h"
++#include "intfsorch.h"
++#include "vrrporch.h"
++
++extern sai_router_interface_api_t*  sai_router_intfs_api;
++extern PortsOrch *gPortsOrch;
++extern sai_object_id_t gSwitchId;
++extern sai_route_api_t* sai_route_api;
++extern FdbOrch *gFdbOrch;
++extern IntfsOrch *gIntfsOrch;
++bool VrrpOrch::hasSameIpAddr(const string &alias,const IpPrefix &vip_prefix)
++{
++    IntfsTable m_syncdIntfses = gIntfsOrch->getSyncdIntfses();
++    for (const auto &intfPrefix: m_syncdIntfses[alias].ip_addresses)
++    {
++        if (intfPrefix.getIp() == vip_prefix.getIp())
++        {
++                SWSS_LOG_NOTICE("vrrp hasSameIpAddr configured %s vip %s",alias.c_str(),vip_prefix.to_string().c_str());
++                return true;
++        }
++    }
++    return false;
++}
++bool VrrpOrch::addOperation(const Request& request)
++{
++    SWSS_LOG_ENTER();
++    sai_attribute_t attr;
++    vector<sai_attribute_t> vmac_attrs;
++    vector<sai_attribute_t> vip_attrs;
++    Port port;
++    MacAddress mac;
++    sai_object_id_t vrrp_rif_id;
++    sai_object_id_t port_oid;
++    for (const auto& name: request.getAttrFieldNames())
++    {
++        if (name == "vmac")
++        {
++            mac = request.getAttrMacAddress("vmac");
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS;
++            memcpy(attr.value.mac, mac.getMac(), sizeof(sai_mac_t));
++            SWSS_LOG_INFO("vrrp orch add : vmac %s ",mac.to_string().c_str());
++            vmac_attrs.push_back(attr);
++        }
++    }
++    auto ip_pfx = request.getKeyIpPrefix(1);
++    /* Check if the vmac,vip combination is already programmed on the port.If yes, skip & return*/
++    auto key = vrrp_key_t(request.getKeyString(0),request.getKeyIpPrefix(1));
++    auto it = vrrp_table_.find(key);
++    if (it != vrrp_table_.end())
++    {
++       if (vrrp_table_[key].vmac == request.getAttrMacAddress("vmac"))
++        {
++            SWSS_LOG_ERROR("_vrrp_table entry already exists, with vmac %s, vip %s for port %s",mac.to_string().c_str(),
++                ip_pfx.to_string().c_str(),request.getKeyString(0).c_str());
++            return true;
++        }
++    }
++    gPortsOrch->getPort(request.getKeyString(0), port);
++    attr.id = SAI_ROUTER_INTERFACE_ATTR_TYPE;
++    switch(port.m_type)
++    {
++        case Port::PHY:
++        case Port::LAG:
++            attr.value.s32 = SAI_ROUTER_INTERFACE_TYPE_PORT;
++            break;
++        case Port::VLAN:
++            attr.value.s32 = SAI_ROUTER_INTERFACE_TYPE_VLAN;
++            break;
++        case Port::SUBPORT:
++            attr.value.s32 = SAI_ROUTER_INTERFACE_TYPE_SUB_PORT;
++            break;			
++        default:
++            SWSS_LOG_ERROR("Unsupported port type: %d", port.m_type);
++            break;
++    }
++    vmac_attrs.push_back(attr);
++    switch(port.m_type)
++    {
++        case Port::PHY:
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_PORT_ID;
++            attr.value.oid = port.m_port_id;
++            break;
++        case Port::LAG:
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_PORT_ID;
++            attr.value.oid = port.m_lag_id;
++            break;
++        case Port::VLAN:
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_VLAN_ID;
++            attr.value.oid = port.m_vlan_info.vlan_oid;
++            break;
++        case Port::SUBPORT:
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_OUTER_VLAN_ID;
++            attr.value.u16 = port.m_vlan_info.vlan_id;
++            vmac_attrs.push_back(attr);
++            attr.id = SAI_ROUTER_INTERFACE_ATTR_PORT_ID;
++            attr.value.oid = port.m_parent_port_id;
++            break;			
++        default:
++            SWSS_LOG_ERROR("Unsupported port type: %d", port.m_type);
++            break;
++    }
++    port_oid = attr.value.oid;
++    vmac_attrs.push_back(attr);
++    SWSS_LOG_NOTICE("vrrp orch add : port %s, ip %s, vmac %s",request.getKeyString(0).c_str(),ip_pfx.to_string().c_str(),mac.to_string().c_str());
++    sai_route_entry_t unicast_route_entry;
++    unicast_route_entry.switch_id = gSwitchId;
++    unicast_route_entry.vr_id = port.m_vr_id;
++    copy(unicast_route_entry.destination, ip_pfx.getIp());
++    subnet(unicast_route_entry.destination, unicast_route_entry.destination);
++    attr.id = SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID;
++    attr.value.oid = gVirtualRouterId;
++    vmac_attrs.push_back(attr);
++    attr.id = SAI_ROUTER_INTERFACE_ATTR_IS_VIRTUAL;
++    attr.value.booldata =  true;
++    vmac_attrs.push_back(attr);
++    //program VRRPMAC.
++    SWSS_LOG_INFO("vrrp orch add, before create_router_interface : port name %s, 0x%" PRIx64 " &rif_id %p",request.getKeyString(0).c_str(),vrrp_rif_id,&vrrp_rif_id);
++    sai_status_t vmac_status = sai_router_intfs_api->create_router_interface(&vrrp_rif_id, gSwitchId, (uint32_t)vmac_attrs.size(), vmac_attrs.data());
++    SWSS_LOG_NOTICE("vrrp orch add, after create_router_interface : port name %s, rif_id 0x%" PRIx64, request.getKeyString(0).c_str(),vrrp_rif_id);
++    if (vmac_status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to program Vrrp Mac on interface %s, rv:%d",
++                 port.m_alias.c_str(), vmac_status);
++        throw runtime_error("Failed to program Vrrp Mac on interface.");
++    }
++    //program VIP
++    if (!hasSameIpAddr (request.getKeyString(0),request.getKeyIpPrefix(1)))
++    {
++        attr.id = SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION;
++        attr.value.s32 = SAI_PACKET_ACTION_FORWARD;
++        vip_attrs.push_back(attr);
++        attr.id = SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID;
++        attr.value.oid = vrrp_rif_id;
++        vip_attrs.push_back(attr);
++        //API to program VRRP ipaddress
++        sai_status_t vip_status = sai_route_api->create_route_entry(&unicast_route_entry, (uint32_t)vip_attrs.size(), vip_attrs.data());
++        if (vip_status != SAI_STATUS_SUCCESS)
++        {
++            sai_status_t rif_status = sai_router_intfs_api->remove_router_interface (vrrp_rif_id);
++            if (rif_status != SAI_STATUS_SUCCESS)
++            {
++                SWSS_LOG_ERROR("Failed to delete rif 0x%" PRIx64 " added for Vrrp Mac on interface %s, rv:%d",
++                        vrrp_rif_id, port.m_alias.c_str(), rif_status);
++            }
++            SWSS_LOG_ERROR("Failed to program Vrrp IP on interface %s, rv:%d",
++                      port.m_alias.c_str(), vip_status);
++            throw runtime_error("Failed to program Vrrp Ip on interface.");
++        }
++    }
++    key = vrrp_key_t(request.getKeyString(0),request.getKeyIpPrefix(1));
++    it = vrrp_table_.find(key);
++    if (it == vrrp_table_.end())
++    {
++        vrrp_table_[key] = {request.getAttrMacAddress("vmac"),vrrp_rif_id};
++        SWSS_LOG_NOTICE("_vrrp_table add port %s, ip %s, vmac %s, rif_id 0x%" PRIx64, request.getKeyString(0).c_str(),
++                                ip_pfx.to_string().c_str(),mac.to_string().c_str(),vrrp_rif_id);
++    }
++    else
++    {
++        SWSS_LOG_NOTICE("_vrrp_table entry already exists with vmac %s, rif_id 0x%" PRIx64 " update vmac to %s, rifid to 0x%" PRIx64,
++                vrrp_table_[key].vmac.to_string().c_str(),vrrp_table_[key].rifid,
++                request.getAttrMacAddress("vmac").to_string().c_str(),vrrp_rif_id);
++        vrrp_table_.erase(key);
++        vrrp_table_[key] = {request.getAttrMacAddress("vmac"),vrrp_rif_id};
++    }
++    //Flush the FDB entry for vmac on vrrp master
++    FdbEntry entry;
++    entry.mac = request.getAttrMacAddress("vmac");
++    entry.bv_id = port_oid;
++    gFdbOrch->removeFdbEntry(entry, FDB_ORIGIN_LEARN);
++    return true;
++}
++bool VrrpOrch::delOperation(const Request& request)
++{
++    SWSS_LOG_ENTER();
++    Port port;
++    sai_object_id_t port_oid = 0;
++    auto key = vrrp_key_t(request.getKeyString(0),request.getKeyIpPrefix(1));
++    auto it = vrrp_table_.find(key);
++    if (it == vrrp_table_.end())
++    {
++        SWSS_LOG_ERROR("VRRP entry for port %s, vip %s doesn't exist", request.getKeyString(0).c_str(),request.getKeyIpPrefix(1).to_string().c_str());
++        return true;
++    }
++    gPortsOrch->getPort(request.getKeyString(0), port);
++    auto ip_pfx = request.getKeyIpPrefix(1);
++    sai_route_entry_t unicast_route_entry;
++    unicast_route_entry.switch_id = gSwitchId;
++    unicast_route_entry.vr_id = port.m_vr_id;
++    copy(unicast_route_entry.destination, ip_pfx.getIp());
++    switch(port.m_type)
++    {
++        case Port::PHY:
++            port_oid = port.m_port_id;
++            break;
++        case Port::LAG:
++            port_oid = port.m_lag_id;
++            break;
++        case Port::VLAN:
++            port_oid = port.m_vlan_info.vlan_oid;
++            break;
++        case Port::SUBPORT:
++            port_oid = port.m_parent_port_id;
++            break;			
++        default:
++            SWSS_LOG_ERROR("Unsupported port type: %d", port.m_type);
++            break;
++    }
++    //Flush the FDB entry for vmac
++    FdbEntry entry;
++    entry.mac = vrrp_table_[key].vmac;
++    entry.bv_id = port_oid;
++    gFdbOrch->removeFdbEntry(entry, FDB_ORIGIN_LEARN);
++    //If same vip is configured as DIP on the port, then skip delete vip as it will delete the DIP on the port.
++    if (!hasSameIpAddr (request.getKeyString(0), request.getKeyIpPrefix(1)))
++    {
++        sai_status_t vip_status = sai_route_api->remove_route_entry(&unicast_route_entry);
++        if (vip_status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to delete Vrrp Vip on interface %s, rv:%d",
++                port.m_alias.c_str(), vip_status);
++            throw runtime_error("Failed to remove Vrrp Vip on interface");
++        }
++    }
++  
++    sai_status_t vmac_status = sai_router_intfs_api->remove_router_interface (vrrp_table_[key].rifid);
++    if (vmac_status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("Failed to delete Vrrp Mac on interface %s, rv:%d",
++                 port.m_alias.c_str(), vmac_status);
++        throw runtime_error("Failed to remove Vrrp Mac on interface.");
++    }
++    SWSS_LOG_NOTICE("vrrp orch del success,port %s vip %s vmac %s rifid 0x%" PRIx64, request.getKeyString(0).c_str(),
++        ip_pfx.to_string().c_str(),vrrp_table_[key].vmac.to_string().c_str(),vrrp_table_[key].rifid);
++    vrrp_table_.erase(key);
++    return true;
++}
+diff --git a/orchagent/vrrporch.h b/orchagent/vrrporch.h
+new file mode 100644
+index 00000000..926d1998
+--- /dev/null
++++ b/orchagent/vrrporch.h
+@@ -0,0 +1,84 @@
++#ifndef VRRPORCH_H
++#define VRRPORCH_H
++
++#include <string>
++#include <sstream>
++#include "orch.h"
++#include "request_parser.h"
++#include "ipaddress.h"
++#include "ipaddresses.h"
++#include "ipprefix.h"
++#include "macaddress.h"
++#include "schema.h"
++
++extern sai_object_id_t gVirtualRouterId;
++
++struct vrrp_key_t
++{
++    std::string port_name;
++    IpPrefix ip_addr;
++
++    vrrp_key_t() = default;
++
++    vrrp_key_t(std::string portName, IpPrefix ipAddr)
++    {
++        port_name = portName;
++        ip_addr = ipAddr;
++    };
++
++    bool operator== (const vrrp_key_t& rhs) const
++    {
++        if (!(ip_addr == rhs.ip_addr) || port_name != rhs.port_name)
++        {
++            return false;
++        }
++        return true;
++    }
++};
++
++struct vrrp_data_t
++{
++    MacAddress vmac;
++    sai_object_id_t rifid;
++};
++
++struct vrrp_key_hash
++{
++    size_t operator() (const vrrp_key_t& key) const
++    {
++        stringstream ss;
++        ss << key.port_name << key.ip_addr.to_string();
++        return std::hash<std::string>() (ss.str());
++    }
++};
++
++typedef std::unordered_map<vrrp_key_t, vrrp_data_t, vrrp_key_hash> VrrpTable;
++
++const request_description_t request_desc = {
++    { REQ_T_STRING, REQ_T_IP_PREFIX },
++    {
++        { "vmac", REQ_T_MAC_ADDRESS },
++    },
++    { } // no mandatory attributes
++};
++
++class VrrpRequest : public Request
++{
++public:
++    VrrpRequest() : Request(request_desc, '|') { }
++};
++
++class VrrpOrch : public Orch2
++{
++public:
++    VrrpOrch(DBConnector *db, const std::string& tableName) : Orch2(db, tableName, request_) { }
++
++private:
++    virtual bool addOperation(const Request& request);
++    virtual bool delOperation(const Request& request);
++    bool hasSameIpAddr(const string &alias,const IpPrefix &vip_prefix);
++    VrrpTable vrrp_table_;
++    VrrpRequest request_;
++};
++
++#endif  //VRRPORCH_H
+diff --git a/tests/mock_tests/Makefile.am b/tests/mock_tests/Makefile.am
+index 8d6b053d..f759b0a7 100644
+--- a/tests/mock_tests/Makefile.am
++++ b/tests/mock_tests/Makefile.am
+@@ -125,6 +125,7 @@ tests_SOURCES = aclorch_ut.cpp \
+                 $(top_srcdir)/orchagent/crmorch.cpp \
+                 $(top_srcdir)/orchagent/request_parser.cpp \
+                 $(top_srcdir)/orchagent/vrforch.cpp \
++                $(top_srcdir)/orchagent/vrrporch.cpp \
+                 $(top_srcdir)/orchagent/countercheckorch.cpp \
+                 $(top_srcdir)/orchagent/vxlanorch.cpp \
+                 $(top_srcdir)/orchagent/tunneltermhelper.cpp \
+diff --git a/tests/test_vrrp.py b/tests/test_vrrp.py
+new file mode 100644
+index 00000000..d73b8004
+--- /dev/null
++++ b/tests/test_vrrp.py
+@@ -0,0 +1,209 @@
++import time
++import json
++import pytest
++
++from swsscommon import swsscommon
++
++class TestVrrp(object):
++    def setup_db(self, dvs):
++        self.pdb = swsscommon.DBConnector(0, dvs.redis_sock, 0)
++        self.adb = swsscommon.DBConnector(1, dvs.redis_sock, 0)
++        self.cdb = swsscommon.DBConnector(4, dvs.redis_sock, 0)
++
++    def set_admin_status(self, dvs, interface, status):
++        if interface.startswith("PortChannel"):
++            tbl_name = "PORTCHANNEL"
++        elif interface.startswith("Vlan"):
++            tbl_name = "VLAN"
++        else:
++            tbl_name = "PORT"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        fvs = swsscommon.FieldValuePairs([("admin_status", status)])
++        tbl.set(interface, fvs)
++        time.sleep(1)
++
++        # when using FRR, route cannot be inserted if the neighbor is not
++        # connected. thus it is mandatory to force the interface up manually
++        if interface.startswith("PortChannel"):
++            dvs.runcmd("bash -c 'echo " + ("1" if status == "up" else "0") +\
++                    " > /sys/class/net/" + interface + "/carrier'")
++        time.sleep(1)
++
++    def create_vrf(self, vrf_name):
++        tbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER")
++        initial_entries = set(tbl.getKeys())
++
++        tbl = swsscommon.Table(self.cdb, "VRF")
++        fvs = swsscommon.FieldValuePairs([('empty', 'empty')])
++        tbl.set(vrf_name, fvs)
++        time.sleep(1)
++
++        tbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER")
++        current_entries = set(tbl.getKeys())
++        assert len(current_entries - initial_entries) == 1
++        return list(current_entries - initial_entries)[0]
++
++    def remove_vrf(self, vrf_name):
++        tbl = swsscommon.Table(self.cdb, "VRF")
++        tbl._del(vrf_name)
++        time.sleep(1)
++
++    def create_l3_intf(self, interface, vrf_name):
++        if interface.startswith("PortChannel"):
++            tbl_name = "PORTCHANNEL_INTERFACE"
++        elif interface.startswith("Vlan"):
++            tbl_name = "VLAN_INTERFACE"
++        elif interface.startswith("Loopback"):
++            tbl_name = "LOOPBACK_INTERFACE"
++        else:
++            tbl_name = "INTERFACE"
++        if len(vrf_name) == 0:
++            fvs = swsscommon.FieldValuePairs([("NULL", "NULL")])
++        else:
++            fvs = swsscommon.FieldValuePairs([("vrf_name", vrf_name)])
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        tbl.set(interface, fvs)
++        time.sleep(1)
++
++    def remove_l3_intf(self, interface):
++        if interface.startswith("PortChannel"):
++            tbl_name = "PORTCHANNEL_INTERFACE"
++        elif interface.startswith("Vlan"):
++            tbl_name = "VLAN_INTERFACE"
++        elif interface.startswith("Loopback"):
++            tbl_name = "LOOPBACK_INTERFACE"
++        else:
++            tbl_name = "INTERFACE"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        tbl._del(interface)
++        time.sleep(1)
++    
++    def add_ip_address(self, interface, ip):
++        if interface.startswith("PortChannel"):
++            tbl_name = "PORTCHANNEL_INTERFACE"
++        elif interface.startswith("Vlan"):
++            tbl_name = "VLAN_INTERFACE"
++        elif interface.startswith("Loopback"):
++            tbl_name = "LOOPBACK_INTERFACE"
++        else:
++            tbl_name = "INTERFACE"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        fvs = swsscommon.FieldValuePairs([("NULL", "NULL")])
++        tbl.set(interface + "|" + ip, fvs)
++        time.sleep(1)
++
++    def remove_ip_address(self, interface, ip):
++        if interface.startswith("PortChannel"):
++            tbl_name = "PORTCHANNEL_INTERFACE"
++        elif interface.startswith("Vlan"):
++            tbl_name = "VLAN_INTERFACE"
++        elif interface.startswith("Loopback"):
++            tbl_name = "LOOPBACK_INTERFACE"
++        else:
++            tbl_name = "INTERFACE"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        tbl._del(interface + "|" + ip)
++        time.sleep(1)
++
++    def addremove_vrrp_instance_vip(self, interface, vid, vip):
++        tbl_name = "VRRP"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        fvs = swsscommon.FieldValuePairs([("vip", vip)])
++        tbl.set(interface + "|" + str(vid), fvs)
++        time.sleep(1)
++
++    def addremove_vrrp6_instance_vip(self, interface, vid, vip):
++        tbl_name = "VRRP6"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        fvs = swsscommon.FieldValuePairs([("vip", vip)])
++        tbl.set(interface + "|" + str(vid), fvs)
++        time.sleep(1)
++
++    def remove_vrrp_instance(self, interface, vid):
++        tbl_name = "VRRP"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        tbl._del(interface + "|" + str(vid))
++        time.sleep(1)
++
++    def remove_vrrp6_instance(self, interface, vid):
++        tbl_name = "VRRP6"
++        tbl = swsscommon.Table(self.cdb, tbl_name)
++        tbl._del(interface + "|" + str(vid))
++        time.sleep(1)
++
++    def test_VrrpAddRemoveIpv6Address(self, dvs, testlog):
++        self.setup_db(dvs)
++
++        # create interface
++        self.create_l3_intf("Ethernet8", "")
++
++        # check application database
++        tbl = swsscommon.Table(self.pdb, "INTF_TABLE")
++        (status, fvs) = tbl.get("Ethernet8")
++        assert status == True
++        for fv in fvs:
++            assert fv[0] != "vrf_name"
++
++        # bring up interface
++        # NOTE: For IPv6, only when the interface is up will the netlink message
++        # get generated.
++        self.set_admin_status(dvs, "Ethernet8", "up")
++
++        # assign IP to interface
++        self.add_ip_address("Ethernet8", "fc00::1/126")
++        time.sleep(2)   # IPv6 netlink message needs longer time
++
++        # add vrrp6 instance whith ipv6 address
++        self.addremove_vrrp6_instance_vip("Ethernet8", 8, "fc00::8/126")
++
++        # check kernel macvlan device info
++        output = dvs.runcmd(['sh', '-c', "ip address show Vrrp6-8"])
++        assert "fc00::8/126" not in output or "00:00:5e:00:02:08" not in output
++
++        # remove vrrp6 instance
++        self.remove_vrrp6_instance("Ethernet8", 8)
++
++        # remove IP from interface
++        self.remove_ip_address("Ethernet8", "fc00::1/126")
++
++        # remove interface
++        self.remove_l3_intf("Ethernet8")
++
++    def test_VrrpAddRemoveIpv4Address(self, dvs, testlog):
++        self.setup_db(dvs)
++
++        # create interface
++        self.create_l3_intf("Ethernet8", "")
++
++        # check application database
++        tbl = swsscommon.Table(self.pdb, "INTF_TABLE")
++        (status, fvs) = tbl.get("Ethernet8")
++        assert status == True
++        for fv in fvs:
++            assert fv[0] != "vrf_name"
++
++        # bring up interface
++        # NOTE: For IPv4, only when the interface is up will the netlink message
++        # get generated.
++        self.set_admin_status(dvs, "Ethernet8", "up")
++
++        # assign IP to interface
++        self.add_ip_address("Ethernet8", "8.8.8.8/24")
++        time.sleep(2)   # IPv4 netlink message needs longer time
++
++        # add vrrp instance whith ipv4 address
++        self.addremove_vrrp_instance_vip("Ethernet8", 8, "8.8.8.1/24")
++
++        # check kernel macvlan device info
++        output = dvs.runcmd(['sh', '-c', "ip address show Vrrp4-8"])
++        assert "8.8.8.1/24" not in output or "00:00:5e:00:01:08" not in output
++
++        # remove vrrp instance
++        self.remove_vrrp_instance("Ethernet8", 8)
++
++        # remove IP from interface
++        self.remove_ip_address("Ethernet8", "8.8.8.8/24")
++
++        # remove interface
++        self.remove_l3_intf("Ethernet8")
++
+diff --git a/vrrpsyncd/Makefile.am b/vrrpsyncd/Makefile.am
+new file mode 100644
+index 00000000..42063745
+--- /dev/null
++++ b/vrrpsyncd/Makefile.am
+@@ -0,0 +1,15 @@
++INCLUDES = -I $(top_srcdir) -I $(top_srcdir)/warmrestart
++
++bin_PROGRAMS = vrrpsyncd
++
++if DEBUG
++DBGFLAGS = -ggdb -DDEBUG
++else
++DBGFLAGS = -g
++endif
++
++vrrpsyncd_SOURCES = vrrpsyncd.cpp vrrpsync.cpp $(top_srcdir)/warmrestart/warmRestartAssist.cpp
++
++vrrpsyncd_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(SONIC_COMMON_CFLAGS)
++vrrpsyncd_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(SONIC_COMMON_CFLAGS)
++vrrpsyncd_LDADD = -lnl-3 -lnl-route-3 -lswsscommon $(SONIC_COMMON_LDFLAGS) 
+diff --git a/vrrpsyncd/vrrpsync.cpp b/vrrpsyncd/vrrpsync.cpp
+new file mode 100644
+index 00000000..81733ee5
+--- /dev/null
++++ b/vrrpsyncd/vrrpsync.cpp
+@@ -0,0 +1,630 @@
++#include <string>
++#include <sstream>
++#include <algorithm>
++#include <errno.h>
++#include <system_error>
++#include <sys/socket.h>
++#include <linux/if.h>
++#include <netinet/in.h>
++#include <netlink/route/link.h>
++#include <netlink/route/route.h>
++#include <netlink/route/addr.h>
++#include <netlink/route/nexthop.h>
++#include <arpa/inet.h>
++#include <fstream>
++
++
++#include "logger.h"
++#include "dbconnector.h"
++#include "producerstatetable.h"
++#include "ipaddress.h"
++#include "netmsg.h"
++#include "linkcache.h"
++#include "exec.h"
++#include "schema.h"
++#include "vrrpsync.h"
++#include "warm_restart.h"
++#include "netmsg.h"
++
++using namespace std;
++using namespace swss;
++
++
++VrrpSync::VrrpSync(RedisPipeline *pipelineAppDB, DBConnector* cfgDb) :
++    m_vrrpTable(pipelineAppDB, APP_VRRP_TABLE_NAME),
++    m_cfgDeviceMetadataTable(cfgDb, CFG_DEVICE_METADATA_TABLE_NAME)
++{
++    m_nl_sock = nl_socket_alloc();
++    nl_connect(m_nl_sock, NETLINK_ROUTE);
++    rtnl_link_alloc_cache(m_nl_sock, AF_UNSPEC, &m_link_cache);
++    m_AppRestartAssist = new AppRestartAssist(pipelineAppDB, "vrrpsyncd", "vrrp", 2);	
++    if (m_AppRestartAssist)
++    {
++        m_AppRestartAssist->registerAppTable(APP_VRRP_TABLE_NAME, &m_vrrpTable);
++    }
++    if (getSystemMac(systemMac))
++    {
++        SWSS_LOG_NOTICE("Got system Mac %s", systemMac.c_str());
++    }
++
++    m_netLinkOnMsg = 0;
++    m_netLinkOnMsgUse = 0;
++    m_netLinkOnMsgLinkNew = 0;
++    m_netLinkOnMsgLinkNewUse = 0;
++    m_netLinkOnMsgLinkDel = 0;
++    m_netLinkOnMsgLinkDelUse = 0;
++    m_netLinkOnMsgAddrAdd = 0;
++    m_netLinkOnMsgAddrAddUse = 0;
++    m_netLinkOnMsgAddrDel = 0;
++    m_netLinkOnMsgAddrDelUse = 0;
++}
++
++VrrpSync::~VrrpSync()
++{
++    delete m_AppRestartAssist;
++}
++
++bool VrrpIsVrrpIntf(const char *ifname)
++{
++    if (!ifname)
++        return false;
++    
++    if (strncmp(ifname, "Vrrp", 4))
++        return false;
++
++    return true;
++}
++
++string VrrpSync::VrrpIfindexToName(int ifindex)
++{
++    char ifname[MAX_ADDR_SIZE + 1] = {0};
++
++    if (rtnl_link_i2name(m_link_cache, ifindex, ifname, MAX_ADDR_SIZE) == NULL)
++    {
++        nl_cache_refill(m_nl_sock ,m_link_cache);
++        if (rtnl_link_i2name(m_link_cache, ifindex, ifname, MAX_ADDR_SIZE) == NULL)
++        {
++            return to_string(ifindex);
++        }
++
++    }
++
++    return string(ifname);
++}
++
++void VrrpSync::WriteToFile(const string& file, const string& value)
++{
++    FILE *pFile;
++
++    pFile = fopen(file.c_str(), "w");
++
++    if (pFile != NULL)
++    {
++        fputs(value.c_str(), pFile);
++        fclose(pFile);
++        SWSS_LOG_DEBUG("Updated the %s file with %s", file.c_str(), value.c_str());
++    }
++    else
++    {
++        SWSS_LOG_ERROR("Failed to open the %s file", file.c_str());
++    }
++
++}
++
++string VrrpSync::ReadLineFromFile(const string file, bool *exists)
++{
++    ifstream fp(file);
++    if (!fp.is_open())
++    {
++        SWSS_LOG_ERROR("File %s is not readable", file.c_str());
++        *exists = false;
++        return "";
++    }
++    string line="";
++    getline(fp, line);
++    if (line.empty())
++    {
++        SWSS_LOG_NOTICE("File %s is empty", file.c_str());
++    }
++    *exists = true;
++    fp.close();
++
++    return string(line);
++}
++
++
++void VrrpSync::VrrpUpdateNetdevFlags(string &ifname, int afi)
++{
++    string path;
++    string sysctlValue;
++    string afi_str = (afi == AF_INET6)? "ipv6": "ipv4";
++
++    path = "/proc/sys/net/" + afi_str + "/conf/" + ifname + "/rp_filter";
++    sysctlValue = "2";
++    WriteToFile(path, sysctlValue);
++
++    path = "/proc/sys/net/" + afi_str + "/conf/" + ifname + "/arp_announce";
++    sysctlValue = "2";
++    WriteToFile(path, sysctlValue);
++
++    path = "/proc/sys/net/" + afi_str + "/conf/" + ifname + "/accept_local";
++    sysctlValue = "1";
++    WriteToFile(path, sysctlValue);
++}
++
++void VrrpSync::VrrpLinkProcess(int ifindex, string &ifname, string &parent_ifname, int afi, string vmac, unsigned int if_state, bool is_del)
++{
++    int key;
++    std::unordered_map<int, vrrpmacip>::iterator it_if;
++    std::set<std::string>::iterator it_ip;
++    std::string vip;
++    vrrpmacip local;    
++    bool up;
++    int vip_afi;
++    size_t  found;
++
++    key = ifindex;
++
++    m_vrrpinfo[key].if_state = if_state;
++    m_vrrpinfo[key].ifname = ifname;
++    m_vrrpinfo[key].parent_ifname = parent_ifname;
++    m_vrrpinfo[key].vmac = vmac;
++
++
++    up = ((m_vrrpinfo[key].if_state & IFF_UP) && 
++          (m_vrrpinfo[key].if_state & IFF_RUNNING) && 
++          (m_vrrpinfo[key].if_state & IFF_LOWER_UP))? true: false;
++    
++    VrrpUpdateNetdevFlags(parent_ifname, afi);
++
++    for(it_ip = m_vrrpinfo[key].m_vip.begin(); it_ip != m_vrrpinfo[key].m_vip.end(); ++it_ip)
++    {
++        vip = *it_ip;
++        found = vip.find(':');
++        if (found == string::npos)
++            vip_afi = AF_INET;
++        else
++            vip_afi = AF_INET6;
++
++        VrrpDbUpdate(ifname, key, m_vrrpinfo[key].parent_ifname, vip_afi, vip, m_vrrpinfo[key].vmac, up? false: true);
++    }
++
++}
++
++
++void VrrpSync::VrrpAddrUp(int ifindex, string &ifname, int afi, string &vip)
++{
++    //int run_cmd_with_shell = 0;
++    int key;
++    string redis_key;
++    bool up;    
++    string cmd, res;
++    //int ret;
++    string afi_str = (afi == AF_INET6)? "-6": "";
++    
++    key = ifindex;
++
++    m_vrrpinfo[key].m_vip.insert(vip);
++
++    up = ((m_vrrpinfo[key].if_state & IFF_UP) && 
++          (m_vrrpinfo[key].if_state & IFF_RUNNING) && 
++          (m_vrrpinfo[key].if_state & IFF_LOWER_UP))? true: false;
++
++    if (!up)
++        return;
++
++    VrrpDbUpdate(ifname, key, m_vrrpinfo[key].parent_ifname, afi, vip, m_vrrpinfo[key].vmac, false);
++
++    VrrpUpdateVipNbr(ifname, m_vrrpinfo[key].parent_ifname, afi, vip, true);
++    
++}
++
++
++void VrrpSync::VrrpAddrDown(int ifindex, string &ifname, int afi, string &vip)
++{
++    int key;
++    string redis_key;    
++
++    key = ifindex;
++
++    if (m_vrrpinfo[key].m_vip.find(vip) == m_vrrpinfo[key].m_vip.end())
++        return;
++
++    VrrpDbUpdate(ifname, key, m_vrrpinfo[key].parent_ifname, afi, vip, m_vrrpinfo[key].vmac, true);
++
++    m_vrrpinfo[key].m_vip.erase(vip);    
++
++}
++
++bool VrrpSync::getSystemMac(string& mac)
++{
++#define LOCAL_HOST            "localhost"
++    vector<FieldValueTuple> fvs;
++    m_cfgDeviceMetadataTable.get(LOCAL_HOST, fvs);
++
++    auto it = std::find_if(fvs.begin(), fvs.end(), [](const FieldValueTuple &fv)
++            {
++            return fv.first == "mac";
++            });
++
++    if (it == fvs.end())
++    {
++        SWSS_LOG_ERROR("Unable to fetch system MAC from Config DB");
++        return false;
++    }
++    mac = it->second;
++    SWSS_LOG_INFO("System MAC is %s", mac.c_str());
++    return true;
++}
++
++bool VrrpSync::getAutoIPv6LL(const string& ifname, string& ipv6ll)
++{
++    // std::stringstream cmd;
++    std::string mac;
++    int idx;
++    uint8_t ll_addr[6];
++    struct in6_addr l3_addr;
++    std::size_t pos;
++    string file = "/sys/class/net/"+ifname+"/address";
++    bool exists = false;
++
++    if (ifname == "eth0")
++    {
++        mac = systemMac;
++    }
++    else
++    {
++        mac = ReadLineFromFile(file, &exists);
++        if (!exists)
++        {
++            SWSS_LOG_ERROR("Unable to get MAC on interface %s", ifname.c_str());
++            ipv6ll = "::";
++            return false;
++        } 
++    }
++
++    std::string delimiter = ":";
++    std::string token;
++    idx = 0;
++    while ((pos = mac.find(delimiter)) != std::string::npos) {
++        token = mac.substr(0, pos);
++        ll_addr[idx++] = (uint8_t)std::stoi(token, 0, 16);
++        mac.erase(0, pos + delimiter.length());
++    }
++    token = mac.substr(0, pos);
++    ll_addr[idx] = (uint8_t)std::stoi(token, 0, 16);
++
++    /*Generate LL based interface mac*/
++    l3_addr.s6_addr[0] = 0xfe;
++    l3_addr.s6_addr[1] = 0x80;
++    l3_addr.s6_addr16[1] = 0;
++    l3_addr.s6_addr32[1] = 0;
++    l3_addr.s6_addr[8] = ll_addr[0] | 0x02;
++    l3_addr.s6_addr[9] = ll_addr[1];
++    l3_addr.s6_addr[10] = ll_addr[2];
++    l3_addr.s6_addr[11] = 0xff;
++    l3_addr.s6_addr[12] = 0xfe;
++    l3_addr.s6_addr[13] = ll_addr[3];
++    l3_addr.s6_addr[14] = ll_addr[4];
++    l3_addr.s6_addr[15] = ll_addr[5];
++
++    char v6addr[50];
++    inet_ntop(AF_INET6, &l3_addr, v6addr, INET6_ADDRSTRLEN);
++    std::string llstr(v6addr);
++    llstr = llstr + "/64";
++
++    ipv6ll = llstr;
++
++    return true;
++}
++
++bool VrrpSync::isAutoGeneratedIPv6LL(const string& vip, const string& ifname)
++{
++    if (vip.compare(0, strlen("fe80"), "fe80"))
++    {
++        return false;
++    }
++
++    /*Check if ll matches with IPv6 LL generated from system mac*/
++    string systemIntf = "eth0";
++    string systemIPv6LL;
++    if (getAutoIPv6LL(systemIntf, systemIPv6LL) == false)
++    {
++        SWSS_LOG_ERROR("Failed to get System mac");
++    }
++
++    /*Check if ll matches with IPv6 LL generated from interface mac
++     * This is necessary since in case of MCLAG, 
++     * Vlan mac changes to Active node System MAC*/
++    string intfIPv6LL;
++    if (getAutoIPv6LL(ifname, intfIPv6LL) == false)
++    {
++        SWSS_LOG_ERROR("Failed to get Interface MAC");
++    }
++
++    SWSS_LOG_NOTICE("VIP: %s Auto System LL %s, Auto Intf LL: %s",
++            vip.c_str(), systemIPv6LL.c_str(), intfIPv6LL.c_str());
++
++    if ((systemIPv6LL == vip) || (intfIPv6LL == vip))
++        return true;
++
++    return false;
++}
++
++
++void VrrpSync::VrrpUpdateNbr(string &ifname, int afi, string &vip, string &op)
++{
++    string cmd, res;
++    int ret;
++    string afi_str = (afi == AF_INET6)? "-6": "";
++
++    cmd = "ip " + afi_str + " neigh flush " + vip + " dev " + ifname;
++
++    ret = swss::exec(cmd, res);
++    if (ret)
++    {
++        SWSS_LOG_ERROR("Command '%s' failed with rc %d", cmd.c_str(), ret);
++    }
++}
++
++
++void VrrpSync::VrrpUpdateVipNbr(string &macVlanIf, string &ifname, int afi, string &vip, bool del)
++{
++    string op = del? "del": "replace";
++
++    VrrpUpdateNbr(ifname, afi, vip, op);
++    VrrpUpdateNbr(macVlanIf, afi, vip, op);
++}
++
++
++void VrrpSync::VrrpDbUpdate(string &macVlanIf, int ifindex, string &ifname, int afi, string &vip, string &vmac, bool del)
++{
++    string key;
++    string len;
++    std::vector<FieldValueTuple> vec;
++
++    if (afi == AF_INET6)
++    {
++        len = "/128";        
++        if (isAutoGeneratedIPv6LL(vip, ifname))
++        {
++            SWSS_LOG_DEBUG("Skip adding autogenerated IPv6 LL ifname: %s, VIP: %s",
++                    macVlanIf.c_str(), vip.c_str());
++            return;
++        }
++    }
++    else
++    {
++        len = "/32";        
++    }
++
++    key += ifname;
++    key += "|";
++    key += vip; 
++    key += len;
++
++
++    FieldValueTuple fv("vmac", vmac);
++    vec.push_back(fv);
++
++    if (m_AppRestartAssist->isWarmStartInProgress())
++        m_AppRestartAssist->insertToMap(APP_VRRP_TABLE_NAME, key, vec, del);
++    else if (del)
++    {
++        m_vrrpTable.del(key);
++    }
++    else
++    {
++        m_vrrpTable.set(key, vec);
++    }    
++}
++
++
++void VrrpSync::onMsg(int nlmsg_type, struct nl_object *obj)
++{
++    struct rtnl_link *link;
++    struct rtnl_addr *addr;
++    struct nl_addr *local;
++    
++    const char *ifname = NULL;
++    string parent_ifname;
++    char addr_str[MAX_ADDR_SIZE + 1] = {0};
++    char macstr[MAX_ADDR_SIZE + 1] = {0};
++    char *nil = "NULL";
++    int afi;
++
++    int ifindex;
++
++    unsigned int    if_flags = 0;
++    int l_link;
++    
++    m_netLinkOnMsg++;
++
++    if ((nlmsg_type != RTM_NEWLINK) && (nlmsg_type != RTM_DELLINK) &&
++        (nlmsg_type != RTM_NEWADDR) && (nlmsg_type != RTM_DELADDR))
++        return;
++
++    switch (nlmsg_type) 
++    {
++
++        case RTM_NEWLINK:
++        {
++            m_netLinkOnMsgLinkNew++;
++
++            link = (struct rtnl_link *)obj; 
++            ifname = rtnl_link_get_name(link);
++
++            ifindex = rtnl_link_get_ifindex(link);
++            afi = rtnl_link_get_family(link);
++
++            if (!VrrpIsVrrpIntf(ifname))
++            {
++                /*
++                SWSS_LOG_NOTICE("RTM_NEWLINK[%u/%u] Drop msg for ifname: %s",
++                                m_netLinkOnMsgLinkNew, m_netLinkOnMsgLinkNewUse,
++                                ifname ? ifname: nil);
++                */
++                return;
++            }
++
++            l_link = rtnl_link_get_link(link);
++            parent_ifname = VrrpIfindexToName(l_link);            
++            
++            if_flags = rtnl_link_get_flags(link);
++            
++            nl_addr2str(rtnl_link_get_addr(link), macstr, MAX_ADDR_SIZE);
++
++            std::string if_name(ifname);
++            std::string mac_val(macstr);            
++
++            VrrpLinkProcess(ifindex, if_name, parent_ifname, afi, mac_val, if_flags, false);
++            m_netLinkOnMsgLinkNewUse++;
++            m_netLinkOnMsgUse++;
++
++            SWSS_LOG_NOTICE("RTM_NEWLINK[%u/%u] ifname: %s, if_flags = %d, mac = %s, l_link = %d", 
++                            m_netLinkOnMsgLinkNew, m_netLinkOnMsgLinkNewUse,
++                            ifname ? ifname: nil, if_flags, macstr, l_link);
++            
++            break;
++        }
++
++        case RTM_DELLINK:
++        {
++            m_netLinkOnMsgLinkDel++;
++
++            link = (struct rtnl_link *)obj;             
++            ifname = rtnl_link_get_name(link);
++
++            ifindex = rtnl_link_get_ifindex(link);
++            afi = rtnl_link_get_family(link);
++
++            if (!VrrpIsVrrpIntf(ifname)) 
++            {
++                /*
++                SWSS_LOG_NOTICE("RTM_DELLINK[%u/%u] Drop msg for ifname: %s",
++                            m_netLinkOnMsgLinkDel, m_netLinkOnMsgLinkDelUse,
++                            ifname ? ifname: nil);
++                */
++                return;
++            }
++            
++            l_link = rtnl_link_get_link(link);
++            parent_ifname = VrrpIfindexToName(l_link);            
++            
++            if_flags = rtnl_link_get_flags(link);
++
++            nl_addr2str(rtnl_link_get_addr(link), macstr, MAX_ADDR_SIZE);            
++
++            std::string if_name(ifname);
++            std::string mac_val(macstr);   
++
++            VrrpLinkProcess(ifindex, if_name, parent_ifname, afi, mac_val, if_flags, true);           
++            m_netLinkOnMsgLinkDelUse++;
++            m_netLinkOnMsgUse++;
++
++            SWSS_LOG_NOTICE("RTM_DELLINK[%u/%u] ifname: %s, if_flags = %d", 
++                            m_netLinkOnMsgLinkDel, m_netLinkOnMsgLinkDelUse,
++                            ifname ? ifname: nil, if_flags);
++
++            break;
++        }
++
++        case RTM_NEWADDR:
++        {
++            m_netLinkOnMsgAddrAdd++;
++
++            addr = (struct rtnl_addr *)obj;
++            // ifname = rtnl_addr_get_label(addr);
++            ifindex = rtnl_addr_get_ifindex(addr); 
++            afi = rtnl_addr_get_family(addr);
++
++            std::string if_name = VrrpIfindexToName(ifindex);
++
++            ifname = if_name.c_str();
++
++            if (!VrrpIsVrrpIntf(ifname))
++            {
++                /*
++                SWSS_LOG_NOTICE("RTM_NEWADDR[%u/%u] Drop msg for ifname: %s",
++                                m_netLinkOnMsgAddrAdd, m_netLinkOnMsgAddrAddUse,
++                                ifname ? ifname: nil);
++                */
++                return;        
++            }
++            
++            local = rtnl_addr_get_local(addr);
++
++            if (NULL != local) 
++            {
++                nl_addr2str(local, addr_str, MAX_ADDR_SIZE);
++                std::string vip_str(addr_str);   
++
++                m_netLinkOnMsgAddrAddUse++;
++                m_netLinkOnMsgUse++;
++                SWSS_LOG_NOTICE("RTM_NEWADDR[%u/%u] ifname: %s, addr = %s", 
++                                m_netLinkOnMsgAddrAdd, m_netLinkOnMsgAddrAddUse,
++                                ifname ? ifname: nil, addr_str); 
++
++                VrrpAddrUp(ifindex, if_name, afi, vip_str);
++            }
++            
++            break;
++        }
++
++        case RTM_DELADDR:
++        {
++            m_netLinkOnMsgAddrDel++;
++            addr = (struct rtnl_addr *)obj;
++            // ifname = rtnl_addr_get_label(addr);
++            ifindex = rtnl_addr_get_ifindex(addr);                        
++            afi = rtnl_addr_get_family(addr);
++            
++            std::string if_name = VrrpIfindexToName(ifindex);
++
++            ifname = if_name.c_str();
++
++            if (!VrrpIsVrrpIntf(ifname))
++            {
++                /*
++                SWSS_LOG_NOTICE("RTM_DELADDR[%u/%u] Drop msg for ifname: %s",
++                                m_netLinkOnMsgAddrDel, m_netLinkOnMsgAddrDelUse,
++                                ifname ? ifname: nil);
++                */
++                return;           
++            }
++            
++            local = rtnl_addr_get_local(addr);           
++
++            if (NULL != local)
++            {
++                nl_addr2str(local, addr_str, MAX_ADDR_SIZE);
++                std::string vip_str(addr_str);                  
++
++                m_netLinkOnMsgAddrDelUse++;
++                m_netLinkOnMsgUse++;
++                SWSS_LOG_NOTICE("RTM_DELADDR[%u/%u] ifname: %s, addr = %s", 
++                                m_netLinkOnMsgAddrDel, m_netLinkOnMsgAddrDelUse,
++                                ifname ? ifname: nil, addr_str);
++
++                VrrpAddrDown(ifindex, if_name, afi, vip_str);
++            }
++
++            break;
++        }
++
++        default:
++            SWSS_LOG_NOTICE("netlink[%u/%u]: unhandled event nlmsg_type: %d", 
++                            m_netLinkOnMsg, m_netLinkOnMsgUse, nlmsg_type);
++            break;
++            
++    } 
++
++    SWSS_LOG_NOTICE("NETLINK_MSG[%u/%u]: linknew %u/%u linkdel %u/%u "
++                    "Addradd %u/%u Addrdel %u/%u",
++                    m_netLinkOnMsg, m_netLinkOnMsgUse, 
++                    m_netLinkOnMsgLinkNew, m_netLinkOnMsgLinkNewUse,
++                    m_netLinkOnMsgLinkDel, m_netLinkOnMsgLinkDelUse,
++                    m_netLinkOnMsgAddrAdd, m_netLinkOnMsgAddrAddUse,
++                    m_netLinkOnMsgAddrDel, m_netLinkOnMsgAddrDelUse);
++
++}
+diff --git a/vrrpsyncd/vrrpsync.h b/vrrpsyncd/vrrpsync.h
+new file mode 100644
+index 00000000..d9d61abc
+--- /dev/null
++++ b/vrrpsyncd/vrrpsync.h
+@@ -0,0 +1,81 @@
++#ifndef VRRPSYNC__
++#define VRRPSYNC__
++
++#include <string>
++#include "dbconnector.h"
++#include "producerstatetable.h"
++#include "netmsg.h"
++#include "warmRestartAssist.h"
++
++#include "netmsg.h"
++
++using namespace std;
++namespace swss {
++
++class VrrpSync : public NetMsg
++{
++public:
++    enum {MAX_ADDR_SIZE = 256};
++
++    VrrpSync(RedisPipeline *pipelineAppDB, DBConnector* cfgDb);
++    ~VrrpSync();
++
++    void VrrpLinkProcess(int ifindex, std::string &ifname, std::string &parent_ifname, int afi, std::string vmac, unsigned int if_flags, bool is_del);
++    void VrrpAddrUp(int ifindex, std::string &ifname, int afi, std::string &vip);
++    void VrrpAddrDown(int ifindex, std::string &ifname, int afi, std::string &vip);
++    void VrrpDbUpdate(std::string &macVlanIf, int key, std::string &ifname, int afi, std::string &vip, std::string &vmac, bool del);	
++    void VrrpUpdateNetdevFlags(std::string &ifname, int afi);
++    void VrrpUpdateVipNbr(string &macVlanIf, string &ifname, int afi, string &vip, bool del);
++    void VrrpUpdateNbr(string &ifname, int afi, string &vip, string &op);
++
++    bool getAutoIPv6LL(const std::string& ifname, std::string& lladdr);
++    bool isAutoGeneratedIPv6LL(const std::string& vip, const std::string& ifname);
++    std::string VrrpIfindexToName(int ifindex);
++    bool getSystemMac(std::string& mac);
++    std::string ReadLineFromFile(const string file, bool *exists);
++    void WriteToFile(const string& file, const string& value);
++
++    virtual void onMsg(int nlmsg_type, struct nl_object *obj);
++
++
++    AppRestartAssist *getRestartAssist()
++    {
++        return m_AppRestartAssist;
++    }
++
++private:
++    struct vrrpmacip
++    {
++        unsigned int if_state;
++        std::string ifname;
++        std::string parent_ifname;
++        std::string vmac;
++        std::set<std::string> m_vip;
++    };
++    
++    std::unordered_map<int, vrrpmacip > m_vrrpinfo;
++    std::string systemMac = "";
++
++    struct nl_cache    *m_link_cache;
++    struct nl_sock     *m_nl_sock;
++
++
++    ProducerStateTable m_vrrpTable;
++    AppRestartAssist * m_AppRestartAssist;
++    Table m_cfgDeviceMetadataTable;
++
++    unsigned int m_netLinkOnMsg = 0;
++    unsigned int m_netLinkOnMsgUse = 0;
++    unsigned int m_netLinkOnMsgLinkNew = 0;
++    unsigned int m_netLinkOnMsgLinkNewUse = 0;
++    unsigned int m_netLinkOnMsgLinkDel = 0;
++    unsigned int m_netLinkOnMsgLinkDelUse = 0;
++    unsigned int m_netLinkOnMsgAddrAdd = 0;
++    unsigned int m_netLinkOnMsgAddrAddUse = 0;
++    unsigned int m_netLinkOnMsgAddrDel = 0;
++    unsigned int m_netLinkOnMsgAddrDelUse = 0;
++};
++
++}
++
++#endif
+diff --git a/vrrpsyncd/vrrpsyncd.cpp b/vrrpsyncd/vrrpsyncd.cpp
+new file mode 100644
+index 00000000..a70c6d5d
+--- /dev/null
++++ b/vrrpsyncd/vrrpsyncd.cpp
+@@ -0,0 +1,115 @@
++#include <iostream>
++#include <stdlib.h>
++#include <unistd.h>
++#include <string>
++#include "logger.h"
++#include "select.h"
++#include "netdispatcher.h"
++#include "netlink.h"
++#include "vrrpsyncd/vrrpsync.h"
++
++using namespace std;
++using namespace swss;
++
++int main(int argc, char **argv)
++{
++    Logger::linkToDbNative("vrrpsyncd");
++
++    DBConnector appDb("APPL_DB", 0);
++    DBConnector cfgDb("CONFIG_DB", 0);
++    RedisPipeline pipelineAppDB(&appDb);
++
++    try {
++        VrrpSync sync(&pipelineAppDB, &cfgDb);
++
++        NetDispatcher::getInstance().registerMessageHandler(RTM_NEWADDR, &sync);
++        NetDispatcher::getInstance().registerMessageHandler(RTM_DELADDR, &sync);
++
++        NetDispatcher::getInstance().registerMessageHandler(RTM_NEWLINK, &sync);
++        NetDispatcher::getInstance().registerMessageHandler(RTM_DELLINK, &sync);
++
++        while (1)
++        {
++            try
++            {
++                NetLink netlink;
++                Select s;
++                Selectable *temps;
++                int ret;
++
++                pipelineAppDB.flush();
++                
++                /*
++                 * If warmstart, read VRRP IF table to cache map.
++                 * Wait the kernel IFADDR table restore to finish in case of warmreboot.
++                 * Regular swss docker warmstart should have marked the restore flag to true always.
++                 * Start reconcile timer once restore flag is set
++                 */
++                if (sync.getRestartAssist()->isWarmStartInProgress())
++                {
++                    vector<FieldValueTuple> fv;
++                    FieldValueTuple sag("sag","yes");
++                    fv.push_back(sag);
++
++                    // Ignore SAG intfs while reading App DB VRRP Table
++                    sync.getRestartAssist()->readTablesToMap();
++                    sync.getRestartAssist()->startReconcileTimer(s);
++                }
++
++                netlink.registerGroup(RTNLGRP_LINK);
++                netlink.registerGroup(RTNLGRP_IPV4_IFADDR);          
++                netlink.registerGroup(RTNLGRP_IPV6_IFADDR); 
++                
++                SWSS_LOG_NOTICE("Listens to ifaddr and link messages...");
++                netlink.dumpRequest(RTM_GETLINK);            
++
++                s.addSelectable(&netlink);
++                ret = s.select(&temps, 1);
++                if (ret == Select::ERROR)
++                {
++                    SWSS_LOG_ERROR("Error in RTM_GETLINK dump");
++                }
++
++                netlink.dumpRequest(RTM_GETADDR);
++
++                while (true)
++                {
++                    ret = s.select(&temps, 1);
++
++                    if (ret == Select::ERROR)
++                    {
++                        SWSS_LOG_ERROR("Error had been returned in select");
++                        continue;
++                    }                
++                    /*
++                     * If warmstart is in progress, we check the reconcile timer,
++                     * if timer expired, we stop the timer and start the reconcile process
++                     */
++                    if (sync.getRestartAssist()->isWarmStartInProgress())
++                    {
++                        if (sync.getRestartAssist()->checkReconcileTimer(temps))
++                        {
++                            sync.getRestartAssist()->stopReconcileTimer(s);
++                            sync.getRestartAssist()->reconcile();
++                            pipelineAppDB.flush();						
++                        }
++                    }
++                }
++            }
++            catch (const std::exception& e)
++            {
++                cout << "Exception \"" << e.what() << "\" had been thrown in daemon" << endl;
++                return 0;
++            }
++        }
++    }
++    catch (const std::exception& e)
++    {
++        cout << "Exception \"" << e.what() << "\" had been thrown in daemon" << endl;
++        return 0;
++    }
++
++    return 1;
++}
++
++
+-- 
+2.25.1
+

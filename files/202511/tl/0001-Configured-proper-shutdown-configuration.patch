@@ -1,0 +1,131 @@
+From 2585473068f879bbc5d6079a1c618c305f73f6aa Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Fri, 13 Mar 2026 14:30:35 +0530
+Subject: [PATCH] Configured proper shutdown configuration
+
+Configured warm-shutdown to execute after swss and before syncd
+Configured fast-shutdown to execute after swss and before syncd
+Kept startup dependencies empty as STP is an on-demand feature activated via CLI
+Adding STP to FEATURE table
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ Makefile.work                                   | 1 +
+ dockers/docker-stp/Dockerfile.j2                | 3 +++
+ files/build_templates/init_cfg.json.j2          | 1 +
+ files/build_templates/stp.service.j2            | 4 ++--
+ files/image_config/copp/copp_cfg.j2             | 4 ++++
+ files/image_config/ebtables/ebtables.filter.cfg | 1 -
+ rules/config                                    | 1 +
+ rules/docker-stp.mk                             | 6 ++++--
+ 8 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/Makefile.work b/Makefile.work
+index b42b3d772..3cee59ba6 100644
+--- a/Makefile.work
++++ b/Makefile.work
+@@ -555,6 +555,7 @@ SONIC_BUILD_INSTRUCTION :=  $(MAKE) \
+                            SONIC_INCLUDE_SYSTEM_GNMI=$(INCLUDE_SYSTEM_GNMI) \
+                            SONIC_INCLUDE_SYSTEM_BMP=$(INCLUDE_SYSTEM_BMP) \
+                            SONIC_INCLUDE_SYSTEM_EVENTD=$(INCLUDE_SYSTEM_EVENTD) \
++						   SONIC_INCLUDE_STP=$(INCLUDE_STP) \
+                            SONIC_INCLUDE_SYSTEM_OTEL=$(INCLUDE_SYSTEM_OTEL) \
+                            INCLUDE_DHCP_RELAY=$(INCLUDE_DHCP_RELAY) \
+                            INCLUDE_DHCP_SERVER=$(INCLUDE_DHCP_SERVER) \
+diff --git a/dockers/docker-stp/Dockerfile.j2 b/dockers/docker-stp/Dockerfile.j2
+index 048fcf55f..1c0320b9d 100644
+--- a/dockers/docker-stp/Dockerfile.j2
++++ b/dockers/docker-stp/Dockerfile.j2
+@@ -4,10 +4,13 @@ ARG BASE=docker-config-engine-bookworm-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
+ FROM $BASE AS base
+ 
+ ARG docker_container_name
++ARG image_version
+ RUN [ -f /etc/rsyslog.conf ] && sed -ri "s/%syslogtag%/$docker_container_name#%syslogtag%/;" /etc/rsyslog.conf
+ 
+ ## Make apt-get non-interactive
+ ENV DEBIAN_FRONTEND=noninteractive
++# Pass the image_version to container
++ENV IMAGE_VERSION=$image_version
+ 
+ RUN apt-get update      && \
+     apt-get install -f -y  \
+diff --git a/files/build_templates/init_cfg.json.j2 b/files/build_templates/init_cfg.json.j2
+index f292f6c2e..669185361 100644
+--- a/files/build_templates/init_cfg.json.j2
++++ b/files/build_templates/init_cfg.json.j2
+@@ -67,6 +67,7 @@
+                    ("swss", "enabled", false, "enabled"),
+                    ("syncd", "enabled", false, "enabled")] %}
+ {%- if include_system_bmp == "y" %}{% do features.append(("bmp", "disabled", false, "enabled")) %}{% endif %}
++{%- if include_stp == "y" %}{% do features.append(("stp", "disabled", false, "enabled")) %}{% endif %}
+ {%- if include_router_advertiser == "y" %}{% do features.append(("radv", "enabled", false, "enabled")) %}{% endif %}
+ {%- if include_lldp == "y" %}{% do features.append(("lldp", "enabled", true, "enabled")) %}{% endif %}
+ {%- if include_snmp == "y" %}{% do features.append(("snmp", "enabled", true, "enabled")) %}{% endif %}
+diff --git a/files/build_templates/stp.service.j2 b/files/build_templates/stp.service.j2
+index 3cd5ac23d..ea833bab1 100644
+--- a/files/build_templates/stp.service.j2
++++ b/files/build_templates/stp.service.j2
+@@ -1,7 +1,7 @@
+ [Unit]
+ Description=STP container
+-Requires=updategraph.service swss.service
+-After=updategraph.service swss.service syncd.service
++Requires=database.service swss.service
++After=database.service swss.service syncd.service
+ Before=ntp-config.service
+ BindsTo=sonic.target
+ After=sonic.target
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index b8acbc778..d8c4016e1 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -131,6 +131,10 @@
+ 		    "trap_ids": "lldp",
+ 		    "trap_group": "queue4_group3"
+ 	    },
++	    "stp": {
++		    "trap_ids": "stp,pvrst",
++		    "trap_group": "queue4_group1"
++	    },
+ 	    "dhcp_relay": {
+ 		    "trap_ids": "dhcp,dhcpv6",
+ 		    "trap_group": "queue4_group3"
+diff --git a/files/image_config/ebtables/ebtables.filter.cfg b/files/image_config/ebtables/ebtables.filter.cfg
+index fae04a378..917fa0e98 100644
+--- a/files/image_config/ebtables/ebtables.filter.cfg
++++ b/files/image_config/ebtables/ebtables.filter.cfg
+@@ -9,4 +9,3 @@
+ -A FORWARD -p ARP -j DROP
+ -A FORWARD -p 802_1Q --vlan-encap ARP -j DROP
+ -A FORWARD -d Multicast -j DROP
+-
+diff --git a/rules/config b/rules/config
+index 5bcec7c73..11de194ab 100644
+--- a/rules/config
++++ b/rules/config
+@@ -343,3 +343,4 @@ SONIC_PTF_ENV_PY_VER = py3
+ 
+ # Add timeout on some process which may hangs
+ BUILD_PROCESS_TIMEOUT ?= 0
++INCLUDE_STP ?= n
+diff --git a/rules/docker-stp.mk b/rules/docker-stp.mk
+index b16ac2fe3..46cfc7f64 100644
+--- a/rules/docker-stp.mk
++++ b/rules/docker-stp.mk
+@@ -16,8 +16,10 @@ $(DOCKER_STP)_LOAD_DOCKERS = $(DOCKER_CONFIG_ENGINE_BOOKWORM)
+ 
+ $(DOCKER_STP)_VERSION = 1.0.0
+ $(DOCKER_STP)_PACKAGE_NAME = stp
+-$(DOCKER_STP)_WARM_SHUTDOWN_BEFORE = swss
+-$(DOCKER_STP)_FAST_SHUTDOWN_BEFORE = swss
++$(DOCKER_STP)_WARM_SHUTDOWN_BEFORE = syncd
++$(DOCKER_STP)_WARM_SHUTDOWN_AFTER = swss
++$(DOCKER_STP)_FAST_SHUTDOWN_BEFORE = syncd
++$(DOCKER_STP)_FAST_SHUTDOWN_AFTER = swss
+ 
+ ifeq ($(INCLUDE_STP), y)
+ SONIC_DOCKER_IMAGES += $(DOCKER_STP)
+-- 
+2.25.1
+

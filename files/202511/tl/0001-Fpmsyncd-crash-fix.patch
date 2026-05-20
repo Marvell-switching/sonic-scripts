@@ -1,0 +1,100 @@
+From 300a86e247c8d6c81ac68225970f30055c41797a Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Thu, 12 Mar 2026 16:24:34 +0530
+Subject: [PATCH] Fpmsyncd crash fix
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fpmsyncd/routesync.h | 69 ++++++++++++++++++++++----------------------
+ 1 file changed, 35 insertions(+), 34 deletions(-)
+
+diff --git a/fpmsyncd/routesync.h b/fpmsyncd/routesync.h
+index 1d7559eb..ed418e33 100644
+--- a/fpmsyncd/routesync.h
++++ b/fpmsyncd/routesync.h
+@@ -199,6 +199,41 @@ class Srv6SidListTableFieldValueTupleWrapper : public FieldValueTupleWrapperBase
+ 
+ class RouteSync : public NetMsg
+ {
++private:
++    /* ZMQ client */
++    shared_ptr<ZmqClient> m_zmqClient;
++    /* regular route table */
++    shared_ptr<ProducerStateTable> m_routeTable;
++    /* label route table */
++    shared_ptr<ProducerStateTable> m_label_routeTable;
++    /* vnet route table */
++    ProducerStateTable  m_vnet_routeTable;
++    /* vnet vxlan tunnel table */
++    ProducerStateTable  m_vnet_tunnelTable;
++    /* EVPN Split Horizon Table */
++    ProducerStateTable  m_evpn_shlTable;
++    /* EVPN DF Table (Designated Forwarder) */
++    ProducerStateTable  m_evpn_dfTable;
++    /* EVPN ES Backup NextHopGroup Table */
++    ProducerStateTable  m_evpn_esBackupNhgTable;
++    /* srv6 mySid table */
++    ProducerStateTable m_srv6MySidTable;
++    /* srv6 sid list table */
++    ProducerStateTable m_srv6SidListTable;
++    struct nl_cache    *m_link_cache;
++    struct nl_sock     *m_nl_sock;
++    /* nexthop group table */
++    ProducerStateTable  m_nexthop_groupTable;
++    map<uint32_t,NextHopGroup> m_nh_groups;
++    /* SID list to refcount */
++    map<string, uint32_t> m_srv6_sidlist_refcnt;
++
++    bool                m_isSuppressionEnabled{false};
++    FpmInterface*       m_fpmInterface {nullptr};
++
++    /* Handle regular route (include VRF route) */
++    void onRouteMsg(int nlmsg_type, struct nl_object *obj, char *vrf);
++
+ public:
+     enum { MAX_ADDR_SIZE = 64 };
+ 
+@@ -258,40 +293,6 @@ public:
+     }
+ 
+ private:
+-    /* ZMQ client */
+-    shared_ptr<ZmqClient> m_zmqClient;
+-    /* regular route table */
+-    shared_ptr<ProducerStateTable> m_routeTable;
+-    /* label route table */
+-    shared_ptr<ProducerStateTable> m_label_routeTable;
+-    /* vnet route table */
+-    ProducerStateTable  m_vnet_routeTable;
+-    /* vnet vxlan tunnel table */  
+-    ProducerStateTable  m_vnet_tunnelTable;
+-    /* EVPN Split Horizon Table */
+-    ProducerStateTable  m_evpn_shlTable;
+-    /* EVPN DF Table (Designated Forwarder) */
+-    ProducerStateTable  m_evpn_dfTable;
+-    /* EVPN ES Backup NextHopGroup Table */
+-    ProducerStateTable  m_evpn_esBackupNhgTable;
+-    /* srv6 mySid table */
+-    ProducerStateTable m_srv6MySidTable; 
+-    /* srv6 sid list table */
+-    ProducerStateTable m_srv6SidListTable; 
+-    struct nl_cache    *m_link_cache;
+-    struct nl_sock     *m_nl_sock;
+-    /* nexthop group table */
+-    ProducerStateTable  m_nexthop_groupTable;
+-    map<uint32_t,NextHopGroup> m_nh_groups;
+-    /* SID list to refcount */
+-    map<string, uint32_t> m_srv6_sidlist_refcnt;
+-
+-    bool                m_isSuppressionEnabled{false};
+-    FpmInterface*       m_fpmInterface {nullptr};
+-
+-    /* Handle regular route (include VRF route) */
+-    void onRouteMsg(int nlmsg_type, struct nl_object *obj, char *vrf);
+-
+     /* Handle label route */
+     void onLabelRouteMsg(int nlmsg_type, struct nl_object *obj);
+ 
+-- 
+2.25.1
+

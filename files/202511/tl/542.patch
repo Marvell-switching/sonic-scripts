@@ -1,0 +1,149 @@
+From ced47a20cb91f572a48f5f509c81330781a7fc48 Mon Sep 17 00:00:00 2001
+From: aravindmani-1 <aravind_m1@dell.com>
+Date: Tue, 10 Mar 2026 14:46:51 +0530
+Subject: [PATCH 1/4] Disable SPD instantiation in I2C SMBUS driver
+
+Signed-off-by: aravindmani-1 <aravind_m1@dell.com>
+---
+ ...bus-Add-disable_spd-module-parameter.patch | 49 +++++++++++++++++++
+ patches-sonic/series                          |  1 +
+ 2 files changed, 50 insertions(+)
+ create mode 100644 patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+
+diff --git a/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch b/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+new file mode 100644
+index 000000000..398da68e5
+--- /dev/null
++++ b/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+@@ -0,0 +1,49 @@
++From f929033d2ce54b4cb5072f9d594efa24ab3d4ea9 Mon Mar 09 00:00:00 2026
++From: Aravind Mani <aravind.m1@dell.com>
++Date: Mon, 3 Mar 2026 00:00:00 +0000
++Subject: [PATCH] i2c: smbus: Add disable_spd module parameter to skip
++automatic SPD EEPROM instantiation
++
++In one of the Dell switch platforms(Z9864F), the system EEPROM resides at
++address 0x50 on the DDR SMBus. The automatic SPD scanning grabs this address
++with the ee1004 driver before the platform driver can claim it with the at24 driver 
++and it breaks system EEPROM access.
++
++Added a module parameter 'disable_spd' (default 0) in i2c-smbus driver.
++By default, it allows automatic SPD EEPROM instantiation.
++When disable_spd flag is set to 1,then the automatic SPD EEPROM instantiation will be disabled. 
++
++Usage:
++   modprobe i2c-smbus disable_spd=1
++   or: echo "options i2c-smbus disable_spd=1" > /etc/modprobe.d/i2c-smbus.conf
++
++Signed-off-by: Aravind Mani <aravind.m1@dell.com>
++---
++ drivers/i2c/i2c-smbus.c | 7 +++++++
++ 1 file changed, 7 insertions(+)
++
++--- a/drivers/i2c/i2c-smbus.c	2026-03-03 21:27:46.766199714 +0530
+++++ b/drivers/i2c/i2c-smbus.c	2026-03-03 21:28:00.099400219 +0530
++@@ -362,6 +362,10 @@
++  *  - Only works on systems with 1 to 8 memory slots
++  */
++ #if IS_ENABLED(CONFIG_DMI)
+++static bool disable_spd;
+++module_param(disable_spd, bool, 0644);
+++MODULE_PARM_DESC(disable_spd, "Disable automatic SPD EEPROM instantiation (default: false)");
+++
++ void i2c_register_spd(struct i2c_adapter *adap)
++ {
++ 	int n, slot_count = 0, dimm_count = 0;
++@@ -370,6 +374,9 @@
++ 	u64 mem_size;
++ 	const char *name;
++ 
+++	if (disable_spd)
+++		return;
+++
++ 	while ((handle = dmi_memdev_handle(slot_count)) != 0xffff) {
++ 		slot_count++;
++ 
++-- 
++2.39.2
+diff --git a/patches-sonic/series b/patches-sonic/series
+index 068174c3d..87ae9a603 100644
+--- a/patches-sonic/series
++++ b/patches-sonic/series
+@@ -53,6 +53,7 @@ driver-net-tg3-change-dma-mask-for-57766.patch
+ # Tbridge-per-port-multicast-broadcast-flood-flags.patch
+ #
+ 
++driver-i2c-smbus-add-disable_spd-module-parameter.patch
+ 0001-efi-memattr-Ignore-table-if-the-size-is-clearly-bogus.patch
+ 
+ # Mellanox patches for 5.10
+
+From 39eeb234c4793f789033810a881133e96b937345 Mon Sep 17 00:00:00 2001
+From: aravindmani-1 <aravind_m1@dell.com>
+Date: Tue, 10 Mar 2026 14:53:59 +0530
+Subject: [PATCH 2/4] Update description: Signed-off-by: Aravind Mani
+ <aravind.m1@dell.com>
+
+Signed-off-by: aravindmani-1 <aravind_m1@dell.com>
+---
+ .../driver-i2c-smbus-Add-disable_spd-module-parameter.patch     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch b/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+index 398da68e5..a0830ebc7 100644
+--- a/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
++++ b/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+@@ -5,7 +5,7 @@ Subject: [PATCH] i2c: smbus: Add disable_spd module parameter to skip
+ automatic SPD EEPROM instantiation
+ 
+ In one of the Dell switch platforms(Z9864F), the system EEPROM resides at
+-address 0x50 on the DDR SMBus. The automatic SPD scanning grabs this address
++address 0x50 on the DDR SMBUS. The automatic SPD scanning grabs this address
+ with the ee1004 driver before the platform driver can claim it with the at24 driver 
+ and it breaks system EEPROM access.
+ 
+
+From 5fb52a2dfe7f39a56e187201c336ba1fd1e406dd Mon Sep 17 00:00:00 2001
+From: aravindmani-1 <aravind_m1@dell.com>
+Date: Tue, 10 Mar 2026 15:17:49 +0530
+Subject: [PATCH 3/4] Update patch. Signed-off-by: Aravind Mani
+ <aravind.m1@dell.com>
+
+Signed-off-by: aravindmani-1 <aravind_m1@dell.com>
+---
+ ...ch => driver-i2c-smbus-add-disable_spd-module-parameter.patch} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ rename patches-sonic/{driver-i2c-smbus-Add-disable_spd-module-parameter.patch => driver-i2c-smbus-add-disable_spd-module-parameter.patch} (100%)
+
+diff --git a/patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch b/patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch
+similarity index 100%
+rename from patches-sonic/driver-i2c-smbus-Add-disable_spd-module-parameter.patch
+rename to patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch
+
+From d3119433d202eb7c7d1facc4cd0ce9cee21d0f0a Mon Sep 17 00:00:00 2001
+From: aravindmani-1 <aravind_m1@dell.com>
+Date: Wed, 11 Mar 2026 21:46:28 +0530
+Subject: [PATCH 4/4] Address review comments
+
+Signed-off-by: aravindmani-1 <aravind_m1@dell.com>
+---
+ .../driver-i2c-smbus-add-disable_spd-module-parameter.patch  | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch b/patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch
+index a0830ebc7..af04ff828 100644
+--- a/patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch
++++ b/patches-sonic/driver-i2c-smbus-add-disable_spd-module-parameter.patch
+@@ -1,10 +1,9 @@
+ From f929033d2ce54b4cb5072f9d594efa24ab3d4ea9 Mon Mar 09 00:00:00 2026
+ From: Aravind Mani <aravind.m1@dell.com>
+ Date: Mon, 3 Mar 2026 00:00:00 +0000
+-Subject: [PATCH] i2c: smbus: Add disable_spd module parameter to skip
+-automatic SPD EEPROM instantiation
++Subject: [PATCH] i2c: smbus: Add disable_spd module parameter to skip automatic SPD EEPROM instantiation
+ 
+-In one of the Dell switch platforms(Z9864F), the system EEPROM resides at
++In some of the Dell switch platforms, the system EEPROM resides at
+ address 0x50 on the DDR SMBUS. The automatic SPD scanning grabs this address
+ with the ee1004 driver before the platform driver can claim it with the at24 driver 
+ and it breaks system EEPROM access.

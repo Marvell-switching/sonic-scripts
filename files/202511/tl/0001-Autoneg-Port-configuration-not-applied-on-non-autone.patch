@@ -1,0 +1,62 @@
+From 16c8ef2bee610973587139c8aae51e969b839840 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 29 Jan 2026 15:54:58 +0530
+Subject: [PATCH] [Autoneg] Port configuration not applied on
+ non-autonegotiation ports
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Issue:
+When auto‑negotiation is configured off on a non‑auto‑negotiation‑capable port,
+orchagent incorrectly blocks processing of subsequent port attributes.
+As a result, other configurations applied alongside auto‑negotiation—such as
+admin state or speed—are not programmed into the ASIC.
+This leads to the port remaining down even when it should be operational.
+
+Fix:
+
+Allow orchagent to continue applying remaining port configurations
+(e.g., admin state and speed) when auto‑negotiation is disabled on
+non‑auto‑negotiation‑capable ports. This ensures the ASIC is programmed
+correctly and the port can transition to the expected operational state.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ orchagent/portsorch.cpp | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 4f75810c..a473daa7 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -4542,10 +4542,22 @@ void PortsOrch::doPortTask(Consumer &consumer)
+                         }
+                         if (p.m_cap_an < 1)
+                         {
+-                            SWSS_LOG_ERROR("%s: autoneg is not supported (cap=%d)", p.m_alias.c_str(), p.m_cap_an);
+-                            // autoneg is not supported, don't retry
+-                            it = taskMap.erase(it);
+-                            continue;
++                            if (pCfg.autoneg.value == true)
++                            {
++                                SWSS_LOG_ERROR("%s: autoneg is not supported (cap=%d)", p.m_alias.c_str(), p.m_cap_an);
++                                // autoneg is not supported, don't retry
++                                it = taskMap.erase(it);
++                                continue;
++                            }
++                            else
++                            {
++                                // Auto-negotiation config "off" is valid for ports that do not support AN.
++                                // In this case, we should continue retrying other port configurations
++                                // (e.g., admin state and speed). Set m_an_cfg to prevent AN programming
++                                // attempts in subsequent retries.
++                                m_portList[p.m_alias].m_an_cfg = true;
++                                continue;
++                            }
+                         }
+                         if (p.m_admin_state_up)
+                         {
+-- 
+2.25.1
+

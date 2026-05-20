@@ -1,0 +1,125 @@
+From 0d4e8ea21a7f30a64f85be0bff7f7055839e87bf Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Tue, 7 Apr 2026 16:40:16 +0530
+Subject: [PATCH] Change Advertise mac to NO
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ ...mac-when-arp-nd-suppression-is-not-s.patch | 95 +++++++++++++++++++
+ src/sonic-frr/patch/series                    |  1 +
+ 2 files changed, 96 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+
+diff --git a/src/sonic-frr/patch/0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch b/src/sonic-frr/patch/0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+new file mode 100644
+index 000000000..6c646b9e7
+--- /dev/null
++++ b/src/sonic-frr/patch/0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+@@ -0,0 +1,95 @@
++From c2c885aa79e37908bb388bda22c9d22e92a00b1e Mon Sep 17 00:00:00 2001
++From: apannerselva <apannerselva@marvell.com>
++Date: Tue, 17 Mar 2026 20:42:57 +0530
++Subject: [PATCH] Suppress system mac when arp/nd suppression is not supported
++
++On platforms without ARP/ND suppression support, advertising the
++system/chassis MAC as a Type-2 route causes remote VTEPs to install
++the chassis MAC as a dynamic host MAC entry for every VNI/VLAN even
++when no hosts exist on the ES.
++
++Add ZEBRA_EVPN_MH_SUPPRESS_SVI_MAC flag. When set in zebra_evpn_mh_init(),
++SVI MAC advertisement is suppressed by default. Platforms that require
++SVI MAC advertisement for ARP/ND suppression must explicitly clear this
++flag.
++
++Signed-off-by: apannerselva <apannerselva@marvell.com>
++---
++ zebra/zebra_evpn_mh.c | 22 +++++++++++++++++++++-
++ zebra/zebra_evpn_mh.h | 14 +++++++++++++-
++ 2 files changed, 34 insertions(+), 2 deletions(-)
++
++diff --git a/zebra/zebra_evpn_mh.c b/zebra/zebra_evpn_mh.c
++index 0657c0070e..c49e593ba 100644
++--- a/zebra/zebra_evpn_mh.c
+++++ b/zebra/zebra_evpn_mh.c
++@@ -2250,10 +2250,17 @@ static void zebra_evpn_mh_on_first_local_es(void)
++ 	zebra_evpn_mh_dup_addr_detect_off();
++ 	/* Don't restrict to reachable neighbors only - in SONiC,
++ 	 * neighbor entries go stale because traffic goes via ASIC
++ 	 * not kernel.
++ 	 */
++ 	/* zebra_evpn_mh_advertise_reach_neigh_only(); */
++-	zebra_evpn_mh_advertise_svi_mac();
+++	/* Skip SVI MAC advertisement if suppression is configured.
+++	 * On platforms without ARP/ND suppression support,
+++	 * advertising the system MAC as a Type-2 route
+++	 * causes remote VTEPs to install the chassis MAC as a dynamic host
+++	 * MAC entry for every VNI/VLAN even when no hosts exist on the ES.
+++	 */
+++	if (!zebra_evpn_mh_suppress_svi_mac())
+++		zebra_evpn_mh_advertise_svi_mac();
++ }
++ 
++ static void zebra_evpn_es_local_info_set(struct zebra_evpn_es *es,
++@@ -3911,6 +3918,16 @@ void zebra_evpn_mh_init(void)
++ 
++ 	zmh_info->startup_delay_time = ZEBRA_EVPN_MH_STARTUP_DELAY_DEF;
++ 	zebra_evpn_mh_startup_delay_timer_start("init");
+++
+++	/* Suppress SVI MAC advertisement by default.
+++	 * On platforms without ARP/ND suppression support,
+++	 * auto-advertising the SVI/system MAC as Type-2 routes
+++	 * causes remote VTEPs to install the chassis MAC as a
+++	 * dynamic host MAC per VNI even when no hosts exist on the ES.
+++	 * Platforms that require SVI MAC advertisement for ARP/ND
+++	 * suppression must explicitly clear this flag.
+++	 */
+++	zmh_info->flags |= ZEBRA_EVPN_MH_SUPPRESS_SVI_MAC;
++ }
++ 
++ void zebra_evpn_mh_terminate(void)
++diff --git a/zebra/zebra_evpn_mh.h b/zebra/zebra_evpn_mh.h
++index f68e2eae6..9824a610c 100644
++--- a/zebra/zebra_evpn_mh.h
+++++ b/zebra/zebra_evpn_mh.h
++@@ -202,6 +202,12 @@ struct zebra_evpn_mh_info {
++  * flooding of ARP replies rxed from the multi-homed host
++  */
++ #define ZEBRA_EVPN_MH_ADV_SVI_MAC (1 << 3)
+++/* If set, SVI MAC advertisement is suppressed even in EVPN MH mode.
+++ * Used on platforms that do not support ARP/ND suppression.
+++ * Prevents the system/chassis MAC from being advertised as Type-2
+++ * (MAC/IP) routes when no actual hosts are present on the Ethernet Segment.
+++ */
+++#define ZEBRA_EVPN_MH_SUPPRESS_SVI_MAC (1 << 4)
++ 
++ 	/* RB tree of Ethernet segments (used for EVPN-MH)  */
++ 	struct zebra_es_rb_head es_rb_tree;
++@@ -295,7 +301,13 @@ static inline bool zebra_evpn_mh_do_adv_reachable_neigh_only(void)
++ 
++ static inline bool zebra_evpn_mh_do_adv_svi_mac(void)
++ {
++-	return zmh_info && (zmh_info->flags & ZEBRA_EVPN_MH_ADV_SVI_MAC);
+++	return zmh_info && (zmh_info->flags & ZEBRA_EVPN_MH_ADV_SVI_MAC)
+++	       && !(zmh_info->flags & ZEBRA_EVPN_MH_SUPPRESS_SVI_MAC);
+++}
+++
+++static inline bool zebra_evpn_mh_suppress_svi_mac(void)
+++{
+++	return zmh_info && (zmh_info->flags & ZEBRA_EVPN_MH_SUPPRESS_SVI_MAC);
++ }
++ 
++ /*****************************************************************************/
++-- 
++2.25.1
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 8862a5c4d..e6747586f 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -77,3 +77,4 @@
+ 0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
+ 0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
+ 0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
++0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+-- 
+2.25.1
+

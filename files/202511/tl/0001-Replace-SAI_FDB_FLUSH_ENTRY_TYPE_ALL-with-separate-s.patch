@@ -1,0 +1,140 @@
+From dfe36169b4f54735fd547112ed6644c3dc3470b1 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Mon, 23 Mar 2026 10:10:00 +0530
+Subject: [PATCH] Replace SAI_FDB_FLUSH_ENTRY_TYPE_ALL with separate static and
+ dynamic
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ orchagent/fdborch.cpp                         | 38 ++++++++++++----
+ tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp | 44 +++++++++++++++----
+ 2 files changed, 65 insertions(+), 17 deletions(-)
+
+diff --git a/orchagent/fdborch.cpp b/orchagent/fdborch.cpp
+index 2b8c01fb..c2e93d12 100644
+--- a/orchagent/fdborch.cpp
++++ b/orchagent/fdborch.cpp
+@@ -1541,17 +1541,39 @@ void FdbOrch::flushAllFDBEntries(sai_object_id_t bridge_port_oid,
+         }
+     }
+ 
+-    /* As to non-tunnel port, flush both static and dynamic mac */
+-    attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
+-    attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_ALL;
+-    attrs.push_back(attr);
+-
++    /* As to non-tunnel port, flush both static and dynamic mac via two separate calls.
++     * SAI does not allow the same attribute ID to appear more than once in a single call.
++     */
+     SWSS_LOG_INFO("Flushing all FDB bridge_port_oid: 0x%" PRIx64 ", and bvid_oid:0x%" PRIx64 ".", bridge_port_oid, vlan_oid);
+ 
+-    rv = sai_fdb_api->flush_fdb_entries(gSwitchId, (uint32_t)attrs.size(), attrs.data());
+-    if (SAI_STATUS_SUCCESS != rv)
++    /* Flush static entries */
++    {
++        vector<sai_attribute_t> static_attrs = attrs;
++        attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_STATIC;
++        static_attrs.push_back(attr);
++        rv = sai_fdb_api->flush_fdb_entries(gSwitchId, (uint32_t)static_attrs.size(), static_attrs.data());
++        if (SAI_STATUS_SUCCESS != rv)
++        {
++            SWSS_LOG_ERROR("Flushing static FDB failed. rv:%d", rv);
++        }
++    }
++
++    /* Flush dynamic entries */
+     {
+-        SWSS_LOG_ERROR("Flushing all FDB failed. rv:%d", rv);
++        vector<sai_attribute_t> dynamic_attrs = attrs;
++        attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_DYNAMIC;
++        dynamic_attrs.push_back(attr);
++        sai_status_t rv2 = sai_fdb_api->flush_fdb_entries(gSwitchId, (uint32_t)dynamic_attrs.size(), dynamic_attrs.data());
++        if (SAI_STATUS_SUCCESS != rv2)
++        {
++            SWSS_LOG_ERROR("Flushing dynamic FDB failed. rv:%d", rv2);
++        }
++        if (SAI_STATUS_SUCCESS == rv)
++        {
++            rv = rv2;
++        }
+     }
+ 
+     if (SAI_STATUS_SUCCESS == rv) {
+diff --git a/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp b/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
+index 456ee3e8..461f80d7 100644
+--- a/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
++++ b/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
+@@ -896,12 +896,26 @@ namespace fdborch_vxlan_ut
+         attr.value.oid = m_portsOrch->m_portList[VLAN40].m_vlan_info.vlan_oid;
+         attrs.push_back(attr);
+ 
++        /* Build expected attr lists outside any inner scope so the vectors remain
++         * alive when the actual SAI calls are made inside gFdbOrch->update(). */
++        vector<sai_attribute_t> static_attrs = attrs;
+         attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
+-        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_ALL;
+-        attrs.push_back(attr);
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_STATIC;
++        static_attrs.push_back(attr);
++
++        vector<sai_attribute_t> dynamic_attrs = attrs;
++        attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_DYNAMIC;
++        dynamic_attrs.push_back(attr);
+ 
+         EXPECT_CALL(*mock_sai_fdb_api, flush_fdb_entries(_, _, _))
+-            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)attrs.size(), attrs.data()))));
++            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)static_attrs.size(), static_attrs.data()))))
++            .WillOnce(testing::Return(SAI_STATUS_SUCCESS));
++
++        EXPECT_CALL(*mock_sai_fdb_api, flush_fdb_entries(_, _, _))
++            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)dynamic_attrs.size(), dynamic_attrs.data()))))
++            .WillOnce(testing::Return(SAI_STATUS_SUCCESS));
++
+         gFdbOrch->update(SUBJECT_TYPE_VLAN_MEMBER_CHANGE, &vlanMemberUpdate);
+     }
+ 
+@@ -1016,20 +1030,32 @@ namespace fdborch_vxlan_ut
+         ASSERT_EQ(m_portsOrch->m_portList[ETH0].m_fdb_count, 1);
+         ASSERT_EQ(m_portsOrch->m_portList[VLAN40].m_fdb_count, 1);
+ 
+-        // Set up expected SAI flush call for non-tunnel port (flushes all static and dynamic)
+-        vector<sai_attribute_t> expected_attrs;
++        // Set up expected SAI flush calls for non-tunnel port:
++        // flushAllFDBEntries makes two separate calls - one for static, one for dynamic.
++        // SAI does not allow duplicate attribute IDs in a single flush call.
++        vector<sai_attribute_t> base_attrs;
+         sai_attribute_t attr;
+ 
+         attr.id = SAI_FDB_FLUSH_ATTR_BRIDGE_PORT_ID;
+         attr.value.oid = m_portsOrch->m_portList[ETH0].m_bridge_port_id;
+-        expected_attrs.push_back(attr);
++        base_attrs.push_back(attr);
++
++        vector<sai_attribute_t> static_expected_attrs = base_attrs;
++        attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_STATIC;
++        static_expected_attrs.push_back(attr);
+ 
++        vector<sai_attribute_t> dynamic_expected_attrs = base_attrs;
+         attr.id = SAI_FDB_FLUSH_ATTR_ENTRY_TYPE;
+-        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_ALL;
+-        expected_attrs.push_back(attr);
++        attr.value.s32 = SAI_FDB_FLUSH_ENTRY_TYPE_DYNAMIC;
++        dynamic_expected_attrs.push_back(attr);
++
++        EXPECT_CALL(*mock_sai_fdb_api, flush_fdb_entries(_, _, _))
++            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)static_expected_attrs.size(), static_expected_attrs.data()))))
++            .WillOnce(testing::Return(SAI_STATUS_SUCCESS));
+ 
+         EXPECT_CALL(*mock_sai_fdb_api, flush_fdb_entries(_, _, _))
+-            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)expected_attrs.size(), expected_attrs.data()))))
++            .With(testing::AllArgs(MatchSaiAttrList(make_tuple((uint32_t)dynamic_expected_attrs.size(), dynamic_expected_attrs.data()))))
+             .WillOnce(testing::Return(SAI_STATUS_SUCCESS));
+ 
+         // Test flushAllFDBEntries for non-tunnel port
+-- 
+2.25.1
+

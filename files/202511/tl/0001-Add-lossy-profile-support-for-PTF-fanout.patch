@@ -1,0 +1,28 @@
+From a5de7c5d1641806b3cecec32b5fe679b2ed50a23 Mon Sep 17 00:00:00 2001
+From: Jithender Kondam <jreddy@marvell.com>
+Date: Tue, 7 Apr 2026 11:51:18 +0530
+Subject: [PATCH] Add lossy profile support for PTF fanout
+
+Signed-off-by: Jithender Kondam <jreddy@marvell.com>
+---
+ .../marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh  | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
+index 0965c940d..bdc43f7a2 100755
+--- a/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
++++ b/platform/marvell-teralynx/docker-syncd-mrvl-teralynx/ivm_start.sh
+@@ -27,8 +27,8 @@ if [ ${topo} != "none" ]; then
+        [ "$(/usr/local/bin/sonic-cfggen -d -v BUFFER_QUEUE)" ]; then
+         echo "Database has QoS settings, skip loading defaults"
+     elif [ -f "$BUFFER_CONFIG" ] && [ -f "$QOS_CONFIG" ]; then
+-        /usr/local/bin/sonic-cfggen -d -t $BUFFER_CONFIG >/tmp/buffers.json
+-        /usr/local/bin/sonic-cfggen -d -t $QOS_CONFIG -y /etc/sonic/sonic_version.yml >/tmp/qos.json
++        /usr/local/bin/sonic-cfggen -d -t $BUFFER_CONFIG -a "{\"default_topo\": \"$topo\"}" >/tmp/buffers.json
++        /usr/local/bin/sonic-cfggen -d -t $QOS_CONFIG -a "{\"default_topo\": \"$topo\"}" -y /etc/sonic/sonic_version.yml >/tmp/qos.json
+         /usr/local/bin/sonic-cfggen -j /tmp/buffers.json --write-to-db
+         /usr/local/bin/sonic-cfggen -j /tmp/qos.json --write-to-db
+     else
+-- 
+2.25.1
+

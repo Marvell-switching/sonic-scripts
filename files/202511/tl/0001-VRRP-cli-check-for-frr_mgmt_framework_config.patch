@@ -1,0 +1,103 @@
+From 0e36d29cdfc0a3b934aa8926f2ddb4ff380c7ecc Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Wed, 18 Feb 2026 23:18:43 +0530
+Subject: [PATCH] VRRP cli check for frr_mgmt_framework_config
+
+Signed-off-by: Anish Peter <apeter@marvell.com>
+---
+ config/main.py     | 20 ++++++++++++++++++++
+ tests/vrrp_test.py | 17 +++++++++++++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/config/main.py b/config/main.py
+index 89b8d816..75ae3709 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -6529,6 +6529,11 @@ def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
+     """Add IPv4 address to the vrrp instance"""
+     config_db = ctx.obj["config_db"]
+ 
++    # Check frr_mgmt_framework_config knob
++    device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
++    if not device_metadata or device_metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("VRRP configuration requires frr_mgmt_framework_config to be true")
++
+     if clicommon.get_interface_naming_mode() == "alias":
+         interface_name = interface_alias_to_name(config_db, interface_name)
+         if interface_name is None:
+@@ -6863,6 +6868,11 @@ def add_vrrp(ctx, interface_name, vrrp_id):
+     """Add vrrp instance to the interface"""
+     config_db = ctx.obj["config_db"]
+ 
++    # Check frr_mgmt_framework_config knob
++    device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
++    if not device_metadata or device_metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("VRRP configuration requires frr_mgmt_framework_config to be true")
++
+     if clicommon.get_interface_naming_mode() == "alias":
+         interface_name = interface_alias_to_name(config_db, interface_name)
+         if interface_name is None:
+@@ -6947,6 +6957,11 @@ def add_vrrp6_ipv6(ctx, interface_name, vrrp_id, ipv6_addr):
+     """Add IPv6 address to the Vrrpv6 instance"""
+     config_db = ctx.obj["config_db"]
+ 
++    # Check frr_mgmt_framework_config knob
++    device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
++    if not device_metadata or device_metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("VRRP6 configuration requires frr_mgmt_framework_config to be true")
++
+     if clicommon.get_interface_naming_mode() == "alias":
+         interface_name = interface_alias_to_name(config_db, interface_name)
+         if interface_name is None:
+@@ -7262,6 +7277,11 @@ def add_vrrp_v6(ctx, interface_name, vrrp_id):
+     """Add Vrrpv6 instance to the interface"""
+     config_db = ctx.obj["config_db"]
+ 
++    # Check frr_mgmt_framework_config knob
++    device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
++    if not device_metadata or device_metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("VRRP6 configuration requires frr_mgmt_framework_config to be true")
++
+     if clicommon.get_interface_naming_mode() == "alias":
+         interface_name = interface_alias_to_name(config_db, interface_name)
+         if interface_name is None:
+diff --git a/tests/vrrp_test.py b/tests/vrrp_test.py
+index 7d476af9..c77ac7dd 100644
+--- a/tests/vrrp_test.py
++++ b/tests/vrrp_test.py
+@@ -10,6 +10,7 @@ import utilities_common.bgp_util as bgp_util
+ 
+ class TestConfigVRRP(object):
+     _old_run_bgp_command = None
++    _old_db_init = None
+ 
+     @classmethod
+     def setup_class(cls):
+@@ -17,8 +18,24 @@ class TestConfigVRRP(object):
+         cls._old_run_bgp_command = bgp_util.run_bgp_command
+         bgp_util.run_bgp_command = mock.MagicMock(
+             return_value=cls.mock_run_bgp_command())
++        cls._old_db_init = Db.__init__
++
++        def patched_db_init(db_self, *args, **kwargs):
++            cls._old_db_init(db_self, *args, **kwargs)
++            metadata = db_self.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
++            metadata['frr_mgmt_framework_config'] = 'true'
++            db_self.cfgdb.set_entry('DEVICE_METADATA', 'localhost', metadata)
++
++        Db.__init__ = patched_db_init
+         print("SETUP")
+ 
++    @classmethod
++    def teardown_class(cls):
++        if cls._old_run_bgp_command is not None:
++            bgp_util.run_bgp_command = cls._old_run_bgp_command
++        if cls._old_db_init is not None:
++            Db.__init__ = cls._old_db_init
++
+     ''' Tests for VRRPv4 and VRRPv6  '''
+ 
+     def mock_run_bgp_command():
+-- 
+2.25.1
+

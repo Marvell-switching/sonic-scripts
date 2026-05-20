@@ -1,0 +1,35 @@
+From 46f22d47668becaae15edddba18d9f75df216d6b Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 13 Nov 2025 09:51:04 +0530
+Subject: [PATCH] Create a BFD_OFFLOAD_CAPABILITY_TABLE in STATE_DB
+
+This change allows to create the BFD_OFFLOAD_CAPABILITY_TABLE in STATE_DB which
+will be used to store the HW_OFFLOAD type capability supported by
+vendor.
+
+Supported types will be:
+
+1. Full
+2. Sustenance
+3. None -> default value
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ common/schema.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/common/schema.h b/common/schema.h
+index c2efb93..0c82336 100644
+--- a/common/schema.h
++++ b/common/schema.h
+@@ -579,6 +579,7 @@ namespace swss {
+ 
+ #define STATE_BFD_SESSION_TABLE_NAME                "BFD_SESSION_TABLE"
+ #define STATE_BFD_SOFTWARE_SESSION_TABLE_NAME       "BFD_SOFTWARE_SESSION_TABLE"
++#define STATE_BFD_OFFLOAD_CAPABILITY_TABLE_NAME     "BFD_OFFLOAD_CAPABILITY_TABLE"
+ #define STATE_ICMP_ECHO_SESSION_TABLE_NAME          "ICMP_ECHO_SESSION_TABLE"
+ #define STATE_ROUTE_TABLE_NAME                      "ROUTE_TABLE"
+ #define STATE_VNET_RT_TUNNEL_TABLE_NAME             "VNET_ROUTE_TUNNEL_TABLE"
+-- 
+2.25.1
+

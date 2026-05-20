@@ -1,0 +1,25 @@
+From 1bf7bc0358b134b0e14058b1ea7fd1b8ebd10618 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Tue, 26 Aug 2025 16:51:43 +0530
+Subject: [PATCH] SONICDC-515 fix for reboot cause issue
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ .../6512-32r/service/platform-modules-6512-32r.service          | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
+index 485217dc6..cf3ac32ec 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/service/platform-modules-6512-32r.service
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=Wistron 6512-32R Platform modules
+-Before=pmon.service
++Before=watchdog-control.service determine-reboot-cause.service pmon.service
+ After=sysinit.target
+ DefaultDependencies=no
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,95 @@
+From 6ad9329e6a5b97f180bcde8e534b466f8eef54f4 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Tue, 4 Nov 2025 21:00:04 +0530
+Subject: [PATCH] Fix SAG mac not being displayed when no vlan is attached
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ config/main.py    |  2 +-
+ show/main.py      | 27 +++++++++++++++++----------
+ tests/sag_test.py | 10 ++++++++++
+ 3 files changed, 28 insertions(+), 11 deletions(-)
+
+diff --git a/config/main.py b/config/main.py
+index 08d74903..c550a413 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -9219,7 +9219,7 @@ def add_mac(db, mac_address):
+     if not db.cfgdb.get_entry('SAG', 'GLOBAL'):
+         db.cfgdb.set_entry('SAG', 'GLOBAL', {'gateway_mac': mac_address})
+     else:
+-        click.get_current_context().fail(f'static-anycast-gateway MAC address {mac_address} is alreday existed. Remove it first')
++        click.get_current_context().fail(f'static-anycast-gateway MAC address is already existed. Remove it first')
+ 
+ @mac_address.command('del')
+ @clicommon.pass_db
+diff --git a/show/main.py b/show/main.py
+index ff7a514b..dae40572 100755
+--- a/show/main.py
++++ b/show/main.py
+@@ -2628,17 +2628,24 @@ def sag(db):
+     header = ['MacAddress', 'Interfaces']
+     body = []
+ 
++    # Get SAG configuration
+     sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+-    if sag_entry:
+-        sag_mac = sag_entry.get('gateway_mac')
+-
+-        intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+-        for key, value in intf_dict.items():
+-            if value.get('static_anycast_gateway') == 'true':
+-                if not body:
+-                    body.append([sag_mac, key])
+-                else:
+-                    body.append(['', key])
++    sag_mac = sag_entry.get('gateway_mac', '') if sag_entry else ''
++
++    # Get interfaces with static anycast gateway enabled
++    intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
++    sag_interfaces = [key for key, value in intf_dict.items()
++                      if value.get('static_anycast_gateway') == 'true']
++
++    # Build the output table
++    if sag_interfaces:
++        # Show MAC address only in the first row, empty for subsequent rows
++        for i, interface in enumerate(sag_interfaces):
++            mac_display = sag_mac if i == 0 else ''
++            body.append([mac_display, interface])
++    else:
++        # No interfaces found, show just the MAC address
++        body.append([sag_mac, 'N/A'])
+ 
+     click.echo("Static Anycast Gateway Information")
+     click.echo(tabulate(body, header, tablefmt='simple'))
+diff --git a/tests/sag_test.py b/tests/sag_test.py
+index dfb304e9..08962e18 100644
+--- a/tests/sag_test.py
++++ b/tests/sag_test.py
+@@ -15,6 +15,13 @@ MacAddress         Interfaces
+ 00:11:22:33:44:55  Vlan1000
+ """
+ 
++show_sag_output_with_no_vlan="""\
++Static Anycast Gateway Information
++MacAddress         Interfaces
++-----------------  ------------
++00:11:22:33:44:55  N/A
++"""
++
+ class TestSag(object):
+     @classmethod
+     def setup_class(cls):
+@@ -75,6 +82,9 @@ class TestSag(object):
+                         ["1000"], obj=db)
+         assert result.exit_code == 0, f"sag invalid vlan with code {type(result.exit_code)}:{result.exit_code} Output:{result.output}"
+         assert {"static_anycast_gateway": "false"}.items() <= db.cfgdb.get_entry("VLAN_INTERFACE", "Vlan1000").items()
++        result = runner.invoke(show.cli.commands["static-anycast-gateway"], obj=db)
++        assert result.exit_code == 0, f"invalid show sag with code {type(result.exit_code)}:{result.exit_code} Output:{result.output}"
++        assert result.output == show_sag_output_with_no_vlan
+ 
+     def test_show_sag_mac(self):
+         runner = CliRunner()
+-- 
+2.25.1
+
