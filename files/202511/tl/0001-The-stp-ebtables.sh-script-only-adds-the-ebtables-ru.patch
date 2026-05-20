@@ -1,0 +1,90 @@
+From 3d596f28cd4edaf573be57f1db4e1d3c637da026 Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Wed, 25 Feb 2026 11:55:04 +0530
+Subject: [PATCH] The stp-ebtables.sh script only adds the ebtables rule only
+ if it is not present, and removes the rule when STP is disabled. This makes
+ rule management more responsive to STP state, improving reliability and
+ maintainability.
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ .../build_templates/sonic_debian_extension.j2 |  1 +
+ files/build_templates/stp.service.j2          |  2 ++
+ files/scripts/stp-ebtables.sh                 | 36 +++++++++++++++++++
+ 3 files changed, 39 insertions(+)
+ create mode 100644 files/scripts/stp-ebtables.sh
+
+diff --git a/files/build_templates/sonic_debian_extension.j2 b/files/build_templates/sonic_debian_extension.j2
+index bc8e54f6b..b66663571 100644
+--- a/files/build_templates/sonic_debian_extension.j2
++++ b/files/build_templates/sonic_debian_extension.j2
+@@ -1043,6 +1043,7 @@ sudo LANG=C cp $SCRIPTS_DIR/gbsyncd-platform.sh $FILESYSTEM_ROOT/usr/bin/gbsyncd
+ sudo LANG=C cp $SCRIPTS_DIR/bgp.sh $FILESYSTEM_ROOT/usr/local/bin/bgp.sh
+ sudo LANG=C cp $SCRIPTS_DIR/teamd.sh $FILESYSTEM_ROOT/usr/local/bin/teamd.sh
+ sudo LANG=C cp $SCRIPTS_DIR/lldp.sh $FILESYSTEM_ROOT/usr/local/bin/lldp.sh
++sudo LANG=C cp $SCRIPTS_DIR/stp-ebtables.sh $FILESYSTEM_ROOT/usr/local/bin/stp-ebtables.sh
+ sudo LANG=C cp $SCRIPTS_DIR/radv.sh $FILESYSTEM_ROOT/usr/local/bin/radv.sh
+ sudo LANG=C cp $SCRIPTS_DIR/database.sh $FILESYSTEM_ROOT/usr/local/bin/database.sh
+ sudo LANG=C cp $SCRIPTS_DIR/snmp.sh $FILESYSTEM_ROOT/usr/local/bin/snmp.sh
+diff --git a/files/build_templates/stp.service.j2 b/files/build_templates/stp.service.j2
+index ea833bab1..ae288a6f2 100644
+--- a/files/build_templates/stp.service.j2
++++ b/files/build_templates/stp.service.j2
+@@ -9,10 +9,12 @@ StartLimitIntervalSec=1200
+ StartLimitBurst=3
+ 
+ [Service]
++ExecStartPre=/usr/bin/sudo /usr/local/bin/stp-ebtables.sh
+ User={{ sonicadmin_user }}
+ ExecStartPre=/usr/bin/{{docker_container_name}}.sh start
+ ExecStart=/usr/bin/{{docker_container_name}}.sh wait
+ ExecStop=/usr/bin/{{docker_container_name}}.sh stop
++ExecStopPost=/usr/bin/sudo /usr/local/bin/stp-ebtables.sh disable
+ RestartSec=30
+ 
+ [Install]
+diff --git a/files/scripts/stp-ebtables.sh b/files/scripts/stp-ebtables.sh
+new file mode 100644
+index 000000000..09021a710
+--- /dev/null
++++ b/files/scripts/stp-ebtables.sh
+@@ -0,0 +1,36 @@
++#!/bin/bash
++# stp-ebtables.sh - STP service ebtables rule management script
++# Manages ebtables rules for STP-related traffic on service start and stop
++
++log() {
++    logger -t stp-ebtables.sh "$1"
++    echo "$1"
++}
++
++EBT_RULE="-d 01:00:0c:cc:cc:cd -j DROP"
++
++if [ "$1" = "disable" ]; then
++    # Remove the ebtables rule if STP is disabled
++    if ebtables -C FORWARD $EBT_RULE 2>/dev/null; then
++        if ebtables -D FORWARD $EBT_RULE; then
++            log "ebtables rule removed: $EBT_RULE"
++        else
++            log "Failed to remove ebtables rule: $EBT_RULE"
++            exit 1
++        fi
++    else
++        log "ebtables rule not present, nothing to remove."
++    fi
++else
++    # Add the ebtables rule only if not already present
++    if ! ebtables -C FORWARD $EBT_RULE 2>/dev/null; then
++        if ebtables -A FORWARD $EBT_RULE; then
++            log "ebtables rule added: $EBT_RULE"
++        else
++            log "Failed to add ebtables rule: $EBT_RULE"
++            exit 1
++        fi
++    else
++        log "ebtables rule already present: $EBT_RULE"
++    fi
++fi
+-- 
+2.25.1
+

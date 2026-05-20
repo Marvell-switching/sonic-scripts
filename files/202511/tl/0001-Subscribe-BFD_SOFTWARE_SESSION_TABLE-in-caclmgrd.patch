@@ -1,0 +1,67 @@
+From 02afae260d07dc853aabdc573fbf891488789e23 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 13 Nov 2025 14:57:14 +0530
+Subject: [PATCH] Subscribe BFD_SOFTWARE_SESSION_TABLE in caclmgrd
+
+This changes subscribes BFD_SOFTWARE_SESSION_TABLE of STATE_DB in
+caclmgrd.
+
+Right now, to allow bfd traffic on ports, caclmgrd only subscribes to
+BFD_SESSION_TABLE. However, for software bfd, BFD_SOFTWARE_SESSION_TABLE
+is create for which exception to allow traffic is not added.
+This change helps enable software bfd as well.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ scripts/caclmgrd | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/scripts/caclmgrd b/scripts/caclmgrd
+index 5c1137a..f08a363 100755
+--- a/scripts/caclmgrd
++++ b/scripts/caclmgrd
+@@ -86,6 +86,7 @@ class ControlPlaneAclManager(logger.Logger):
+     ACL_TABLE_TYPE_CTRLPLANE = "CTRLPLANE"
+ 
+     BFD_SESSION_TABLE = "BFD_SESSION_TABLE"
++    BFD_SOFTWARE_SESSION_TABLE = "BFD_SOFTWARE_SESSION_TABLE"
+     VXLAN_TUNNEL_TABLE = "VXLAN_TUNNEL"
+     DPU_TABLE = "DPU"
+     MID_PLANE_BRIDGE_TABLE = "MID_PLANE_BRIDGE"
+@@ -1154,6 +1155,9 @@ class ControlPlaneAclManager(logger.Logger):
+         subscribe_bfd_session = swsscommon.SubscriberStateTable(state_db_connector, self.BFD_SESSION_TABLE)
+         sel.addSelectable(subscribe_bfd_session)
+ 
++        subscribe_bfd_software_session = swsscommon.SubscriberStateTable(state_db_connector, self.BFD_SOFTWARE_SESSION_TABLE)
++        sel.addSelectable(subscribe_bfd_software_session)
++
+         subscribe_vxlan_table = swsscommon.SubscriberStateTable(config_db_connector, self.VXLAN_TUNNEL_TABLE)
+         sel.addSelectable(subscribe_vxlan_table)
+ 
+@@ -1218,7 +1222,23 @@ class ControlPlaneAclManager(logger.Logger):
+                     if op == 'SET' and not self.bfdAllowed:
+                         self.allow_bfd_protocol(namespace)
+                         self.bfdAllowed = True
++                        '''remove both the subscription of software and hardware offload BFD
++                           once the bfdAllowed is set to True'''
++                        sel.removeSelectable(subscribe_bfd_session)
++                        sel.removeSelectable(subscribe_bfd_software_session)
++
++                while True:
++                    key, op, fvs = subscribe_bfd_software_session.pop()
++                    if not key:
++                        break
++
++                    if op == 'SET' and not self.bfdAllowed:
++                        self.allow_bfd_protocol(namespace)
++                        self.bfdAllowed = True
++                        '''remove both the subscription of software and hardware offload BFD
++                           once the bfdAllowed is set to True'''
+                         sel.removeSelectable(subscribe_bfd_session)
++                        sel.removeSelectable(subscribe_bfd_software_session)
+ 
+                 if self.DualToR:
+                     '''dhcp packet mark update'''
+-- 
+2.25.1
+

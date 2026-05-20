@@ -1,0 +1,537 @@
+From 2b59316a96984a2ea7834541832d65f6a5045998 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 24 Feb 2026 09:41:07 +0530
+Subject: [PATCH] Add support for MIRROR_URL build attribute
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ Makefile.work                                   | 16 +++++++++++++---
+ build_debian.sh                                 |  2 +-
+ dockers/docker-base-bookworm/Dockerfile.j2      |  3 +++
+ dockers/docker-ptf/Dockerfile.j2                |  3 +++
+ get_docker-base.sh                              |  2 +-
+ platform/vs/onie.mk                             |  6 +++---
+ rules/config                                    | 12 ++++++++++--
+ rules/sonic-fips.mk                             |  2 +-
+ scripts/build_debian_base_system.sh             |  5 +++--
+ scripts/build_mirror_config.sh                  | 10 ++++++----
+ scripts/generate_buildinfo_config.sh            |  4 +++-
+ slave.mk                                        | 12 +++++++-----
+ sonic-slave-bookworm/Dockerfile.j2              | 11 +++++++++--
+ sonic-slave-trixie/Dockerfile.j2                | 11 +++++++++--
+ src/ixgbe/Makefile                              |  2 +-
+ src/lldpd/Makefile                              |  2 +-
+ src/snmpd/Makefile                              |  2 +-
+ src/socat/Makefile                              |  6 +++---
+ src/sonic-build-hooks/scripts/buildinfo_base.sh | 15 +++++++--------
+ src/swig/Makefile                               |  6 +++---
+ src/thrift/Makefile                             |  2 +-
+ 21 files changed, 89 insertions(+), 45 deletions(-)
+
+diff --git a/Makefile.work b/Makefile.work
+index d1d88b6bd..3cee59ba6 100644
+--- a/Makefile.work
++++ b/Makefile.work
+@@ -200,12 +200,14 @@ $(shell test -d $(SONIC_VERSION_CACHE_SOURCE) || \
+ $(shell \
+ 	SONIC_VERSION_CONTROL_COMPONENTS=$(SONIC_VERSION_CONTROL_COMPONENTS) \
+ 	TRUSTED_GPG_URLS=$(TRUSTED_GPG_URLS) \
+-	PACKAGE_URL_PREFIX=$(PACKAGE_URL_PREFIX) \
++	BUILD_PACKAGES_URL=$(BUILD_PACKAGES_URL) \
+ 	DISTRO=$(BLDENV) \
+ 	SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+ 	SONIC_VERSION_CACHE_SOURCE=$(SONIC_VERSION_CACHE_SOURCE) \
+ 	DBGOPT='$(DBGOPT)' \
+ 	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) \
++	BUILD_PUBLIC_URL=$(BUILD_PUBLIC_URL) \
++	BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) \
+ 	PIP_HTTP_TIMEOUT=$(PIP_HTTP_TIMEOUT) \
+ 	scripts/generate_buildinfo_config.sh)
+ 
+@@ -216,6 +218,8 @@ $(shell CONFIGURED_ARCH=$(CONFIGURED_ARCH) \
+ 	INCLUDE_FIPS=$(INCLUDE_FIPS) \
+ 	DOCKER_EXTRA_OPTS=$(DOCKER_EXTRA_OPTS) \
+ 	DEFAULT_CONTAINER_REGISTRY=$(DEFAULT_CONTAINER_REGISTRY) \
++	BUILD_PUBLIC_URL=$(BUILD_PUBLIC_URL) \
++	BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) \
+ 	FIPS_VERSION=$(FIPS_VERSION) \
+ 	FIPS_GOLANG_MAIN_VERSION=$(FIPS_GOLANG_MAIN_VERSION) \
+ 	FIPS_GOLANG_VERSION=$(FIPS_GOLANG_VERSION) \
+@@ -228,16 +232,18 @@ $(shell CONFIGURED_ARCH=$(CONFIGURED_ARCH) \
+ 
+ ifeq ($(CROSS_BUILD_ENVIRON), y)
+ $(shell SONIC_VERSION_CONTROL_COMPONENTS=$(SONIC_VERSION_CONTROL_COMPONENTS) \
+-	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) scripts/build_mirror_config.sh $(SLAVE_DIR) amd64 $(BLDENV))
++	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) scripts/build_mirror_config.sh $(SLAVE_DIR) amd64 $(BLDENV))
+ endif
+ $(shell SONIC_VERSION_CONTROL_COMPONENTS=$(SONIC_VERSION_CONTROL_COMPONENTS) \
+-	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) scripts/build_mirror_config.sh $(SLAVE_DIR) $(CONFIGURED_ARCH) $(BLDENV))
++	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) scripts/build_mirror_config.sh $(SLAVE_DIR) $(CONFIGURED_ARCH) $(BLDENV))
+ 
+ PREPARE_DOCKER=BUILD_SLAVE=y \
+ 	DEFAULT_CONTAINER_REGISTRY=$(DEFAULT_CONTAINER_REGISTRY) \
+ 	SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+ 	DBGOPT='$(DBGOPT)' \
+ 	MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) \
++	BUILD_PUBLIC_URL=$(BUILD_PUBLIC_URL) \
++	BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) \
+ 	scripts/prepare_docker_buildinfo.sh \
+ 		$(SLAVE_BASE_IMAGE) \
+ 		$(SLAVE_DIR)/Dockerfile \
+@@ -582,6 +588,8 @@ SONIC_BUILD_INSTRUCTION :=  $(MAKE) \
+                            MIRROR_URLS=$(MIRROR_URLS) \
+                            MIRROR_SECURITY_URLS=$(MIRROR_SECURITY_URLS) \
+                            MIRROR_SNAPSHOT=$(MIRROR_SNAPSHOT) \
++                           BUILD_PUBLIC_URL=$(BUILD_PUBLIC_URL) \
++                           BUILD_SNAPSHOT_URL=$(BUILD_SNAPSHOT_URL) \
+                            SONIC_VERSION_CONTROL_COMPONENTS=$(SONIC_VERSION_CONTROL_COMPONENTS) \
+                            ONIE_IMAGE_PART_SIZE=$(ONIE_IMAGE_PART_SIZE) \
+                            SONIC_OS_VERSION=$(SONIC_OS_VERSION) \
+@@ -610,6 +618,8 @@ endif
+ export MIRROR_URLS
+ export MIRROR_SECURITY_URLS
+ export MIRROR_SNAPSHOT
++export BUILD_PUBLIC_URL
++export BUILD_SNAPSHOT_URL
+ export SONIC_VERSION_CONTROL_COMPONENTS
+ export PIP_HTTP_TIMEOUT
+ export SECURE_UPGRADE_PROD_TOOL_ARGS
+diff --git a/build_debian.sh b/build_debian.sh
+index 4940b03d9..9c10144be 100755
+--- a/build_debian.sh
++++ b/build_debian.sh
+@@ -244,7 +244,7 @@ sudo LANG=C chroot $FILESYSTEM_ROOT apt-get -y install docker-ce=${DOCKER_VERSIO
+ install_kubernetes () {
+     local ver="$1"
+     ## Install k8s package from storage
+-    local storage_prefix="https://packages.trafficmanager.net/public/kubernetes"
++    local storage_prefix="$BUILD_PUBLIC_URL/kubernetes"
+     sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT curl -o /tmp/cri-tools.deb -fsSL \
+         ${storage_prefix}/cri-tools_${KUBERNETES_CRI_TOOLS_VERSION}_${CONFIGURED_ARCH}.deb
+     sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT curl -o /tmp/kubernetes-cni.deb -fsSL \
+diff --git a/dockers/docker-base-bookworm/Dockerfile.j2 b/dockers/docker-base-bookworm/Dockerfile.j2
+index c63d3a850..3a8e2f65a 100644
+--- a/dockers/docker-base-bookworm/Dockerfile.j2
++++ b/dockers/docker-base-bookworm/Dockerfile.j2
+@@ -18,6 +18,9 @@ COPY ["dpkg_01_drop", "/etc/dpkg/dpkg.cfg.d/01_drop"]
+ COPY ["sources.list.{{ CONFIGURED_ARCH }}", "/etc/apt/sources.list"]
+ COPY ["no_install_recommend_suggest", "/etc/apt/apt.conf.d"]
+ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d"]
++# Install certificates by disabling the peer verification
++RUN apt -o Acquire::https::Verify-Peer=false update && \
++    apt -o Acquire::https::Verify-Peer=false install -y ca-certificates
+ 
+ # Update apt cache and
+ # pre-install fundamental packages
+diff --git a/dockers/docker-ptf/Dockerfile.j2 b/dockers/docker-ptf/Dockerfile.j2
+index fd3875c57..0ae9f71bc 100644
+--- a/dockers/docker-ptf/Dockerfile.j2
++++ b/dockers/docker-ptf/Dockerfile.j2
+@@ -19,6 +19,9 @@ LABEL maintainer="Pavel Shirshov"
+ COPY ["sources.list.{{ CONFIGURED_ARCH }}", "/etc/apt/sources.list"]
+ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d"]
+ COPY ["apt-retries-count", "/etc/apt/apt.conf.d"]
++# Install certificates by disabling the peer verification
++RUN apt -o Acquire::https::Verify-Peer=false update && \
++    apt -o Acquire::https::Verify-Peer=false install -y ca-certificates
+ 
+ ## Make apt-get non-interactive
+ ENV DEBIAN_FRONTEND=noninteractive
+diff --git a/get_docker-base.sh b/get_docker-base.sh
+index 91359c49b..3f6ea9f6d 100755
+--- a/get_docker-base.sh
++++ b/get_docker-base.sh
+@@ -12,7 +12,7 @@ set -x -e
+ TARGET_PATH=$(sed -n 's/TARGET_PATH\s*=\s*//p' slave.mk)
+ 
+ ## [SuppressMessage("Microsoft.Security", "CS002:SecretInNextLine", Justification="Read-only link of Azure Blob storage with shared access signature (SAS)")]
+-BASE_URL="https://packages.trafficmanager.net/public/docker-base.ea507753d98b0769e2a15be13003331f8ad38d1c15b40a683e05fc53b1463b10.gz"
++BASE_URL="$BUILD_PUBLIC_URL/docker-base.ea507753d98b0769e2a15be13003331f8ad38d1c15b40a683e05fc53b1463b10.gz"
+ 
+ base_image_name=docker-base
+ docker_try_rmi $base_image_name
+diff --git a/platform/vs/onie.mk b/platform/vs/onie.mk
+index badd7b351..1314e63ea 100644
+--- a/platform/vs/onie.mk
++++ b/platform/vs/onie.mk
+@@ -1,10 +1,10 @@
+ ONIE_RECOVERY_IMAGE = onie-recovery-x86_64-kvm_x86_64-r0.iso
+-$(ONIE_RECOVERY_IMAGE)_URL = "https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso"
++$(ONIE_RECOVERY_IMAGE)_URL = "$(BUILD_PUBLIC_URL)/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso"
+ 
+ ONIE_RECOVERY_KVM_4ASIC_IMAGE = onie-recovery-x86_64-kvm_x86_64_4_asic-r0.iso
+-$(ONIE_RECOVERY_KVM_4ASIC_IMAGE)_URL = "https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64_4_asic-r0.iso"
++$(ONIE_RECOVERY_KVM_4ASIC_IMAGE)_URL = "$(BUILD_PUBLIC_URL)/onie/onie-recovery-x86_64-kvm_x86_64_4_asic-r0.iso"
+ 
+ ONIE_RECOVERY_KVM_6ASIC_IMAGE = onie-recovery-x86_64-kvm_x86_64_6_asic-r0.iso
+-$(ONIE_RECOVERY_KVM_6ASIC_IMAGE)_URL = "https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64_6_asic-r0.iso"
++$(ONIE_RECOVERY_KVM_6ASIC_IMAGE)_URL = "$(BUILD_PUBLIC_URL)/onie/onie-recovery-x86_64-kvm_x86_64_6_asic-r0.iso"
+ 
+ SONIC_ONLINE_FILES += $(ONIE_RECOVERY_IMAGE) $(ONIE_RECOVERY_KVM_4ASIC_IMAGE) $(ONIE_RECOVERY_KVM_6ASIC_IMAGE)
+diff --git a/rules/config b/rules/config
+index 583858a17..cfca62800 100644
+--- a/rules/config
++++ b/rules/config
+@@ -244,8 +244,16 @@ SECURE_UPGRADE_MODE ?= "no_sign"
+ SECURE_UPGRADE_KERNEL_CAFILE ?= $(SECURE_UPGRADE_SIGNING_CERT)
+ SECURE_UPGRADE_PROD_SIGNING_TOOL ?=
+ SECURE_UPGRADE_PROD_TOOL_ARGS ?=
+-# PACKAGE_URL_PREFIX - the package url prefix
+-PACKAGE_URL_PREFIX ?= https://packages.trafficmanager.net/packages
++
++# BUILD_SNAPSHOT_URL - Default debian snapshot mirror url
++# Mirror of https://snapshot.debian.org/archive
++BUILD_SNAPSHOT_URL ?= http://packages.trafficmanager.net/snapshot
++
++# BUILD_PUBLIC_URL - Default public mirror url
++BUILD_PUBLIC_URL ?= https://packages.trafficmanager.net/public
++
++# BUILD_PACKAGES_URL - Default packages mirror url
++BUILD_PACKAGES_URL ?= https://packages.trafficmanager.net/packages
+ 
+ # TRUSTED_GPG_URLS - the trusted gpgs, separated by comma
+ TRUSTED_GPG_URLS = https://packages.microsoft.com/keys/microsoft.asc
+diff --git a/rules/sonic-fips.mk b/rules/sonic-fips.mk
+index 398b8df39..fc7147ef7 100644
+--- a/rules/sonic-fips.mk
++++ b/rules/sonic-fips.mk
+@@ -34,7 +34,7 @@ FIPS_GOLANG_VERSION = 1.15.15-1~deb11u4+fips
+ FIPS_KRB5_VERSION = 1.18.3-6+deb11u5+fips
+ endif
+ 
+-FIPS_URL_PREFIX = https://packages.trafficmanager.net/public/fips/$(BLDENV)/$(FIPS_VERSION)/$(CONFIGURED_ARCH)
++FIPS_URL_PREFIX = $(BUILD_PUBLIC_URL)/fips/$(BLDENV)/$(FIPS_VERSION)/$(CONFIGURED_ARCH)
+ 
+ SYMCRYPT_OPENSSL_NAME = symcrypt-openssl
+ SYMCRYPT_OPENSSL = $(SYMCRYPT_OPENSSL_NAME)_$(FIPS_VERSION)_$(CONFIGURED_ARCH).deb
+diff --git a/scripts/build_debian_base_system.sh b/scripts/build_debian_base_system.sh
+index d4e4ab059..3e3b62423 100755
+--- a/scripts/build_debian_base_system.sh
++++ b/scripts/build_debian_base_system.sh
+@@ -23,10 +23,11 @@ generate_version_file()
+     sudo LANG=C chroot $FILESYSTEM_ROOT /bin/bash -c "dpkg-query -W -f '\${Package}==\${Version}\n'" > $TARGET_BASEIMAGE_PATH/versions-deb-${IMAGE_DISTRO}-${CONFIGURED_ARCH}
+ }
+ 
+-MIRROR_URL=http://deb.debian.org/debian
+ if [ "$MIRROR_SNAPSHOT" == y ]; then
+     SNAPSHOT_TIMESTAMP=$(grep "^debian==" $TARGET/versions/default/versions-mirror | tail -n 1 | sed 's/.*==//')
+-    MIRROR_URL=http://packages.trafficmanager.net/snapshot/debian/$SNAPSHOT_TIMESTAMP
++    MIRROR_URL=$BUILD_SNAPSHOT_URL/debian/$SNAPSHOT_TIMESTAMP
++else
++    MIRROR_URL=http://deb.debian.org/debian
+ fi
+ 
+ if [ "$ENABLE_VERSION_CONTROL_DEB" != "y" ] || [ ! -d files/build/versions/host-base-image ]; then
+diff --git a/scripts/build_mirror_config.sh b/scripts/build_mirror_config.sh
+index 768699765..b264c5933 100755
+--- a/scripts/build_mirror_config.sh
++++ b/scripts/build_mirror_config.sh
+@@ -43,11 +43,11 @@ if [ "$MIRROR_SNAPSHOT" == y ]; then
+         DEBIAN_SECURITY_TIMESTAMP=$(curl $DEFAULT_MIRROR_URL_PREFIX/debian-snapshot/debian-security/latest)
+     fi
+ 
+-    DEFAULT_MIRROR_URLS=http://deb.debian.org/debian/,http://packages.trafficmanager.net/snapshot/debian/$DEBIAN_TIMESTAMP/
+-    DEFAULT_MIRROR_SECURITY_URLS=http://deb.debian.org/debian-security/,http://packages.trafficmanager.net/snapshot/debian-security/$DEBIAN_SECURITY_TIMESTAMP/
++    DEFAULT_MIRROR_URLS=http://deb.debian.org/debian/,$BUILD_SNAPSHOT_URL/debian/$DEBIAN_TIMESTAMP/
++    DEFAULT_MIRROR_SECURITY_URLS=http://deb.debian.org/debian-security/,$BUILD_SNAPSHOT_URL/debian-security/$DEBIAN_SECURITY_TIMESTAMP/
+ 
+ 	if [ "$DISTRIBUTION" == "buster" ] || [ "$DISTRIBUTION" == "bullseye" ]; then
+-		DEFAULT_MIRROR_URLS=http://archive.debian.org/debian/,http://packages.trafficmanager.net/snapshot/debian/$DEBIAN_TIMESTAMP/
++		DEFAULT_MIRROR_URLS=http://archive.debian.org/debian/,$BUILD_SNAPSHOT_URL/debian/$DEBIAN_TIMESTAMP/
+ 	fi
+ 
+     mkdir -p target/versions/default
+@@ -68,8 +68,10 @@ TEMPLATE=files/apt/sources.list.j2
+ 
+ MIRROR_URLS=$MIRROR_URLS MIRROR_SECURITY_URLS=$MIRROR_SECURITY_URLS j2 $TEMPLATE | sed '/^$/N;/^\n$/D' > $CONFIG_PATH/sources.list.$ARCHITECTURE
+ if [ "$MIRROR_SNAPSHOT" == y ]; then
++    # Escape special characters in BUILD_SNAPSHOT_URL for use in sed regex
++    ESCAPED_MIRROR_URL=$(echo "$BUILD_SNAPSHOT_URL" | sed 's/[\/&.]/\\&/g')
+     # Set the snapshot mirror, and add the SET_REPR_MIRRORS flag
+-    sed -i -e "/^#*deb.*packages.trafficmanager.net/! s/^#*deb/#&/" -e "\$a#SET_REPR_MIRRORS" $CONFIG_PATH/sources.list.$ARCHITECTURE
++    sed -i -e "/^#*deb.*$ESCAPED_MIRROR_URL/! s/^#*deb/#&/" -e "\$a#SET_REPR_MIRRORS" $CONFIG_PATH/sources.list.$ARCHITECTURE
+ fi
+ 
+ # Handle apt retry count config
+diff --git a/scripts/generate_buildinfo_config.sh b/scripts/generate_buildinfo_config.sh
+index d0bfb942e..749113b1f 100755
+--- a/scripts/generate_buildinfo_config.sh
++++ b/scripts/generate_buildinfo_config.sh
+@@ -6,10 +6,12 @@ BUILDINFO_CONFIG=$BUILDINFO_PATH/buildinfo/config/buildinfo.config
+ 
+ mkdir -p $BUILDINFO_PATH/buildinfo/config
+ 
+-echo "export PACKAGE_URL_PREFIX=$PACKAGE_URL_PREFIX" > $BUILDINFO_CONFIG
++echo "export BUILD_PACKAGES_URL=$BUILD_PACKAGES_URL" > $BUILDINFO_CONFIG
+ echo "export SONIC_VERSION_CONTROL_COMPONENTS=$SONIC_VERSION_CONTROL_COMPONENTS" >> $BUILDINFO_CONFIG
+ echo "export SONIC_VERSION_CACHE=${SONIC_VERSION_CACHE}" >> $BUILDINFO_CONFIG
+ echo "export SONIC_VERSION_CACHE_SOURCE=${SONIC_VERSION_CACHE_SOURCE}" >> $BUILDINFO_CONFIG
+ echo "export DISTRO=${DISTRO}" >> $BUILDINFO_CONFIG
+ echo "export MIRROR_SNAPSHOT=$MIRROR_SNAPSHOT" >> $BUILDINFO_CONFIG
++echo "export BUILD_PUBLIC_URL=$BUILD_PUBLIC_URL" >> $BUILDINFO_CONFIG
++echo "export BUILD_SNAPSHOT_URL=$BUILD_SNAPSHOT_URL" >> $BUILDINFO_CONFIG
+ echo "export PIP_HTTP_TIMEOUT=$PIP_HTTP_TIMEOUT" >> $BUILDINFO_CONFIG
+diff --git a/slave.mk b/slave.mk
+index 832465cdf..8b9e59fdb 100644
+--- a/slave.mk
++++ b/slave.mk
+@@ -99,6 +99,8 @@ export CROSS_BUILD_ENVIRON
+ export BLDENV
+ export BUILD_WORKDIR
+ export MIRROR_SNAPSHOT
++export BUILD_PUBLIC_URL
++export BUILD_SNAPSHOT_URL
+ export SONIC_OS_VERSION
+ export FILES_PATH
+ export PROJECT_ROOT
+@@ -160,7 +162,7 @@ include $(RULES_PATH)/config
+ ###############################################################################
+ ## Version control related exports
+ ###############################################################################
+-export PACKAGE_URL_PREFIX
++export BUILD_PACKAGES_URL
+ export TRUSTED_GPG_URLS
+ export SONIC_VERSION_CONTROL_COMPONENTS
+ DEFAULT_CONTAINER_REGISTRY := $(SONIC_DEFAULT_CONTAINER_REGISTRY)
+@@ -1244,7 +1246,7 @@ $(addprefix $(TARGET_PATH)/, $(DOCKER_IMAGES)) : $(TARGET_PATH)/%.gz : .platform
+ 		j2 $($*.gz_PATH)/Dockerfile.j2 > $($*.gz_PATH)/Dockerfile
+ 		$(call generate_manifest,$*)
+ 		# Prepare docker build info
+-		PACKAGE_URL_PREFIX=$(PACKAGE_URL_PREFIX) \
++		BUILD_PACKAGES_URL=$(BUILD_PACKAGES_URL) \
+ 		SONIC_ENFORCE_VERSIONS=$(SONIC_ENFORCE_VERSIONS) \
+ 		TRUSTED_GPG_URLS=$(TRUSTED_GPG_URLS) \
+ 		SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+@@ -1313,7 +1315,7 @@ $(addprefix $(TARGET_PATH)/, $(DOCKER_DBG_IMAGES)) : $(TARGET_PATH)/%-$(DBG_IMAG
+ 		j2 $($*.gz_PATH)/Dockerfile-dbg.j2 > $($*.gz_PATH)/Dockerfile-dbg
+ 		$(call generate_manifest,$*,dbg)
+ 		# Prepare docker build info
+-		PACKAGE_URL_PREFIX=$(PACKAGE_URL_PREFIX) \
++		BUILD_PACKAGES_URL=$(BUILD_PACKAGES_URL) \
+ 		SONIC_ENFORCE_VERSIONS=$(SONIC_ENFORCE_VERSIONS) \
+ 		TRUSTED_GPG_URLS=$(TRUSTED_GPG_URLS) \
+ 		SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+@@ -1416,7 +1418,7 @@ $(addprefix $(TARGET_PATH)/, $(SONIC_RFS_TARGETS)) : $(TARGET_PATH)/% : \
+ 		IMAGE_TYPE=$($(installer)_IMAGE_TYPE) \
+ 		TARGET_PATH=$(TARGET_PATH) \
+ 		TRUSTED_GPG_URLS=$(TRUSTED_GPG_URLS) \
+-		PACKAGE_URL_PREFIX=$(PACKAGE_URL_PREFIX) \
++		BUILD_PACKAGES_URL=$(BUILD_PACKAGES_URL) \
+ 		DBGOPT='$(DBGOPT)' \
+ 		SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+ 		MULTIARCH_QEMU_ENVIRON=$(MULTIARCH_QEMU_ENVIRON) \
+@@ -1680,7 +1682,7 @@ $(addprefix $(TARGET_PATH)/, $(SONIC_INSTALLERS)) : $(TARGET_PATH)/% : \
+ 		ONIE_IMAGE_PART_SIZE=$(ONIE_IMAGE_PART_SIZE) \
+ 		SONIC_ENFORCE_VERSIONS=$(SONIC_ENFORCE_VERSIONS) \
+ 		TRUSTED_GPG_URLS=$(TRUSTED_GPG_URLS) \
+-		PACKAGE_URL_PREFIX=$(PACKAGE_URL_PREFIX) \
++		BUILD_PACKAGES_URL=$(BUILD_PACKAGES_URL) \
+ 		DBGOPT='$(DBGOPT)' \
+ 		SONIC_VERSION_CACHE=$(SONIC_VERSION_CACHE) \
+ 		MULTIARCH_QEMU_ENVIRON=$(MULTIARCH_QEMU_ENVIRON) \
+diff --git a/sonic-slave-bookworm/Dockerfile.j2 b/sonic-slave-bookworm/Dockerfile.j2
+index 243105016..f5578428a 100644
+--- a/sonic-slave-bookworm/Dockerfile.j2
++++ b/sonic-slave-bookworm/Dockerfile.j2
+@@ -27,6 +27,13 @@ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d/"]
+ COPY ["sources.list.{{ CONFIGURED_ARCH }}", "/etc/apt/sources.list"]
+ {%- else %}
+ COPY ["sources.list.amd64", "/etc/apt/sources.list"]
++{%- endif %}
++
++# Install certificates by disabling the peer verification
++RUN apt -o Acquire::https::Verify-Peer=false update && \
++    apt -o Acquire::https::Verify-Peer=false install -y ca-certificates
++
++{%- if CROSS_BUILD_ENVIRON == "y" %}
+ {%- if CONFIGURED_ARCH == "armhf" %}
+ ARG arch=armhf
+ ARG gcc_arch=arm-linux-gnueabihf
+@@ -534,8 +541,8 @@ RUN eatmydata apt-get install -y kernel-wedge
+ # For gobgp and telemetry build
+ RUN eatmydata apt-get install -y golang
+ {%- if INCLUDE_FIPS == "y" %}
+-RUN wget -O golang-go.deb 'https://packages.trafficmanager.net/public/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-go_{{ FIPS_GOLANG_VERSION }}_{{ CONFIGURED_ARCH }}.deb' \
+- && wget -O golang-src.deb 'https://packages.trafficmanager.net/public/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-src_{{ FIPS_GOLANG_VERSION }}_all.deb' \
++RUN wget -O golang-go.deb '{{ BUILD_PUBLIC_URL }}/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-go_{{ FIPS_GOLANG_VERSION }}_{{ CONFIGURED_ARCH }}.deb' \
++ && wget -O golang-src.deb '{{ BUILD_PUBLIC_URL }}/fips/bookworm/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-1.19-src_{{ FIPS_GOLANG_VERSION }}_all.deb' \
+  && eatmydata dpkg -i golang-go.deb golang-src.deb \
+  && ln -sf /usr/lib/go-1.19 /usr/local/go \
+  && rm golang-go.deb golang-src.deb
+diff --git a/sonic-slave-trixie/Dockerfile.j2 b/sonic-slave-trixie/Dockerfile.j2
+index 875663b95..26f6d52d4 100644
+--- a/sonic-slave-trixie/Dockerfile.j2
++++ b/sonic-slave-trixie/Dockerfile.j2
+@@ -27,6 +27,13 @@ COPY ["no-check-valid-until", "/etc/apt/apt.conf.d/"]
+ COPY ["sources.list.{{ CONFIGURED_ARCH }}", "/etc/apt/sources.list"]
+ {%- else %}
+ COPY ["sources.list.amd64", "/etc/apt/sources.list"]
++{%- endif %}
++
++# Install certificates by disabling the peer verification
++RUN apt -o Acquire::https::Verify-Peer=false update && \
++    apt -o Acquire::https::Verify-Peer=false install -y ca-certificates
++
++{%- if CROSS_BUILD_ENVIRON == "y" %}
+ {%- if CONFIGURED_ARCH == "armhf" %}
+ ARG arch=armhf
+ ARG gcc_arch=arm-linux-gnueabihf
+@@ -554,8 +561,8 @@ RUN eatmydata apt-get install -y kernel-wedge
+ # For gobgp and telemetry build
+ RUN eatmydata apt-get install -y golang golang-go
+ {%- if INCLUDE_FIPS == "y" %}
+-RUN wget -O golang-go.deb 'https://packages.trafficmanager.net/public/fips/trixie/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-{{ FIPS_GOLANG_MAIN_VERSION }}-go_{{ FIPS_GOLANG_VERSION }}_{{ CONFIGURED_ARCH }}.deb' \
+- && wget -O golang-src.deb 'https://packages.trafficmanager.net/public/fips/trixie/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-{{ FIPS_GOLANG_MAIN_VERSION }}-src_{{ FIPS_GOLANG_VERSION }}_all.deb' \
++RUN wget -O golang-go.deb '{{ BUILD_PUBLIC_URL }}/fips/trixie/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-{{ FIPS_GOLANG_MAIN_VERSION }}-go_{{ FIPS_GOLANG_VERSION }}_{{ CONFIGURED_ARCH }}.deb' \
++ && wget -O golang-src.deb '{{ BUILD_PUBLIC_URL }}/fips/trixie/{{ FIPS_VERSION }}/{{ CONFIGURED_ARCH }}/golang-{{ FIPS_GOLANG_MAIN_VERSION }}-src_{{ FIPS_GOLANG_VERSION }}_all.deb' \
+  && eatmydata dpkg -i golang-go.deb golang-src.deb \
+  && ln -sf /usr/lib/go-{{ FIPS_GOLANG_MAIN_VERSION }} /usr/local/go \
+  && rm golang-go.deb golang-src.deb
+diff --git a/src/ixgbe/Makefile b/src/ixgbe/Makefile
+index 436a4b85c..753445b9d 100644
+--- a/src/ixgbe/Makefile
++++ b/src/ixgbe/Makefile
+@@ -6,7 +6,7 @@ MAIN_TARGET = ixgbe.ko
+ 
+ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -rf ./ixgbe-$(IXGBE_DRIVER_VERSION)
+-	wget -O ixgbe-$(IXGBE_DRIVER_VERSION).tar.gz "https://packages.trafficmanager.net/public/ixgbe-5.2.4.tar.gz"
++	wget -O ixgbe-$(IXGBE_DRIVER_VERSION).tar.gz "$(BUILD_PUBLIC_URL)/ixgbe-5.2.4.tar.gz"
+ 	tar xzf ixgbe-$(IXGBE_DRIVER_VERSION).tar.gz
+ 
+ 	# Patch
+diff --git a/src/lldpd/Makefile b/src/lldpd/Makefile
+index 24c8e26bd..b81a9151d 100644
+--- a/src/lldpd/Makefile
++++ b/src/lldpd/Makefile
+@@ -5,7 +5,7 @@ SHELL = /bin/bash
+ MAIN_TARGET = $(LLDPD)
+ DERIVED_TARGETS = $(LIBLLDPCTL) $(LLDPD_DBG)
+ 
+-LLDP_URL = https://packages.trafficmanager.net/public/debian/pool/main/l/lldpd
++LLDP_URL = $(BUILD_PUBLIC_URL)/debian/pool/main/l/lldpd
+ 
+ DSC_FILE = lldpd_$(LLDPD_VERSION_FULL).dsc
+ ORIG_FILE = lldpd_$(LLDPD_VERSION).orig.tar.gz
+diff --git a/src/snmpd/Makefile b/src/snmpd/Makefile
+index 4945e6545..24dd652fb 100644
+--- a/src/snmpd/Makefile
++++ b/src/snmpd/Makefile
+@@ -38,7 +38,7 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -rf net-snmp-$(SNMPD_VERSION)
+ 
+ 	# download debian net-snmp
+-	dget -u https://packages.trafficmanager.net/public/debian/pool/main/n/net-snmp/net-snmp_$(SNMPD_VERSION_FULL).dsc
++	dget -u $(BUILD_PUBLIC_URL)/debian/pool/main/n/net-snmp/net-snmp_$(SNMPD_VERSION_FULL).dsc
+ 
+ 	pushd net-snmp-$(SNMPD_VERSION)
+ 	git init
+diff --git a/src/socat/Makefile b/src/socat/Makefile
+index bee404ebc..58f9861a5 100644
+--- a/src/socat/Makefile
++++ b/src/socat/Makefile
+@@ -10,9 +10,9 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -rf ./socat-1.7.4.1
+ 
+ 	# Get source package
+-	wget -NO socat_$(SOCAT_VERSION).dsc "https://packages.trafficmanager.net/public/debian/socat_1.7.4.1-3.dsc"
+-	wget -NO socat_$(SOCAT_VERSION).debian.tar.xz "https://packages.trafficmanager.net/public/debian/socat_1.7.4.1-3.debian.tar.xz"
+-	wget -NO socat_1.7.4.1.orig.tar.gz "https://packages.trafficmanager.net/public/debian/socat_1.7.4.1.orig.tar.gz"
++	wget -NO socat_$(SOCAT_VERSION).dsc "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.dsc"
++	wget -NO socat_$(SOCAT_VERSION).debian.tar.xz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1-3.debian.tar.xz"
++	wget -NO socat_1.7.4.1.orig.tar.gz "$(BUILD_PUBLIC_URL)/debian/socat_1.7.4.1.orig.tar.gz"
+ 
+ 	dpkg-source -x socat_$(SOCAT_VERSION).dsc
+ 
+diff --git a/src/sonic-build-hooks/scripts/buildinfo_base.sh b/src/sonic-build-hooks/scripts/buildinfo_base.sh
+index 7c9a8dc92..eafba5e07 100755
+--- a/src/sonic-build-hooks/scripts/buildinfo_base.sh
++++ b/src/sonic-build-hooks/scripts/buildinfo_base.sh
+@@ -11,7 +11,6 @@ POST_VERSION_PATH=$BUILDINFO_PATH/post-versions
+ VERSION_DEB_PREFERENCE=$BUILDINFO_PATH/versions/01-versions-deb
+ WEB_VERSION_FILE=$VERSION_PATH/versions-web
+ BUILD_WEB_VERSION_FILE=$BUILD_VERSION_PATH/versions-web
+-REPR_MIRROR_URL_PATTERN='http:\/\/packages.trafficmanager.net\/'
+ DPKG_INSTALLTION_LOCK_FILE=/tmp/.dpkg_installation.lock
+ GET_RETRY_COUNT=5
+ 
+@@ -34,7 +33,7 @@ PKG_CACHE_FILE_NAME=${PKG_CACHE_PATH}/cache.tgz
+ . ${BUILDINFO_PATH}/scripts/utils.sh
+ 
+ 
+-URL_PREFIX=$(echo "${PACKAGE_URL_PREFIX}" | sed -E "s#(//[^/]*/).*#\1#")
++URL_PREFIX=$(echo "${BUILD_PACKAGES_URL}" | sed -E "s#(//[^/]*/).*#\1#")
+ 
+ log_err()
+ {
+@@ -112,15 +111,15 @@ get_version_cache_option()
+ set_reproducible_mirrors()
+ {
+     # Remove the charater # in front of the line if matched
+-    local expression="s/^#\s*\(.*$REPR_MIRROR_URL_PATTERN\)/\1/"
++    local expression="s,^#\s*\(.*$BUILD_SNAPSHOT_URL\),\1,"
+     # Add the character # in front of the line, if not match the URL pattern condition
+-    local expression2="/^#*deb.*$REPR_MIRROR_URL_PATTERN/! s/^#*deb/#&/"
++    local expression2="\,^#*deb.*$BUILD_SNAPSHOT_URL,! s,^#*deb,#&,"
+     local expression3="\$a#SET_REPR_MIRRORS"
+     if [ "$1" = "-d" ]; then
+         # Add the charater # in front of the line if match
+-        expression="s/^deb.*$REPR_MIRROR_URL_PATTERN/#\0/"
++        expression="s,^deb.*$BUILD_SNAPSHOT_URL,#\0,"
+         # Remove the character # in front of the line, if not match the URL pattern condition
+-        expression2="/^#*deb.*$REPR_MIRROR_URL_PATTERN/! s/^#\s*(#*deb)/\1/"
++        expression2="\,^#*deb.*$BUILD_SNAPSHOT_URL,! s,^#\s*(#*deb),\1,"
+         expression3="/#SET_REPR_MIRRORS/d"
+     fi
+     if [[ "$1" != "-d" ]] && [ -f /etc/apt/sources.list.d/debian.sources ]; then
+@@ -132,7 +131,7 @@ set_reproducible_mirrors()
+ 
+     local mirrors="/etc/apt/sources.list $(find /etc/apt/sources.list.d/ -type f)"
+     for mirror in $mirrors; do
+-        if ! grep -iq "$REPR_MIRROR_URL_PATTERN" "$mirror"; then
++        if ! grep -iq "$BUILD_SNAPSHOT_URL" "$mirror"; then
+             continue
+         fi
+ 
+@@ -212,7 +211,7 @@ download_packages()
+                 else
+ 
+                     local version_filename="${filename}-${version}"
+-                    local proxy_url="${PACKAGE_URL_PREFIX}/${version_filename}"
++                    local proxy_url="${BUILD_PACKAGES_URL}/${version_filename}"
+                     local url_exist=$(check_if_url_exist $proxy_url)
+                     if [ "$url_exist" == y ]; then
+                         parameters[$i]=$proxy_url
+diff --git a/src/swig/Makefile b/src/swig/Makefile
+index 429184dd9..5e7f09c20 100644
+--- a/src/swig/Makefile
++++ b/src/swig/Makefile
+@@ -7,9 +7,9 @@ DERIVED_TARGETS = $(SWIG) $(SWIG_DBG)
+ 
+ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -fr ./swig-$(SWIG_VERSION) *.deb
+-	wget -O swig_$(SWIG_VERSION).orig.tar.gz                      'https://packages.trafficmanager.net/public/swig_3.0.12.orig.tar.gz'
+-	wget -O swig_$(SWIG_VERSION).dsc                              'https://packages.trafficmanager.net/public/swig_3.0.12-2.dsc'
+-	wget -O swig_$(SWIG_VERSION)-$(SWIG_SUBVERSION).debian.tar.xz 'https://packages.trafficmanager.net/public/swig_3.0.12-2.debian.tar.xz'
++	wget -O swig_$(SWIG_VERSION).orig.tar.gz                      '$(BUILD_PUBLIC_URL)/swig_3.0.12.orig.tar.gz'
++	wget -O swig_$(SWIG_VERSION).dsc                              '$(BUILD_PUBLIC_URL)/swig_3.0.12-2.dsc'
++	wget -O swig_$(SWIG_VERSION)-$(SWIG_SUBVERSION).debian.tar.xz '$(BUILD_PUBLIC_URL)/swig_3.0.12-2.debian.tar.xz'
+ 	dpkg-source -x swig_$(SWIG_VERSION).dsc
+ 
+ 	pushd ./swig-$(SWIG_VERSION)
+diff --git a/src/thrift/Makefile b/src/thrift/Makefile
+index c8317a5e1..e9467ce8e 100644
+--- a/src/thrift/Makefile
++++ b/src/thrift/Makefile
+@@ -10,7 +10,7 @@ DERIVED_TARGETS = libthrift-dev_$(THRIFT_VERSION_FULL)_$(CONFIGURED_ARCH).deb \
+ 		  python-thrift_$(THRIFT_VERSION_FULL)_$(CONFIGURED_ARCH).deb \
+ 		  thrift-compiler_$(THRIFT_VERSION_FULL)_$(CONFIGURED_ARCH).deb
+ 
+-THRIFT_LINK_PRE = https://packages.trafficmanager.net/public/debian
++THRIFT_LINK_PRE = $(BUILD_PUBLIC_URL)/debian
+ 
+ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ 	rm -rf thrift-$(THRIFT_VERSION)
+-- 
+2.25.1
+

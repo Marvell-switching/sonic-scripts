@@ -1,0 +1,154 @@
+From 7bc4f240b7ad3d8af2a9f7ddcfe9695de19f934c Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Tue, 24 Mar 2026 19:00:30 +0530
+Subject: [PATCH] static_route: Add missing duplicate next hop guard
+
+If a route is added with identical nexthop, route command must reject
+it.
+
+Before fix:
+config route add prefix vrf Vrf_test 30.30.30.0/24 nexthop 10.10.10.2
+config route add prefix vrf Vrf_test 30.30.30.0/24 nexthop 10.10.10.2
+config route add prefix vrf Vrf_test 30.30.30.0/24 nexthop 10.10.10.2
+
+  "STATIC_ROUTE|Vrf_test|30.30.30.0/24": {
+    "type": "hash",
+    "value": {
+      "blackhole": "false,false,false",
+      "distance": "0,0,0",
+      "ifname": ",",
+      "nexthop": "10.10.10.2,10.10.10.2,10.10.10.2",
+      "nexthop-vrf": "Vrf_test,Vrf_test,Vrf_test"
+    }
+
+After fix:
+config route add prefix vrf Vrf_test 30.30.30.0/24 nexthop 10.10.10.2
+Usage: config route add [OPTIONS] prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop
+                        [vrf <vrf_name>]                 <A.B.C.D>|<dev
+                        <dev_name>>|<A.B.C.D dev <dev_name>>
+Try 'config route add -h' for help.
+
+Error: Nexthop ('10.10.10.2', 'Vrf_test', '') already exists for route Vrf_test|30.30.30.0/24
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ config/main.py              | 15 ++++++++
+ tests/static_routes_test.py | 69 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 84 insertions(+)
+
+diff --git a/config/main.py b/config/main.py
+index 47cb1aa7..efb5b1ac 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -7596,6 +7596,21 @@ def add_route(ctx, command_str):
+         # If exist update current entry
+         current_entry = config_db.get_entry('STATIC_ROUTE', key)
+ 
++        # Check for duplicate nexthop: build existing (nexthop, nexthop-vrf, ifname) tuples
++        # and reject the add if the incoming tuple is already present.
++        existing_nh     = current_entry.get('nexthop', '').split(',')
++        existing_nhvrf  = current_entry.get('nexthop-vrf', '').split(',')
++        existing_ifname = current_entry.get('ifname', '').split(',')
++        existing_zip    = list(itertools.zip_longest(existing_nh, existing_nhvrf, existing_ifname, fillvalue=''))
++
++        incoming_tuple = (
++            route.get('nexthop', ''),
++            route.get('nexthop-vrf', vrf),
++            route.get('ifname', ''),
++        )
++        if incoming_tuple in existing_zip:
++            ctx.fail('Nexthop {} already exists for route {}'.format(incoming_tuple, key))
++
+         for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
+             if item not in current_entry:
+                 current_entry[item] = ''
+diff --git a/tests/static_routes_test.py b/tests/static_routes_test.py
+index e4911d33..bddc2820 100644
+--- a/tests/static_routes_test.py
++++ b/tests/static_routes_test.py
+@@ -42,6 +42,7 @@ Error: interface {} does not exist.
+ ERROR_STR_NO_DEL_MULTI_NH = '''
+ Error: Only one nexthop can be deleted at a time
+ '''
++ERROR_STR_DUPLICATE_NEXTHOP = "already exists for route"
+ 
+ 
+ class TestStaticRoutes(object):
+@@ -677,6 +678,74 @@ class TestStaticRoutes(object):
+         print(result.exit_code, result.output)
+         assert '1.2.3.5/32' not in db.cfgdb.get_table('STATIC_ROUTE')
+ 
++    def test_add_duplicate_nexthop_static_route(self):
++        """Adding the same nexthop twice for the same prefix must be rejected (default and named VRF)."""
++        db = Db()
++        runner = CliRunner()
++        obj = {'config_db': db.cfgdb}
++
++        # --- default VRF ---
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "20.0.0.0/24", "nexthop", "10.10.10.2"], obj=obj)
++        print(result.exit_code, result.output)
++        assert result.exit_code == 0
++        assert ('default', '20.0.0.0/24') in db.cfgdb.get_table('STATIC_ROUTE')
++
++        # Add with identical nexthop - must be rejected
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "20.0.0.0/24", "nexthop", "10.10.10.2"], obj=obj)
++        print(result.exit_code, result.output)
++        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
++        
++        # DB must still contain exactly one nexthop entry
++        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'default|20.0.0.0/24')
++        assert entry['nexthop'] == '10.10.10.2'
++        assert entry['blackhole'] == 'false'
++        assert entry['nexthop-vrf'] == 'default'
++
++        # --- VRF ---
++        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf-RED"], obj=obj)
++        print(result.exit_code, result.output)
++
++        # First add
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "vrf", "Vrf-RED", "30.30.30.0/24", "nexthop", "10.10.10.2"], obj=obj)
++        print(result.exit_code, result.output)
++        assert result.exit_code == 0
++        assert ('Vrf-RED', '30.30.30.0/24') in db.cfgdb.get_table('STATIC_ROUTE')
++
++        # Second add with the same nexthop - must be rejected
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "vrf", "Vrf-RED", "30.30.30.0/24", "nexthop", "10.10.10.2"], obj=obj)
++        print(result.exit_code, result.output)
++        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
++
++        # DB must still contain exactly one nexthop entry in the VRF
++        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'Vrf-RED|30.30.30.0/24')
++        assert entry['nexthop'] == '10.10.10.2'
++        assert ',' not in entry['nexthop']
++        assert ',' not in entry['blackhole']
++
++        # --- IPv6 ---
++        # First add — should succeed
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "2001:db8::/32", "nexthop", "fc00::1"], obj=obj)
++        print(result.exit_code, result.output)
++        assert result.exit_code == 0
++        assert ('default', '2001:db8::/32') in db.cfgdb.get_table('STATIC_ROUTE')
++
++        # Second add with identical IPv6 nexthop - must be rejected
++        result = runner.invoke(config.config.commands["route"].commands["add"],
++                               ["prefix", "2001:db8::/32", "nexthop", "fc00::1"], obj=obj)
++        print(result.exit_code, result.output)
++        assert ERROR_STR_DUPLICATE_NEXTHOP in result.output
++
++        # DB must still contain exactly one nexthop entry
++        entry = db.cfgdb.get_entry('STATIC_ROUTE', 'default|2001:db8::/32')
++        assert entry['nexthop'] == 'fc00::1'
++        assert ',' not in entry['nexthop']
++        assert ',' not in entry['blackhole']
++
+     @classmethod
+     def teardown_class(cls):
+         os.environ['UTILITIES_UNIT_TESTING'] = "0"
+-- 
+2.25.1
+

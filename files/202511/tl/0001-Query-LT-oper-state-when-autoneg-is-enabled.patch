@@ -1,0 +1,47 @@
+From b5956ab409282d5dab8e98e95298f294f23d6035 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Wed, 29 Oct 2025 17:00:15 +0530
+Subject: [PATCH] Query LT oper state when autoneg is enabled
+
+Why I did it:
+In accordance with point 8 of the SONiC High-Level Design [HLD](https://github.com/sonic-net/SONiC/blob/master/doc/port_auto_neg/port-auto-negotiation-design.md#sai-api-requirement) for autonegotiation,
+if autonegotiation is enabled, SAI should also activate the link-training to dynamically tune the TX FIR. The link-training show CLI should display the correct link training operational state.
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ orchagent/portsorch.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 1a0f3d22..5bb9b226 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -4320,6 +4320,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
+                         if (p.m_cap_an < 0)
+                         {
+                             initPortCapAutoNeg(p);
++                            initPortCapLinkTraining(p);
+                             m_portList[p.m_alias] = p;
+                         }
+                         if (p.m_cap_an < 1)
+@@ -8719,6 +8720,7 @@ void PortsOrch::updatePortOperStatus(Port &port, sai_port_oper_status_t status)
+         if (port.m_autoneg > 0)
+         {
+             refreshPortStateAutoNeg(port);
++            refreshPortStateLinkTraining(port);
+             updatePortStatePoll(port, PORT_STATE_POLL_AN, !(status == SAI_PORT_OPER_STATUS_UP));
+         }
+         if (port.m_link_training > 0)
+@@ -10110,8 +10112,7 @@ void PortsOrch::refreshPortStateLinkTraining(const Port &port)
+     }
+ 
+     string status = "off";
+-
+-    if (port.m_admin_state_up && port.m_link_training > 0 && port.m_cap_lt > 0)
++    if (port.m_admin_state_up && ((port.m_autoneg > 0) || (port.m_link_training > 0)) && port.m_cap_lt > 0)
+     {
+         sai_port_link_training_rx_status_t rx_status;
+         sai_port_link_training_failure_status_t failure;
+-- 
+2.25.1
+

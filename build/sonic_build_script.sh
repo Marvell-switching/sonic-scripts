@@ -70,8 +70,8 @@ print_usage()
     echo "    --verify_patches:    Apply patches, don't compile. Abort on failure"
     echo "        export DEVEL=y   Ignore patch apply failures but continue"
     echo "    --clean_dockers: clean up build dockers"
-echo """
-Example:
+    echo "    --tl  -1  -2  -3     Apply Extra patches from customers directories"
+echo """Examples:
 ./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
   -c 021569412
@@ -132,6 +132,22 @@ parse_arguments()
                 PATCH_SCRIPT_URL="$2"
                 shift # past argument
                 shift # past value
+                ;;
+            --tl)
+                export PATCH_CUSTOM_TL="Y"
+                shift # past argument
+                ;;
+            -1)
+                export PATCH_CUSTOM_1="Y"
+                shift # past argument
+                ;;
+            -2)
+                export PATCH_CUSTOM_2="Y"
+                shift # past argument
+                ;;
+            -3)
+                export PATCH_CUSTOM_3="Y"
+                shift # past argument
                 ;;
             --url)
                 GIT_HUB_URL="$2"

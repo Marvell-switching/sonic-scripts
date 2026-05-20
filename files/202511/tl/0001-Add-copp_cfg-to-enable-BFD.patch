@@ -1,0 +1,53 @@
+From 275b7ebccfe1bd89ef288d8482a6c9b6b54ad1fb Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 29 Oct 2025 12:43:51 +0530
+Subject: [PATCH] [SONICDC-611] Add copp_cfg to enable BFD
+
+Add copp_cfg to enable BFD
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ files/image_config/copp/copp_cfg.j2 | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index fc2002cff..865e2618d 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -84,7 +84,18 @@
+ 		    "red_action": "drop",
+ 		    "trap_action": "trap",
+ 		    "trap_priority": "1"
+-
++{% if DEVICE_METADATA is defined and DEVICE_METADATA['localhost'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] == "true" %}
++	    },
++	    "queue5_group1": {
++	        "trap_action":"trap",
++	        "trap_priority":"5",
++	        "queue": "5",
++	        "meter_type":"packets",
++	        "mode":"sr_tcm",
++	        "cir":"1000",
++	        "cbs":"1000",
++	        "red_action":"drop"
++{% endif %}
+ 	    }
+     },
+     "COPP_TRAP": {
+@@ -136,6 +147,13 @@
+ 		    "trap_ids": "neighbor_miss",
+ 		    "trap_group": "queue1_group3",
+ 		    "always_enabled": "true"
++{% if DEVICE_METADATA is defined and DEVICE_METADATA['localhost'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] == "true" %}
++	    },
++	    "bfd": {
++	        "trap_ids": "bfd,bfdv6",
++	        "trap_group": "queue5_group1",
++	        "always_enabled": "true"
++{% endif %}
+ 	    }
+     }
+ }
+-- 
+2.25.1
+

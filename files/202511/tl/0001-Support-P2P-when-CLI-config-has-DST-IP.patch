@@ -1,0 +1,79 @@
+From 0080ef12059dbba79f042a1629ef4524d849b41b Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Mon, 13 Apr 2026 11:52:31 +0530
+Subject: [PATCH] Support P2P when CLI config has DST IP
+
+Root cause :
+When DST IP is configured via CLI, P2MP was always configured
+instead of P2P.
+
+Fix :
+1. Check if the DST IP is configured.
+2. Check the hardware capability of P2P or P2MP support.
+3. if P2P is supported, enable it else P2MP.
+
+Testing :
+
+Tested with both P2P and P2MP support from hardware by enabling/
+disabling the EVPN MH IVM params.
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/vxlanorch.cpp           | 15 ++++++++++++---
+ tests/mock_tests/vxlanorch_ut.cpp |  2 +-
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/orchagent/vxlanorch.cpp b/orchagent/vxlanorch.cpp
+index dc9cae6f..36eec38b 100644
+--- a/orchagent/vxlanorch.cpp
++++ b/orchagent/vxlanorch.cpp
+@@ -531,12 +531,20 @@ VxlanTunnel::VxlanTunnel(string name, IpAddress srcIp, IpAddress dstIp, tunnel_c
+        tunnel_orch->addVTEP(this, srcIp);
+        vtep_ptr = NULL;
+    }
+-   else if (src_creation_ == TNL_CREATION_SRC_EVPN) 
++   else if (src_creation_ == TNL_CREATION_SRC_EVPN)
+    {
+        vtep_ptr = tunnel_orch->getVTEP(srcIp);
+        tunnel_orch->addRemoveStateTableEntry(name,srcIp, dstIp,
+                                            src, true);
+    }
++   else
++   {
++       /* CLI P2P tunnel: set vtep_ptr if a SIP VTEP exists */
++       if (tunnel_orch->isVTEPExists(srcIp))
++       {
++           vtep_ptr = tunnel_orch->getVTEP(srcIp);
++       }
++   }
+ }
+ 
+ VxlanTunnel::~VxlanTunnel()
+@@ -900,8 +908,9 @@ bool VxlanTunnel::createTunnelHw(uint8_t mapper_list, tunnel_map_use_t map_src,
+         {
+             swss::copy(ipd, dst_ip_);
+             ip = &ipd;
+-            p2p = (src_creation_ == TNL_CREATION_SRC_EVPN)? true:false;
+-            SWSS_LOG_WARN("creation src = %d",src_creation_);
++            p2p = tunnel_orch->isDipTunnelsSupported();
++            SWSS_LOG_NOTICE("Tunnel %s creation src = %d, p2p = %d",
++                            tunnel_name_.c_str(), src_creation_, p2p);
+         }
+ 
+         ids_.tunnel_id = create_tunnel(&ids_, &ips, ip, gUnderlayIfId, p2p, decap_ttl_mode_, encap_ttl);
+diff --git a/tests/mock_tests/vxlanorch_ut.cpp b/tests/mock_tests/vxlanorch_ut.cpp
+index 09fa96a9..d70a22d4 100644
+--- a/tests/mock_tests/vxlanorch_ut.cpp
++++ b/tests/mock_tests/vxlanorch_ut.cpp
+@@ -229,7 +229,7 @@ namespace vxlanorch_test
+                 // Create the tunnel entry directly in the orchestrator's internal structures
+                 // This simulates what would happen after database processing
+                 IpAddress srcIpAddr(src_ip);
+-                IpAddress dstIpAddr = dst_ip.empty() ? IpAddress() : IpAddress(dst_ip);
++                IpAddress dstIpAddr = dst_ip.empty() ? IpAddress("0.0.0.0") : IpAddress(dst_ip);
+ 
+                 // Create tunnel object directly
+                 auto tunnel = std::make_unique<VxlanTunnel>(tunnel_name, srcIpAddr, dstIpAddr, TNL_CREATION_SRC_CLI);
+-- 
+2.25.1
+

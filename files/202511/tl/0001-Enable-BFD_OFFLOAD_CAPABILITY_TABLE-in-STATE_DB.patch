@@ -1,0 +1,182 @@
+From 68c6d525062c72ff991e5d2dec04e9b730ce7f20 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 13 Nov 2025 12:17:08 +0530
+Subject: [PATCH] Enable BFD_OFFLOAD_CAPABILITY_TABLE in STATE_DB
+
+This code change enables orchagent to store the
+BFD_OFFLOAD_CAPABILITY_TABLE in STATE_DB. This helps store the type of
+offload_type that is supported by the vendor.
+
+Supported types will be:
+
+1. Full
+2. Sustenance
+3. None -> default value signifying offload not supported. Table will
+   not be created in this case.
+
+Sample dump of table:
+
+root@sonic:/home/admin# redis-dump -d 6 -k "BFD*" | jq
+{
+  "BFD_OFFLOAD_CAPABILITY_TABLE|global": {
+    "type": "hash",
+    "value": {
+      "ipv4_offload_type": "full",
+      "ipv6_offload_type": "full"
+    },
+    "ttl": -0.001,
+    "expireat": 1762496643.566433
+  }
+}
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ orchagent/bfdorch.cpp | 75 +++++++++++++++++++++++++++++++++++++++++--
+ orchagent/bfdorch.h   |  7 ++++
+ 2 files changed, 79 insertions(+), 3 deletions(-)
+
+diff --git a/orchagent/bfdorch.cpp b/orchagent/bfdorch.cpp
+index c37b178a..668309fd 100644
+--- a/orchagent/bfdorch.cpp
++++ b/orchagent/bfdorch.cpp
+@@ -511,7 +511,14 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         attrs.emplace_back(attr);
+ 
+         attr.id = SAI_BFD_SESSION_ATTR_SRC_MAC_ADDRESS;
+-        memcpy(attr.value.mac, port.m_mac.getMac(), sizeof(sai_mac_t));
++        if (port.m_mac)
++        {
++            memcpy(attr.value.mac, port.m_mac.getMac(), sizeof(sai_mac_t));
++        }
++        else
++        {
++            memcpy(attr.value.mac, gMacAddress.getMac(), sizeof(sai_mac_t));
++        }
+         attrs.emplace_back(attr);
+ 
+         attr.id = SAI_BFD_SESSION_ATTR_DST_MAC_ADDRESS;
+@@ -541,6 +548,17 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         attrs.emplace_back(attr);
+     }
+ 
++    BgpGlobalStateOrch* bgp_global_state_orch = gDirectory.get<BgpGlobalStateOrch*>();
++    if (bgp_global_state_orch)
++    {
++        bool is_ipv6 = !src_ip.isV4();
++        sai_bfd_session_offload_type_t offload_type = bgp_global_state_orch->getBfdOffloadType(is_ipv6);
++
++        attr.id = SAI_BFD_SESSION_ATTR_OFFLOAD_TYPE;
++        attr.value.s32 = offload_type;
++        attrs.emplace_back(attr);
++    }
++
+     fvVector.emplace_back("state", session_state_lookup.at(SAI_BFD_SESSION_STATE_DOWN));
+ 
+     sai_object_id_t bfd_session_id = SAI_NULL_OBJECT_ID;
+@@ -709,6 +727,10 @@ BgpGlobalStateOrch::BgpGlobalStateOrch(DBConnector *db, string tableName):
+     SWSS_LOG_ENTER();
+     tsa_enabled = false;
+     bool ipv6 = true;
++
++    m_stateDbConnector = std::make_unique<swss::DBConnector>("STATE_DB", 0);
++    m_stateBfdCapabilityTable = std::make_unique<swss::Table>(m_stateDbConnector.get(), STATE_BFD_OFFLOAD_CAPABILITY_TABLE_NAME);
++
+     bfd_offload = (offload_supported(!ipv6) && offload_supported(ipv6));
+ }
+ 
+@@ -729,6 +751,28 @@ bool BgpGlobalStateOrch::getSoftwareBfd()
+     return !bfd_offload;
+ }
+ 
++sai_bfd_session_offload_type_t BgpGlobalStateOrch::getBfdOffloadType(bool is_ipv6)
++{
++    SWSS_LOG_ENTER();
++
++    string field_name = is_ipv6 ? "ipv6_offload_type" : "ipv4_offload_type";
++    string offload_value;
++
++    if (m_stateBfdCapabilityTable->hget("global", field_name, offload_value))
++    {
++        if (offload_value == "full")
++        {
++            return SAI_BFD_SESSION_OFFLOAD_TYPE_FULL;
++        }
++        else if (offload_value == "sustenance")
++        {
++            return SAI_BFD_SESSION_OFFLOAD_TYPE_SUSTENANCE;
++        }
++    }
++
++    return SAI_BFD_SESSION_OFFLOAD_TYPE_NONE;
++}
++
+ bool BgpGlobalStateOrch::offload_supported(bool get_ipv6)
+ {
+     sai_attribute_t attr;
+@@ -760,13 +804,38 @@ bool BgpGlobalStateOrch::offload_supported(bool get_ipv6)
+     status = sai_switch_api->get_switch_attribute(gSwitchId, 1, &attr);
+     if(status == SAI_STATUS_SUCCESS && attr.value.u32list.count > 0)
+     {
+-        SWSS_LOG_INFO("BFD offload type: %d", attr.value.u32list.list[0]);
+-        return (attr.value.u32list.list[0] != SAI_BFD_SESSION_OFFLOAD_TYPE_NONE);
++        sai_bfd_session_offload_type_t offload_type = static_cast<sai_bfd_session_offload_type_t>(attr.value.u32list.list[0]);
++
++        store_offload_capability(get_ipv6, offload_type);
++
++        SWSS_LOG_INFO("BFD offload type: %d", offload_type);
++        return (offload_type != SAI_BFD_SESSION_OFFLOAD_TYPE_NONE);
+     }
+     SWSS_LOG_ERROR("Could not get supported BFD offload type, rv: %d", status);
+     return false;
+ }
+ 
++void BgpGlobalStateOrch::store_offload_capability(bool is_ipv6, sai_bfd_session_offload_type_t offload_type)
++{
++    string field_name = is_ipv6 ? "ipv6_offload_type" : "ipv4_offload_type";
++    string offload_value;
++    if (offload_type == SAI_BFD_SESSION_OFFLOAD_TYPE_FULL)
++    {
++        offload_value = "full";
++    }
++    else if (offload_type == SAI_BFD_SESSION_OFFLOAD_TYPE_SUSTENANCE)
++    {
++        offload_value = "sustenance";
++    }
++    else
++    {
++        SWSS_LOG_INFO("BFD %s offload not supported (type NONE); capability not stored", is_ipv6 ? "IPv6" : "IPv4");
++        return;
++    }
++    m_stateBfdCapabilityTable->hset("global", field_name, offload_value);
++    SWSS_LOG_INFO("BFD %s offload capability stored: %s", is_ipv6 ? "IPv6" : "IPv4", offload_value.c_str());
++}
++
+ void BgpGlobalStateOrch::doTask(Consumer &consumer)
+ {
+     SWSS_LOG_ENTER();
+diff --git a/orchagent/bfdorch.h b/orchagent/bfdorch.h
+index 4beb3272..b6076bf4 100644
+--- a/orchagent/bfdorch.h
++++ b/orchagent/bfdorch.h
+@@ -55,11 +55,18 @@ public:
+     virtual ~BgpGlobalStateOrch(void);
+     bool getTsaState();
+     bool getSoftwareBfd();
++    sai_bfd_session_offload_type_t getBfdOffloadType(bool is_ipv6);
+ 
+ private:
+     bool tsa_enabled;
+     bool bfd_offload;
++    sai_bfd_session_offload_type_t ipv4_offload_type;
++    sai_bfd_session_offload_type_t ipv6_offload_type;
++    std::unique_ptr<swss::DBConnector> m_stateDbConnector;
++    std::unique_ptr<swss::Table> m_stateBfdCapabilityTable;
++
+     bool offload_supported(bool get_ipv6);
++    void store_offload_capability(bool is_ipv6, sai_bfd_session_offload_type_t offload_type);
+ 
+ };
+ #endif /* SWSS_BFDORCH_H */
+-- 
+2.25.1
+

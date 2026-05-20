@@ -1,0 +1,31 @@
+From 6a61cb39ba03f68a5636afd9f3c6eb08e2d78331 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Tue, 16 Dec 2025 16:20:56 +0530
+Subject: [PATCH] Enable bfd_data_plane_mode flag for frr docker
+
+This flag, once enabled, launches bfdd process with --dplaneaddr flag.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2 | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2 b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+index 702bd3b79..c97c94e2e 100644
+--- a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
++++ b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+@@ -95,7 +95,11 @@ dependent_startup=true
+ dependent_startup_wait_for=zebra:running
+ 
+ [program:bfdd]
++{% if DEVICE_METADATA.localhost.bfd_data_plane_mode is defined and DEVICE_METADATA.localhost.bfd_data_plane_mode == "enabled" %}
++command=/usr/lib/frr/bfdd -A 127.0.0.1 -P 0 --dplaneaddr ipv4:127.0.0.1:50700
++{% else %}
+ command=/usr/lib/frr/bfdd -A 127.0.0.1 -P 0
++{% endif %}
+ priority=4
+ stopsignal=KILL
+ autostart=false
+-- 
+2.25.1
+

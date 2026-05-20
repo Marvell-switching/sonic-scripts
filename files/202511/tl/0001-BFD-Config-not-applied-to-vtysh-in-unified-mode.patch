@@ -1,0 +1,168 @@
+From a7901c59441b213c1e9e9183a09f582b8b2960c9 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 13 Nov 2025 11:12:34 +0530
+Subject: [PATCH] BFD Config not applied to vtysh in unified mode
+
+Issue: When "docker_routing_config_mode" is configured in "unified"
+mode, the BFD_PEER table is read from config_db.json by frrcfgd and
+corresponding bfd commands are supposed to be executed in vtysh. This is
+failing.
+
+RCA: When we manually push the BFD_PEER via redis-cli, it works because
+data expected is a plain string, and it receives the same.
+data[param] == 'up'
+
+However, when we add the same in config_db.json, we receive the data as
+follows:
+data[param] == (up, ADD)
+
+The above is handled properly for scenarios like bgp_af_handler, but was
+missed for bfd.
+
+Fix: Updated the code to handle the above problem.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../frrcfgd/frrcfgd.py                        | 91 +++++++++++--------
+ 1 file changed, 53 insertions(+), 38 deletions(-)
+
+diff --git a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+index 4a26e643d..ec03186fd 100755
+--- a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
++++ b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+@@ -1960,6 +1960,15 @@ class BGPConfigDaemon:
+                          ('detection-multiplier',               '{no:no-prefix}detect-multiplier {}'),
+     ]
+ 
++    bfd_peer_key_map = [('admin_status',                        '{no:no-prefix}shutdown', ['down', 'up']),
++                        ('transmit_interval',                   '{no:no-prefix}transmit-interval {}'),
++                        ('receive_interval',                    '{no:no-prefix}receive-interval {}'),
++                        ('multiplier',                          '{no:no-prefix}detect-multiplier {}'),
++                        ('echo_interval',                       '{no:no-prefix}echo-interval {}'),
++                        ('echo_mode',                           '{no:no-prefix}echo-mode', ['false', 'true']),
++                        ('label',                               '{no:no-prefix}description {}'),
++    ]
++
+     listen_prefix_key_map = [('peer_group', '{no:no-prefix}bgp listen range {} peer-group {}')]
+ 
+     community_set_key_map = [(('set_type', 'match_action', 'community_member'), '{no:no-prefix}bgp community-list {}', hdl_com_set, False)]
+@@ -2109,6 +2118,7 @@ class BGPConfigDaemon:
+                       'BGP_GLOBALS_AF_AGGREGATE_ADDR':  af_aggregate_key_map,
+                       'BGP_GLOBALS_AF_NETWORK':         af_network_key_map,
+                       'BGP_GLOBALS_EVPN_VNI':           global_evpn_vni_key_map,
++                      'BFD_PEER':                       bfd_peer_key_map,
+                       'BFD_PEER_SINGLE_HOP':            bfd_peer_shop_key_map,
+                       'BFD_PEER_MULTI_HOP':             bfd_peer_mhop_key_map,
+                       'IP_SLA':                         ip_sla_key_map,
+@@ -2295,7 +2305,7 @@ class BGPConfigDaemon:
+             ('BGP_GLOBALS_EVPN_VNI', self.bgp_table_handler_common),
+             ('BGP_GLOBALS_EVPN_RT', self.bgp_table_handler_common),
+             ('BGP_GLOBALS_EVPN_VNI_RT', self.bgp_table_handler_common),
+-            ('BFD_PEER', self.bfd_handler),
++            ('BFD_PEER', self.bfd_peer_handler),
+             ('NEIGHBOR_SET', self.bgp_table_handler_common),
+             ('NEXTHOP_SET', self.bgp_table_handler_common),
+             ('TAG_SET', self.bgp_table_handler_common),
+@@ -2360,43 +2370,6 @@ class BGPConfigDaemon:
+         else:
+             self.metadata_asn = data['bgp_asn']
+ 
+-    def bfd_handler(self, table, key, data):
+-        syslog.syslog(syslog.LOG_INFO, '[bgp cfgd](bfd) value for {} changed to {}'.format(key, data))
+-        #get frr bfd session key
+-        key_params = key.split('|')
+-        cmd = 'peer {}'.format(key_params[0])
+-        if len(key_params) == 4 and key_params[3] == 'multihop':
+-            cmd = cmd + ' multihop '
+-        if key_params[1] != 'null':
+-            cmd = cmd + ' local-address ' + key_params[1]
+-        if key_params[2] != 'null':
+-            cmd = cmd + ' interface ' + key_params[2]
+-        if not data:
+-            #BFD peer is deleted
+-            command = "vtysh -c 'configure terminal' -c 'bfd' -c 'no {}'".format(cmd)
+-            self.__run_command(table, command)
+-        else:
+-            #create/update case
+-            command = "vtysh -c 'configure terminal' -c 'bfd' -c '{}'".format(cmd)
+-            for param in data:
+-                if param == 'transmit_interval':
+-                    command = command + " -c 'transmit-interval {}'".format(data[param])
+-                elif param == 'receive_interval':
+-                    command = command + " -c 'receive-interval {}'".format(data[param])
+-                elif param == 'multiplier':
+-                    command = command + " -c 'detect-multiplier {}'".format(data[param])
+-                elif param == 'echo_mode' and data[param] == 'true':
+-                    command = command + " -c 'echo-mode'"
+-                elif param == 'echo_interval':
+-                    command = command + " -c 'echo-interval {}'".format(data[param])
+-                elif param == 'label':
+-                    command = command + " -c 'label {}'".format(data[param])
+-                elif param == 'admin_status' and data[param] == 'up':
+-                    command = command + " -c 'no shutdown'"
+-                elif param == 'admin_status' and data[param] == 'down':
+-                    command = command + " -c 'shutdown'"
+-            self.__run_command(table, command)
+-
+     def vrf_handler(self, table, key, data):
+         syslog.syslog(syslog.LOG_INFO, '[bgp cfgd](vrf) value for {} changed to {}'.format(key, data))
+         #get vrf key
+@@ -3169,6 +3142,45 @@ class BGPConfigDaemon:
+                         if vrf in self.af_aggr_list:
+                             self.af_aggr_list[vrf].pop(norm_ip_prefix, None)
+ 
++            elif table == 'BFD_PEER':
++                # Parse BFD_PEER key: prefix contains remote_addr, key contains local_addr|interface|hop_type
++                remote_addr = prefix
++                key_params = key.split('|') if key else []
++                if len(key_params) >= 2:
++                    local_addr = key_params[0] if key_params[0] != 'null' else None
++                    interface = key_params[1] if key_params[1] != 'null' else None
++                    hop_type = key_params[2] if len(key_params) > 2 else 'singlehop'
++
++                    if del_table:
++                        # Handle complete BFD peer deletion
++                        peer_cmd = f'peer {remote_addr}'
++                        if hop_type == 'multihop':
++                            peer_cmd += ' multihop'
++                        if local_addr:
++                            peer_cmd += f' local-address {local_addr}'
++                        if interface:
++                            peer_cmd += f' interface {interface}'
++
++                        command = f"vtysh -c 'configure terminal' -c 'bfd' -c 'no {peer_cmd}'"
++                        if not self.__run_command(table, command):
++                            syslog.syslog(syslog.LOG_ERR, 'failed to delete BFD peer {}'.format(remote_addr))
++                            continue
++                    else:
++                        # Handle individual field updates using standardized pipeline
++                        cmd_prefix = ['configure terminal', 'bfd']
++                        peer_cmd = f'peer {remote_addr}'
++                        if hop_type == 'multihop':
++                            peer_cmd += ' multihop'
++                        if local_addr:
++                            peer_cmd += f' local-address {local_addr}'
++                        if interface:
++                            peer_cmd += f' interface {interface}'
++                        cmd_prefix.append(peer_cmd)
++
++                        if not key_map.run_command(self, table, data, cmd_prefix):
++                            syslog.syslog(syslog.LOG_ERR, 'failed running BFD_PEER config command')
++                            continue
++
+             elif table == 'BFD_PEER_SINGLE_HOP':
+                 key = prefix + '|' + key
+                 remoteaddr, interface, vrf, localaddr = key.split('|')
+@@ -3898,6 +3910,9 @@ class BGPConfigDaemon:
+     def comm_set_handler(self, table, key, data):
+         self.bgp_table_handler_common(table, key, data, [{'set_type', 'match_action', 'community_member'}])
+ 
++    def bfd_peer_handler(self, table, key, data):
++        self.bgp_table_handler_common(table, key, data, [{'remote-address', 'vrf', 'interface', 'local-address'}])
++
+     def bfd_shop_handler(self, table, key, data):
+         self.bgp_table_handler_common(table, key, data, [{'remote-address', 'vrf', 'interface'},
+                                                          {'remote-address', 'vrf', 'interface', 'local-address'}])
+-- 
+2.25.1
+

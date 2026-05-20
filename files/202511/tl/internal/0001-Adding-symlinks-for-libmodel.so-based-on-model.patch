@@ -1,0 +1,43 @@
+From caf9430c9c08f0fda70bb83a7f105f26a4513ba7 Mon Sep 17 00:00:00 2001
+From: Naveen Rampuram <nrampuram@marvell.com>
+Date: Thu, 30 Apr 2026 00:48:57 +0530
+Subject: [PATCH] Adding symlinks for libmodel.so based on model
+
+Signed-off-by: Naveen Rampuram <nrampuram@marvell.com>
+---
+ syncd/scripts/syncd_start.sh | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/syncd/scripts/syncd_start.sh b/syncd/scripts/syncd_start.sh
+index 1c061b4c..6fcdc54d 100755
+--- a/syncd/scripts/syncd_start.sh
++++ b/syncd/scripts/syncd_start.sh
+@@ -1,4 +1,25 @@
+ #!/usr/bin/env bash
++
++source /usr/share/sonic/hwsku/sai.profile
++
++INSTALL_DIR="/lib/x86_64-linux-gnu"
++
++if [[ -n "$MODEL" ]]; then
++    # Update libmodel.so symlink based on MODEL
++    if [[ "$MODEL" == "tl10" ]]; then
++        ln -sf $INSTALL_DIR/tl10/libmodel.so "${INSTALL_DIR}/libmodel.so"
++        exec /usr/bin/tl10_k -L 5 -p 23700 -n 8 &
++    elif [[ "$MODEL" == "t100" ]]; then
++        ln -sf $INSTALL_DIR/t100/libmodel.so "${INSTALL_DIR}/libmodel.so"
++        exec /usr/bin/t100_k -L 5 -p 23700 -n 8 &
++    elif [[ "$MODEL" == "tl7" ]]; then
++        ln -sf $INSTALL_DIR/tl7/libmodel.so "${INSTALL_DIR}/libmodel.so"
++        exec /usr/bin/teralynx_k -L 5 -p 23700 -n 6 &
++    else
++        echo "ERROR: Unsupported MODEL '$MODEL'" >&2
++        exit 1
++    fi
++fi
+ #
+ # Script to start syncd using supervisord
+ #
+-- 
+2.25.1
+

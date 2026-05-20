@@ -1,0 +1,26 @@
+From 9e13ed6438cc192b1a9f80da492b4bbbb4c5f83f Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Tue, 20 Jan 2026 14:13:15 +0530
+Subject: [PATCH] Increase timeout in kvm vs image build scripts
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ install_sonic.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/install_sonic.py b/install_sonic.py
+index 2397a6d61..20d27fec8 100755
+--- a/install_sonic.py
++++ b/install_sonic.py
+@@ -42,7 +42,7 @@ def main():
+     p.sendline()
+ 
+     # wait for grub, and exit
+-    p.expect([grub_selection])
++    p.expect([grub_selection], timeout=5000)
+ 
+ 
+ if __name__ == '__main__':
+-- 
+2.25.1
+

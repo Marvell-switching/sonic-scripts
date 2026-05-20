@@ -1,0 +1,31 @@
+From 9aeb83f728bbfc5dfb8abbecc4af4bfbabd6c92a Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@bglp-swdev081.marvell.com>
+Date: Fri, 31 Oct 2025 16:48:36 +0530
+Subject: [PATCH] [SONICDC-274]: Disabled routeCheck from monit config
+
+---
+ files/image_config/monit/conf.d/sonic-host | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/files/image_config/monit/conf.d/sonic-host b/files/image_config/monit/conf.d/sonic-host
+index 30d539464..6a580c3f1 100644
+--- a/files/image_config/monit/conf.d/sonic-host
++++ b/files/image_config/monit/conf.d/sonic-host
+@@ -27,9 +27,11 @@ check process rsyslog with pidfile /var/run/rsyslogd.pid
+ # Hence for any discrepancy, there will be log messages for "ERR" level
+ # from both route_check.py & monit.
+ #
+-check program routeCheck with path "/usr/local/bin/route_check.py"
+-    every 5 cycles
+-    if status != 0 for 3 cycle then alert repeat every 1 cycles
++#### routeCheck consumes excessive resources in scaled deployments, leading to
++#### performance degradation; hence disabling it to optimize system efficiency.
++##check program routeCheck with path "/usr/local/bin/route_check.py"
++##    every 5 cycles
++##    if status != 0 for 3 cycle then alert repeat every 1 cycles
+ 
+ # dualtor_neighbor_check.py: script to check if the neighbor entries in APPL_DB
+ # has correct neighbor or tunnel route entries in ASIC_DB based on the mux
+-- 
+2.25.1
+

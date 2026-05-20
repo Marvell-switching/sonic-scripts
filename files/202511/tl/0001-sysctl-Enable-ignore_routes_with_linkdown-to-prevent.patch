@@ -1,0 +1,280 @@
+From 535f8716d1f256b2a88bdf3134c767486f6198ed Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Mon, 9 Mar 2026 09:40:16 +0530
+Subject: [PATCH] Enable ignore_routes_with_linkdown to prevent using
+ downinterface routes
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ files/image_config/interfaces/interfaces.j2               | 2 +-
+ files/image_config/sysctl/90-sonic.conf                   | 3 +++
+ .../tests/sample_output/py2/interfaces                    | 4 ++--
+ .../tests/sample_output/py2/interfaces_syslog             | 4 ++--
+ .../tests/sample_output/py2/mvrf_interfaces               | 4 ++--
+ .../tests/sample_output/py2/two_mgmt_interfaces           | 8 ++++----
+ .../tests/sample_output/py3/interfaces                    | 4 ++--
+ .../tests/sample_output/py3/interfaces_syslog             | 4 ++--
+ .../tests/sample_output/py3/mvrf_interfaces               | 4 ++--
+ .../tests/sample_output/py3/two_mgmt_interfaces           | 8 ++++----
+ 10 files changed, 24 insertions(+), 21 deletions(-)
+
+diff --git a/files/image_config/interfaces/interfaces.j2 b/files/image_config/interfaces/interfaces.j2
+index 766bf98e5..07a13180a 100644
+--- a/files/image_config/interfaces/interfaces.j2
++++ b/files/image_config/interfaces/interfaces.j2
+@@ -82,8 +82,8 @@ iface {{ name }} {{ 'inet' if prefix | ipv4 else 'inet6' }} static
+ {% set force_mgmt_route_priority = 32764 %}
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip {{ '-4' if prefix | ipv4 else '-6' }} route add default via {{ MGMT_INTERFACE[(name, prefix)]['gwaddr'] }} dev {{ name }} table {{ vrf_table }} metric 201
+     up ip {{ '-4' if prefix | ipv4 else '-6' }} route add {{ prefix | network }}/{{ prefix | prefixlen }} dev {{ name }} table {{ vrf_table }}
++    up ip {{ '-4' if prefix | ipv4 else '-6' }} route add default via {{ MGMT_INTERFACE[(name, prefix)]['gwaddr'] }} dev {{ name }} table {{ vrf_table }} metric 201
+     up ip {{ '-4' if prefix | ipv4 else '-6' }} rule add pref {{ force_mgmt_route_priority + 1 }} from {{ prefix | ip }}/{{ '32' if prefix | ipv4 else '128' }} table {{ vrf_table }}
+ {% for route in MGMT_INTERFACE[(name, prefix)]['forced_mgmt_routes'] %}
+     up ip {{ '-4' if prefix | ipv4 else '-6' }} rule add pref {{ force_mgmt_route_priority }} to {{ route }} table {{ vrf_table }}
+diff --git a/files/image_config/sysctl/90-sonic.conf b/files/image_config/sysctl/90-sonic.conf
+index 6de95c243..924359d7d 100644
+--- a/files/image_config/sysctl/90-sonic.conf
++++ b/files/image_config/sysctl/90-sonic.conf
+@@ -56,3 +56,6 @@ kernel.core_pipe_limit=16
+ 
+ vm.panic_on_oom=2
+ fs.suid_dumpable=2
++
++net.ipv4.conf.all.ignore_routes_with_linkdown=1
++net.ipv6.conf.all.ignore_routes_with_linkdown=1
+diff --git a/src/sonic-config-engine/tests/sample_output/py2/interfaces b/src/sonic-config-engine/tests/sample_output/py2/interfaces
+index f4a67ce37..e0b39fbf6 100644
+--- a/src/sonic-config-engine/tests/sample_output/py2/interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py2/interfaces
+@@ -21,8 +21,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -37,8 +37,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+diff --git a/src/sonic-config-engine/tests/sample_output/py2/interfaces_syslog b/src/sonic-config-engine/tests/sample_output/py2/interfaces_syslog
+index 8b58153b5..7f43cc64f 100644
+--- a/src/sonic-config-engine/tests/sample_output/py2/interfaces_syslog
++++ b/src/sonic-config-engine/tests/sample_output/py2/interfaces_syslog
+@@ -21,8 +21,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.3.145.8/32 table default
+     up ip rule add pref 32764 to 100.127.20.21/32 table default
+@@ -39,8 +39,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+diff --git a/src/sonic-config-engine/tests/sample_output/py2/mvrf_interfaces b/src/sonic-config-engine/tests/sample_output/py2/mvrf_interfaces
+index 89a6c6bc3..0549dcb54 100644
+--- a/src/sonic-config-engine/tests/sample_output/py2/mvrf_interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py2/mvrf_interfaces
+@@ -31,8 +31,8 @@ iface eth0 inet static
+     vrf mgmt
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table 6000 metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table 6000
++    up ip -4 route add default via 10.0.0.1 dev eth0 table 6000 metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table 6000
+     up ip -4 rule add pref 32764 to 11.11.11.11 table 6000
+     up ip -4 rule add pref 32764 to 22.22.22.0/23 table 6000
+@@ -52,8 +52,8 @@ iface eth0 inet6 static
+     vrf mgmt
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table 6000 metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table 6000
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table 6000 metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table 6000
+     up ip -6 rule add pref 32764 to 33:33:33::0/64 table 6000
+     # management port down rules
+diff --git a/src/sonic-config-engine/tests/sample_output/py2/two_mgmt_interfaces b/src/sonic-config-engine/tests/sample_output/py2/two_mgmt_interfaces
+index 9e44fe93e..2fca44b3f 100644
+--- a/src/sonic-config-engine/tests/sample_output/py2/two_mgmt_interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py2/two_mgmt_interfaces
+@@ -22,8 +22,8 @@ iface eth1 inet static
+     broadcast 10.0.10.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.10.1 dev eth1 table default metric 201
+     up ip -4 route add 10.0.10.0/24 dev eth1 table default
++    up ip -4 route add default via 10.0.10.1 dev eth1 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.10.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -38,8 +38,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -54,8 +54,8 @@ iface eth1 inet6 static
+     broadcast 2603:10e2:0:abcd:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:abcd::1 dev eth1 table default metric 201
+     up ip -6 route add 2603:10e2:0:abcd::/64 dev eth1 table default
++    up ip -6 route add default via 2603:10e2:0:abcd::1 dev eth1 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:abcd::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+@@ -71,8 +71,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+diff --git a/src/sonic-config-engine/tests/sample_output/py3/interfaces b/src/sonic-config-engine/tests/sample_output/py3/interfaces
+index f4a67ce37..e0b39fbf6 100644
+--- a/src/sonic-config-engine/tests/sample_output/py3/interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py3/interfaces
+@@ -21,8 +21,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -37,8 +37,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+diff --git a/src/sonic-config-engine/tests/sample_output/py3/interfaces_syslog b/src/sonic-config-engine/tests/sample_output/py3/interfaces_syslog
+index 8b58153b5..7f43cc64f 100644
+--- a/src/sonic-config-engine/tests/sample_output/py3/interfaces_syslog
++++ b/src/sonic-config-engine/tests/sample_output/py3/interfaces_syslog
+@@ -21,8 +21,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.3.145.8/32 table default
+     up ip rule add pref 32764 to 100.127.20.21/32 table default
+@@ -39,8 +39,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+diff --git a/src/sonic-config-engine/tests/sample_output/py3/mvrf_interfaces b/src/sonic-config-engine/tests/sample_output/py3/mvrf_interfaces
+index 89a6c6bc3..0549dcb54 100644
+--- a/src/sonic-config-engine/tests/sample_output/py3/mvrf_interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py3/mvrf_interfaces
+@@ -31,8 +31,8 @@ iface eth0 inet static
+     vrf mgmt
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table 6000 metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table 6000
++    up ip -4 route add default via 10.0.0.1 dev eth0 table 6000 metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table 6000
+     up ip -4 rule add pref 32764 to 11.11.11.11 table 6000
+     up ip -4 rule add pref 32764 to 22.22.22.0/23 table 6000
+@@ -52,8 +52,8 @@ iface eth0 inet6 static
+     vrf mgmt
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table 6000 metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table 6000
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table 6000 metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table 6000
+     up ip -6 rule add pref 32764 to 33:33:33::0/64 table 6000
+     # management port down rules
+diff --git a/src/sonic-config-engine/tests/sample_output/py3/two_mgmt_interfaces b/src/sonic-config-engine/tests/sample_output/py3/two_mgmt_interfaces
+index df2ac9ad3..34eadb9ee 100644
+--- a/src/sonic-config-engine/tests/sample_output/py3/two_mgmt_interfaces
++++ b/src/sonic-config-engine/tests/sample_output/py3/two_mgmt_interfaces
+@@ -22,8 +22,8 @@ iface eth0 inet static
+     broadcast 10.0.0.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 route add 10.0.0.0/24 dev eth0 table default
++    up ip -4 route add default via 10.0.0.1 dev eth0 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.0.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -38,8 +38,8 @@ iface eth0 inet6 static
+     broadcast 2603:10e2:0:2902:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 route add 2603:10e2:0:2902::/64 dev eth0 table default
++    up ip -6 route add default via 2603:10e2:0:2902::1 dev eth0 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:2902::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+@@ -55,8 +55,8 @@ iface eth1 inet static
+     broadcast 10.0.10.255
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -4 route add default via 10.0.10.1 dev eth1 table default metric 201
+     up ip -4 route add 10.0.10.0/24 dev eth1 table default
++    up ip -4 route add default via 10.0.10.1 dev eth1 table default metric 201
+     up ip -4 rule add pref 32765 from 10.0.10.100/32 table default
+     up ip rule add pref 32764 to 10.20.6.16/32 table default
+     # management port down rules
+@@ -71,8 +71,8 @@ iface eth1 inet6 static
+     broadcast 2603:10e2:0:abcd:ffff:ffff:ffff:ffff
+     ########## management network policy routing rules
+     # management port up rules
+-    up ip -6 route add default via 2603:10e2:0:abcd::1 dev eth1 table default metric 201
+     up ip -6 route add 2603:10e2:0:abcd::/64 dev eth1 table default
++    up ip -6 route add default via 2603:10e2:0:abcd::1 dev eth1 table default metric 201
+     up ip -6 rule add pref 32765 from 2603:10e2:0:abcd::8/128 table default
+     # IPV6 default table not add to lookup by default, management server need this to access IPV6 address when BGP shutdown
+     up ip -6 rule add pref 32767 lookup default
+-- 
+2.25.1
+

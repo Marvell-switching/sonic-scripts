@@ -1,0 +1,27 @@
+From 7ff32caba8ac0bb63f298dc500b050dee62e709e Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 13:53:35 +0530
+Subject: [PATCH] OSPF GR: libswsscommon schema changes
+
+Added STATE_DB table for OSPF
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ common/schema.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/common/schema.h b/common/schema.h
+index c55db4b..ec79192 100644
+--- a/common/schema.h
++++ b/common/schema.h
+@@ -435,6 +435,7 @@ after libswsscommon deb make.
+ #define STATE_VXLAN_TUNNEL_TABLE_NAME               "VXLAN_TUNNEL_TABLE"
+ #define STATE_NEIGH_SUPPRESS_VLAN_TABLE_NAME        "SUPPRESS_VLAN_NEIGH_TABLE"
+ #define STATE_BGP_TABLE_NAME                        "BGP_STATE_TABLE"
++#define STATE_OSPF_TABLE_NAME                       "OSPF_STATE_TABLE"
+ #define STATE_DEBUG_COUNTER_CAPABILITIES_NAME       "DEBUG_COUNTER_CAPABILITIES"
+ #define STATE_NAT_RESTORE_TABLE_NAME                "NAT_RESTORE_TABLE"
+ #define STATE_MCLAG_TABLE_NAME                      "MCLAG_TABLE"
+-- 
+2.25.1
+

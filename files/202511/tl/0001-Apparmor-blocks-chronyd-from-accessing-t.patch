@@ -1,0 +1,42 @@
+From a706b3b5d65dac7832f626d8ed9dcfd4f4ef70d3 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Tue, 26 Aug 2025 17:39:11 +0530
+Subject: [PATCH] [SONICDC-501] Apparmor blocks chronyd from accessing tacacs
+ config file
+
+Apparmor blocks chronyd from accessing tacacs config file.
+Adding permissions for chrony to allow it to access tacacs config file.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ build_debian.sh                 | 4 ++++
+ files/apparmor/usr.sbin.chronyd | 2 ++
+ 2 files changed, 6 insertions(+)
+ create mode 100644 files/apparmor/usr.sbin.chronyd
+
+diff --git a/build_debian.sh b/build_debian.sh
+index 9600b887c..d648f5afe 100755
+--- a/build_debian.sh
++++ b/build_debian.sh
+@@ -406,6 +406,10 @@ EOF
+ # override tcpdump profile to allow tcpdump access TACACS config file.
+ sudo cp files/apparmor/usr.bin.tcpdump $FILESYSTEM_ROOT/etc/apparmor.d/local/usr.bin.tcpdump
+ 
++# latest chrony control resource access with AppArmor.
++# override chrony profile to allow chrony access TACACS config file.
++sudo cp files/apparmor/usr.sbin.chronyd $FILESYSTEM_ROOT/etc/apparmor.d/local/usr.sbin.chronyd
++
+ ## Set /etc/shadow permissions to -rw-------.
+ sudo LANG=c chroot $FILESYSTEM_ROOT chmod 600 /etc/shadow
+ 
+diff --git a/files/apparmor/usr.sbin.chronyd b/files/apparmor/usr.sbin.chronyd
+new file mode 100644
+index 000000000..201d51c9e
+--- /dev/null
++++ b/files/apparmor/usr.sbin.chronyd
+@@ -0,0 +1,2 @@
++# Chrony needs to hook its API to the NSS plugin nss_tacplus and need access to tacacs config file.
++/etc/tacplus_nss.conf r,
+-- 
+2.25.1
+

@@ -1,0 +1,225 @@
+From 7c1498d3e0c8407d82612faab53393eeb5428635 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Sun, 5 Apr 2026 07:11:49 +0530
+Subject: [PATCH] Asymmetric L2VNI Fix for SONiC
+
+**Purpose**:
+* Checks if the neighbor entry corresponds to an L2-only VNI FDB
+* Only applies to VLAN interfaces (SVI/IRB)
+* Skips neighbor creation if it's asymmetric IRB
+* Logs the action for debugging
+
+BGP receives EVPN route -> fdbsyncd -> APP_VXLAN_FDB_TABLE
+
+fdborch.cpp:doTask()
+  |
+  v
+Extract VNI from entry
+  |
+  v
+VxlanVrfMapOrch::isVniL2Only(vni)
+  - VNI in VRF table with isL2Vni=true  -> L2-only (Asymmetric)
+  - VNI in VRF table with isL2Vni=false -> L3 enabled (Symmetric)
+  - VNI not in VRF table               -> L2-only (Pure L2VNI)
+  |
+  v
+Set fdbData.is_l2_only_vni = true/false
+  |
+  v
+Install FDB entry in SAI (Always happens)
+
+BGP/Zebra programs kernel -> kernel neighbor table -> APP_NEIGH_TABLE
+
+neighorch.cpp:doTask()
+  |
+  v
+Extract IP, MAC, interface from neighbor entry
+  |
+  v
+Is interface a VLAN (SVI)?
+  - NO  -> Process normally
+  - YES -> Check FDB
+             |
+             v
+         FdbOrch::isFdbEntryL2OnlyVni(mac, vlan_oid)
+           - TRUE  -> SKIP neighbor creation (asymmetric)
+           - FALSE -> Create neighbor normally (symmetric)
+
+Route arrives -> RouteOrch::addRoute()
+  |
+  v
+Requires next-hop -> Requires neighbor
+  |
+  v
+Neighbor doesn't exist (we prevented it)
+  |
+  v
+Route fails to install or is skipped
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/fdborch.cpp   | 16 ++++++++++++++++
+ orchagent/fdborch.h     | 13 +++++++++++++
+ orchagent/neighorch.cpp | 24 ++++++++++++++++++++++++
+ orchagent/vxlanorch.h   | 16 ++++++++++++++++
+ 4 files changed, 69 insertions(+)
+
+diff --git a/orchagent/fdborch.cpp b/orchagent/fdborch.cpp
+index e4a723a4..0321c3ee 100644
+--- a/orchagent/fdborch.cpp
++++ b/orchagent/fdborch.cpp
+@@ -114,6 +114,7 @@ bool FdbOrch::storeFdbEntryState(const FdbUpdate& update)
+         fdbdata.remote_ip = "";
+         fdbdata.esi = "";
+         fdbdata.vni = 0;
++        fdbdata.is_l2_only_vni = false;
+ 
+         m_entries[entry] = fdbdata;
+         SWSS_LOG_INFO("FdbOrch notification: mac %s was inserted in port %s into bv_id 0x%" PRIx64,
+@@ -456,6 +457,7 @@ void FdbOrch::update(sai_fdb_event_t        type,
+                 fdbData.remote_ip = existing_entry->second.remote_ip;
+                 fdbData.esi = existing_entry->second.esi;
+                 fdbData.vni = existing_entry->second.vni;
++                fdbData.is_l2_only_vni = existing_entry->second.is_l2_only_vni;
+                 saved_fdb_entries[update.port.m_alias].push_back(
+                         {existing_entry->first.mac, vlan.m_vlan_info.vlan_id, fdbData});
+             }
+@@ -774,6 +776,7 @@ void FdbOrch::doTask(Consumer& consumer)
+             unsigned int vni = 0;
+             string sticky = "";
+             string discard = "false";
++            bool is_l2_only_vni = false;
+ 
+             for (auto i : kfvFieldsValues(t))
+             {
+@@ -818,6 +821,17 @@ void FdbOrch::doTask(Consumer& consumer)
+                     {
+                         try {
+                             vni = (unsigned int) stoi(fvValue(i));
++
++                            // Check if this VNI is L2-only (asymmetric IRB)
++                            VxlanVrfMapOrch* vrf_map_orch = gDirectory.get<VxlanVrfMapOrch*>();
++                            if (vrf_map_orch)
++                            {
++                                is_l2_only_vni = vrf_map_orch->isVniL2Only(vni);
++                                if (is_l2_only_vni)
++                                {
++                                    SWSS_LOG_INFO("VNI %d marked as L2-only (asymmetric IRB)", vni);
++                                }
++                            }
+                         } catch(exception &e) {
+                             SWSS_LOG_INFO("Invalid VNI in remote MAC %s", fvValue(i).c_str());
+                             vni = 0;
+@@ -868,6 +882,8 @@ void FdbOrch::doTask(Consumer& consumer)
+             fdbData.vni = vni;
+             fdbData.is_flush_pending = false;
+             fdbData.discard = discard;
++            fdbData.is_l2_only_vni = is_l2_only_vni;
++
+             if (addFdbEntry(entry, port, fdbData))
+             {
+                 if (origin == FDB_ORIGIN_MCLAG_ADVERTIZED)
+diff --git a/orchagent/fdborch.h b/orchagent/fdborch.h
+index ef912b84..e5629490 100644
+--- a/orchagent/fdborch.h
++++ b/orchagent/fdborch.h
+@@ -66,6 +66,8 @@ struct FdbData
+     unsigned int vni;
+     sai_fdb_entry_type_t sai_fdb_type;
+     string discard;
++    /* Flag to indicate L2-only VNI (asymmetric IRB) */
++    bool is_l2_only_vni;
+ };
+ 
+ struct SavedFdbEntry
+@@ -99,6 +101,17 @@ public:
+     bool getPort(const MacAddress&, uint16_t, Port&);
+ 
+     bool removeFdbEntry(const FdbEntry& entry, FdbOrigin origin=FDB_ORIGIN_PROVISIONED);
++    /* Check if FDB entry is for L2-only VNI (asymmetric IRB) */
++    bool isFdbEntryL2OnlyVni(const FdbEntry& entry) const
++    {
++        auto it = m_entries.find(entry);
++        if (it != m_entries.end())
++        {
++            return (it->second.origin == FDB_ORIGIN_VXLAN_ADVERTIZED &&
++                    it->second.is_l2_only_vni);
++        }
++        return false;
++    }
+ 
+     static const int fdborch_pri;
+     void flushFDBEntries(sai_object_id_t bridge_port_oid,
+diff --git a/orchagent/neighorch.cpp b/orchagent/neighorch.cpp
+index 1eb425a9..40643481 100644
+--- a/orchagent/neighorch.cpp
++++ b/orchagent/neighorch.cpp
+@@ -927,6 +927,25 @@ void NeighOrch::doTask(Consumer &consumer)
+             }
+ 
+             ctx.mac = mac_address;
++            // Check if this is an L2-only VNI neighbor (asymmetric IRB) - skip neighbor installation
++            bool is_l2_only_vni_neighbor = false;
++            if (mac_address)
++            {
++                // Check if there's a corresponding FDB entry marked as L2-only VNI
++                Port port;
++                if (gPortsOrch->getPort(alias, port) && port.m_type == Port::VLAN)
++                {
++                    FdbEntry fdb_entry;
++                    fdb_entry.mac = mac_address;
++                    fdb_entry.bv_id = port.m_vlan_info.vlan_oid;
++                    if (m_fdbOrch && m_fdbOrch->isFdbEntryL2OnlyVni(fdb_entry))
++                    {
++                        is_l2_only_vni_neighbor = true;
++                        SWSS_LOG_INFO("Skipping neighbor entry for L2-only VNI (asymmetric IRB): IP %s, MAC %s on %s",
++                                    ip_address.to_string().c_str(), mac_address.to_string().c_str(), alias.c_str());
++                    }
++                }
++            }
+ 
+             bool nbr_not_found = (m_syncdNeighbors.find(neighbor_entry) == m_syncdNeighbors.end());
+             if (nbr_not_found || m_syncdNeighbors[neighbor_entry].mac != mac_address)
+@@ -956,6 +975,11 @@ void NeighOrch::doTask(Consumer &consumer)
+                         it = consumer.m_toSync.erase(it);
+                     }
+                 }
++                else if (is_l2_only_vni_neighbor)
++                {
++                    // Skip neighbor creation for L2-only VNI (asymmetric IRB)
++                    it = consumer.m_toSync.erase(it);
++                }
+                 else if (addNeighbor(ctx))
+                 {
+                     it = consumer.m_toSync.erase(it);
+diff --git a/orchagent/vxlanorch.h b/orchagent/vxlanorch.h
+index ae7cd857..281a952d 100644
+--- a/orchagent/vxlanorch.h
++++ b/orchagent/vxlanorch.h
+@@ -471,6 +471,22 @@ public:
+         return vxlan_vrf_table_.find(name) != std::end(vxlan_vrf_table_);
+     }
+ 
++    /* Check if a VNI is L2-only (asymmetric IRB)
++     * Returns true if VNI has no L3VNI/VRF mapping or is marked as L2VNI
++     */
++    bool isVniL2Only(uint32_t vni) const
++    {
++        for (const auto& entry : vxlan_vrf_table_)
++        {
++            if (entry.second.vni_id == vni)
++            {
++                // VNI has VRF mapping, check if it's marked as L2VNI
++                return entry.second.isL2Vni;
++            }
++        }
++        return true;
++    }
++
+ private:
+     virtual bool addOperation(const Request& request);
+     virtual bool delOperation(const Request& request);
+-- 
+2.25.1
+

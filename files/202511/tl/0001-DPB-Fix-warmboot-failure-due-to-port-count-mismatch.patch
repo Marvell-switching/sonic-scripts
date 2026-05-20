@@ -1,0 +1,276 @@
+From d8683ecbba820ee5802aa3f6c97f58cf5c463564 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 5 Feb 2026 14:59:44 +0530
+Subject: [PATCH] [DPB] Fix warmboot-failure due to port count mismatch
+
+What is issue:
+
+SONiC does not update the port count after DPB is done.
+Due to this warm-boot fails if it is done after port breakout
+is done with error like below.
+
+sonic ERR swss#orchagent: :- bake: Invalid port table: portCount, expecting 66, got 67
+
+portsyncd write the port count in PortConfigDone only at the time of init. but this
+count value is not updated with port delete/add events which happens during port
+breakout.
+
+Fix:
+Adjusting the port count based on netdev event in portsyncd with dynamic
+port addition and deleting trigger through dynamic port breakout.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ portsyncd/linksync.cpp                      |  31 ++++
+ tests/mock_tests/portsyncd/portsyncd_ut.cpp | 171 ++++++++++++++++++++
+ 2 files changed, 202 insertions(+)
+
+diff --git a/portsyncd/linksync.cpp b/portsyncd/linksync.cpp
+index 4c00d366..68d64e0b 100644
+--- a/portsyncd/linksync.cpp
++++ b/portsyncd/linksync.cpp
+@@ -20,6 +20,7 @@
+ #include <set>
+ #include <sstream>
+ #include <iomanip>
++#include <cinttypes>
+ 
+ using namespace std;
+ using namespace swss;
+@@ -137,6 +138,7 @@ void LinkSync::onMsg(int nlmsg_type, struct nl_object *obj)
+     int master = rtnl_link_get_master(link);
+     char *type = rtnl_link_get_type(link);
+     unsigned int mtu = rtnl_link_get_mtu(link);
++    string       value;
+ 
+     if (type)
+     {
+@@ -176,6 +178,9 @@ void LinkSync::onMsg(int nlmsg_type, struct nl_object *obj)
+         return;
+     }
+ 
++    /* Check if this is a new interface (not seen before) */
++    bool isNewInterface = (m_ifindexNameMap.find(ifindex) == m_ifindexNameMap.end());
++
+     /* Insert or update the ifindex to key map */
+     m_ifindexNameMap[ifindex] = key;
+ 
+@@ -183,9 +188,35 @@ void LinkSync::onMsg(int nlmsg_type, struct nl_object *obj)
+     {
+         m_statePortTable.del(key);
+         SWSS_LOG_NOTICE("Delete %s(ok) from state db", key.c_str());
++
++        /* Update port count only if system is initialized */
++        if (g_init)
++        {
++            if (m_portTable.hget("PortConfigDone", "count", value))
++            {
++                uintmax_t portCount = strtoumax(value.c_str(), nullptr, 0);
++                if (portCount > 0)
++                {
++                    portCount = portCount - 1;
++                    m_portTable.hset("PortConfigDone", "count", to_string(portCount));
++                    SWSS_LOG_NOTICE("Port %s deleted at runtime, updated PortConfigDone count to %ju", key.c_str(), portCount);
++                }
++            }
++        }
+         return;
+     }
+ 
++    if (g_init && isNewInterface)
++    {
++        /* Update PortConfigDone count to reflect new port addition */
++        if (m_portTable.hget("PortConfigDone", "count", value))
++        {
++            uintmax_t portCount = strtoumax(value.c_str(), nullptr, 0);
++            portCount = portCount + 1;
++            m_portTable.hset("PortConfigDone", "count", to_string(portCount));
++            SWSS_LOG_NOTICE("Port %s added at runtime, updated PortConfigDone count to %ju", key.c_str(), portCount);
++        }
++    }
+     /* front panel interfaces: Check if the port is in the PORT_TABLE
+      * non-front panel interfaces such as eth0, lo which are not in the
+      * PORT_TABLE are ignored. */
+diff --git a/tests/mock_tests/portsyncd/portsyncd_ut.cpp b/tests/mock_tests/portsyncd/portsyncd_ut.cpp
+index 93575f68..2e541d82 100644
+--- a/tests/mock_tests/portsyncd/portsyncd_ut.cpp
++++ b/tests/mock_tests/portsyncd/portsyncd_ut.cpp
+@@ -305,4 +305,175 @@ namespace portsyncd_ut
+         std::vector<swss::FieldValueTuple> ovalues;
+         ASSERT_EQ(sync.m_statePortTable.get("Ethernet0", ovalues), false);
+     }
++
++    TEST_F(PortSyncdTest, test_onMsgNewLinkUpdatePortCount)
++    {
++        swss::LinkSync sync(m_app_db.get(), m_state_db.get());
++        /* Write config to Config DB */
++        populateCfgDb(m_portCfgTable.get());
++        swss::DBConnector cfg_db_conn("CONFIG_DB", 0);
++        /* Handle CFG DB notifs and Write them to APPL_DB */
++        swss::ProducerStateTable p(m_app_db.get(), APP_PORT_TABLE_NAME);
++        writeToApplDB(p, cfg_db_conn);
++        /* Set PortConfigDone with initial count of 2 */
++        std::vector<swss::FieldValueTuple> attrs;
++        attrs.emplace_back("count", "2");
++        m_portAppTable->set("PortConfigDone", attrs);
++        /* Set g_init to true to enable runtime port count updates */
++        g_init = true;
++        /* Generate a netlink notification for a new interface Ethernet8 (ifindex 150) */
++        std::vector<unsigned int> flags = {IFF_UP, IFF_RUNNING};
++        struct nl_object* msg = draft_nlmsg("Ethernet8",
++                                            flags,
++                                            "sx_netdev",
++                                            "1c:34:da:1c:9f:01",
++                                            150,
++                                            9100,
++                                            0);
++        sync.onMsg(RTM_NEWLINK, msg);
++        /* Verify that PortConfigDone count is incremented to 3 */
++        std::string count_value;
++        ASSERT_EQ(m_portAppTable->hget("PortConfigDone", "count", count_value), true);
++        ASSERT_EQ(count_value, "3");
++        /* Free Nl_object */
++        free_nlobj(msg);
++        /* Reset g_init */
++        g_init = false;
++    }
++
++    TEST_F(PortSyncdTest, test_onMsgDelLinkUpdatePortCount)
++    {
++        swss::LinkSync sync(m_app_db.get(), m_state_db.get());
++        /* Write config to Config DB */
++        populateCfgDb(m_portCfgTable.get());
++        swss::DBConnector cfg_db_conn("CONFIG_DB", 0);
++        /* Handle CFG DB notifs and Write them to APPL_DB */
++        swss::ProducerStateTable p(m_app_db.get(), APP_PORT_TABLE_NAME);
++        writeToApplDB(p, cfg_db_conn);
++        /* Set PortConfigDone with initial count of 3 */
++        std::vector<swss::FieldValueTuple> attrs;
++        attrs.emplace_back("count", "3");
++        m_portAppTable->set("PortConfigDone", attrs);
++        /* Set g_init to true */
++        g_init = true;
++        /* First add the interface via NEWLINK to register it in the internal map */
++        std::vector<unsigned int> flags = {IFF_UP, IFF_RUNNING};
++        struct nl_object* msg = draft_nlmsg("Ethernet0",
++                                            flags,
++                                            "sx_netdev",
++                                            "1c:34:da:1c:9f:00",
++                                            142,
++                                            9100,
++                                            0);
++        sync.onMsg(RTM_NEWLINK, msg);
++        free_nlobj(msg);
++        /* Verify count was incremented to 4 after NEWLINK */
++        std::string count_value;
++        ASSERT_EQ(m_portAppTable->hget("PortConfigDone", "count", count_value), true);
++        ASSERT_EQ(count_value, "4");
++        /* Now generate a DELLINK notification */
++        msg = draft_nlmsg("Ethernet0",
++                          flags,
++                          "sx_netdev",
++                          "1c:34:da:1c:9f:00",
++                          142,
++                          9100,
++                          0);
++        sync.onMsg(RTM_DELLINK, msg);
++        /* Verify that PortConfigDone count is decremented to 3 */
++        ASSERT_EQ(m_portAppTable->hget("PortConfigDone", "count", count_value), true);
++        ASSERT_EQ(count_value, "3");
++        /* Free Nl_object */
++        free_nlobj(msg);
++        /* Reset g_init */
++        g_init = false;
++    }
++
++    TEST_F(PortSyncdTest, test_onMsgDelLinkNotInitialized)
++    {
++        swss::LinkSync sync(m_app_db.get(), m_state_db.get());
++        /* Write config to Config DB */
++        populateCfgDb(m_portCfgTable.get());
++        swss::DBConnector cfg_db_conn("CONFIG_DB", 0);
++        /* Handle CFG DB notifs and Write them to APPL_DB */
++        swss::ProducerStateTable p(m_app_db.get(), APP_PORT_TABLE_NAME);
++        writeToApplDB(p, cfg_db_conn);
++        /* Set PortConfigDone with initial count of 3 */
++        std::vector<swss::FieldValueTuple> attrs;
++        attrs.emplace_back("count", "3");
++        m_portAppTable->set("PortConfigDone", attrs);
++        /* Set g_init to false - system not initialized */
++        g_init = false;
++        /* First add the interface via NEWLINK */
++        std::vector<unsigned int> flags = {IFF_UP, IFF_RUNNING};
++        struct nl_object* msg = draft_nlmsg("Ethernet0",
++                                            flags,
++                                            "sx_netdev",
++                                            "1c:34:da:1c:9f:00",
++                                            142,
++                                            9100,
++                                            0);
++        sync.onMsg(RTM_NEWLINK, msg);
++        free_nlobj(msg);
++        /* Now generate a DELLINK notification */
++        msg = draft_nlmsg("Ethernet0",
++                          flags,
++                          "sx_netdev",
++                          "1c:34:da:1c:9f:00",
++                          142,
++                          9100,
++                          0);
++        sync.onMsg(RTM_DELLINK, msg);
++        /* Verify that PortConfigDone count is NOT updated (still 3) */
++        std::string count_value;
++        ASSERT_EQ(m_portAppTable->hget("PortConfigDone", "count", count_value), true);
++        ASSERT_EQ(count_value, "3");
++        /* Free Nl_object */
++        free_nlobj(msg);
++    }
++
++    TEST_F(PortSyncdTest, test_onMsgNewLinkExistingInterface)
++    {
++        swss::LinkSync sync(m_app_db.get(), m_state_db.get());
++        /* Write config to Config DB */
++        populateCfgDb(m_portCfgTable.get());
++        swss::DBConnector cfg_db_conn("CONFIG_DB", 0);
++        /* Handle CFG DB notifs and Write them to APPL_DB */
++        swss::ProducerStateTable p(m_app_db.get(), APP_PORT_TABLE_NAME);
++        writeToApplDB(p, cfg_db_conn);
++        /* Set PortConfigDone with initial count of 2 */
++        std::vector<swss::FieldValueTuple> attrs;
++        attrs.emplace_back("count", "2");
++        m_portAppTable->set("PortConfigDone", attrs);
++        /* Set g_init to true */
++        g_init = true;
++        /* Generate first NEWLINK for Ethernet0 */
++        std::vector<unsigned int> flags = {IFF_UP, IFF_RUNNING};
++        struct nl_object* msg = draft_nlmsg("Ethernet0",
++                                            flags,
++                                            "sx_netdev",
++                                            "1c:34:da:1c:9f:00",
++                                            142,
++                                            9100,
++                                            0);
++        sync.onMsg(RTM_NEWLINK, msg);
++        free_nlobj(msg);
++        /* Generate second NEWLINK for same Ethernet0 (not a new interface) */
++        msg = draft_nlmsg("Ethernet0",
++                          flags,
++                          "sx_netdev",
++                          "1c:34:da:1c:9f:00",
++                          142,
++                          9100,
++                          0);
++        sync.onMsg(RTM_NEWLINK, msg);
++        /* Verify that PortConfigDone count is still 3 (only incremented once) */
++        std::string count_value;
++        ASSERT_EQ(m_portAppTable->hget("PortConfigDone", "count", count_value), true);
++        ASSERT_EQ(count_value, "3");  // Incremented once from 2 to 3
++        /* Free Nl_object */
++        free_nlobj(msg);
++        /* Reset g_init */
++        g_init = false;
++    }
+ }
+-- 
+2.25.1
+

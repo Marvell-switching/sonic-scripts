@@ -1,0 +1,84 @@
+From 1cc7a7ca06ec130bdc9f68c3b712059d846ec93a Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Tue, 11 Nov 2025 15:03:18 +0530
+Subject: [PATCH] Stop config reload from using routeChecker
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ config/main.py       | 20 +++++++++++---------
+ tests/config_test.py |  6 +++---
+ 2 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/config/main.py b/config/main.py
+index ced2e33a..4d1134fc 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -1001,10 +1001,11 @@ def _monit_service_exists(service):
+ def _stop_services():
+     try:
+         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+-        click.echo("Disabling container and routeCheck monitoring ...")
++        click.echo("Disabling container monitoring ...")
+         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
+-        if _monit_service_exists('routeCheck'):
+-            clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
++        ## routeCheck disabled from monit due to performance drain
++        ## if _monit_service_exists('routeCheck'):
++        ##     clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+     except subprocess.CalledProcessError as err:
+         pass
+ 
+@@ -1152,14 +1153,15 @@ def _restart_services():
+     wait_service_restart_finish('networking', last_networking_timestamp)
+     try:
+         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+-        click.echo("Enabling container and routeCheck monitoring ...")
+-        has_route_check = _monit_service_exists('routeCheck')
+-        if has_route_check:
+-            clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
++        click.echo("Enabling container monitoring ...")
++        ## routeCheck disabled from monit due to performance drain
++        ## has_route_check = _monit_service_exists('routeCheck')
++        ## if has_route_check:
++        ##    clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+         log.log_notice("Waiting for monit monitor actions to complete ...")
+-        if has_route_check:
+-            _wait_for_monit_service_monitored('routeCheck')
++        ## if has_route_check:
++        ##    _wait_for_monit_service_monitored('routeCheck')
+         _wait_for_monit_service_monitored('container_checker')
+     except subprocess.CalledProcessError as err:
+         pass
+diff --git a/tests/config_test.py b/tests/config_test.py
+index 67c824d5..131f9340 100644
+--- a/tests/config_test.py
++++ b/tests/config_test.py
+@@ -52,13 +52,13 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
+ 
+ load_minigraph_command_output="""\
+ Acquired lock on {0}
+-Disabling container and routeCheck monitoring ...
++Disabling container monitoring ...
+ Stopping SONiC target ...
+ Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
+ Running command: config qos reload --no-dynamic-buffer --no-delay
+ Running command: pfcwd start_default
+ Restarting SONiC target ...
+-Enabling container and routeCheck monitoring ...
++Enabling container monitoring ...
+ Reloading Monit configuration ...
+ Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
+ Released lock on {0}
+@@ -1148,7 +1148,7 @@ class TestLoadMinigraph(object):
+             # Verify "systemctl reset-failed" is called for services under sonic.target
+             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
+             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
+-            assert mock_run_command.call_count == 21
++            assert mock_run_command.call_count == 18
+ 
+     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                 mock.MagicMock(return_value=("dummy_path", None)))
+-- 
+2.25.1
+

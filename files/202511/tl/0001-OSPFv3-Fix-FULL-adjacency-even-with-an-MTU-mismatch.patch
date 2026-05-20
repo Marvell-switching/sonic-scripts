@@ -1,0 +1,243 @@
+From c9dfbdff9548bd366d972270dfe7a0edbee82412 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Sat, 6 Dec 2025 23:28:25 +0530
+Subject: [PATCH] OSPFv3 - Fix FULL adjacency even with an MTU mismatch
+
+ospf6d: Add automatic MTU change detection for FULL adjacencies
+
+Implemented automatic neighbor reset when an interface MTU is modified
+after the adjacency has already reached FULL state - bringing OSPFv3
+behavior in line with OSPFv2.
+
+In OSPFv2, MTU changes immediately trigger DBD exchange and cause the
+adjacency to fall back to ExStart. However, OSPFv3 previously did not
+react to MTU changes, allowing adjacency to remain in FULL state, which
+could lead to operational inconsistencies and potential issues.
+
+Testing:
+1. Added test_ospfv3_tc5_mtu_auto_change_p0 test
+2. Verified the fix on routers.
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ ...atic-MTU-change-detection-for-FULL-a.patch | 195 ++++++++++++++++++
+ src/sonic-frr/patch/series                    |   1 +
+ 2 files changed, 196 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch
+
+diff --git a/src/sonic-frr/patch/0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch b/src/sonic-frr/patch/0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch
+new file mode 100644
+index 000000000..aedaf83ec
+--- /dev/null
++++ b/src/sonic-frr/patch/0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch
+@@ -0,0 +1,195 @@
++From b8a4d2a1121c3a7b6d7d14f8a86167967facaef0 Mon Sep 17 00:00:00 2001
++From: Ravi Minnikanti <rminnikanti@marvell.com>
++Date: Sat, 6 Dec 2025 23:12:08 +0530
++Subject: [PATCH] ospf6d: Add automatic MTU change detection for FULL
++ adjacencies
++
++Implemented automatic neighbor reset when an interface MTU is modified
++after the adjacency has already reached FULL state - bringing OSPFv3
++behavior in line with OSPFv2.
++
++In OSPFv2, MTU changes immediately trigger DBD exchange and cause the
++adjacency to fall back to ExStart. However, OSPFv3 previously did not
++react to MTU changes, allowing adjacency to remain in FULL state, which
++could lead to operational inconsistencies and potential issues.
++
++Testing:
++1. Added test_ospfv3_tc5_mtu_auto_change_p0 test
++2. Verified the fix on routers.
++
++Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
++---
++ ospf6d/ospf6_interface.c                      | 42 +++++++++--
++ ospf6d/ospf6_interface.h                      |  1 +
++ .../test_ospfv3_single_area.py                | 73 +++++++++++++++++++
++ 3 files changed, 111 insertions(+), 5 deletions(-)
++
++diff --git a/ospf6d/ospf6_interface.c b/ospf6d/ospf6_interface.c
++index 60f92385d..7a274b82b 100644
++--- a/ospf6d/ospf6_interface.c
+++++ b/ospf6d/ospf6_interface.c
++@@ -258,6 +258,22 @@ struct ospf6_interface *ospf6_interface_create(struct interface *ifp)
++ 	return oi;
++ }
++ 
+++void ospf6_interface_reset(struct interface *ifp)
+++{
+++	struct ospf6_interface *oi;
+++
+++	oi = (struct ospf6_interface *)ifp->info;
+++	if (oi == NULL)
+++		return;
+++
+++	if (IS_OSPF6_DEBUG_INTERFACE)
+++		zlog_debug("Interface %s: Resetting", ifp->name);
+++
+++	/* Reset the interface (simulate down/up). */
+++	event_execute(master, interface_down, oi, 0, NULL);
+++	event_execute(master, interface_up, oi, 0, NULL);
+++}
+++
++ void ospf6_interface_delete(struct ospf6_interface *oi)
++ {
++ 	struct listnode *node, *nnode;
++@@ -374,21 +390,37 @@ void ospf6_interface_state_update(struct interface *ifp)
++ 	/* Adjust the mtu values if the kernel told us something new */
++ 	if (ifp->mtu6 != oi->ifmtu) {
++ 		/* If nothing configured, accept it and check for buffer size */
+++		uint32_t new_ifmtu;
+++
++ 		if (!oi->c_ifmtu) {
++-			oi->ifmtu = ifp->mtu6;
+++			new_ifmtu = ifp->mtu6;
++ 			iobuflen = ospf6_iobuf_size(ifp->mtu6);
++-			if (oi->ifmtu > iobuflen) {
+++			if (new_ifmtu > iobuflen) {
++ 				if (IS_OSPF6_DEBUG_INTERFACE)
++ 					zlog_debug("Interface %s: IfMtu is adjusted to I/O buffer size: %d.",
++ 						   ifp->name, iobuflen);
++-				oi->ifmtu = iobuflen;
+++				new_ifmtu = iobuflen;
++ 			}
++ 		} else if (oi->c_ifmtu > ifp->mtu6) {
++-			oi->ifmtu = ifp->mtu6;
+++			/* Configured MTU exceeds kernel - use kernel */
+++			new_ifmtu = ifp->mtu6;
++ 			zlog_warn("Configured mtu %u on %s overridden by kernel %u",
++ 				  oi->c_ifmtu, ifp->name, ifp->mtu6);
++ 		} else
++-			oi->ifmtu = oi->c_ifmtu;
+++			new_ifmtu = oi->c_ifmtu;
+++
+++		/* Check if effective MTU actually changed */
+++		if (new_ifmtu != oi->ifmtu) {
+++			if (IS_OSPF6_DEBUG_INTERFACE)
+++				zlog_debug("Interface %s: Effective OSPF MTU change %u -> %u, resetting interface",
+++					   ifp->name, oi->ifmtu, new_ifmtu);
+++
+++			oi->ifmtu = new_ifmtu;
+++
+++			/* MTU changed reset interface */
+++			ospf6_interface_reset(ifp);
+++			return;
+++		}
++ 	}
++ 
++ 	if (if_is_operative(ifp) &&
++diff --git a/ospf6d/ospf6_interface.h b/ospf6d/ospf6_interface.h
++index 46a7c90dc..f56dc0087 100644
++--- a/ospf6d/ospf6_interface.h
+++++ b/ospf6d/ospf6_interface.h
++@@ -244,6 +244,7 @@ extern struct ospf6_interface *
++ ospf6_interface_lookup_by_ifindex(ifindex_t, vrf_id_t vrf_id);
++ extern struct ospf6_interface *ospf6_interface_create(struct interface *ifp);
++ extern void ospf6_interface_delete(struct ospf6_interface *oi);
+++extern void ospf6_interface_reset(struct interface *ifp);
++ 
++ extern void ospf6_interface_enable(struct ospf6_interface *oi);
++ extern void ospf6_interface_disable(struct ospf6_interface *oi);
++diff --git a/tests/topotests/ospfv3_basic_functionality/test_ospfv3_single_area.py b/tests/topotests/ospfv3_basic_functionality/test_ospfv3_single_area.py
++index 00d4e8ffd..485875be1 100644
++--- a/tests/topotests/ospfv3_basic_functionality/test_ospfv3_single_area.py
+++++ b/tests/topotests/ospfv3_basic_functionality/test_ospfv3_single_area.py
++@@ -1121,6 +1121,79 @@ def test_ospfv3_tc4_mtu_ignore_p0(request):
++     result = verify_ospf6_interface(tgen, topo, dut=dut, input_dict=input_dict)
++     assert result is True, "Testcase {} : Failed \n Error: {}".format(tc_name, result)
++ 
+++    step("Restore MTU back to default value (1500) on R0 to R1 interface.")
+++    rtr0.run("ifconfig {} mtu 1500".format(r0_r1_intf))
+++    rtr1.run("ifconfig {} mtu 1500".format(r1_r0_intf))
+++
+++    write_test_footer(tc_name)
+++
+++
+++def test_ospfv3_tc5_mtu_auto_change_p0(request):
+++    """
+++    OSPF NFSM - Automatic MTU change detection
+++
+++    Verify that OSPFv3 automatically detects MTU changes after adjacency is FULL
+++    and resets the neighbor adjacencies without manual intervention.
+++    """
+++    tc_name = request.node.name
+++    write_test_header(tc_name)
+++    tgen = get_topogen()
+++
+++    # Don't run this test if we have any failure.
+++    if tgen.routers_have_failure():
+++        pytest.skip(tgen.errors)
+++
+++    global topo
+++    step("Bring up the base config as per the topology")
+++    step("Configure OSPF on all the routers of the topology.")
+++    step("Verify that OSPF neighbors are FULL.")
+++    reset_config_on_routers(tgen)
+++
+++    rtr0 = tgen.routers()["r0"]
+++    rtr1 = tgen.routers()["r1"]
+++
+++    r0_r1_intf = topo["routers"]["r0"]["links"]["r1"]["interface"]
+++    r1_r0_intf = topo["routers"]["r1"]["links"]["r0"]["interface"]
+++
+++    step("Verify that OSPF neighborship between R0 and R1 is FULL.")
+++    result = verify_ospf6_neighbor(tgen, topo)
+++    assert result is True, "Testcase {} : Failed \n Error: {}".format(tc_name, result)
+++
+++    step("Change MTU on R0-R1 interface to 1400 while adjacency is FULL.")
+++    rtr0.run("ifconfig {} mtu 1400".format(r0_r1_intf))
+++
+++    # Give some time for interface state update to propagate
+++    time.sleep(2)
+++
+++    step(
+++        "Verify that OSPF neighborship between R0 and R1 is stuck in Exstart state "
+++        "due to MTU mismatch, without explicit 'clear ospf'"
+++    )
+++    result = verify_ospf6_neighbor(tgen, topo, expected=False)
+++    assert result is not True, (
+++        "Testcase {} : Failed \n OSPF nbrs are Full "
+++        "instead of being stuck due to MTU mismatch. Error: {}".format(tc_name, result)
+++    )
+++
+++    step("Verify that MTU value of 1400 is reflected in show ipv6 ospf interface.")
+++    dut = "r0"
+++    input_dict = {"r0": {"links": {"r1": {"ospf6": {"interfaceMtu": 1400}}}}}
+++    result = verify_ospf6_interface(tgen, topo, dut=dut, input_dict=input_dict)
+++    assert result is True, "Testcase {} : Failed \n Error: {}".format(tc_name, result)
+++
+++    step("Restore MTU to 1500 on R0-R1 interface. ")
+++    rtr0.run("ifconfig {} mtu 1500".format(r0_r1_intf))
+++
+++    # Give some time for interface state update and adjacency to reform
+++    time.sleep(5)
+++
+++    step(
+++        "Verify that OSPF neighborship between R0 and R1 becomes FULL again "
+++        "automatically after MTU is restored, without explicit 'clear ospf'."
+++    )
+++    result = verify_ospf6_neighbor(tgen, topo)
+++    assert result is True, "Testcase {} : Failed \n Error: {}".format(tc_name, result)
+++
++     write_test_footer(tc_name)
++ 
++ 
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 53258ca4a..edeb2d8d0 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -22,6 +22,7 @@
+ 0027-Dont-skip-kernel-routes-uninstall.patch
+ 0060-bgpd-Convert-bmp-path_info-tracking-from-hash-to-rbt.patch
+ 0061-bgpd-Fix-JSON-wrapper-brace-consistency-in-neighbor.patch
++0062-ospf6d-Add-automatic-MTU-change-detection-for-FULL-a.patch
+ 0062-zebra-if-speed-change-check-fix.patch
+ 0064-bgpd-Prevent-unnecessary-re-install-of-routes.patch
+ 0065-bgpd-fix-DEREF_OF_NULL.EX.COND-in-community_list_dup.patch
+-- 
+2.25.1
+

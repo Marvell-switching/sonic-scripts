@@ -1,0 +1,31 @@
+From c8237dd210f4ece5b270b4eb8b6d45a0d4dc9e99 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Tue, 16 Dec 2025 16:23:18 +0530
+Subject: [PATCH] Enable bfd_data_plane_mode for platform/vpp
+
+This flag, once enabled, allows user to run bfdd with -dplaneaddr flag
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ docker-sonic-vpp/frr/frr/supervisord/supervisord.conf.j2 | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/docker-sonic-vpp/frr/frr/supervisord/supervisord.conf.j2 b/docker-sonic-vpp/frr/frr/supervisord/supervisord.conf.j2
+index 105c033..6ec601e 100644
+--- a/docker-sonic-vpp/frr/frr/supervisord/supervisord.conf.j2
++++ b/docker-sonic-vpp/frr/frr/supervisord/supervisord.conf.j2
+@@ -64,7 +64,11 @@ dependent_startup_wait_for=zsocket:exited
+ 
+ {% if DEVICE_METADATA.localhost.frr_mgmt_framework_config is defined and DEVICE_METADATA.localhost.frr_mgmt_framework_config == "true" %}
+ [program:bfdd]
++{% if DEVICE_METADATA.localhost.bfd_data_plane_mode is defined and DEVICE_METADATA.localhost.bfd_data_plane_mode == "enabled" %}
++command=/usr/lib/frr/bfdd -A 127.0.0.1 --dplaneaddr ipv4:127.0.0.1:50700
++{% else %}
+ command=/usr/lib/frr/bfdd -A 127.0.0.1
++{% endif %}
+ priority=4
+ stopsignal=KILL
+ autostart=false
+-- 
+2.25.1
+

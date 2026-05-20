@@ -1,0 +1,90 @@
+From 169d3513d588df66a8c2cbe0954245babc51ae77 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Mon, 23 Feb 2026 15:29:42 +0530
+Subject: [PATCH] Fix decimal support for PBH ip proto config
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ config/plugins/pbh.py | 25 ++++++++++++++----
+ tests/pbh_test.py     | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 49 insertions(+), 5 deletions(-)
+
+diff --git a/config/plugins/pbh.py b/config/plugins/pbh.py
+index ce9187a3..cd7190b2 100644
+--- a/config/plugins/pbh.py
++++ b/config/plugins/pbh.py
+@@ -287,12 +287,27 @@ def re_match(ctx, param, value, regexp):
+             str: validated value
+     """
+ 
+-    if re.match(regexp, str(value)) is None:
+-        raise click.UsageError(
+-            "Invalid value for {}: {} is ill-formed".format(param.get_error_hint(ctx), value), ctx
+-        )
++    match_value = str(value)
++    if re.match(regexp, match_value) is None:
++        # Try converting a plain decimal to hex
++        try:
++            dec_val = int(match_value)
++            if 0 <= dec_val <= 255:
++                match_value = "0x{:x}".format(dec_val)
++            else:
++                raise click.UsageError(
++                    "Invalid value for {}: {} is out of range (0-255)".format(param.get_error_hint(ctx), value),
++                    ctx,
++                )
++        except ValueError:
++            pass
++
++        if re.match(regexp, match_value) is None:
++            raise click.UsageError(
++                "Invalid value for {}: {} is ill-formed".format(param.get_error_hint(ctx), value), ctx
++            )
+ 
+-    return value
++    return match_value
+ 
+ 
+ def match_validator(ctx, param, value):
+diff --git a/tests/pbh_test.py b/tests/pbh_test.py
+index 0d68f458..46c30c2e 100644
+--- a/tests/pbh_test.py
++++ b/tests/pbh_test.py
+@@ -715,6 +715,35 @@ class TestPBH:
+         assert result.exit_code == ERROR2
+ 
++    @pytest.mark.parametrize("ip_protocol,expected_exit_code", [
++        ("17", SUCCESS),       # valid decimal
++        ("0x11", SUCCESS),     # valid hex
++        ("-1", ERROR2),        # negative decimal (out of range)
++        ("256", ERROR2),       # decimal out of range
++        ("abc", ERROR2),       # non-numeric string
++    ])
++    def test_config_pbh_rule_add_ip_protocol_formats(self, ip_protocol, expected_exit_code):
++        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'rule')
++
++        db = Db()
++        runner = CliRunner()
++
++        result = runner.invoke(
++            config.config.commands["pbh"].commands["rule"].
++            commands["add"], ["pbh_table1", "vxlan", "--priority",
++                              "2", "--ip-protocol", ip_protocol,
++                              "--inner-ether-type", "0x0800",
++                              "--l4-dst-port", "0x12b5",
++                              "--hash", "inner_v6_hash",
++                              "--packet-action", "SET_ECMP_HASH",
++                              "--flow-counter", "ENABLED"],
++            obj=db
++        )
++
++        logger.debug("\n" + result.output)
++        logger.debug(result.exit_code)
++        assert result.exit_code == expected_exit_code
++
+ 
+     def test_config_pbh_rule_add_invalid_inner_ether_type(self):
+         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'rule')
+ 
+-- 
+2.25.1

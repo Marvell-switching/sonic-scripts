@@ -1,0 +1,72 @@
+From 1416ede432be015965b60db67d3e8a253dbbf38a Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Fri, 13 Mar 2026 15:16:28 +0530
+Subject: [PATCH] sbfd config does not get deleted with bfd config
+
+Due to a miss in CLI infra, sbfd deletion is not included in bfd
+deletion tree. As a result, when "no bfd" command is executed, we do not
+delete sbfd command and it is left hanging.
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ ...does-not-get-deleted-with-bfd-config.patch | 37 +++++++++++++++++++
+ src/sonic-frr/patch/series                    |  1 +
+ 2 files changed, 38 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+
+diff --git a/src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch b/src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+new file mode 100644
+index 000000000..19d24f357
+--- /dev/null
++++ b/src/sonic-frr/patch/0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+@@ -0,0 +1,37 @@
++From ac6133c2da8a77bd000520dec17187c361a3a025 Mon Sep 17 00:00:00 2001
++From: sarabjeets <sarabjeets@marvell.com>
++Date: Tue, 3 Mar 2026 09:44:06 +0530
++Subject: [PATCH] sbfd config does not get deleted with bfd config
++
++Due to a miss in CLI infra, sbfd deletion is not included in bfd
++deletion tree. As a result, when "no bfd" command is executed, we do not
++delete sbfd command and it is left hanging.
++
++Signed-off-by: sarabjeets <sarabjeets@marvell.com>
++---
++ bfdd/bfdd_cli.c | 8 +++++++-
++ 1 file changed, 7 insertions(+), 1 deletion(-)
++
++diff --git a/bfdd/bfdd_cli.c b/bfdd/bfdd_cli.c
++index 016e63b19..d757bb02b 100644
++--- a/bfdd/bfdd_cli.c
+++++ b/bfdd/bfdd_cli.c
++@@ -85,8 +85,14 @@ DEFUN_YANG(
++ 	NO_STR
++ 	"Configure BFD peers\n")
++ {
+++	int ret;
+++
++ 	nb_cli_enqueue_change(vty, "/frr-bfdd:bfdd/bfd", NB_OP_DESTROY, NULL);
++-	return nb_cli_apply_changes(vty, NULL);
+++	ret = nb_cli_apply_changes(vty, NULL);
+++	if (ret == CMD_SUCCESS)
+++		sbfd_reflector_flush();
+++
+++	return ret;
++ }
++ 
++ void bfd_cli_show_header(struct vty *vty,
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 487f01821..bf0047248 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -66,4 +66,5 @@
+ 0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms.patch
+ 0104-SONiC-ONLY-zebra-skip-if-add-update-in-speed-timer-for-unready-ifp.patch
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
++0100-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+ evpn-mh-frr-zebra.patch
+-- 
+2.25.1
+

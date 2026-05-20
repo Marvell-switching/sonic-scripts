@@ -1,0 +1,182 @@
+From b328a62b59245aef4beccad0d88eca2c8b993aee Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Tue, 5 May 2026 12:20:22 +0530
+Subject: [PATCH] fix PBH warmreboot issue
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/orch.h      |  2 +-
+ orchagent/pbhorch.cpp | 46 +++++++++++++++++++++++++++++++++++++++----
+ orchagent/pbhorch.h   |  2 ++
+ 3 files changed, 45 insertions(+), 5 deletions(-)
+
+diff --git a/orchagent/orch.h b/orchagent/orch.h
+index d135c23e..7692f8c3 100644
+--- a/orchagent/orch.h
++++ b/orchagent/orch.h
+@@ -307,7 +307,7 @@ public:
+ 
+     virtual bool warmRestartCheck() const { return true; }
+ 
+-    void dumpPendingTasks(std::vector<std::string> &ts);
++    virtual void dumpPendingTasks(std::vector<std::string> &ts);
+ 
+     /**
+      * @brief Flush pending responses
+diff --git a/orchagent/pbhorch.cpp b/orchagent/pbhorch.cpp
+index 29f98eee..9f1b26a6 100644
+--- a/orchagent/pbhorch.cpp
++++ b/orchagent/pbhorch.cpp
+@@ -95,6 +95,28 @@ PbhOrch::PbhOrch(
+     this->portsOrch = portsOrch;
+ }
+ 
++void PbhOrch::dumpPendingTasks(std::vector<std::string> &ts)
++{
++    Orch::dumpPendingTasks(ts);
++
++    for (const auto &kv : this->pbhHlpr.tableTask.pendingSetupMap)
++        ts.push_back("PBH_TABLE|" + kv.first + "|SET");
++    for (const auto &kv : this->pbhHlpr.ruleTask.pendingSetupMap)
++        ts.push_back("PBH_RULE|" + kv.first + "|SET");
++    for (const auto &kv : this->pbhHlpr.hashTask.pendingSetupMap)
++        ts.push_back("PBH_HASH|" + kv.first + "|SET");
++    for (const auto &kv : this->pbhHlpr.hashFieldTask.pendingSetupMap)
++        ts.push_back("PBH_HASH_FIELD|" + kv.first + "|SET");
++    for (const auto &kv : this->pbhHlpr.tableTask.pendingRemoveMap)
++        ts.push_back("PBH_TABLE|" + kv.first + "|DEL");
++    for (const auto &kv : this->pbhHlpr.ruleTask.pendingRemoveMap)
++        ts.push_back("PBH_RULE|" + kv.first + "|DEL");
++    for (const auto &kv : this->pbhHlpr.hashTask.pendingRemoveMap)
++        ts.push_back("PBH_HASH|" + kv.first + "|DEL");
++    for (const auto &kv : this->pbhHlpr.hashFieldTask.pendingRemoveMap)
++        ts.push_back("PBH_HASH_FIELD|" + kv.first + "|DEL");
++}
++
+ template<typename T>
+ std::vector<std::string> PbhOrch::getPbhAddedFields(const T &obj, const T &nObj) const
+ {
+@@ -424,6 +446,8 @@ void PbhOrch::deployPbhTableSetupTasks()
+             if (!this->createPbhTable(table))
+             {
+                 SWSS_LOG_ERROR("Failed to create PBH table(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+         else
+@@ -431,6 +455,8 @@ void PbhOrch::deployPbhTableSetupTasks()
+             if (!this->updatePbhTable(table))
+             {
+                 SWSS_LOG_ERROR("Failed to update PBH table(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+ 
+@@ -469,7 +495,7 @@ void PbhOrch::deployPbhTableRemoveTasks()
+         if (!this->removePbhTable(table))
+         {
+             SWSS_LOG_ERROR("Failed to remove PBH table(%s): ASIC and CONFIG DB are diverged", key.c_str());
+-            it = map.erase(it);
++            it++;
+             continue;
+         }
+ 
+@@ -1003,6 +1029,8 @@ void PbhOrch::deployPbhRuleSetupTasks()
+             if (!this->createPbhRule(rule))
+             {
+                 SWSS_LOG_ERROR("Failed to create PBH rule(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+         else
+@@ -1010,6 +1038,8 @@ void PbhOrch::deployPbhRuleSetupTasks()
+             if (!this->updatePbhRule(rule))
+             {
+                 SWSS_LOG_ERROR("Failed to update PBH rule(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+ 
+@@ -1041,7 +1071,7 @@ void PbhOrch::deployPbhRuleRemoveTasks()
+         if (!this->removePbhRule(rule))
+         {
+             SWSS_LOG_ERROR("Failed to remove PBH rule(%s): ASIC and CONFIG DB are diverged", key.c_str());
+-            it = map.erase(it);
++            it++;
+             continue;
+         }
+ 
+@@ -1301,6 +1331,8 @@ void PbhOrch::deployPbhHashSetupTasks()
+             if (!this->createPbhHash(hash))
+             {
+                 SWSS_LOG_ERROR("Failed to create PBH hash(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+         else
+@@ -1308,6 +1340,8 @@ void PbhOrch::deployPbhHashSetupTasks()
+             if (!this->updatePbhHash(hash))
+             {
+                 SWSS_LOG_ERROR("Failed to update PBH hash(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+ 
+@@ -1346,7 +1380,7 @@ void PbhOrch::deployPbhHashRemoveTasks()
+         if (!this->removePbhHash(hash))
+         {
+             SWSS_LOG_ERROR("Failed to remove PBH hash(%s): ASIC and CONFIG DB are diverged", key.c_str());
+-            it = map.erase(it);
++            it++;
+             continue;
+         }
+ 
+@@ -1532,6 +1566,8 @@ void PbhOrch::deployPbhHashFieldSetupTasks()
+             if (!this->createPbhHashField(hashField))
+             {
+                 SWSS_LOG_ERROR("Failed to create PBH hash field(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+         else
+@@ -1539,6 +1575,8 @@ void PbhOrch::deployPbhHashFieldSetupTasks()
+             if (!this->updatePbhHashField(hashField))
+             {
+                 SWSS_LOG_ERROR("Failed to update PBH hash field(%s): ASIC and CONFIG DB are diverged", key.c_str());
++                it++;
++                continue;
+             }
+         }
+ 
+@@ -1577,7 +1615,7 @@ void PbhOrch::deployPbhHashFieldRemoveTasks()
+         if (!this->removePbhHashField(hashField))
+         {
+             SWSS_LOG_ERROR("Failed to remove PBH hash field(%s): ASIC and CONFIG DB are diverged", key.c_str());
+-            it = map.erase(it);
++            it++;
+             continue;
+         }
+ 
+diff --git a/orchagent/pbhorch.h b/orchagent/pbhorch.h
+index 250963f5..72f61174 100644
+--- a/orchagent/pbhorch.h
++++ b/orchagent/pbhorch.h
+@@ -24,6 +24,8 @@ public:
+ 
+     using Orch::doTask;  // Allow access to the basic doTask
+ 
++    void dumpPendingTasks(std::vector<std::string> &ts) override;
++
+ private:
+     template<typename T>
+     std::vector<std::string> getPbhAddedFields(const T &obj, const T &nObj) const;
+-- 
+2.25.1
+

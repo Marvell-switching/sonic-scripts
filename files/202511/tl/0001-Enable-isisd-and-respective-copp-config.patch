@@ -1,0 +1,58 @@
+From 60318eb4c2241da785685f12c7983835dd911504 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Fri, 14 Nov 2025 15:10:03 +0530
+Subject: [PATCH] Enable isisd and respective copp config
+
+Enabled when frr_mgmt_framework_config is set to true in
+DEVICE_METADATA|localhost CONFIG_DB table
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ .../frr/supervisord/supervisord.conf.j2            | 14 ++++++++++++++
+ files/image_config/copp/copp_cfg.j2                |  5 +++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2 b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+index 71f9687df..31a4cf380 100644
+--- a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
++++ b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+@@ -146,6 +146,20 @@ stderr_syslog=true
+ dependent_startup=true
+ dependent_startup_wait_for=zebra:running
+ 
++[program:isisd]
++command=/usr/lib/frr/isisd -A 127.0.0.1 -P 0 -M snmp
++priority=5
++stopsignal=KILL
++autostart=false
++autorestart=false
++startsecs=0
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++dependent_startup_wait_for=zebra:running
++
+ [program:pimd]
+ command=/usr/lib/frr/pimd -A 127.0.0.1 -P 0
+ priority=5
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index ff7c870e9..52f6d86f5 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -158,6 +158,11 @@
+ 		    "trap_ids": "ospf,ospfv6",
+ 		    "trap_group": "queue4_group1",
+ 		    "always_enabled": "true"
++	    },
++	    "isis": {
++		    "trap_ids": "isis",
++		    "trap_group": "queue4_group1",
++		    "always_enabled": "true"
+ {% endif %}
+ 	    }
+     }
+-- 
+2.25.1
+

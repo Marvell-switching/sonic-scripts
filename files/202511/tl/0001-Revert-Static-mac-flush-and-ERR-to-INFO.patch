@@ -1,0 +1,40 @@
+From cb6a895ff2192c112af2546f9d002a4ef745c4f6 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Wed, 22 Apr 2026 14:56:19 +0530
+Subject: [PATCH] Revert Static mac flush and ERR to INFO
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fdbsyncd/fdbsync.cpp    | 2 +-
+ orchagent/l2nhgorch.cpp | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fdbsyncd/fdbsync.cpp b/fdbsyncd/fdbsync.cpp
+index 98e2af37..9abecc4c 100644
+--- a/fdbsyncd/fdbsync.cpp
++++ b/fdbsyncd/fdbsync.cpp
+@@ -839,7 +839,7 @@ void FdbSync::macDelVxlan(string key)
+         macDelVxlanDB(key);
+         m_mac.erase(key);
+     } else {
+-        SWSS_LOG_ERROR("DEL_KEY %s entry doesn't exist", key.c_str());
++        SWSS_LOG_INFO("EVPN-MH-DBG: DEL_KEY %s entry doesn't exist (already deleted)", key.c_str());
+     }
+ }
+ 
+diff --git a/orchagent/l2nhgorch.cpp b/orchagent/l2nhgorch.cpp
+index 8c572267..12e8638b 100644
+--- a/orchagent/l2nhgorch.cpp
++++ b/orchagent/l2nhgorch.cpp
+@@ -776,7 +776,7 @@ bool L2NhgOrch::deleteL2Nhg(string& key, Consumer& consumer)
+     }
+     else
+     {
+-        SWSS_LOG_ERROR("Can't delete L2NHG '%s': does not exist", nh_id.c_str());
++        SWSS_LOG_INFO("EVPN-MH-DBG: L2NHG '%s' delete skipped: does not exist (already deleted or never created)", nh_id.c_str());
+     }
+     return true;
+ }
+-- 
+2.25.1
+

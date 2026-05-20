@@ -1,0 +1,65 @@
+From aa336dc98fa67257843dde34bf74cf04400338a8 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 12:26:10 +0530
+Subject: [PATCH] OSPF GR: Changes to apply OSPF during boot and runtime
+
+frrcfgd.py -> changes here are to apply the changes during runtime
+ospfd.conf.db.comm_list.j2 -> to apply changes during boot
+
+This is mapped by the already existing CONFIG_DB table "OSPFV2_ROUTER"
+
+Sample commands:
+
+sonic-db-cli CONFIG_DB HSET "OSPFV2_ROUTER|default" "graceful-restart-enable" "true"
+sonic-db-cli CONFIG_DB HSET "OSPFV2_ROUTER|default" "graceful-restart-grace-period" "120"
+sonic-db-cli CONFIG_DB HSET "OSPFV2_ROUTER|default" "graceful-restart-helper-enable" "true"
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py     |  5 ++++-
+ .../templates/ospfd/ospfd.conf.db.comm_list.j2      | 13 +++++++++++++
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+index f3234c96f..b2eb8b331 100755
+--- a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
++++ b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+@@ -2016,7 +2016,10 @@ class BGPConfigDaemon:
+                              ('distance-all',                  '{no:no-prefix}distance {}'),
+                              ('distance-external',             '{no:no-prefix}distance ospf external {}'),
+                              ('distance-inter-area',           '{no:no-prefix}distance ospf inter-area {}'),
+-                             ('distance-intra-area',           '{no:no-prefix}distance ospf intra-area {}')]
++                             ('distance-intra-area',           '{no:no-prefix}distance ospf intra-area {}'),
++                             ('graceful-restart-enable',       '{no:no-prefix}graceful-restart', ['true', 'false']),
++                             ('graceful-restart-grace-period', '{no:no-prefix}graceful-restart grace-period {}'),
++                             ('graceful-restart-helper-enable','{no:no-prefix}graceful-restart helper enable', ['true', 'false'])]
+ 
+     ospfv2_area_key_map = [('stub',                     '{no:no-prefix}area {} stub'),
+                            ('stub-no-summary',          '{no:no-prefix}area {} stub no-summary'),
+diff --git a/src/sonic-frr-mgmt-framework/templates/ospfd/ospfd.conf.db.comm_list.j2 b/src/sonic-frr-mgmt-framework/templates/ospfd/ospfd.conf.db.comm_list.j2
+index 96f70e020..64efc54d8 100644
+--- a/src/sonic-frr-mgmt-framework/templates/ospfd/ospfd.conf.db.comm_list.j2
++++ b/src/sonic-frr-mgmt-framework/templates/ospfd/ospfd.conf.db.comm_list.j2
+@@ -74,6 +74,19 @@ router ospf vrf {{ vrf }}
+ {% endif %}
+   {{ distance_cmd }}
+ {% endif %}
++{% if 'graceful-restart-enable' in ospf_instance %}
++{% if ospf_instance['graceful-restart-enable'] == 'true' %}
++  graceful-restart
++{% endif %}
++{% endif %}
++{% if 'graceful-restart-grace-period' in ospf_instance %}
++  graceful-restart grace-period {{ ospf_instance['graceful-restart-grace-period'] }}
++{% endif %}
++{% if 'graceful-restart-helper-enable' in ospf_instance %}
++{% if ospf_instance['graceful-restart-helper-enable'] == 'true' %}
++  graceful-restart helper enable
++{% endif %}
++{% endif %}
+ {# -------OSPFV2_ROUTER end --------------------------- #}
+ {# -------OSPFV2_ROUTER_AREA Begin --------------------------- #}
+ {% if OSPFV2_ROUTER_AREA is defined and OSPFV2_ROUTER_AREA|length > 0 %}
+-- 
+2.25.1
+

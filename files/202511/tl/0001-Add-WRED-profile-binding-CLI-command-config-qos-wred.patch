@@ -1,0 +1,988 @@
+From 5b5595f1948408db79fdd4c3d60b792d7ad421a1 Mon Sep 17 00:00:00 2001
+From: Jithender Kondam <jreddy@marvell.com>
+Date: Tue, 3 Feb 2026 07:57:31 +0530
+Subject: [PATCH] Add WRED profile binding CLI command (config qos
+ wred-profile)
+
+Description:
+Implement new `config qos wred-profile` subcommand group to bind and manage
+WRED profiles on interface queues. This feature enables runtime binding of
+WRED profiles to specific queues without requiring configuration file edits.
+
+Features:
+- config qos wred-profile bind <profile> <interface> <queue_spec>
+  Bind WRED profiles to interface queues with flexible queue specification
+  support (single: "3", range: "1-4", comma-separated: "1,3,5",
+  mixed: "0-2,5,7-9"). Replaces existing profiles and binds valid queues
+  with warnings for invalid queue indices.
+
+- config qos wred-profile unbind <interface> <queue_spec>
+  Remove WRED profile bindings from interface queues using same queue
+  specification formats.
+
+- show qos wred-profile [interface] [queue_spec]
+  Display all current WRED profile bindings across interfaces with optional
+  filtering by specific interface.
+
+Backward Compatibility:
+- No breaking changes to existing commands or APIs
+- Existing ecnconfig command continues to work as before
+- New CLI provides alternative interface for WRED profile management
+
+Signed-off-by: Jithender Kondam <jreddy@marvell.com>
+---
+ config/main.py                         | 254 +++++++++++
+ show/main.py                           | 107 +++++
+ tests/test_qos_wred_profile_binding.py | 557 +++++++++++++++++++++++++
+ 3 files changed, 918 insertions(+)
+ create mode 100644 tests/test_qos_wred_profile_binding.py
+
+diff --git a/config/main.py b/config/main.py
+index 7db8cbbb..01e2aec1 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -3777,6 +3777,260 @@ def is_dynamic_buffer_enabled(config_db):
+     device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
+     return 'dynamic' == device_metadata.get('buffer_model')
+ 
++
++#
++# WRED Profile Binding Helper Functions
++#
++
++def parse_queue_range(queue_spec):
++    """
++    Parse queue specification and return list of valid queue indices.
++
++    Supports formats:
++    - Single: "3" -> [3]
++    - Range: "1-4" -> [1, 2, 3, 4]
++    - Comma-separated: "1,3,5" -> [1, 3, 5]
++    - Mixed: "0-2,5,7-9" -> [0, 1, 2, 5, 7, 8, 9]
++    - Empty segments from repeated or trailing commas are ignored
++
++    Returns tuple: (valid_queues, invalid_queues_info)
++    """
++    valid_queues = []
++    invalid_queues = []
++    MAX_QUEUE_INDEX = 255
++
++    try:
++        # Split by comma for comma-separated values
++        parts = queue_spec.split(',')
++
++        for part in parts:
++            part = part.strip()
++            if not part:
++                continue
++
++            if '-' in part:
++                # Handle range
++                range_parts = part.split('-')
++                if len(range_parts) != 2:
++                    invalid_queues.append(part)
++                    continue
++                try:
++                    start = int(range_parts[0].strip())
++                    end = int(range_parts[1].strip())
++
++                    if start < 0 or end < 0 or start > MAX_QUEUE_INDEX or end > MAX_QUEUE_INDEX:
++                        invalid_queues.append(part)
++                        continue
++
++                    if start > end:
++                        invalid_queues.append(part)
++                        continue
++
++                    for q in range(start, end + 1):
++                        if q not in valid_queues:
++                            valid_queues.append(q)
++                except ValueError:
++                    invalid_queues.append(part)
++            else:
++                # Single queue index
++                try:
++                    queue_idx = int(part.strip())
++                    if queue_idx < 0 or queue_idx > MAX_QUEUE_INDEX:
++                        invalid_queues.append(part)
++                    elif queue_idx not in valid_queues:
++                        valid_queues.append(queue_idx)
++                except ValueError:
++                    invalid_queues.append(part)
++    except Exception as e:
++        click.secho("Error parsing queue specification: {}".format(str(e)), fg="red")
++        return [], [queue_spec]
++
++    valid_queues.sort()
++    return valid_queues, invalid_queues
++
++
++def validate_wred_profile_exists(config_db, profile_name):
++    """Check if WRED profile exists in CONFIG_DB (connector is already namespaced)."""
++    wred_profiles = config_db.get_table('WRED_PROFILE') or {}
++    return profile_name in wred_profiles
++
++
++def validate_interface_exists(config_db, interface_name):
++    """Check if interface exists in PORT table"""
++    ports = config_db.get_table('PORT') or {}
++    return interface_name in ports
++
++
++#
++# 'wred-profile' group ('config qos wred-profile ...')
++#
++
++@qos.group(cls=clicommon.AbbreviationGroup, name='wred-profile')
++@click.pass_context
++def wred_profile(ctx):
++    """WRED profile binding management"""
++    pass
++
++
++@wred_profile.command('bind')
++@click.argument('profile_name', type=str, required=True)
++@click.argument('interface', type=str, required=True)
++@click.argument('queue_spec', type=str, required=True)
++@click.option('--verbose', is_flag=True, help="Enable verbose output")
++@multi_asic_util.multi_asic_click_option_namespace
++@click.pass_context
++def bind_wred_profile(ctx, profile_name, interface, queue_spec, verbose, namespace):
++    """Bind a WRED profile to interface queue(s)
++
++    Examples:
++      config qos wred-profile bind AZURE_LOSSLESS Ethernet0 3
++      config qos wred-profile bind my_profile Ethernet0 1-4
++      config qos wred-profile bind my_profile Ethernet0 1,3,5
++      config qos wred-profile bind my_profile Ethernet0 0-2,5,7-9
++    """
++    log.log_info("'qos wred-profile bind {}' executing...".format(profile_name))
++
++    # Connect to config DB
++    if namespace is None:
++        config_db = ConfigDBConnector()
++    else:
++        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
++
++    config_db.connect()
++
++    # Validate profile exists
++    if not validate_wred_profile_exists(config_db, profile_name):
++        ctx.fail("WRED profile '{}' does not exist".format(profile_name))
++
++    # Validate interface exists
++    if not validate_interface_exists(config_db, interface):
++        ctx.fail("Interface '{}' does not exist".format(interface))
++
++    # Parse queue specification
++    valid_queues, invalid_queues = parse_queue_range(queue_spec)
++
++    if not valid_queues:
++        ctx.fail("No valid queues in specification '{}'".format(queue_spec))
++
++    if invalid_queues:
++        click.secho("Warning: Skipping invalid queue(s): {}".format(', '.join(invalid_queues)), fg="yellow")
++
++    # Bind profile to each valid queue
++    bound_queues = []
++    failed_queues = []
++    for queue_idx in valid_queues:
++        queue_key = (interface, str(queue_idx))
++
++        try:
++            # Get existing queue entry or create new one
++            queue_entry = config_db.get_entry('QUEUE', queue_key)
++            if not queue_entry:
++                queue_entry = {}
++
++            # Set the WRED profile
++            old_profile = queue_entry.get('wred_profile', None)
++            queue_entry['wred_profile'] = profile_name
++
++            # Write back to config DB
++            config_db.set_entry('QUEUE', queue_key, queue_entry)
++            bound_queues.append(queue_idx)
++
++            if verbose:
++                if old_profile:
++                    click.echo("Queue {}|{}: Replaced profile '{}' with '{}'".format(
++                        interface, queue_idx, old_profile, profile_name))
++                else:
++                    click.echo("Queue {}|{}: Bound profile '{}'".format(
++                        interface, queue_idx, profile_name))
++        except Exception as e:
++            click.secho("Error binding queue {}|{}: {}".format(interface, queue_idx, str(e)), fg="red")
++            failed_queues.append(queue_idx)
++
++    if not bound_queues:
++        ctx.fail("Failed to bind profile to any queues")
++
++    if failed_queues:
++        failed_sorted = sorted(set(failed_queues))
++        failed_list = ', '.join(str(q) for q in failed_sorted)
++        click.secho(
++            "Partial success: profile '{}' bound to {} queue(s) on interface {}; "
++            "bind failed for {} queue(s): {}".format(
++                profile_name, len(bound_queues), interface, len(failed_sorted), failed_list),
++            fg="yellow")
++        ctx.fail("WRED profile bind failed for queue(s): {}".format(failed_list))
++
++    click.secho("Successfully bound profile '{}' to {} queue(s) on interface {}".format(
++        profile_name, len(bound_queues), interface), fg="green")
++
++
++@wred_profile.command('unbind')
++@click.argument('interface', type=str, required=True)
++@click.argument('queue_spec', type=str, required=True)
++@click.option('--verbose', is_flag=True, help="Enable verbose output")
++@multi_asic_util.multi_asic_click_option_namespace
++@click.pass_context
++def unbind_wred_profile(ctx, interface, queue_spec, verbose, namespace):
++    """Remove WRED profile binding from interface queue(s)
++
++    Examples:
++      config qos wred-profile unbind Ethernet0 3
++      config qos wred-profile unbind Ethernet0 1-4
++      config qos wred-profile unbind Ethernet0 1,3,5
++    """
++    log.log_info("'qos wred-profile unbind' executing...")
++
++    # Connect to config DB
++    if namespace is None:
++        config_db = ConfigDBConnector()
++    else:
++        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
++
++    config_db.connect()
++
++    # Validate interface exists
++    if not validate_interface_exists(config_db, interface):
++        ctx.fail("Interface '{}' does not exist".format(interface))
++
++    # Parse queue specification
++    valid_queues, invalid_queues = parse_queue_range(queue_spec)
++
++    if not valid_queues:
++        ctx.fail("No valid queues in specification '{}'".format(queue_spec))
++
++    if invalid_queues:
++        click.secho("Warning: Skipping invalid queue(s): {}".format(', '.join(invalid_queues)), fg="yellow")
++
++    # Remove profile binding from each queue
++    unbound_queues = []
++    for queue_idx in valid_queues:
++        queue_key = (interface, str(queue_idx))
++
++        try:
++            queue_entry = config_db.get_entry('QUEUE', queue_key)
++            if queue_entry and 'wred_profile' in queue_entry:
++                old_profile = queue_entry['wred_profile']
++                del queue_entry['wred_profile']
++                if queue_entry:
++                    config_db.set_entry('QUEUE', queue_key, queue_entry)
++                else:
++                    config_db.set_entry('QUEUE', queue_key, None)
++                unbound_queues.append(queue_idx)
++
++                if verbose:
++                    click.echo("Queue {}|{}: Removed profile '{}'".format(
++                        interface, queue_idx, old_profile))
++            elif verbose:
++                click.echo("Queue {}|{}: No WRED profile binding".format(interface, queue_idx))
++        except Exception as e:
++            click.secho("Error unbinding queue {}|{}: {}".format(interface, queue_idx, str(e)), fg="red")
++
++    if unbound_queues:
++        click.secho("Successfully removed WRED profile bindings from {} queue(s) on interface {}".format(
++            len(unbound_queues), interface), fg="green")
++    else:
++        click.secho("No WRED profile bindings were removed", fg="yellow")
++
++
+ #
+ # 'warm_restart' group ('config warm_restart ...')
+ #
+diff --git a/show/main.py b/show/main.py
+index 27032107..9c1796b9 100755
+--- a/show/main.py
++++ b/show/main.py
+@@ -978,6 +978,113 @@ def pwm_q_all(namespace, json_output):
+         command += ["-j"]
+     run_command(command)
+ 
++#
++# 'qos' group ("show qos ...")
++#
++
++
++@cli.group(cls=clicommon.AliasedGroup)
++def qos():
++    """Show QoS configuration"""
++    pass
++
++
++# 'wred-profile' subcommand ("show qos wred-profile [interface] [queue_spec]")
++@qos.command('wred-profile')
++@click.argument('interface', type=str, required=False)
++@click.argument('queue_spec', type=str, required=False)
++@multi_asic_util.multi_asic_click_option_namespace
++@click.option('--verbose', is_flag=True, help="Enable verbose output")
++def wred_profile(interface, queue_spec, namespace, verbose):
++    """Show WRED profile bindings for queues
++
++    Examples:
++      show qos wred-profile
++      show qos wred-profile Ethernet0
++      show qos wred-profile Ethernet0 3
++      show qos wred-profile Ethernet0-4              (interface range)
++      show qos wred-profile Ethernet0 0-7          (queue range)
++      show qos wred-profile Ethernet0-5 0-7        (interface and queue range)
++      show qos wred-profile Ethernet0 1,3,5
++      show qos wred-profile Ethernet0 0-2,5,7-9
++    """
++    # Import here to avoid circular imports
++    from config.main import parse_queue_range
++    from utilities_common.intf_filter import interface_in_filter
++
++    # Connect to config DB
++    if namespace is None:
++        config_db = ConfigDBConnector()
++    else:
++        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
++
++    config_db.connect()
++
++    # Get all QUEUE entries
++    queue_table = config_db.get_table('QUEUE')
++
++    if not queue_table:
++        click.echo("No QUEUE entries found in config DB")
++        return
++
++    parsed_queues = None
++    if queue_spec:
++        valid_queues, invalid_queues = parse_queue_range(queue_spec)
++        if invalid_queues and verbose:
++            click.secho("Warning: Skipping invalid queue(s): {}".format(', '.join(invalid_queues)), fg="yellow")
++        parsed_queues = set(valid_queues)
++
++    # Collect bindings
++    bindings = []
++    for queue_key, queue_entry in queue_table.items():
++        if 'wred_profile' not in queue_entry:
++            continue
++
++        # Parse the key: ConfigDB returns tuple (interface, queue_index) for QUEUE table
++        if not (isinstance(queue_key, tuple) and len(queue_key) == 2):
++            continue
++        intf = str(queue_key[0])
++        try:
++            queue_idx_num = int(str(queue_key[1]).strip())
++        except (TypeError, ValueError):
++            continue
++        profile = queue_entry['wred_profile']
++
++        # Filter by interface if specified (supports single or range e.g. Ethernet0-4)
++        if interface and not interface_in_filter(intf, interface):
++            continue
++
++        # Filter by queue_spec if specified (supports single or range e.g. 0-7)
++        if parsed_queues is not None and queue_idx_num not in parsed_queues:
++            continue
++
++        bindings.append((intf, queue_idx_num, profile))
++
++    if not bindings:
++        if interface and queue_spec:
++            click.echo(
++                "No WRED profile bindings found for interface '{}' with queue(s) {}".format(
++                    interface, queue_spec
++                )
++            )
++        elif interface:
++            click.echo("No WRED profile bindings found for interface '{}'".format(interface))
++        else:
++            click.echo("No WRED profile bindings found")
++        return
++
++    # Sort and display
++    bindings.sort()
++
++    # Print header
++    click.echo("\nInterface    Queue  WRED Profile")
++    click.echo("-----------  -----  ------------------------")
++
++    for intf, queue_idx_num, profile in bindings:
++        click.echo("{:<12}  {:<6}  {}".format(intf, queue_idx_num, profile))
++
++    click.echo("\nTotal bindings: {}".format(len(bindings)))
++
+ #
+ # 'priority-group' group ("show priority-group ...")
+ #
+diff --git a/tests/test_qos_wred_profile_binding.py b/tests/test_qos_wred_profile_binding.py
+new file mode 100644
+index 00000000..879b6ea5
+--- /dev/null
++++ b/tests/test_qos_wred_profile_binding.py
+@@ -0,0 +1,557 @@
++#!/usr/bin/env python3
++"""
++Test cases for WRED profile binding functionality in config qos wred-profile command.
++
++This test module validates:
++1. Queue specification parsing (single, range, comma-separated, mixed)
++2. WRED profile binding to interfaces and queues
++3. WRED profile unbinding from queues
++4. Show qos wred-profile CLI (filters, empty table, invalid queue_spec)
++5. Validation of profile and interface existence
++6. Error handling and edge cases
++
++QUEUE table keys in mocks match ConfigDBConnector multi-key form: a 2-tuple
++(port_name, queue_index_as_str), e.g. ('Ethernet0', '1'). Bind/unbind tests
++assert set_entry/get_entry use the same tuple keys as production code.
++"""
++
++import os
++import unittest
++from unittest import mock
++
++from click.testing import CliRunner
++
++# Click maps ctx.fail() to exit 1 or 2 depending on version / CliRunner behavior.
++_FAIL_EXIT_CODES = (1, 2)
++
++# Mock the utilities before importing
++os.environ["UTILITIES_UNIT_TESTING"] = "2"
++os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "single_asic"
++
++# Import from config package properly
++import config.main as config  # noqa: E402
++import show.main as show  # noqa: E402
++from config.main import parse_queue_range, validate_wred_profile_exists, validate_interface_exists  # noqa: E402
++
++
++class TestQueueRangeParser(unittest.TestCase):
++    """Test queue range parsing functionality"""
++
++    def test_parse_single_queue(self):
++        """Test parsing single queue index"""
++        valid, invalid = parse_queue_range("3")
++        self.assertEqual(valid, [3])
++        self.assertEqual(invalid, [])
++
++    def test_parse_queue_range(self):
++        """Test parsing queue range"""
++        valid, invalid = parse_queue_range("1-4")
++        self.assertEqual(valid, [1, 2, 3, 4])
++        self.assertEqual(invalid, [])
++
++    def test_parse_comma_separated_queues(self):
++        """Test parsing comma-separated queues"""
++        valid, invalid = parse_queue_range("1,3,5")
++        self.assertEqual(valid, [1, 3, 5])
++        self.assertEqual(invalid, [])
++
++    def test_parse_mixed_queues(self):
++        """Test parsing mixed ranges and comma-separated values"""
++        valid, invalid = parse_queue_range("0-2,5,7-9")
++        self.assertEqual(valid, [0, 1, 2, 5, 7, 8, 9])
++        self.assertEqual(invalid, [])
++
++    def test_parse_invalid_range_reversed(self):
++        """Test parsing invalid range (end < start)"""
++        valid, invalid = parse_queue_range("5-1")
++        self.assertEqual(valid, [])
++        self.assertIn("5-1", invalid)
++
++    def test_parse_invalid_queue_index(self):
++        """Test parsing invalid queue index"""
++        valid, invalid = parse_queue_range("256")  # > 255
++        self.assertEqual(valid, [])
++        self.assertIn("256", invalid)
++
++    def test_parse_invalid_negative_queue(self):
++        """Test parsing negative queue index"""
++        valid, invalid = parse_queue_range("-1")
++        self.assertEqual(valid, [])
++        self.assertIn("-1", invalid)
++
++    def test_parse_invalid_text(self):
++        """Test parsing non-numeric text"""
++        valid, invalid = parse_queue_range("abc")
++        self.assertEqual(valid, [])
++        self.assertIn("abc", invalid)
++
++    def test_parse_duplicate_removal(self):
++        """Test that duplicate queue indices are removed"""
++        valid, invalid = parse_queue_range("1,1,2,2,3")
++        self.assertEqual(valid, [1, 2, 3])
++        self.assertEqual(invalid, [])
++
++    def test_parse_whitespace_handling(self):
++        """Test handling of whitespace in queue specs"""
++        valid, invalid = parse_queue_range(" 1 - 3 , 5 ")
++        self.assertEqual(valid, [1, 2, 3, 5])
++        self.assertEqual(invalid, [])
++
++    def test_parse_max_queue_index(self):
++        """Test parsing maximum valid queue index"""
++        valid, invalid = parse_queue_range("255")
++        self.assertEqual(valid, [255])
++        self.assertEqual(invalid, [])
++
++    def test_parse_range_to_max(self):
++        """Test parsing range to maximum queue index"""
++        valid, invalid = parse_queue_range("250-255")
++        self.assertEqual(valid, [250, 251, 252, 253, 254, 255])
++        self.assertEqual(invalid, [])
++
++
++class TestWREDProfileValidation(unittest.TestCase):
++    """Test WRED profile and interface validation"""
++
++    def setUp(self):
++        """Set up test fixtures"""
++        self.mock_config_db = mock.MagicMock()
++
++    def test_validate_profile_exists(self):
++        """Test validating existing WRED profile"""
++        self.mock_config_db.get_table.return_value = {
++            'AZURE_LOSSLESS': {'green_min_threshold': '1048576'},
++            'TEST_PROFILE': {'green_min_threshold': '2097152'}
++        }
++        result = validate_wred_profile_exists(self.mock_config_db, 'AZURE_LOSSLESS')
++        self.assertTrue(result)
++
++    def test_validate_profile_not_exists(self):
++        """Test validating non-existent WRED profile"""
++        self.mock_config_db.get_table.return_value = {
++            'AZURE_LOSSLESS': {'green_min_threshold': '1048576'}
++        }
++        result = validate_wred_profile_exists(self.mock_config_db, 'NONEXISTENT')
++        self.assertFalse(result)
++
++    def test_validate_interface_exists(self):
++        """Test validating existing interface"""
++        self.mock_config_db.get_table.return_value = {
++            'Ethernet0': {'mtu': '9100'},
++            'Ethernet4': {'mtu': '9100'}
++        }
++        result = validate_interface_exists(self.mock_config_db, 'Ethernet0')
++        self.assertTrue(result)
++
++    def test_validate_interface_not_exists(self):
++        """Test validating non-existent interface"""
++        self.mock_config_db.get_table.return_value = {
++            'Ethernet0': {'mtu': '9100'}
++        }
++        result = validate_interface_exists(self.mock_config_db, 'Ethernet4')
++        self.assertFalse(result)
++
++
++class TestWREDProfileBindingCLI(unittest.TestCase):
++    """Test WRED profile binding CLI commands.
++
++    QUEUE rows are mocked with 2-tuple keys (interface, queue_index_str) consistent
++    with ConfigDBConnector.get_entry/set_entry, not pipe-joined strings.
++    """
++
++    def setUp(self):
++        """Set up test fixtures"""
++        self.runner = CliRunner()
++        qos_cmd = config.config.commands["qos"]
++        wred_profile_cmd = qos_cmd.commands["wred-profile"]
++        self.bind_cmd = wred_profile_cmd.commands["bind"]
++        self.unbind_cmd = wred_profile_cmd.commands["unbind"]
++
++    @staticmethod
++    def _setup_common_tables(mock_db, profile_exists=True, interface_exists=True):
++        wred_profiles = {
++            'AZURE_LOSSLESS': {'green_min_threshold': '1048576'}
++        } if profile_exists else {}
++        ports = {
++            'Ethernet0': {'mtu': '9100'}
++        } if interface_exists else {}
++
++        mock_db.get_table.side_effect = lambda table: {
++            'WRED_PROFILE': wred_profiles,
++            'PORT': ports
++        }.get(table, {})
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_bind_cli_updates_db_and_verbose_output(self, mock_config_db_class):
++        """Test bind command updates DB and emits verbose output"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++
++        # QUEUE keys: 2-tuples as ConfigDBConnector uses for multi-key tables
++        queue_entries = {
++            ('Ethernet0', '1'): {},
++            ('Ethernet0', '3'): {'wred_profile': 'OLD_PROFILE'},
++        }
++        mock_db.get_entry.side_effect = lambda table, key: dict(queue_entries.get(key, {}))
++
++        result = self.runner.invoke(
++            self.bind_cmd,
++            ['AZURE_LOSSLESS', 'Ethernet0', '1,3', '--verbose']
++        )
++
++        self.assertEqual(result.exit_code, 0)
++        mock_db.connect.assert_called_once()
++        mock_db.get_entry.assert_has_calls([
++            mock.call('QUEUE', ('Ethernet0', '1')),
++            mock.call('QUEUE', ('Ethernet0', '3')),
++        ])
++        mock_db.set_entry.assert_has_calls([
++            mock.call('QUEUE', ('Ethernet0', '1'), {'wred_profile': 'AZURE_LOSSLESS'}),
++            mock.call('QUEUE', ('Ethernet0', '3'), {'wred_profile': 'AZURE_LOSSLESS'})
++        ])
++        self.assertIn("Queue Ethernet0|1: Bound profile 'AZURE_LOSSLESS'", result.output)
++        self.assertIn("Queue Ethernet0|3: Replaced profile 'OLD_PROFILE' with 'AZURE_LOSSLESS'", result.output)
++        self.assertIn(
++            "Successfully bound profile 'AZURE_LOSSLESS' to 2 queue(s) on interface Ethernet0",
++            result.output
++        )
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_bind_cli_partial_failure_exits_nonzero(self, mock_config_db_class):
++        """Bind reports partial success and exits non-zero if any queue raises"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++        mock_db.get_entry.return_value = {}
++
++        def set_entry_side_effect(table, key, data):
++            if key == ('Ethernet0', '3'):
++                raise RuntimeError('simulated db error')
++
++        mock_db.set_entry.side_effect = set_entry_side_effect
++
++        result = self.runner.invoke(
++            self.bind_cmd,
++            ['AZURE_LOSSLESS', 'Ethernet0', '1,3']
++        )
++
++        self.assertIn(result.exit_code, _FAIL_EXIT_CODES)
++        self.assertIn('Partial success', result.output)
++        self.assertIn('bind failed for 1 queue(s): 3', result.output)
++        self.assertIn('simulated db error', result.output)
++        self.assertNotIn('Successfully bound profile', result.output)
++        mock_db.get_entry.assert_has_calls([
++            mock.call('QUEUE', ('Ethernet0', '1')),
++            mock.call('QUEUE', ('Ethernet0', '3')),
++        ])
++        mock_db.set_entry.assert_has_calls([
++            mock.call('QUEUE', ('Ethernet0', '1'), {'wred_profile': 'AZURE_LOSSLESS'}),
++            mock.call('QUEUE', ('Ethernet0', '3'), {'wred_profile': 'AZURE_LOSSLESS'})
++        ])
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_bind_cli_interface_validation_error(self, mock_config_db_class):
++        """Test bind command returns error when interface is missing"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db, profile_exists=True, interface_exists=False)
++
++        result = self.runner.invoke(
++            self.bind_cmd,
++            ['AZURE_LOSSLESS', 'Ethernet0', '3']
++        )
++
++        self.assertIn(result.exit_code, _FAIL_EXIT_CODES)
++        self.assertIn("Error: Interface 'Ethernet0' does not exist", result.output)
++        mock_db.set_entry.assert_not_called()
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_bind_cli_namespace_connector_path(self, mock_config_db_class):
++        """Test bind command uses namespaced connector when namespace is provided"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++        mock_db.get_entry.return_value = {}
++
++        result = self.runner.invoke(
++            self.bind_cmd,
++            ['--namespace', '', 'AZURE_LOSSLESS', 'Ethernet0', '3']
++        )
++
++        self.assertEqual(result.exit_code, 0)
++        mock_config_db_class.assert_called_once_with(use_unix_socket_path=True, namespace='')
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_unbind_cli_updates_db_and_verbose_output(self, mock_config_db_class):
++        """Test unbind command updates DB and emits verbose output"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++
++        queue_entries = {
++            ('Ethernet0', '1'): {'wred_profile': 'AZURE_LOSSLESS', 'scheduler': 'SCHEDULER_PROFILE_1'},
++            ('Ethernet0', '3'): {'scheduler': 'SCHEDULER_PROFILE_2'},
++        }
++        mock_db.get_entry.side_effect = lambda table, key: dict(queue_entries.get(key, {}))
++
++        result = self.runner.invoke(
++            self.unbind_cmd,
++            ['Ethernet0', '1,3', '--verbose']
++        )
++
++        self.assertEqual(result.exit_code, 0)
++        mock_db.connect.assert_called_once()
++        mock_db.set_entry.assert_called_once_with(
++            'QUEUE',
++            ('Ethernet0', '1'),
++            {'scheduler': 'SCHEDULER_PROFILE_1'}
++        )
++        self.assertIn("Queue Ethernet0|1: Removed profile 'AZURE_LOSSLESS'", result.output)
++        self.assertIn("Queue Ethernet0|3: No WRED profile binding", result.output)
++        self.assertIn(
++            "Successfully removed WRED profile bindings from 1 queue(s) on interface Ethernet0",
++            result.output
++        )
++        mock_db.get_entry.assert_has_calls([
++            mock.call('QUEUE', ('Ethernet0', '1')),
++            mock.call('QUEUE', ('Ethernet0', '3')),
++        ])
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_unbind_deletes_queue_row_when_only_wred_profile(self, mock_config_db_class):
++        """Removing last field deletes the QUEUE row (set_entry(..., None)), not an empty hash"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++        mock_db.get_entry.side_effect = lambda table, key: dict({
++            ('Ethernet0', '5'): {'wred_profile': 'ONLY_WRED'},
++        }.get(key, {}))
++
++        result = self.runner.invoke(self.unbind_cmd, ['Ethernet0', '5'])
++
++        self.assertEqual(result.exit_code, 0)
++        mock_db.set_entry.assert_called_once_with('QUEUE', ('Ethernet0', '5'), None)
++
++    @mock.patch('config.main.ConfigDBConnector')
++    def test_unbind_cli_invalid_queue_spec_error(self, mock_config_db_class):
++        """Test unbind command returns error when queue spec has no valid queues"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++
++        self._setup_common_tables(mock_db)
++
++        result = self.runner.invoke(
++            self.unbind_cmd,
++            ['Ethernet0', 'abc']
++        )
++
++        self.assertIn(result.exit_code, _FAIL_EXIT_CODES)
++        self.assertIn("Error: No valid queues in specification 'abc'", result.output)
++        mock_db.set_entry.assert_not_called()
++
++
++class TestShowQosWredProfileCLI(unittest.TestCase):
++    """CLI tests for show qos wred-profile (QUEUE keys as ConfigDB 2-tuples)."""
++
++    def setUp(self):
++        self.runner = CliRunner()
++        qos_cmd = show.cli.commands['qos']
++        self.show_wred_cmd = qos_cmd.commands['wred-profile']
++
++    @staticmethod
++    def _queue_table_with_bindings():
++        return {
++            ('Ethernet0', '1'): {'wred_profile': 'PROFILE_A', 'scheduler': 'SCHED_1'},
++            ('Ethernet0', '3'): {'wred_profile': 'PROFILE_B'},
++            ('Ethernet4', '0'): {'wred_profile': 'PROFILE_C'},
++            ('Ethernet4', '2'): {'scheduler': 'SCHED_2'},  # no wred_profile — skipped
++            # Wrong arity (not a 2-tuple key) — skipped like non-ConfigDB keys
++            ('Ethernet0', '9', 'extra'): {'wred_profile': 'IGNORED'},
++        }
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_empty_queue_table(self, mock_config_db_class):
++        """No QUEUE rows -> user message, exit 0"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = {}
++
++        result = self.runner.invoke(self.show_wred_cmd, [])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('No QUEUE entries found in config DB', result.output)
++        mock_db.connect.assert_called_once()
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_lists_all_bindings(self, mock_config_db_class):
++        """Prints all rows that have wred_profile and tuple keys"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(self.show_wred_cmd, [])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('Interface    Queue  WRED Profile', result.output)
++        self.assertIn('Ethernet0', result.output)
++        self.assertIn('PROFILE_A', result.output)
++        self.assertIn('PROFILE_B', result.output)
++        self.assertIn('Ethernet4', result.output)
++        self.assertIn('PROFILE_C', result.output)
++        self.assertNotIn('IGNORED', result.output)
++        self.assertIn('Total bindings: 3', result.output)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_sorts_queue_index_numerically(self, mock_config_db_class):
++        """Queue index sorts numerically (2 before 10), not lexicographically as strings"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = {
++            ('Ethernet0', '10'): {'wred_profile': 'PROF_TEN'},
++            ('Ethernet0', '2'): {'wred_profile': 'PROF_TWO'},
++        }
++
++        result = self.runner.invoke(self.show_wred_cmd, ['Ethernet0'])
++
++        self.assertEqual(result.exit_code, 0)
++        pos_two = result.output.index('PROF_TWO')
++        pos_ten = result.output.index('PROF_TEN')
++        self.assertLess(pos_two, pos_ten)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_interface_filter(self, mock_config_db_class):
++        """Interface argument limits output to matching ports"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(self.show_wred_cmd, ['Ethernet4'])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('PROFILE_C', result.output)
++        self.assertNotIn('PROFILE_A', result.output)
++        self.assertNotIn('PROFILE_B', result.output)
++        self.assertIn('Total bindings: 1', result.output)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_queue_spec_filter(self, mock_config_db_class):
++        """queue_spec limits output to listed queue indices"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(self.show_wred_cmd, ['Ethernet0', '1,3'])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('PROFILE_A', result.output)
++        self.assertIn('PROFILE_B', result.output)
++        self.assertNotIn('PROFILE_C', result.output)
++        self.assertIn('Total bindings: 2', result.output)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_interface_and_queue_filter(self, mock_config_db_class):
++        """Both filters apply together"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(self.show_wred_cmd, ['Ethernet0', '3'])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('PROFILE_B', result.output)
++        self.assertNotIn('PROFILE_A', result.output)
++        self.assertIn('Total bindings: 1', result.output)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_no_bindings_in_table(self, mock_config_db_class):
++        """QUEUE rows without wred_profile yield no bindings message"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = {
++            ('Ethernet0', '0'): {'scheduler': 'S'},
++        }
++
++        result = self.runner.invoke(self.show_wred_cmd, [])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('No WRED profile bindings found', result.output)
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_invalid_queue_spec_no_matches(self, mock_config_db_class):
++        """queue_spec with no valid queues matches nothing"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(self.show_wred_cmd, ['Ethernet0', 'abc'])
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn(
++            "No WRED profile bindings found for interface 'Ethernet0' with queue(s) abc",
++            result.output,
++        )
++
++    @mock.patch('show.main.ConfigDBConnector')
++    def test_show_wred_profile_invalid_queue_spec_verbose_warning(self, mock_config_db_class):
++        """--verbose emits warning for invalid queue tokens when some tokens invalid"""
++        mock_db = mock.MagicMock()
++        mock_config_db_class.return_value = mock_db
++        mock_db.get_table.return_value = self._queue_table_with_bindings()
++
++        result = self.runner.invoke(
++            self.show_wred_cmd,
++            ['Ethernet0', '1,abc', '--verbose'],
++        )
++
++        self.assertEqual(result.exit_code, 0)
++        self.assertIn('Warning: Skipping invalid queue(s): abc', result.output)
++        self.assertIn('PROFILE_A', result.output)
++        self.assertNotIn('PROFILE_B', result.output)
++        self.assertIn('Total bindings: 1', result.output)
++
++
++class TestWREDProfileBindingEdgeCases(unittest.TestCase):
++    """Test edge cases and error conditions"""
++
++    def test_parse_empty_string(self):
++        """Test parsing empty queue specification"""
++        valid, invalid = parse_queue_range("")
++        self.assertEqual(valid, [])
++        self.assertEqual(invalid, [])
++
++    def test_parse_trailing_comma(self):
++        """Test parsing queue specification with trailing comma"""
++        valid, invalid = parse_queue_range("1,")
++        self.assertEqual(valid, [1])
++        self.assertEqual(invalid, [])
++
++    def test_parse_malformed_range(self):
++        """Test parsing malformed range"""
++        valid, invalid = parse_queue_range("1-2-3")
++        self.assertEqual(valid, [])
++        self.assertIn("1-2-3", invalid)  # Entire malformed range is marked as invalid
++
++    def test_parse_large_queue_range(self):
++        """Test parsing large queue range"""
++        valid, invalid = parse_queue_range("0-255")
++        self.assertEqual(len(valid), 256)
++        self.assertEqual(valid[0], 0)
++        self.assertEqual(valid[255], 255)
++        self.assertEqual(invalid, [])
++
++    def test_parse_partial_invalid_spec(self):
++        """Test parsing spec with both valid and invalid entries"""
++        valid, invalid = parse_queue_range("0-2,999,5-7")
++        self.assertEqual(valid, [0, 1, 2, 5, 6, 7])
++        self.assertIn("999", invalid)
++
++
++if __name__ == '__main__':
++    unittest.main()
+-- 
+2.25.1
+

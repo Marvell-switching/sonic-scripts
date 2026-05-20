@@ -1,0 +1,86 @@
+From babd7798f795ccb8459d686c87b612d763136ada Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Fri, 9 Jan 2026 14:21:46 +0530
+Subject: [PATCH] SONICDC-873: Warmboot to be stopped when vrrp forwarding
+ entries are present
+
+---
+ orchagent/orch.h         |  2 ++
+ orchagent/orchdaemon.cpp | 10 ++++++++++
+ orchagent/vrrporch.cpp   | 13 +++++++++++++
+ orchagent/vrrporch.h     |  1 +
+ 4 files changed, 26 insertions(+)
+
+diff --git a/orchagent/orch.h b/orchagent/orch.h
+index 007f4548..d135c23e 100644
+--- a/orchagent/orch.h
++++ b/orchagent/orch.h
+@@ -305,6 +305,8 @@ public:
+      */
+     virtual void onWarmBootEnd() { }
+ 
++    virtual bool warmRestartCheck() const { return true; }
++
+     void dumpPendingTasks(std::vector<std::string> &ts);
+ 
+     /**
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index 0fa9d623..ecf5dbca 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -1203,6 +1203,16 @@ bool OrchDaemon::warmRestartCheck()
+         }
+     }
+ 
++    for (auto orch : m_orchList)
++    {
++        if (!orch->warmRestartCheck())
++        {
++            data = "NOT_READY";
++            ret = false;
++            break;
++        }
++    }
++
+     SWSS_LOG_NOTICE("Restart check result: %s", data.c_str());
+     gSwitchOrch->restartCheckReply(op,  data, values);
+     return ret;
+diff --git a/orchagent/vrrporch.cpp b/orchagent/vrrporch.cpp
+index bae21fff..c7d4eb07 100644
+--- a/orchagent/vrrporch.cpp
++++ b/orchagent/vrrporch.cpp
+@@ -28,6 +28,19 @@ bool VrrpOrch::hasSameIpAddr(const string &alias,const IpPrefix &vip_prefix)
+     }
+     return false;
+ }
++
++bool VrrpOrch::warmRestartCheck() const
++{
++    if (!vrrp_table_.empty())
++    {
++        SWSS_LOG_ERROR("VRRP Warmboot cannot proceed with %ld entries on dataplane",
++                       vrrp_table_.size());
++        return false;
++    }
++
++    return true;
++}
++
+ bool VrrpOrch::addOperation(const Request& request)
+ {
+     SWSS_LOG_ENTER();
+diff --git a/orchagent/vrrporch.h b/orchagent/vrrporch.h
+index 926d1998..f6566cb4 100644
+--- a/orchagent/vrrporch.h
++++ b/orchagent/vrrporch.h
+@@ -74,6 +74,7 @@ public:
+     VrrpOrch(DBConnector *db, const std::string& tableName) : Orch2(db, tableName, request_) { }
+ 
+ private:
++    bool warmRestartCheck() const override;
+     virtual bool addOperation(const Request& request);
+     virtual bool delOperation(const Request& request);
+     bool hasSameIpAddr(const string &alias,const IpPrefix &vip_prefix);
+-- 
+2.25.1
+

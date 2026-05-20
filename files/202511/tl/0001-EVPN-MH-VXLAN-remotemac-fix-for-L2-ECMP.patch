@@ -1,0 +1,56 @@
+From aee30a6dfbff3b124c7be739898815e1b40690ca Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Tue, 7 Apr 2026 13:06:48 +0530
+Subject: [PATCH] EVPN MH VXLAN remotemac fix for L2 ECMP
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ show/vxlan.py | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/show/vxlan.py b/show/vxlan.py
+index 16743fc0..46f97cdc 100644
+--- a/show/vxlan.py
++++ b/show/vxlan.py
+@@ -277,6 +277,15 @@ def remotevni(remote_vtep_ip, count):
+ def remotemac(remote_vtep_ip, count):
+     """Show MACs pointing to the remote VTEP"""
+ 
++    vni_filter = None
++    if remote_vtep_ip == 'vni':
++        vni_filter = count
++        if vni_filter is None:
++            click.echo("Usage: show vxlan remotemac vni {all|<vni>}")
++            return
++        remote_vtep_ip = 'all'
++        count = None
++
+     if (remote_vtep_ip != 'all') and (clicommon.is_ipaddress(remote_vtep_ip ) is False):
+         click.echo("Remote VTEP IP {} invalid format".format(remote_vtep_ip))
+         return
+@@ -308,10 +317,20 @@ def remotemac(remote_vtep_ip, count):
+             if vxlan_table is None:
+              continue
+             rmtip = vxlan_table.get('remote_vtep')
+-            if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip or rmtip is None:
++            nhg = vxlan_table.get('nexthop_group')
++            if rmtip is None and nhg is None:
+                continue
++            if vni_filter is not None and vni_filter != 'all':
++               if vxlan_table.get('vni') != vni_filter:
++                  continue
++            dest = rmtip if rmtip else 'NHG:' + nhg
++            if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip:
++               if rmtip is not None:
++                  continue
++               if remote_vtep_ip != 'all':
++                  continue
+             if count is None:
+-               body.append([vlan, mac, rmtip, vxlan_table['vni'], vxlan_table['type']])
++               body.append([vlan, mac, dest, vxlan_table['vni'], vxlan_table['type']])
+             num += 1
+       if count is None:
+          click.echo(tabulate(body, header, tablefmt="grid"))
+-- 
+2.25.1
+

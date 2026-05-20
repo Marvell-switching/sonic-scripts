@@ -1,0 +1,225 @@
+From 1aac465853f5fbaa9907e03cbd6318bdfcdc25a9 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Mon, 4 May 2026 19:13:17 +0530
+Subject: [PATCH] vlan1: orchagent changes to skip addition and deletion of
+ vlan1
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ cfgmgr/vlanmgr.cpp      | 10 ++++--
+ orchagent/portsorch.cpp | 68 +++++++++++++++++++++++++++++-----------
+ tests/test_vlan.py      | 69 +++++++++++++++++++++++++++++++++++++++--
+ 3 files changed, 123 insertions(+), 24 deletions(-)
+
+diff --git a/cfgmgr/vlanmgr.cpp b/cfgmgr/vlanmgr.cpp
+index cbc6e0b6..ab39e48a 100644
+--- a/cfgmgr/vlanmgr.cpp
++++ b/cfgmgr/vlanmgr.cpp
+@@ -246,9 +246,13 @@ bool VlanMgr::addHostVlanMember(int vlan_id, const string &port_alias, const str
+     //               /sbin/bridge vlan del vid 1 dev {{ port_alias }} &&
+     //               /sbin/bridge vlan add vid {{vlan_id}} dev {{port_alias}} {{tagging_mode}}"
+     ostringstream cmds, inner;
+-    inner << IP_CMD " link set " << shellquote(port_alias) << " master " DOT1Q_BRIDGE_NAME " && "
+-      BRIDGE_CMD " vlan del vid " DEFAULT_VLAN_ID " dev " << shellquote(port_alias) << " && "
+-      BRIDGE_CMD " vlan add vid " + std::to_string(vlan_id) + " dev " << shellquote(port_alias) << " " + tagging_cmd;
++
++    // By default, `ip link set {{port_alias}} master Bridge` attaches the port to
++    // the native VLAN. This sequence always removes the default VLAN 1 association
++    // and then adds membership for the requested vlan_id.
++    inner << IP_CMD " link set " << shellquote(port_alias) << " master " DOT1Q_BRIDGE_NAME
++      << " && " BRIDGE_CMD " vlan del vid " DEFAULT_VLAN_ID " dev " << shellquote(port_alias)
++      << " && " BRIDGE_CMD " vlan add vid " + std::to_string(vlan_id) + " dev " << shellquote(port_alias) << " " + tagging_cmd;
+     cmds << BASH_CMD " -c " << shellquote(inner.str());
+ 
+     std::string res;
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 68f5cb85..99089577 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -7254,23 +7254,50 @@ bool PortsOrch::addVlan(string vlan_alias)
+     sai_object_id_t vlan_oid;
+ 
+     sai_vlan_id_t vlan_id = (uint16_t)stoi(vlan_alias.substr(4));
+-    sai_attribute_t attr;
+-    attr.id = SAI_VLAN_ATTR_VLAN_ID;
+-    attr.value.u16 = vlan_id;
+-
+-    sai_status_t status = sai_vlan_api->create_vlan(&vlan_oid, gSwitchId, 1, &attr);
+ 
+-    if (status != SAI_STATUS_SUCCESS)
++    if (vlan_id == DEFAULT_VLAN_ID)
+     {
+-        SWSS_LOG_ERROR("Failed to create VLAN %s vid:%hu", vlan_alias.c_str(), vlan_id);
+-        task_process_status handle_status = handleSaiCreateStatus(SAI_API_VLAN, status);
+-        if (handle_status != task_success)
++        /* VLAN 1 is the default VLAN created by SAI at switch init.
++         * Use the existing default VLAN OID instead of creating a new one.
++         */
++        vlan_oid = m_defaultVlan;
++
++        /* Query SAI_VLAN_ATTR_VLAN_ID to populate ASIC_DB for the default VLAN.
++         * Without this, the default VLAN entry will not have SAI_VLAN_ATTR_VLAN_ID populated
++         * and consumers like fdbshow cannot resolve VLAN 1 from bvid and fails to display FDB entries in VLAN 1.
++         * 
++         */
++        sai_attribute_t attr;
++        attr.id = SAI_VLAN_ATTR_VLAN_ID;
++        attr.value.u16 = 0;
++        sai_status_t status = sai_vlan_api->get_vlan_attribute(vlan_oid, 1, &attr);
++        if (status != SAI_STATUS_SUCCESS)
+         {
+-            return parseHandleSaiStatusFailure(handle_status);
++            SWSS_LOG_WARN("Failed to get SAI_VLAN_ATTR_VLAN_ID for default VLAN, rv:%d", status);
+         }
++
++        SWSS_LOG_NOTICE("Use existing default VLAN %s vid:%hu vlan_oid:%" PRIx64, vlan_alias.c_str(), vlan_id, vlan_oid);
+     }
++    else
++    {
++        sai_attribute_t attr;
++        attr.id = SAI_VLAN_ATTR_VLAN_ID;
++        attr.value.u16 = vlan_id;
++
++        sai_status_t status = sai_vlan_api->create_vlan(&vlan_oid, gSwitchId, 1, &attr);
++
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("Failed to create VLAN %s vid:%hu", vlan_alias.c_str(), vlan_id);
++            task_process_status handle_status = handleSaiCreateStatus(SAI_API_VLAN, status);
++            if (handle_status != task_success)
++            {
++                return parseHandleSaiStatusFailure(handle_status);
++            }
++        }
+ 
+-    SWSS_LOG_NOTICE("Create an empty VLAN %s vid:%hu vlan_oid:%" PRIx64, vlan_alias.c_str(), vlan_id, vlan_oid);
++        SWSS_LOG_NOTICE("Create an empty VLAN %s vid:%hu vlan_oid:%" PRIx64, vlan_alias.c_str(), vlan_id, vlan_oid);
++    }
+ 
+     Port vlan(vlan_alias, Port::VLAN);
+     vlan.m_vlan_info.vlan_oid = vlan_oid;
+@@ -7334,15 +7361,20 @@ bool PortsOrch::removeVlan(Port vlan)
+         gStpOrch->removeVlanFromStpInstance(vlan.m_alias, 0);
+     }
+ 
+-    sai_status_t status = sai_vlan_api->remove_vlan(vlan.m_vlan_info.vlan_oid);
+-    if (status != SAI_STATUS_SUCCESS)
++    /* VLAN 1 is the default VLAN in SAI and cannot be removed.
++     * Skip the SAI remove call but proceed with internal state cleanup. */
++    if (vlan.m_vlan_info.vlan_id != DEFAULT_VLAN_ID)
+     {
+-        SWSS_LOG_ERROR("Failed to remove VLAN %s vid:%hu",
+-                vlan.m_alias.c_str(), vlan.m_vlan_info.vlan_id);
+-        task_process_status handle_status = handleSaiRemoveStatus(SAI_API_VLAN, status);
+-        if (handle_status != task_success)
++        sai_status_t status = sai_vlan_api->remove_vlan(vlan.m_vlan_info.vlan_oid);
++        if (status != SAI_STATUS_SUCCESS)
+         {
+-            return parseHandleSaiStatusFailure(handle_status);
++            SWSS_LOG_ERROR("Failed to remove VLAN %s vid:%hu",
++                    vlan.m_alias.c_str(), vlan.m_vlan_info.vlan_id);
++            task_process_status handle_status = handleSaiRemoveStatus(SAI_API_VLAN, status);
++            if (handle_status != task_success)
++            {
++                return parseHandleSaiStatusFailure(handle_status);
++            }
+         }
+     }
+ 
+diff --git a/tests/test_vlan.py b/tests/test_vlan.py
+index 4e0a8bcc..4c228e39 100644
+--- a/tests/test_vlan.py
++++ b/tests/test_vlan.py
+@@ -632,7 +632,7 @@ class TestVlan(object):
+         vlan_mac = dvs.get_interface_mac(vlan_interface)
+         assert mac_to_link_local_ipv6(vlan_mac) == dvs.get_interface_link_local_ipv6(vlan_interface)
+ 
+-        self.dvs_vlan.create_vlan_member(vlan_interface, vlan_member)
++        self.dvs_vlan.create_vlan_member(vlan_id, vlan_member)
+         time.sleep(1)
+         dvs.set_interface_status(vlan_member, "up")
+         assert dvs.get_interface_oper_status(vlan_member) != "DOWN"
+@@ -641,8 +641,8 @@ class TestVlan(object):
+ 
+         # Tear down
+         dvs.set_interface_status(vlan_member, "down")
+-        self.dvs_vlan.remove_vlan_member(vlan_interface, vlan_member)
+-        self.dvs_vlan.remove_vlan(vlan_interface)
++        self.dvs_vlan.remove_vlan_member(vlan_id, vlan_member)
++        self.dvs_vlan.remove_vlan(vlan_id)
+         time.sleep(1)
+ 
+     def test_VlanMemberStateUpdate(self, dvs):
+@@ -717,6 +717,69 @@ class TestVlan(object):
+             f"Expected empty STATE_DB entry after VLAN deletion, got {vlan_state}"
+ 
+ 
++    def test_Vlan1AddRemove(self, dvs):
++        """Test that VLAN 1 can be configured as a regular user VLAN.
++           orchagent should reuse the SAI default VLAN OID instead of creating a new one."""
++
++        vlan = "1"
++        self.dvs_vlan.create_vlan(vlan)
++
++        # VLAN 1 is the default VLAN so it already exists in ASIC_DB.
++        # get_and_verify_vlan_ids filters out the default, so count stays 0.
++        self.dvs_vlan.get_and_verify_vlan_ids(0)
++
++        # Verify APP_DB and STATE_DB entries are created
++        # Wait for these first to ensure orchagent has fully processed addVlan(),
++        # which includes the get_vlan_attribute call that populates ASIC_DB.
++        self.dvs_vlan.app_db.wait_for_field_match("VLAN_TABLE", "Vlan1", {"admin_status": "up"})
++        self.dvs_vlan.state_db.wait_for_field_match("VLAN_TABLE", "Vlan1", {"state": "ok"})
++
++        # Verify ASIC_DB has SAI_VLAN_ATTR_VLAN_ID populated for the default VLAN
++        default_vlan_oid = dvs.asicdb.default_vlan_id
++        self.dvs_vlan.verify_vlan(default_vlan_oid, "1")
++
++        self.dvs_vlan.remove_vlan(vlan)
++
++        # Verify APP_DB and STATE_DB entries are removed
++        self.dvs_vlan.app_db.wait_for_deleted_entry("VLAN_TABLE", "Vlan1")
++        self.dvs_vlan.state_db.wait_for_deleted_entry("VLAN_TABLE", "Vlan1")
++
++    def test_Vlan1MemberAddRemove(self, dvs):
++        """Test that ports can be added/removed as members of VLAN 1."""
++
++        vlan = "1"
++        interface = "Ethernet0"
++
++        self.dvs_vlan.create_vlan(vlan)
++
++        self.dvs_vlan.app_db.wait_for_field_match("VLAN_TABLE", "Vlan1", {"admin_status": "up"})
++
++        self.dvs_vlan.create_vlan_member(vlan, interface)
++        self.dvs_vlan.get_and_verify_vlan_member_ids(1)
++
++        self.dvs_vlan.remove_vlan_member(vlan, interface)
++        self.dvs_vlan.get_and_verify_vlan_member_ids(0)
++
++        self.dvs_vlan.remove_vlan(vlan)
++
++    def test_Vlan1WithOtherVlans(self, dvs):
++        """Test that VLAN 1 coexists with other user VLANs."""
++
++        self.dvs_vlan.create_vlan("1")
++        self.dvs_vlan.create_vlan("100")
++
++        # 1 user VLAN besides default (VLAN 1 reuses default OID)
++        self.dvs_vlan.get_and_verify_vlan_ids(1)
++
++        self.dvs_vlan.app_db.wait_for_field_match("VLAN_TABLE", "Vlan1", {"admin_status": "up"})
++        self.dvs_vlan.app_db.wait_for_field_match("VLAN_TABLE", "Vlan100", {"admin_status": "up"})
++
++        self.dvs_vlan.remove_vlan("100")
++        self.dvs_vlan.get_and_verify_vlan_ids(0)
++
++        self.dvs_vlan.remove_vlan("1")
++
++
+ # Add Dummy always-pass test at end as workaroud
+ # for issue when Flaky fail on final test it invokes module tear-down before retrying
+ def test_nonflaky_dummy():
+-- 
+2.25.1
+

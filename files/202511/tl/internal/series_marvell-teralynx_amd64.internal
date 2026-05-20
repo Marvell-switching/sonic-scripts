@@ -1,0 +1,4 @@
+0001-vlan1-CLI-changes-to-allow-vlan1.patch|src/sonic-utilities
+0001-vlan1-Yang-changes-to-allow-vlan-1.patch|sonic-buildimage
+0001-vlan1-orchagent-changes-to-skip-addition-and-deletio.patch|src/sonic-swss
+0001-Adding-symlinks-for-libmodel.so-based-on-model.patch|src/sonic-sairedis

@@ -1,0 +1,248 @@
+From 1b8a9b8531e94277482dfc437df2114a8fd4921e Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Tue, 4 Nov 2025 22:43:44 +0530
+Subject: [PATCH] Fix mac programming inconsistency impacting RIFs
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ cfgmgr/intfmgr.cpp      | 25 +++++++++++++++----------
+ cfgmgr/intfmgr.h        |  1 +
+ cfgmgr/vlanmgr.cpp      | 32 +++++++++++++++++++++++++++++++-
+ cfgmgr/vlanmgr.h        |  5 +++--
+ orchagent/portsorch.cpp |  4 ----
+ tests/test_sag.py       |  9 +++------
+ 6 files changed, 53 insertions(+), 23 deletions(-)
+
+diff --git a/cfgmgr/intfmgr.cpp b/cfgmgr/intfmgr.cpp
+index 8bee1f22..75f78367 100644
+--- a/cfgmgr/intfmgr.cpp
++++ b/cfgmgr/intfmgr.cpp
+@@ -1080,6 +1080,9 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+         if (!mac.empty())
+         {
+             setIntfMac(alias, mac);
++            FieldValueTuple fvTuple("mac_addr", mac);
++            data.push_back(fvTuple);
++            m_macSetIntfList.insert(alias);
+         }
+         else
+         {
+@@ -1116,7 +1119,7 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+                             setIntfMac(alias, gMacAddress.to_string());
+                             setIntfState(alias, true);
+ 
+-                            FieldValueTuple fvTuple("mac_addr", MacAddress().to_string());
++                            FieldValueTuple fvTuple("mac_addr", gMacAddress.to_string());
+                             data.push_back(fvTuple);
+                         } else {
+                             SWSS_LOG_ERROR("invalid SAG config \"%s\", it should be \"true\" or \"false\"", sag.c_str());
+@@ -1126,7 +1129,7 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+             }
+             else
+             {
+-                FieldValueTuple fvTuple("mac_addr", MacAddress().to_string());
++                FieldValueTuple fvTuple("mac_addr", gMacAddress.to_string());
+                 data.push_back(fvTuple);
+             }
+         }
+@@ -1210,6 +1213,15 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+             }
+             m_sagIntfList.erase(alias);
+         }
++        else if (m_macSetIntfList.find(alias) != m_macSetIntfList.end())
++        {
++            // recover to global mac address
++            setIntfState(alias, false);
++            setIntfMac(alias, gMacAddress.to_string());
++            setIntfState(alias, true);
++
++            m_macSetIntfList.erase(alias);
++        }
+ 
+         m_appIntfTableProducer.del(alias);
+         m_stateIntfTable.del(alias);
+@@ -1467,14 +1479,7 @@ void IntfMgr::updateSagMac(const std::string &macAddr)
+                 // Get other fields to set them all together
+                 m_cfgVlanIntfTable.get(key, vlanIntFv);
+ 
+-                // keep consistent with default MAC 00:00:00:00:00:00
+-                string entryMac = MacAddress().to_string();
+-                if (macAddr != gMacAddress.to_string())
+-                {
+-                    entryMac = macAddr;
+-                }
+-
+-                FieldValueTuple fvTuple("mac_addr", entryMac);
++                FieldValueTuple fvTuple("mac_addr", macAddr);
+                 vlanIntFv.push_back(fvTuple);
+                 m_appIntfTableProducer.set(key, vlanIntFv);
+             }
+diff --git a/cfgmgr/intfmgr.h b/cfgmgr/intfmgr.h
+index 2796c0e2..2f89ab2d 100644
+--- a/cfgmgr/intfmgr.h
++++ b/cfgmgr/intfmgr.h
+@@ -40,6 +40,7 @@ private:
+     std::set<std::string> m_loopbackIntfList;
+     std::set<std::string> m_pendingReplayIntfList;
+     std::set<std::string> m_ipv6LinkLocalModeList;
++    std::set<std::string> m_macSetIntfList;
+     std::string mySwitchType;
+ 
+     void setIntfIp(const std::string &alias, const std::string &opCmd, const IpPrefix &ipPrefix);
+diff --git a/cfgmgr/vlanmgr.cpp b/cfgmgr/vlanmgr.cpp
+index 96ee5969..cbc6e0b6 100644
+--- a/cfgmgr/vlanmgr.cpp
++++ b/cfgmgr/vlanmgr.cpp
+@@ -26,6 +26,7 @@ VlanMgr::VlanMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, c
+         Orch(cfgDb, stateDb, tableNames, stateTableNames),
+         m_cfgVlanTable(cfgDb, CFG_VLAN_TABLE_NAME),
+         m_cfgVlanMemberTable(cfgDb, CFG_VLAN_MEMBER_TABLE_NAME),
++        m_appIntfTable(appDb, APP_INTF_TABLE_NAME),
+         m_statePortTable(stateDb, STATE_PORT_TABLE_NAME),
+         m_stateLagTable(stateDb, STATE_LAG_TABLE_NAME),
+         m_stateVlanTable(stateDb, STATE_VLAN_TABLE_NAME),
+@@ -411,7 +412,21 @@ void VlanMgr::doVlanTask(Consumer &consumer)
+                 else if (fvField(i) == "mac")
+                 {
+                     mac = fvValue(i);
+-                    setHostVlanMac(vlan_id, mac);
++
++                    /*
++                     * Check if IP is set for this VLAN interface.
++                     * Set MAC only if VLAN is not a RIF interface to avoid
++                     * overriding MAC configured by intfmgrd.
++                     */
++                    if (!isVlanRif(key))
++                    {
++                        SWSS_LOG_INFO("Set Linux interface MAC %s for VLAN %s", mac.c_str(), key.c_str());
++                        setHostVlanMac(vlan_id, mac);
++                    }
++                    else
++                    {
++                        SWSS_LOG_INFO("Skip setting Linux interface MAC for VLAN %s since MAC is set on VLAN interface", key.c_str());
++                    }
+                 }
+                 else if (fvField(i) == "host_ifname")
+                 {
+@@ -1006,3 +1021,18 @@ void VlanMgr::doTask(Consumer &consumer)
+         throw runtime_error("VlanMgr doTask failure.");
+     }
+ }
++
++bool VlanMgr::isVlanRif(const std::string &vlan_name)
++{
++    SWSS_LOG_ENTER();
++
++    // Check if VLAN is a RIF by checking INTF_TABLE existence in APPL_DB
++    std::vector<FieldValueTuple> intfValues;
++
++    if (m_appIntfTable.get(vlan_name, intfValues))
++    {
++        return true;
++    }
++
++    return false;
++}
+diff --git a/cfgmgr/vlanmgr.h b/cfgmgr/vlanmgr.h
+index 7fce59ce..9d86a941 100644
+--- a/cfgmgr/vlanmgr.h
++++ b/cfgmgr/vlanmgr.h
+@@ -21,7 +21,7 @@ public:
+ private:
+     ProducerStateTable m_appVlanTableProducer, m_appVlanMemberTableProducer;
+     ProducerStateTable m_appFdbTableProducer, m_appPortTableProducer;
+-    Table m_cfgVlanTable, m_cfgVlanMemberTable;
++    Table m_cfgVlanTable, m_cfgVlanMemberTable, m_appIntfTable;
+     Table m_statePortTable, m_stateLagTable;
+     Table m_stateVlanTable, m_stateVlanMemberTable;
+     std::set<std::string> m_vlans;
+@@ -29,7 +29,7 @@ private:
+     std::set<std::string> m_vlanMemberReplay;
+     bool replayDone;
+     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> m_PortVlanMember;
+-    
++
+     void doTask(Consumer &consumer);
+     void doVlanTask(Consumer &consumer);
+     void doVlanMemberTask(Consumer &consumer);
+@@ -46,6 +46,7 @@ private:
+     bool isVlanStateOk(const std::string &alias);
+     bool isVlanMacOk();
+     bool isVlanMemberStateOk(const std::string &vlanMemberKey);
++    bool isVlanRif(const std::string &vlan_name);
+     void doVlanPacPortTask(Consumer &consumer);
+     void doVlanPacFdbTask(Consumer &consumer);
+     void doVlanPacVlanMemberTask(Consumer &consumer);
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index d51be728..e2399a98 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -5527,10 +5527,6 @@ void PortsOrch::doVlanTask(Consumer &consumer)
+                 {
+                     vl.m_mac = mac;
+                     m_portList[vlan_alias] = vl;
+-                    if (vl.m_rif_id)
+-                    {
+-                        gIntfsOrch->setRouterIntfsMac(vl);
+-                    }
+                 }
+                 if (!hostif_name.empty())
+                 {
+diff --git a/tests/test_sag.py b/tests/test_sag.py
+index 206292d3..9032a7fa 100644
+--- a/tests/test_sag.py
++++ b/tests/test_sag.py
+@@ -128,7 +128,6 @@ class TestSag(object):
+     def test_SagAddRemove(self, dvs):
+         self.setup_db(dvs)
+ 
+-        default_mac = "00:00:00:00:00:00"
+         default_vrf_oid = self.get_asic_db_default_vrf_oid()
+         system_mac = self.get_system_mac(dvs)
+ 
+@@ -168,7 +167,7 @@ class TestSag(object):
+             {"NULL": "NULL"}
+         )
+ 
+-        self.check_app_db_intf(fvs, default_mac, "false")
++        self.check_app_db_intf(fvs, system_mac, "false")
+         self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
+ 
+         ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
+@@ -191,7 +190,6 @@ class TestSag(object):
+     def test_SagRemoveWhenSagVlanEnabled(self, dvs):
+         self.setup_db(dvs)
+ 
+-        default_mac = "00:00:00:00:00:00"
+         default_vrf_oid = self.get_asic_db_default_vrf_oid()
+         system_mac = self.get_system_mac(dvs)
+ 
+@@ -236,7 +234,7 @@ class TestSag(object):
+             {"NULL": "NULL"}
+         )
+ 
+-        self.check_app_db_intf(fvs, default_mac, "true")
++        self.check_app_db_intf(fvs, system_mac, "true")
+         self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
+ 
+         ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
+@@ -253,7 +251,6 @@ class TestSag(object):
+     def test_SagAddRemoveInVrf(self, dvs):
+         self.setup_db(dvs)
+ 
+-        default_mac = "00:00:00:00:00:00"
+         default_vrf_oid = self.get_asic_db_default_vrf_oid()
+         system_mac = self.get_system_mac(dvs)
+ 
+@@ -297,7 +294,7 @@ class TestSag(object):
+             {"vrf_name": vrf_name}
+         )
+ 
+-        self.check_app_db_intf(fvs, default_mac, "false")
++        self.check_app_db_intf(fvs, system_mac, "false")
+         self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
+ 
+         ipv6_ll = self.generate_ipv6_link_local_addr(system_mac, 64)
+-- 
+2.25.1
+

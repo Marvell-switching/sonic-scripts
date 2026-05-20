@@ -1,0 +1,45 @@
+From 4dfd04f576b5d7042ca13fad885e11c33fbd7349 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Wed, 29 Oct 2025 16:50:45 +0530
+Subject: [PATCH] Add missing admin state down in LT state change
+
+Fixed missing logic to bring down admin state during
+link training state transitions to ensure proper interface
+handling and consistency.
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ orchagent/portsorch.cpp | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 89c4fb39..1a0f3d22 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -4394,6 +4394,23 @@ void PortsOrch::doPortTask(Consumer &consumer)
+                             continue;
+                         }
+ 
++                        if (p.m_admin_state_up)
++                        {
++                            /* Bring port down before applying LT */
++                            if (!setPortAdminStatus(p, false))
++                            {
++                                SWSS_LOG_ERROR(
++                                    "Failed to set port %s admin status DOWN to set link training",
++                                    p.m_alias.c_str()
++                                );
++                                it++;
++                                continue;
++                            }
++
++                            p.m_admin_state_up = false;
++                            m_portList[p.m_alias] = p;
++                        }
++
+                         auto status = setPortLinkTraining(p, pCfg.link_training.value);
+                         if (status != task_success)
+                         {
+-- 
+2.25.1
+

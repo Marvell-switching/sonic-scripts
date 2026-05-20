@@ -1,0 +1,30 @@
+From fe97be32d08dc7a4a839c4d92ec39ad13866f70c Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 7 May 2026 17:40:00 +0530
+Subject: [PATCH] Add recent community FRR commit in the end to avoid patch
+ conflicts
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Re‑add the previously removed recent FRR commit at the end of the series to prevent conflicts.
+- This commit was earlier removed using 0001-Remove-recent-community-FRR-commits-to-avoid-patch-conflicts.patch.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ src/sonic-frr/patch/series | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 85176756b..48df825a7 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -83,3 +83,5 @@
+ 0106-Suppress-system-mac-when-arp-nd-suppression-is-not-s.patch
+ 0107-zebra-fix-del_local_mac-BGP-withdrawal-in-ext-learn.patch
+ 0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms-modified.patch
++0106-bgpd-Fix-suppress-fib-pending-config-race-condition.patch
++0107-zebra-defer-rib-sweep-until-metaqueue-drained.patch
+-- 
+2.25.1
+

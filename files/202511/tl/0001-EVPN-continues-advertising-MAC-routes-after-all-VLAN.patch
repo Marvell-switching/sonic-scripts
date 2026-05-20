@@ -1,0 +1,782 @@
+From 8381a630d399fb1289ad05da21b040fc8f18d0ef Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Tue, 11 Nov 2025 13:34:36 +0530
+Subject: [PATCH] EVPN continues advertising MAC routes after all VLAN members
+ are removed from a VLAN, which should not happen.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+**Expected Behavior**:
+When the last member is removed from a VLAN that has EVPN enabled (VLAN-VNI mapping), the following should occur:
+1. VLAN member state status should be set to notok
+2. The Linux VNI netdevice should be brought DOWN
+3. FRR/Zebra should detect the VNI netdevice DOWN state
+4. BGP should withdraw all EVPN Type-2 (MAC) routes for that VNI
+5. Peer EVPN nodes should remove the withdrawn routes
+
+**Actual Behavior**:
+MAC routes continue being advertised even after all VLAN members are removed.
+
+**Root Cause Analysis**:
+After reviewing the [SONiC EVPN VXLAN HLD](https://github.com/sonic-net/SONiC/blob/master/doc/vxlan/EVPN/EVPN_VXLAN_HLD.md) and the [L2 MAC flow diagram](https://github.com/sonic-net/SONiC/blob/master/doc/vxlan/EVPN/images/l2macflowcombined.PNG), the architecture shows:
+
+1. **VNI netdevice creation** in Linux kernel triggers IMET route origination (Section 4.3.6)
+2. **fdbsyncd** subscribes to FDB for VLANs with VLAN-VNI mappings
+3. **FRR/Zebra** monitors the **Linux VNI netdevice state** (not STATE_DB!)
+4. When VNI netdevice goes DOWN, FRR withdraws EVPN routes
+
+**Two issues identified**:
+1. **portsorch doesn't track VLAN member state status based on members**
+   - VLAN member state status is not updated when members are added/removed
+   - First member addition should set VLAN oper status UP
+   - Last member removal should set VLAN oper status DOWN
+
+2. **vxlanmgr doesn't monitor VLAN member state status**
+   - vxlanmgr creates VNI netdevices when VLAN-VNI mapping exists
+   - But it never monitors VLAN member changes
+   - VNI netdevice stays UP even when VLAN has no members
+   - FRR sees VNI netdevice as UP, continues advertising routes
+
+```
+VLAN Member Change → portsorch → STATE_DB:VLAN_TABLE → vxlanmgr → Linux VNI netdevice → FRR/Zebra → BGP EVPN
+```
+**Implementation**:
+Fix #1: Track VLAN member state Status (portsorch)
+Fix #2: Monitor VLAN member state and Control VNI Netdevice (vxlanmgr)
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ cfgmgr/vxlanmgr.cpp                      | 196 ++++++++++++++++++-----
+ cfgmgr/vxlanmgr.h                        |   2 +
+ orchagent/p4orch/tests/fake_portorch.cpp |   1 +
+ orchagent/port.h                         |  11 +-
+ orchagent/portsorch.cpp                  |  48 +++++-
+ orchagent/portsorch.h                    |   5 +-
+ tests/test_vlan.py                       |  79 ++++++++-
+ 7 files changed, 283 insertions(+), 59 deletions(-)
+
+diff --git a/cfgmgr/vxlanmgr.cpp b/cfgmgr/vxlanmgr.cpp
+index d078372d..14e4fa51 100644
+--- a/cfgmgr/vxlanmgr.cpp
++++ b/cfgmgr/vxlanmgr.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "logger.h"
+ #include "producerstatetable.h"
++#include "subscriberstatetable.h"
+ #include "macaddress.h"
+ #include "vxlanmgr.h"
+ #include "exec.h"
+@@ -154,7 +155,7 @@ static int cmdDeleteVxlanFromVxlanIf(const swss::VxlanMgr::VxlanInfo & info, std
+     ostringstream cmd;
+     cmd << BRCTL_CMD " delif "
+         << shellquote(info.m_vxlanIf)
+-        << " " 
++        << " "
+         << shellquote(info.m_vxlan);
+     return swss::exec(cmd.str(), res);
+ }
+@@ -203,6 +204,11 @@ VxlanMgr::VxlanMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb,
+         clearAllVxlanDevices();
+     }
+ 
++    // Subscribe to STATE_VLAN_TABLE to monitor VLAN member state status
++    // This is needed to manage VNI netdevice state in kernel to immediately reflect in EVPN route advertisement/withdrawal
++    auto vlanStateSubscriber = new SubscriberStateTable(stateDb, STATE_VLAN_TABLE_NAME);
++    auto vlanStateConsumer = new Consumer(vlanStateSubscriber, this, STATE_VLAN_TABLE_NAME);
++    Orch::addExecutor(vlanStateConsumer);
+ }
+ 
+ VxlanMgr::~VxlanMgr()
+@@ -240,6 +246,10 @@ void VxlanMgr::doTask(Consumer &consumer)
+             {
+                 task_result = doVxlanEvpnNvoCreateTask(t);
+             }
++            else if (table_name == STATE_VLAN_TABLE_NAME)
++            {
++                task_result = doVlanMemberStateUpdateTask(t);
++            }
+             else
+             {
+                 SWSS_LOG_ERROR("Unknown table : %s", table_name.c_str());
+@@ -263,6 +273,11 @@ void VxlanMgr::doTask(Consumer &consumer)
+             {
+                 task_result = doVxlanEvpnNvoDeleteTask(t);
+             }
++            else if (table_name == STATE_VLAN_TABLE_NAME)
++            {
++                // VLAN deletion from STATE_DB - no special Vnet operational state change needed
++                task_result = true;
++            }
+             else
+             {
+                 SWSS_LOG_ERROR("Unknown table : %s", table_name.c_str());
+@@ -305,7 +320,7 @@ bool VxlanMgr::doVxlanCreateTask(const KeyOpFieldsValuesTuple & t)
+     }
+ 
+     // If all information of vnet has been set
+-    if (info.m_vxlanTunnel.empty() 
++    if (info.m_vxlanTunnel.empty()
+      || info.m_vni.empty())
+     {
+         SWSS_LOG_DEBUG("Vnet %s information is incomplete", info.m_vnet.c_str());
+@@ -331,7 +346,7 @@ bool VxlanMgr::doVxlanCreateTask(const KeyOpFieldsValuesTuple & t)
+         // Suspend this message until the vrf is created
+         return false;
+     }
+-    
++
+     // If the mac address has been set
+     auto macAddress = getVxlanRouterMacAddress();
+     if (!macAddress.first)
+@@ -356,8 +371,8 @@ bool VxlanMgr::doVxlanCreateTask(const KeyOpFieldsValuesTuple & t)
+     // If this vxlan has been created
+     if (isVxlanStateOk(info.m_vxlan))
+     {
+-        // Because the vxlan has been create, so this message is to update 
+-        // the information of vxlan. 
++        // Because the vxlan has been create, so this message is to update
++        // the information of vxlan.
+         // This program just delete the old vxlan and create a new one
+         // according to this message.
+         doVxlanDeleteTask(t);
+@@ -411,7 +426,7 @@ bool VxlanMgr::doVxlanTunnelCreateTask(const KeyOpFieldsValuesTuple & t)
+     SWSS_LOG_ENTER();
+ 
+     const std::string & vxlanTunnelName = kfvKey(t);
+-    
++
+     // Update vxlan tunnel cache
+     TunCache tuncache;
+ 
+@@ -450,7 +465,7 @@ bool VxlanMgr::doVxlanTunnelDeleteTask(const KeyOpFieldsValuesTuple & t)
+         SWSS_LOG_WARN("Tunnel %s deletion failed. Need to delete NVO", vxlanTunnelName.c_str());
+         return false;
+     }
+-      
++
+     // If there are mappings still against this tunnel then hold on.
+     if (m_vxlanTunnelCache[vxlanTunnelName].vlan_vni_refcnt)
+     {
+@@ -506,14 +521,14 @@ bool VxlanMgr::doVxlanTunnelMapCreateTask(const KeyOpFieldsValuesTuple & t)
+     // Check for VLAN or VNI if they are already mapped
+     if (m_vlanMapCache.find(vlan) != m_vlanMapCache.end())
+     {
+-        SWSS_LOG_ERROR("Vlan %s already mapped. Map Create failed for : %s", 
++        SWSS_LOG_ERROR("Vlan %s already mapped. Map Create failed for : %s",
+                       vlan.c_str(), vxlanTunnelMapName.c_str());
+         return true;
+     }
+ 
+     if (m_vniMapCache.find(vni_id) != m_vniMapCache.end())
+     {
+-        SWSS_LOG_ERROR("VNI %s already mapped. Map Create failed for : %s", 
++        SWSS_LOG_ERROR("VNI %s already mapped. Map Create failed for : %s",
+                       vni_id.c_str(), vxlanTunnelMapName.c_str());
+         return true;
+     }
+@@ -541,11 +556,11 @@ bool VxlanMgr::doVxlanTunnelMapCreateTask(const KeyOpFieldsValuesTuple & t)
+     }
+ 
+     // Check the below condition only after the vxlanmgrd has reached reconcile state
+-    // The check to verify the state vxlan table is to take care of back to back 
+-    // create and delete of a VTEP object. On deletion of a VTEP object the FRR takes 
+-    // some time to remove all the routes and once all the routes are removed, the p2p 
++    // The check to verify the state vxlan table is to take care of back to back
++    // create and delete of a VTEP object. On deletion of a VTEP object the FRR takes
++    // some time to remove all the routes and once all the routes are removed, the p2p
+     // tunnel is also removed. This check waits for all the p2p tunnels which were associated
+-    // with the earlier version of the VTEP to be deleted before processing further map entry 
++    // with the earlier version of the VTEP to be deleted before processing further map entry
+     // creations.
+     WarmStart::WarmStartState state;
+     WarmStart::getWarmStartState("vxlanmgrd",state);
+@@ -556,7 +571,7 @@ bool VxlanMgr::doVxlanTunnelMapCreateTask(const KeyOpFieldsValuesTuple & t)
+             std::vector<std::string> keys;
+             m_stateVxlanTunnelTable.getKeys(keys);
+             if (!keys.empty())
+-            { 
++            {
+                 SWSS_LOG_WARN("State VXLAN tunnel table not yet empty.");
+                 return false;
+             }
+@@ -593,10 +608,10 @@ bool VxlanMgr::doVxlanTunnelMapCreateTask(const KeyOpFieldsValuesTuple & t)
+     ret = createVxlanNetdevice(vxlanTunnelName, vni_id, src_ip, dst_ip, vlan_id);
+     if (ret != RET_SUCCESS)
+     {
+-        SWSS_LOG_WARN("Vxlan Net Dev creation failure for %s VNI(%s) VLAN(%s)", 
++        SWSS_LOG_WARN("Vxlan Net Dev creation failure for %s VNI(%s) VLAN(%s)",
+                        vxlanTunnelName.c_str(), vni_id.c_str(), vlan_id.c_str());
+     }
+-    
++
+     std::string vxlan_dev_name;
+     vxlan_dev_name = std::string("") + std::string(vxlanTunnelName) + "-" + std::string(vlan_id);
+ 
+@@ -644,7 +659,7 @@ bool VxlanMgr::doVxlanTunnelMapDeleteTask(const KeyOpFieldsValuesTuple & t)
+     }
+     catch (const std::out_of_range& oor)
+     {
+-        SWSS_LOG_ERROR("Error deleting tunnmap : %s exception : %s", 
++        SWSS_LOG_ERROR("Error deleting tunnmap : %s exception : %s",
+                       vxlanTunnelMapName.c_str(), oor.what());
+         return true;
+     }
+@@ -680,7 +695,7 @@ bool VxlanMgr::doVxlanEvpnNvoCreateTask(const KeyOpFieldsValuesTuple & t)
+         SWSS_LOG_ERROR("Only Single NVO object allowed");
+         return true;
+     }
+-    
++
+     for (auto i : kfvFieldsValues(t))
+     {
+         const std::string & field = fvField(i);
+@@ -735,6 +750,101 @@ bool VxlanMgr::doVxlanEvpnNvoDeleteTask(const KeyOpFieldsValuesTuple & t)
+     return true;
+ }
+ 
++bool VxlanMgr::doVlanMemberStateUpdateTask(const KeyOpFieldsValuesTuple & t)
++{
++    SWSS_LOG_ENTER();
++
++    std::string vlanName = kfvKey(t);
++    std::string memberState;
++
++    // Extract member_state from the update
++    for (auto i : kfvFieldsValues(t))
++    {
++        const std::string & field = fvField(i);
++        const std::string & value = fvValue(i);
++
++        if (field == "member_state")
++        {
++            memberState = value;
++            break;
++        }
++    }
++
++    if (memberState.empty())
++    {
++        // No member_state field, nothing to do
++        return true;
++    }
++
++    // Check if this VLAN has a VNI mapping (is used for EVPN)
++    auto vniMapIt = m_vlanMapCache.find(vlanName);
++    if (vniMapIt == m_vlanMapCache.end())
++    {
++        // VLAN doesn't have VNI mapping, not used for EVPN
++        return true;
++    }
++
++    std::string vni = vniMapIt->second;
++
++    // Find the VNI netdevice name
++    std::string vxlan_dev_name;
++    for (const auto& mapEntry : m_vxlanTunnelMapCache)
++    {
++        if (mapEntry.second.vni_id == vni && mapEntry.second.vlan == vlanName)
++        {
++            vxlan_dev_name = mapEntry.second.vxlan_dev_name;
++            break;
++        }
++    }
++
++    if (vxlan_dev_name.empty())
++    {
++        SWSS_LOG_WARN("VLAN %s has VNI %s but VNI netdevice not found",
++                      vlanName.c_str(), vni.c_str());
++        return true;
++    }
++
++    // Control the VNI netdevice state based on VLAN member state
++    std::string res;
++    int ret;
++    std::string operation;
++
++    if (memberState == "ok")
++    {
++        // Bring UP the VNI netdevice using cmdUpVxlan
++        VxlanInfo info;
++        info.m_vxlan = vxlan_dev_name;
++        ret = cmdUpVxlan(info, res);
++        operation = "UP";
++    }
++    else if (memberState == "notok")
++    {
++        // Bring DOWN the VNI netdevice - this will trigger EVPN route withdrawal
++        ret = downVxlanNetdevice(vxlan_dev_name);
++        operation = "DOWN";
++    }
++    else
++    {
++        // Unknown member_state value, Returns true (success) to avoid retrying for invalid data
++        SWSS_LOG_WARN("Unknown member_state value '%s' for VLAN %s, ignoring",
++                      memberState.c_str(), vlanName.c_str());
++        return true;
++    }
++
++    // Common logging for both UP and DOWN operations
++    if (ret != 0)
++    {
++        SWSS_LOG_WARN("Failed to bring %s VNI netdevice %s (will retry): %s",
++                      operation.c_str(), vxlan_dev_name.c_str(), res.c_str());
++        return false;
++    }
++
++    SWSS_LOG_INFO("Set VNI netdevice %s %s for VLAN %s (VNI %s)",
++                  vxlan_dev_name.c_str(), operation.c_str(), vlanName.c_str(), vni.c_str());
++
++    return true;
++}
++
+ bool VxlanMgr::isVrfStateOk(const std::string & vrfName)
+ {
+     SWSS_LOG_ENTER();
+@@ -799,7 +909,7 @@ std::pair<bool, std::string> VxlanMgr::getVxlanRouterMacAddress()
+         SWSS_LOG_DEBUG("Mac address will be automatically set");
+         return std::make_pair(true, "");
+     }
+-    
++
+     SWSS_LOG_DEBUG("Mac address is not ready");
+     return std::make_pair(false, "");
+ }
+@@ -807,7 +917,7 @@ std::pair<bool, std::string> VxlanMgr::getVxlanRouterMacAddress()
+ bool VxlanMgr::createVxlan(const VxlanInfo & info)
+ {
+     SWSS_LOG_ENTER();
+-    
++
+     std::string res;
+     int ret = 0;
+ 
+@@ -870,7 +980,7 @@ bool VxlanMgr::createVxlan(const VxlanInfo & info)
+             info.m_vxlanIf.c_str(),
+             info.m_vnet.c_str());
+         return false;
+-       
++
+     }
+ 
+     // Up Vxlan Interface
+@@ -1000,7 +1110,7 @@ int VxlanMgr::createVxlanNetdevice(std::string vxlanTunnelName, std::string vni_
+         evpn_nvo = true;
+     }
+ 
+-    // ip link add <vxlan_dev_name> type vxlan id <vni> local <src_ip> remote <dst_ip> 
++    // ip link add <vxlan_dev_name> type vxlan id <vni> local <src_ip> remote <dst_ip>
+     // dstport 4789
+     // ip link set <vxlan_dev_name> master DOT1Q_BRIDGE_NAME
+     // bridge vlan add vid <vlan_id> dev <vxlan_dev_name>
+@@ -1008,36 +1118,36 @@ int VxlanMgr::createVxlanNetdevice(std::string vxlanTunnelName, std::string vni_
+     // bridge link set dev <vxlan_dev_name> learning off
+     // ip link set <vxlan_dev_name> up
+ 
+-    link_add_cmd = std::string("") + IP_CMD + " link add " + vxlan_dev_name + 
+-                   " address " + gMacAddress.to_string() + " type vxlan id " + 
+-                   std::string(vni_id) + " local " + src_ip + 
+-                   ((dst_ip  == "")? "":(" remote " + dst_ip)) + 
++    link_add_cmd = std::string("") + IP_CMD + " link add " + vxlan_dev_name +
++                   " address " + gMacAddress.to_string() + " type vxlan id " +
++                   std::string(vni_id) + " local " + src_ip +
++                   ((dst_ip  == "")? "":(" remote " + dst_ip)) +
+                    " nolearning " + " dstport 4789 ";
+-    
+-    link_set_master_cmd = std::string("") + IP_CMD + " link set " + 
++
++    link_set_master_cmd = std::string("") + IP_CMD + " link set " +
+                           vxlan_dev_name + " master Bridge ";
+ 
+     link_up_cmd = std::string("") + IP_CMD + " link set " + vxlan_dev_name + " up ";
+ 
+-    bridge_add_cmd = std::string("") + BRIDGE_CMD + " vlan add vid " + 
++    bridge_add_cmd = std::string("") + BRIDGE_CMD + " vlan add vid " +
+                      std::string(vlan_id) + " dev " + vxlan_dev_name;
+ 
+-    bridge_untagged_add_cmd = std::string("") + BRIDGE_CMD + " vlan add vid " + 
++    bridge_untagged_add_cmd = std::string("") + BRIDGE_CMD + " vlan add vid " +
+                               std::string(vlan_id) + " untagged pvid dev " + vxlan_dev_name;
+ 
+-    bridge_del_vid_cmd = std::string("") + BRIDGE_CMD + " vlan del vid 1 dev " + 
++    bridge_del_vid_cmd = std::string("") + BRIDGE_CMD + " vlan del vid 1 dev " +
+                          vxlan_dev_name;
+ 
+     bridge_learn_off_cmd = std::string("") + BRIDGE_CMD + " link set dev " +
+                            vxlan_dev_name + " learning off ";
+-    
+-    
+-    cmds = std::string("") + BASH_CMD + " -c \"" + 
+-           link_add_cmd + " && " + 
+-           link_set_master_cmd + " && " + 
+-           bridge_add_cmd + " && " + 
+-           bridge_untagged_add_cmd + " && "; 
+-        
++
++
++    cmds = std::string("") + BASH_CMD + " -c \"" +
++           link_add_cmd + " && " +
++           link_set_master_cmd + " && " +
++           bridge_add_cmd + " && " +
++           bridge_untagged_add_cmd + " && ";
++
+     if ( vlan_id != "1")
+     {
+         cmds += bridge_del_vid_cmd + " && ";
+@@ -1063,7 +1173,7 @@ int VxlanMgr::downVxlanNetdevice(std::string vxlan_dev_name)
+ }
+ 
+ int VxlanMgr::deleteVxlanNetdevice(std::string vxlan_dev_name)
+-{    
++{
+     std::string res;
+     const std::string cmd = std::string("") + IP_CMD  + " link del dev " + vxlan_dev_name;
+     return swss::exec(cmd, res);
+@@ -1167,7 +1277,7 @@ void VxlanMgr::restoreVxlanNetDevices()
+     {
+         std::string vlan, vlan_id, vni_id;
+         std::string vxlanTunnelMapName = *it;
+-        std::vector<FieldValueTuple> temp; 
++        std::vector<FieldValueTuple> temp;
+         if (vxlanAppTunnelMapTable.get(vxlanTunnelMapName, temp))
+         {
+             for (auto fv: temp)
+@@ -1201,7 +1311,7 @@ void VxlanMgr::restoreVxlanNetDevices()
+         ret = createVxlanNetdevice(vxlanTunnelName, vni_id, src_ip, dst_ip, vlan_id);
+         if (ret != RET_SUCCESS)
+         {
+-            SWSS_LOG_WARN("Vxlan Net Dev creation failure for %s VNI(%s) VLAN(%s)", 
++            SWSS_LOG_WARN("Vxlan Net Dev creation failure for %s VNI(%s) VLAN(%s)",
+                           vxlanTunnelName.c_str(), vni_id.c_str(), vlan_id.c_str());
+         }
+ 
+@@ -1267,7 +1377,7 @@ void VxlanMgr::waitTillReadyToReconcile()
+             SWSS_LOG_INFO("Vlanmgrd Reconciled %d", (int) state);
+             return;
+         }
+-        SWSS_LOG_INFO("Vlanmgrd NOT Reconciled %d", (int) state);            
++        SWSS_LOG_INFO("Vlanmgrd NOT Reconciled %d", (int) state);
+         sleep(1);
+     }
+     return;
+diff --git a/cfgmgr/vxlanmgr.h b/cfgmgr/vxlanmgr.h
+index de60a44a..9a52c51d 100644
+--- a/cfgmgr/vxlanmgr.h
++++ b/cfgmgr/vxlanmgr.h
+@@ -66,6 +66,8 @@ private:
+     bool doVxlanEvpnNvoCreateTask(const KeyOpFieldsValuesTuple & t);
+     bool doVxlanEvpnNvoDeleteTask(const KeyOpFieldsValuesTuple & t);
+ 
++    bool doVlanMemberStateUpdateTask(const KeyOpFieldsValuesTuple & t);
++
+     void createAppDBTunnelMapTable(const KeyOpFieldsValuesTuple & t);
+     void delAppDBTunnelMapTable(std::string vxlanTunnelMapName);
+     int createVxlanNetdevice(std::string vxlanTunnelName, std::string vni_id,
+diff --git a/orchagent/p4orch/tests/fake_portorch.cpp b/orchagent/p4orch/tests/fake_portorch.cpp
+index 16d4af4e..682a2cb6 100644
+--- a/orchagent/p4orch/tests/fake_portorch.cpp
++++ b/orchagent/p4orch/tests/fake_portorch.cpp
+@@ -22,6 +22,7 @@ PortsOrch::PortsOrch(DBConnector *db, DBConnector *stateDb, vector<table_name_wi
+                      DBConnector *chassisAppDb)
+     : Orch(db, tableNames),
+       m_portStateTable(stateDb, STATE_PORT_TABLE_NAME),
++      m_stateVlanTable(stateDb, STATE_VLAN_TABLE_NAME),
+       m_portOpErrTable(stateDb, STATE_PORT_OPER_ERR_TABLE_NAME),
+       port_stat_manager(PORT_STAT_COUNTER_FLEX_COUNTER_GROUP, StatsMode::READ,
+                         PORT_STAT_FLEX_COUNTER_POLLING_INTERVAL_MS, true),
+diff --git a/orchagent/port.h b/orchagent/port.h
+index af92bc95..112ab640 100644
+--- a/orchagent/port.h
++++ b/orchagent/port.h
+@@ -85,14 +85,14 @@ public:
+     ~PortOperErrorEvent() = default;
+ 
+     inline void incrementErrorCount(void) { m_errorCount++; }
+-    
++
+     inline size_t getErrorCount(void) const { return m_errorCount; }
+-    
++
+     void recordEventTime(void) {
+         auto now = std::chrono::system_clock::now();
+         m_eventTime = std::chrono::system_clock::to_time_t(now);
+     }
+-    
++
+     std::string getEventTime(void) {
+         std::ostringstream oss;
+         oss << std::put_time(std::gmtime(&m_eventTime), "%Y-%m-%d %H:%M:%S");
+@@ -100,7 +100,7 @@ public:
+     }
+ 
+     inline std::string getDbKey(void) const { return m_dbKeyError; }
+-    
++
+     // Returns true if port oper error flag in sai_port_error_status_t is set
+     bool isErrorSet(sai_port_error_status_t errstatus) const { return (m_errorFlag & errstatus);}
+ 
+@@ -253,6 +253,9 @@ public:
+     bool m_lm_cfg = false;        // Forwarding Database (FDB) Learning Mode (LM)
+     bool m_lt_cfg = false;        // Link Training (LT)
+ 
++    /* VLAN member state notification flag for EVPN */
++    bool m_member_state_notified = false; // Track if VLAN member state change has been notified to STATE_DB
++
+     int m_cap_an = -1; /* Capability - AutoNeg, -1 means not set */
+     int m_cap_lt = -1; /* Capability - LinkTraining, -1 means not set */
+ 
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 47b828cb..d7130951 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -584,7 +584,7 @@ static bool isPathTracingSupported()
+         SWSS_LOG_INFO("Querying OBJECT_TYPE_LIST is not supported on this platform");
+         return false;
+     }
+-    else 
++    else
+     {
+         SWSS_LOG_ERROR(
+             "Failed to get a list of supported switch capabilities. Error=%d", status
+@@ -696,6 +696,7 @@ static bool isMlnxPlatform()
+ PortsOrch::PortsOrch(DBConnector *db, DBConnector *stateDb, vector<table_name_with_pri_t> &tableNames, DBConnector *chassisAppDb) :
+         Orch(db, tableNames),
+         m_portStateTable(stateDb, STATE_PORT_TABLE_NAME),
++        m_stateVlanTable(stateDb, STATE_VLAN_TABLE_NAME),
+         m_portOpErrTable(stateDb, STATE_PORT_OPER_ERR_TABLE_NAME),
+         port_stat_manager(PORT_STAT_COUNTER_FLEX_COUNTER_GROUP, StatsMode::READ, PORT_STAT_FLEX_COUNTER_POLLING_INTERVAL_MS, false),
+         port_phy_attr_manager(PORT_PHY_ATTR_FLEX_COUNTER_GROUP, StatsMode::READ, PORT_PHY_ATTR_FLEX_COUNTER_POLLING_INTERVAL_MS, false),
+@@ -5003,7 +5004,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
+                             );
+                         }
+                         m_portStateTable.hset(p.m_alias, "phy_ctrl_unreliable_los", p.m_unreliable_los ? "true":"false");
+-                } 
++                }
+ 
+                 if (pCfg.adv_interface_types.is_set)
+                 {
+@@ -7145,7 +7146,7 @@ bool PortsOrch::removeBridgePort(Port &port)
+                 hostif_vlan_tag[SAI_HOSTIF_VLAN_TAG_STRIP], port.m_alias.c_str());
+         return false;
+     }
+-    
++
+     /* Remove STP ports before bridge port deletion*/
+     gStpOrch->removeStpPorts(port);
+ 
+@@ -7408,6 +7409,24 @@ bool PortsOrch::addVlanMember(Port &vlan, Port &port, string &tagging_mode, stri
+     m_portVlanMember[port.m_alias][vlan.m_vlan_info.vlan_id] = vme;
+     m_portList[port.m_alias] = port;
+     vlan.m_members.insert(port.m_alias);
++
++    // Update VLAN member state status when first member is added
++    // This ensures EVPN/BGP can start advertising MACs
++    // Use flag to prevent race condition with concurrent member additions
++    if (vlan.m_members.size() == 1 && !vlan.m_member_state_notified &&
++        vlan.m_oper_status != SAI_PORT_OPER_STATUS_UP)
++    {
++        SWSS_LOG_NOTICE("VLAN %s has first member, setting oper status to UP",
++                        vlan.m_alias.c_str());
++        vlan.m_oper_status = SAI_PORT_OPER_STATUS_UP;
++        vlan.m_member_state_notified = true;
++
++        // Write to STATE_DB so vxlanmgr can bring up the VNI netdevice for EVPN
++        vector<FieldValueTuple> fvVector;
++        fvVector.push_back(FieldValueTuple("member_state", "ok"));
++        m_stateVlanTable.set(vlan.m_alias, fvVector);
++    }
++
+     m_portList[vlan.m_alias] = vlan;
+ 
+     VlanMemberUpdate update = { vlan, port, true };
+@@ -7741,6 +7760,23 @@ bool PortsOrch::removeVlanMember(Port &vlan, Port &port, string end_point_ip)
+ 
+     m_portList[port.m_alias] = port;
+     vlan.m_members.erase(port.m_alias);
++
++    // Update VLAN member state status when last member is removed
++    // Use flag to prevent race condition with concurrent member removals
++    if (vlan.m_members.empty() && vlan.m_member_state_notified &&
++        vlan.m_oper_status != SAI_PORT_OPER_STATUS_DOWN)
++    {
++        SWSS_LOG_NOTICE("VLAN %s has no members, setting oper status to DOWN",
++                        vlan.m_alias.c_str());
++        vlan.m_oper_status = SAI_PORT_OPER_STATUS_DOWN;
++        vlan.m_member_state_notified = false;
++
++        // Write to STATE_DB so vxlanmgr can bring down the VNI netdevice for EVPN
++        vector<FieldValueTuple> fvVector;
++        fvVector.push_back(FieldValueTuple("member_state", "notok"));
++        m_stateVlanTable.set(vlan.m_alias, fvVector);
++    }
++
+     m_portList[vlan.m_alias] = vlan;
+ 
+     VlanMemberUpdate update = { vlan, port, false };
+@@ -9107,7 +9143,7 @@ void PortsOrch::generateWredPortCounterMap()
+ 
+ /****
+ *  Func Name  : addWredQueueFlexCounters
+-*  Parameters : queueStateVector 
++*  Parameters : queueStateVector
+ *  Returns    : void
+ *  Description: Top level API to Set WRED flex counters for Queues
+ **/
+@@ -9177,9 +9213,9 @@ void PortsOrch::addWredQueueFlexCountersPerPort(const Port& port, FlexCounterQue
+ }
+ /****
+ *  Func Name  : addWredQueueFlexCountersPerPortPerQueueIndex
+-*  Parameters : port, queueIndex, is_voq 
++*  Parameters : port, queueIndex, is_voq
+ *  Returns    : void
+-*  Description: Sets the Stats list to be polled by the flexcounter 
++*  Description: Sets the Stats list to be polled by the flexcounter
+ **/
+ 
+ void PortsOrch::addWredQueueFlexCountersPerPortPerQueueIndex(const Port& port, size_t queueIndex,  bool voq, sai_queue_type_t queueType)
+diff --git a/orchagent/portsorch.h b/orchagent/portsorch.h
+index 719d45c3..28b7c2ea 100644
+--- a/orchagent/portsorch.h
++++ b/orchagent/portsorch.h
+@@ -289,7 +289,8 @@ private:
+     unique_ptr<Table> m_pgPortTable;
+     unique_ptr<Table> m_pgIndexTable;
+     unique_ptr<Table> m_stateBufferMaximumValueTable;
+-    Table m_portStateTable;
++    mutable Table m_portStateTable;
++    mutable Table m_stateVlanTable;
+     Table m_portOpErrTable;
+ 
+     std::string getQueueWatermarkFlexCounterTableKey(std::string s);
+@@ -436,7 +437,7 @@ private:
+     bool initExistingPort(const PortConfig &port);
+     bool initPortsBulk(std::vector<Port>& ports);
+     void registerPort(Port &p);
+-    
++
+     void deInitPort(string alias, sai_object_id_t port_id);
+ 
+     void initPortCapAutoNeg(Port &port);
+diff --git a/tests/test_vlan.py b/tests/test_vlan.py
+index b8a277f2..4e0a8bcc 100644
+--- a/tests/test_vlan.py
++++ b/tests/test_vlan.py
+@@ -249,7 +249,7 @@ class TestVlan(object):
+ 
+         self.dvs_vlan.create_vlan(vlan)
+         self.dvs_vlan.get_and_verify_vlan_ids(1)
+-        
++
+         self.dvs_vlan.create_vlan_member(vlan, lag_interface, "tagged")
+         self.dvs_vlan.get_and_verify_vlan_member_ids(1)
+ 
+@@ -300,7 +300,7 @@ class TestVlan(object):
+ 
+         #Start teammgrd
+         dvs.restart_teammgrd()
+-        
++
+         self.dvs_vlan.get_and_verify_vlan_member_ids(1)
+ 
+         self.dvs_vlan.remove_vlan_member(vlan, lag_interface)
+@@ -531,7 +531,7 @@ class TestVlan(object):
+         self.dvs_vlan.remove_vlan(vlan)
+         self.dvs_vlan.get_and_verify_vlan_ids(0)
+ 
+-    def test_VlanProxyArp(self, dvs): 
++    def test_VlanProxyArp(self, dvs):
+ 
+         def proxy_arp_enabled():
+             rc, proxy_arp_res = dvs.runcmd("cat /proc/sys/net/ipv4/conf/Vlan{}/proxy_arp".format(vlan))
+@@ -544,7 +544,7 @@ class TestVlan(object):
+             rc, pvlan_res = dvs.runcmd("cat /proc/sys/net/ipv4/conf/Vlan{}/proxy_arp_pvlan".format(vlan))
+ 
+             return (proxy_arp_res.strip("\n") == "0" and pvlan_res.strip("\n") == "0", (proxy_arp_res, pvlan_res))
+-            
++
+         vlan = "2"
+         self.dvs_vlan.create_vlan(vlan)
+         self.dvs_vlan.create_vlan_interface(vlan)
+@@ -645,6 +645,77 @@ class TestVlan(object):
+         self.dvs_vlan.remove_vlan(vlan_interface)
+         time.sleep(1)
+ 
++    def test_VlanMemberStateUpdate(self, dvs):
++        """
++        Test VLAN member state updates in STATE_DB for EVPN VXLAN.
++        Verifies that when the first member is added to a VLAN, member_state is set to 'ok',
++        and when the last member is removed, member_state is set to 'notok'.
++        This ensures proper VNI netdevice state management for EVPN route advertisement/withdrawal.
++        """
++        dvs.setup_db()
++
++        vlan_id = "100"
++        vlan_name = f"Vlan{vlan_id}"
++        interface1 = "Ethernet0"
++        interface2 = "Ethernet4"
++
++        # Create VLAN
++        self.dvs_vlan.create_vlan(vlan_id)
++        vlan_oid = self.dvs_vlan.get_and_verify_vlan_ids(1)[0]
++        self.dvs_vlan.verify_vlan(vlan_oid, vlan_id)
++
++        # Verify STATE_DB entry exists but has no member_state (initial state)
++        state_db = dvs.get_state_db()
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert "member_state" not in vlan_state or vlan_state.get("member_state") == "", \
++            f"Expected no member_state after VLAN creation, got {vlan_state.get('member_state')}"
++
++        # Add first member - should trigger member_state = 'ok' in STATE_DB
++        self.dvs_vlan.create_vlan_member(vlan_id, interface1)
++        self.dvs_vlan.verify_vlan_member(vlan_oid, interface1)
++
++        # Verify STATE_DB entry has member_state = 'ok'
++        state_db = dvs.get_state_db()
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert vlan_state.get("member_state") == "ok", \
++            f"Expected member_state='ok' after adding first member, got {vlan_state.get('member_state')}"
++
++        # Add second member - member_state should remain 'ok' (no duplicate writes)
++        self.dvs_vlan.create_vlan_member(vlan_id, interface2)
++        self.dvs_vlan.verify_vlan_member(vlan_oid, interface2)
++
++        # Verify STATE_DB still has member_state = 'ok'
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert vlan_state.get("member_state") == "ok", \
++            f"Expected member_state='ok' after adding second member, got {vlan_state.get('member_state')}"
++
++        # Remove first member - member_state should remain 'ok' (still has one member)
++        self.dvs_vlan.remove_vlan_member(vlan_id, interface1)
++        time.sleep(1)
++
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert vlan_state.get("member_state") == "ok", \
++            f"Expected member_state='ok' after removing first member (one member remains), got {vlan_state.get('member_state')}"
++
++        # Remove last member - should trigger member_state = 'notok' in STATE_DB
++        self.dvs_vlan.remove_vlan_member(vlan_id, interface2)
++        self.dvs_vlan.get_and_verify_vlan_member_ids(0)
++        time.sleep(1)
++
++        # Verify STATE_DB entry has member_state = 'notok'
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert vlan_state.get("member_state") == "notok", \
++            f"Expected member_state='notok' after removing last member, got {vlan_state.get('member_state')}"
++
++        # Tear down / Clean up
++        self.dvs_vlan.remove_vlan(vlan_id)
++        self.dvs_vlan.get_and_verify_vlan_ids(0)
++
++        # Verify STATE_DB entry is removed after VLAN deletion
++        vlan_state = state_db.get_entry("VLAN_TABLE", vlan_name)
++        assert vlan_state == {}, \
++            f"Expected empty STATE_DB entry after VLAN deletion, got {vlan_state}"
++
+ 
+ # Add Dummy always-pass test at end as workaroud
+ # for issue when Flaky fail on final test it invokes module tear-down before retrying
+-- 
+2.25.1
+

@@ -1,0 +1,39 @@
+From 1f4fd5832a2d9e9601531a96c4a3248cc48bbfa4 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Wed, 22 Apr 2026 14:53:19 +0530
+Subject: [PATCH] EVPN MH static MAC fix
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fdbsyncd/fdbsync.cpp | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/fdbsyncd/fdbsync.cpp b/fdbsyncd/fdbsync.cpp
+index afdfd3ed..98e2af37 100644
+--- a/fdbsyncd/fdbsync.cpp
++++ b/fdbsyncd/fdbsync.cpp
+@@ -396,6 +396,21 @@ void FdbSync::updateLocalMac (struct m_fdb_info *info)
+             macDelVxlan(key);
+         }
+     }
++    else
++    {
++        /*
++         * EVPN-MH: On DEL, clean up any VXLAN_FDB entry for this MAC. This prevents
++         * stale sync-MAC entries from present in APP_DB after the
++         * local entry has been flushed. Without this, zebra may
++         * re-install the MAC and fdbsyncd would re-create a VXLAN_FDB
++         * entry that FdbOrch programs as an irremovable STATIC entry.
++         */
++        if (m_mac.find(key) != m_mac.end())
++        {
++            SWSS_LOG_NOTICE("EVPN-MH: Local DEL cleaning VXLAN_FDB entry %s", key.c_str());
++            macDelVxlan(key);
++        }
++    }
+ 
+     return;
+ }
+-- 
+2.25.1
+

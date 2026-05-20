@@ -1,0 +1,53 @@
+From 14930c228c2787b3ec7a6cdd87a487cc40a5d2b7 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 13:47:42 +0530
+Subject: [PATCH] OSPF GR: Changes to enable ospf_eoiu_marker
+
+Changes to enable ospf_eoiu_marker
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../frr/supervisord/supervisord.conf.j2       | 20 ++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2 b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+index c97c94e2e..1f8d2085c 100644
+--- a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
++++ b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+@@ -289,7 +289,7 @@ dependent_startup=true
+ dependent_startup_wait_for=bgpd:running
+ {% endif %}
+ 
+-{% if WARM_RESTART is defined and WARM_RESTART.bgp is defined and WARM_RESTART.bgp.bgp_eoiu is defined and WARM_RESTART.bgp.bgp_eoiu == "true" %}
++{% if WARM_RESTART is defined and WARM_RESTART.bgp is defined and (WARM_RESTART.bgp.warm_restart_protocol is not defined or WARM_RESTART.bgp.warm_restart_protocol == "bgp") and WARM_RESTART.bgp.bgp_eoiu is defined and WARM_RESTART.bgp.bgp_eoiu == "true" %}
+ [program:bgp_eoiu_marker]
+ command=/usr/bin/bgp_eoiu_marker.py
+ priority=7
+@@ -305,6 +305,24 @@ dependent_startup=true
+ dependent_startup_wait_for=bgpd:running
+ {% endif %}
+ 
++{% if DEVICE_METADATA.localhost.frr_mgmt_framework_config is defined and DEVICE_METADATA.localhost.frr_mgmt_framework_config == "true" %}
++{% if WARM_RESTART is defined and WARM_RESTART.bgp is defined and WARM_RESTART.bgp.warm_restart_protocol is defined and WARM_RESTART.bgp.warm_restart_protocol == "ospf" and WARM_RESTART.bgp.ospf_eoiu is defined and WARM_RESTART.bgp.ospf_eoiu == "true" %}
++[program:ospf_eoiu_marker]
++command=/usr/bin/ospf_eoiu_marker.py
++priority=7
++autostart=false
++autorestart=false
++startsecs=0
++startretries=0
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++dependent_startup_wait_for=ospfd:running
++{% endif %}
++{% endif %}
++
+ {% if DEVICE_METADATA.localhost.frr_mgmt_framework_config is defined and DEVICE_METADATA.localhost.frr_mgmt_framework_config == "true" %}
+ [program:pathd]
+ command=/usr/lib/frr/pathd -A 127.0.0.1 -P 0
+-- 
+2.25.1
+

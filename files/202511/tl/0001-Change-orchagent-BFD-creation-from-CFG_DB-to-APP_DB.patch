@@ -1,0 +1,467 @@
+From c7d136da0763a7f5800ce91825f15309e7f5f155 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Mon, 19 Jan 2026 10:06:48 +0530
+Subject: [PATCH] Change orchagent BFD creation from CFG_DB to APP_DB
+
+As part of sonic-bfd.yang, we have created a new table BFD_PEER (which
+was already being unofficially used in frrcfgd.py).
+
+Here we are enabling orchagent code to utilize this new table instead of
+BFD table in APP_DB. This allows us to reach persistency of data across
+reboots/reloads.
+
+As per the current design, we are maintaining bfd such that either only
+HW offload BFD or Software BFD will be supported.
+This will be based on bfd_data_plane_mode flag.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ orchagent/bfdorch.cpp                        | 181 ++++++++++++++-----
+ orchagent/bfdorch.h                          |   2 +
+ orchagent/orchdaemon.cpp                     |   2 +-
+ orchagent/vnetorch.cpp                       |  23 ++-
+ tests/mock_tests/flowcounterrouteorch_ut.cpp |   2 +-
+ tests/mock_tests/intfsorch_ut.cpp            |   2 +-
+ 6 files changed, 151 insertions(+), 61 deletions(-)
+
+diff --git a/orchagent/bfdorch.cpp b/orchagent/bfdorch.cpp
+index d04b95b1..962137b6 100644
+--- a/orchagent/bfdorch.cpp
++++ b/orchagent/bfdorch.cpp
+@@ -92,7 +92,31 @@ BfdOrch::~BfdOrch(void)
+     SWSS_LOG_ENTER();
+ }
+ 
++std::string BfdOrch::createStateDBKey(const std::string &key, const std::vector<swss::FieldValueTuple>& data) {
++    // This function converts BFD data from CONFIG_DB to STATE_DB format
++    // CONFIG_DB format: remote_addr|local_addr|interface|hop_type
++    // STATE_DB format: vrf|interface|peer_ip
++    
++    vector<string> key_parts = tokenize(key, '|');
++    
++    string peer_ip = key_parts[0];
++    string interface = key_parts[2];
++    
++    string vrf_name = "default";
++    for (const auto& fv : data) {
++        if (fvField(fv) == "vrf") {
++            vrf_name = fvValue(fv);
++            break;
++        }
++    }
++    
++    return vrf_name + state_db_key_delimiter + interface + state_db_key_delimiter + peer_ip;
++}
++
+ std::string BfdOrch::createStateDBKey(const std::string &input) {
++    // This function converts APP_DB key format to STATE_DB format
++    // APP_DB format: vrf:interface:peer_ip
++    // STATE_DB format: vrf|interface|peer_ip
+     // Replace ':' with '|' to convert key to StateDB format.
+     std::string result = input;
+     size_t pos = result.find(':'); // Find the first colon
+@@ -133,7 +157,15 @@ void BfdOrch::doTask(Consumer &consumer)
+             if (use_software_bfd)
+             {
+                 //program entry in software BFD table
+-                m_stateSoftBfdSessionTable->set(createStateDBKey(key), data);
++                vector<string> key_parts = tokenize(key, '|');
++                if (key_parts.size() != 4)
++                {
++                    SWSS_LOG_ERROR("Invalid CONFIG_DB key format for BFD: %s, Expected: remote_addr|local_addr|interface|hop_type", key.c_str());
++                    it = consumer.m_toSync.erase(it);
++                    continue;
++                }
++                string state_db_key = createStateDBKey(key, data);
++                m_stateSoftBfdSessionTable->set(state_db_key, data);
+                 it = consumer.m_toSync.erase(it);
+                 continue;
+             }
+@@ -182,7 +214,15 @@ void BfdOrch::doTask(Consumer &consumer)
+             if (use_software_bfd)
+             {
+                 //delete entry from software BFD table
+-                m_stateSoftBfdSessionTable->del(createStateDBKey(key));
++                vector<string> key_parts = tokenize(key, '|');
++                if (key_parts.size() != 4)
++                {
++                    SWSS_LOG_ERROR("Invalid CONFIG_DB key format for BFD: %s, Expected: remote_addr|local_addr|interface|hop_type", key.c_str());
++                    it = consumer.m_toSync.erase(it);
++                    continue;
++                }
++                string state_db_key = createStateDBKey(key, data);
++                m_stateSoftBfdSessionTable->del(state_db_key);
+                 it = consumer.m_toSync.erase(it);
+                 continue;
+             }
+@@ -319,35 +359,31 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         return true;
+     }
+ 
+-    size_t found_vrf = key.find(delimiter);
+-    if (found_vrf == string::npos)
+-    {
+-        SWSS_LOG_ERROR("Failed to parse key %s, no vrf is given", key.c_str());
+-        return true;
+-    }
+-
+-    size_t found_ifname = key.find(delimiter, found_vrf + 1);
+-    if (found_ifname == string::npos)
++    vector<string> key_parts = tokenize(key, '|');
++    if (key_parts.size() != 4)
+     {
+-        SWSS_LOG_ERROR("Failed to parse key %s, no ifname is given", key.c_str());
++        SWSS_LOG_ERROR("Wrong key format. Received: %s, Expected: remote_addr|local_addr|interface|hop_type", key.c_str());
+         return true;
+     }
+ 
+-    string vrf_name = key.substr(0, found_vrf);
+-    string alias = key.substr(found_vrf + 1, found_ifname - found_vrf - 1);
+-    IpAddress peer_address(key.substr(found_ifname + 1));
++    IpAddress peer_address(key_parts[0]);
++    IpAddress src_ip(key_parts[1]);
++    string alias = key_parts[2];
++    string hop_type = key_parts[3];
++    string vrf_name = "default";
+ 
+     sai_bfd_session_type_t bfd_session_type = SAI_BFD_SESSION_TYPE_ASYNC_ACTIVE;
+     sai_bfd_encapsulation_type_t encapsulation_type = SAI_BFD_ENCAPSULATION_TYPE_NONE;
+-    IpAddress src_ip;
++
+     uint32_t tx_interval = BFD_SESSION_DEFAULT_TX_INTERVAL;
+     uint32_t rx_interval = BFD_SESSION_DEFAULT_RX_INTERVAL;
+     uint8_t multiplier = BFD_SESSION_DEFAULT_DETECT_MULTIPLIER;
+     uint8_t tos = BFD_SESSION_DEFAULT_TOS;
+-    bool multihop = false;
+     MacAddress dst_mac;
+     bool dst_mac_provided = false;
+-    bool src_ip_provided = false;
++    bool hw_lookup_valid = false;
++
++    bool multihop = (hop_type == "multihop");
+ 
+     sai_attribute_t attr;
+     vector<sai_attribute_t> attrs;
+@@ -357,11 +393,15 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+     {
+         auto value = fvValue(i);
+ 
+-        if (fvField(i) == "tx_interval")
++        if (fvField(i) == "vrf")
++        {
++            vrf_name = value;
++        }
++        else if (fvField(i) == "transmit_interval")
+         {
+             tx_interval = to_uint<uint32_t>(value);
+         }
+-        else if (fvField(i) == "rx_interval")
++        else if (fvField(i) == "receive_interval")
+         {
+             rx_interval = to_uint<uint32_t>(value);
+         }
+@@ -369,15 +409,6 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         {
+             multiplier = to_uint<uint8_t>(value);
+         }
+-        else if (fvField(i) == "multihop")
+-        {
+-            multihop = (value == "true") ? true : false;
+-        }
+-        else if (fvField(i) == "local_addr")
+-        {
+-            src_ip = IpAddress(value);
+-            src_ip_provided = true;
+-        }
+         else if (fvField(i) == "type")
+         {
+             if (session_type_map.find(value) == session_type_map.end())
+@@ -396,6 +427,10 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         {
+             tos = to_uint<uint8_t>(value);
+         }
++        else if (fvField(i) == "hw_lookup_valid")
++        {
++            hw_lookup_valid = (value == "true") ? true : false;
++        }
+         else if (fvField(i) == "shutdown_bfd_during_tsa")
+         {
+             //since we are handling shutdown_bfd_during_tsa in the caller function, we need to ignore it here.
+@@ -406,12 +441,6 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+             SWSS_LOG_ERROR("Unsupported BFD attribute %s\n", fvField(i).c_str());
+     }
+ 
+-    if (!src_ip_provided)
+-    {
+-        SWSS_LOG_ERROR("Failed to create BFD session %s because source IP is not provided", key.c_str());
+-        return true;
+-    }
+-
+     attr.id = SAI_BFD_SESSION_ATTR_TYPE;
+     attr.value.s32 = bfd_session_type;
+     attrs.emplace_back(attr);
+@@ -451,12 +480,12 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+     attr.id = SAI_BFD_SESSION_ATTR_MIN_TX;
+     attr.value.u32 = tx_interval * BFD_SESSION_MILLISECOND_TO_MICROSECOND;
+     attrs.emplace_back(attr);
+-    fvVector.emplace_back("tx_interval", to_string(tx_interval));
++    fvVector.emplace_back("transmit_interval", to_string(tx_interval));
+ 
+     attr.id = SAI_BFD_SESSION_ATTR_MIN_RX;
+     attr.value.u32 = rx_interval * BFD_SESSION_MILLISECOND_TO_MICROSECOND;
+     attrs.emplace_back(attr);
+-    fvVector.emplace_back("rx_interval", to_string(rx_interval));
++    fvVector.emplace_back("receive_interval", to_string(rx_interval));
+ 
+     attr.id = SAI_BFD_SESSION_ATTR_MULTIPLIER;
+     attr.value.u8 = multiplier;
+@@ -479,7 +508,9 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         fvVector.emplace_back("multihop", "false");
+     }
+ 
+-    if (alias != "default")
++    // Set VRF attribute - required for both singlehop and multihop
++
++    if (!hw_lookup_valid)
+     {
+         Port port;
+         if (!gPortsOrch->getPort(alias, port))
+@@ -505,6 +536,7 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+         attr.id = SAI_BFD_SESSION_ATTR_HW_LOOKUP_VALID;
+         attr.value.booldata = false;
+         attrs.emplace_back(attr);
++        fvVector.emplace_back("hw_lookup_valid", "false");
+ 
+         attr.id = SAI_BFD_SESSION_ATTR_PORT;
+         attr.value.oid = port.m_port_id;
+@@ -534,6 +566,11 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+             return true;
+         }
+ 
++        attr.id = SAI_BFD_SESSION_ATTR_HW_LOOKUP_VALID;
++        attr.value.booldata = true;
++        attrs.emplace_back(attr);
++        fvVector.emplace_back("hw_lookup_valid", "true");
++
+         attr.id = SAI_BFD_SESSION_ATTR_VIRTUAL_ROUTER;
+         if (vrf_name == "default")
+         {
+@@ -544,7 +581,6 @@ bool BfdOrch::create_bfd_session(const string& key, const vector<FieldValueTuple
+             VRFOrch* vrf_orch = gDirectory.get<VRFOrch*>();
+             attr.value.oid = vrf_orch->getVRFid(vrf_name);
+         }
+-
+         attrs.emplace_back(attr);
+     }
+ 
+@@ -676,22 +712,32 @@ uint32_t BfdOrch::bfd_src_port(void)
+ void BfdOrch::notify_session_state_down(const string& key)
+ {
+     SWSS_LOG_ENTER();
+-    size_t found_vrf = key.find(delimiter);
+-    if (found_vrf == string::npos)
++
++    vector<string> key_parts = tokenize(key, '|');
++    if (key_parts.size() != 4)
+     {
+-        SWSS_LOG_ERROR("Failed to parse key %s, no vrf is given", key.c_str());
++        SWSS_LOG_ERROR("Failed to parse CONFIG_DB key %s, Expected: remote_addr|local_addr|interface|hop_type", key.c_str());
+         return;
+     }
+ 
+-    size_t found_ifname = key.find(delimiter, found_vrf + 1);
+-    if (found_ifname == string::npos)
++    IpAddress peer_address(key_parts[0]);  // remote_addr
++    string alias = key_parts[2];            // interface
++    
++    // Need to get VRF from bfd_session_cache since it's stored in data, not key
++    string vrf_name = "default";
++    if (bfd_session_cache.find(key) != bfd_session_cache.end())
+     {
+-        SWSS_LOG_ERROR("Failed to parse key %s, no ifname is given", key.c_str());
+-        return;
++        auto& cached_data = bfd_session_cache[key];
++        for (const auto& fv : cached_data)
++        {
++            if (fvField(fv) == "vrf")
++            {
++                vrf_name = fvValue(fv);
++                break;
++            }
++        }
+     }
+-    string vrf_name = key.substr(0, found_vrf);
+-    string alias = key.substr(found_vrf + 1, found_ifname - found_vrf - 1);
+-    IpAddress peer_address(key.substr(found_ifname + 1));
++    
+     BfdUpdate update;
+     update.peer = get_state_db_key(vrf_name, alias, peer_address);
+     update.state = SAI_BFD_SESSION_STATE_DOWN;
+@@ -754,7 +800,42 @@ BgpGlobalStateOrch::BgpGlobalStateOrch(DBConnector *db, string tableName):
+     m_stateDbConnector = std::make_unique<swss::DBConnector>("STATE_DB", 0);
+     m_stateBfdCapabilityTable = std::make_unique<swss::Table>(m_stateDbConnector.get(), STATE_BFD_OFFLOAD_CAPABILITY_TABLE_NAME);
+ 
+-    bfd_offload = (offload_supported(!ipv6) && offload_supported(ipv6));
++    // Read bfd_data_plane_mode from DEVICE_METADATA
++    DBConnector cfgDb("CONFIG_DB", 0);
++    Table cfgDeviceMetaDataTable(&cfgDb, CFG_DEVICE_METADATA_TABLE_NAME);
++    string bfd_data_plane_mode;
++    
++    if (cfgDeviceMetaDataTable.hget("localhost", "bfd_data_plane_mode", bfd_data_plane_mode))
++    {
++        bfd_data_plane_enabled = (bfd_data_plane_mode == "enabled");
++        SWSS_LOG_NOTICE("BFD data plane mode from DEVICE_METADATA: %s (enabled=%s)", 
++                        bfd_data_plane_mode.c_str(), bfd_data_plane_enabled ? "YES" : "NO");
++    }
++    else
++    {
++        // Default to disabled if not set
++        bfd_data_plane_enabled = false;
++        SWSS_LOG_NOTICE("BFD data plane mode not found in DEVICE_METADATA, defaulting to disabled (software BFD)");
++    }
++
++    // Only check SAI offload support if data plane is enabled
++    if (bfd_data_plane_enabled)
++    {
++        bfd_offload = (offload_supported(!ipv6) && offload_supported(ipv6));
++        SWSS_LOG_NOTICE("BFD offload support from SAI: %s", bfd_offload ? "YES" : "NO");
++        
++        // Validate configuration
++        if (!bfd_offload)
++        {
++            SWSS_LOG_ERROR("BFD data plane mode is enabled but hardware offload is not supported by SAI. BFD sessions will fail to create.");
++        }
++    }
++    else
++    {
++        // Using software BFD, no need to query SAI
++        bfd_offload = false;
++        SWSS_LOG_NOTICE("Using software BFD as bfd_data_plane_mode is disabled");
++    }
+ }
+ 
+ BgpGlobalStateOrch::~BgpGlobalStateOrch(void)
+diff --git a/orchagent/bfdorch.h b/orchagent/bfdorch.h
+index c0667410..416b1667 100644
+--- a/orchagent/bfdorch.h
++++ b/orchagent/bfdorch.h
+@@ -39,6 +39,7 @@ private:
+     bool register_bfd_state_change_notification(void);
+     void update_port_number(std::vector<sai_attribute_t> &attrs);
+     sai_status_t retry_create_bfd_session(sai_object_id_t &bfd_session_id, vector<sai_attribute_t> attrs);
++    std::string createStateDBKey(const std::string &key, const std::vector<swss::FieldValueTuple>& data);
+     std::string createStateDBKey(const std::string &input);
+ 
+     std::map<std::string, sai_object_id_t> bfd_session_map;
+@@ -68,6 +69,7 @@ public:
+ private:
+     bool tsa_enabled;
+     bool bfd_offload;
++    bool bfd_data_plane_enabled;
+     sai_bfd_session_offload_type_t ipv4_offload_type;
+     sai_bfd_session_offload_type_t ipv6_offload_type;
+     std::unique_ptr<swss::DBConnector> m_stateDbConnector;
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index b285cfce..ca72b24b 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -218,7 +218,7 @@ bool OrchDaemon::init()
+     bgp_global_state_orch = new BgpGlobalStateOrch(m_configDb, CFG_BGP_DEVICE_GLOBAL_TABLE_NAME);
+     gDirectory.set(bgp_global_state_orch);
+ 
+-    gBfdOrch = new BfdOrch(m_applDb, APP_BFD_SESSION_TABLE_NAME, stateDbBfdSessionTable);
++    gBfdOrch = new BfdOrch(m_configDb, CFG_BFD_PEER_TABLE_NAME, stateDbBfdSessionTable);
+     gDirectory.set(gBfdOrch);
+ 
+     TableConnector stateDbIcmpSessionTable(m_stateDb, STATE_ICMP_ECHO_SESSION_TABLE_NAME);
+diff --git a/orchagent/vnetorch.cpp b/orchagent/vnetorch.cpp
+index f41c4af1..c41caa11 100644
+--- a/orchagent/vnetorch.cpp
++++ b/orchagent/vnetorch.cpp
+@@ -24,6 +24,7 @@
+ #include "routeorch.h"
+ #include "tunneldecaporch.h"
+ #include "flowcounterrouteorch.h"
++#include "schema.h"
+ 
+ extern sai_virtual_router_api_t* sai_virtual_router_api;
+ extern sai_route_api_t* sai_route_api;
+@@ -725,7 +726,8 @@ static bool update_route(sai_object_id_t vr_id, sai_ip_prefix_t& ip_pfx, sai_obj
+ }
+ 
+ VNetRouteOrch::VNetRouteOrch(DBConnector *db, vector<string> &tableNames, VNetOrch *vnetOrch)
+-                                  : Orch2(db, tableNames, request_), vnet_orch_(vnetOrch), bfd_session_producer_(db, APP_BFD_SESSION_TABLE_NAME),
++                                  : Orch2(db, tableNames, request_), vnet_orch_(vnetOrch),
++                                    bfd_session_producer_(new DBConnector("CONFIG_DB", 0), CFG_BFD_PEER_TABLE_NAME),
+                                     app_tunnel_decap_term_producer_(db, APP_TUNNEL_DECAP_TERM_TABLE_NAME)
+ {
+     SWSS_LOG_ENTER();
+@@ -2007,8 +2009,6 @@ void VNetRouteOrch::createBfdSession(const string& vnet, const NextHopKey& endpo
+     if (bfd_sessions_.find(monitor_addr) == bfd_sessions_.end())
+     {
+         vector<FieldValueTuple>    data;
+-        string key = "default:default:" + monitor_addr.to_string();
+-
+         auto tun_name = vnet_orch_->getTunnelName(vnet);
+         VxlanTunnelOrch* vxlan_orch = gDirectory.get<VxlanTunnelOrch*>();
+         auto tunnel_obj = vxlan_orch->getVxlanTunnel(tun_name);
+@@ -2016,10 +2016,9 @@ void VNetRouteOrch::createBfdSession(const string& vnet, const NextHopKey& endpo
+             Even for local endpoints, we will use tunnel source IP as local_addr of BFD session.
+         */
+         IpAddress src_ip = tunnel_obj->getSrcIP();
+-
+-        FieldValueTuple fvTuple("local_addr", src_ip.to_string());
+-        data.push_back(fvTuple);
+-        data.emplace_back("multihop", "true");
++        
++        // CONFIG_DB key format: remote_addr|local_addr|interface|hop_type
++        string key = monitor_addr.to_string() + "|" + src_ip.to_string() + "|default|multihop";
+         // The BFD sessions established by the Vnet routes with monitoring need to be brought down
+         // when the device goes into TSA.  The following parameter ensures that these session are
+         // brought down while transitioning to TSA and brought back up when transitioning to TSB.
+@@ -2063,7 +2062,15 @@ void VNetRouteOrch::removeBfdSession(const string& vnet, const NextHopKey& endpo
+     SWSS_LOG_INFO("Removing nexthop info for endpoint: %s\n", endpoint_addr.to_string().c_str());
+     nexthop_info_[vnet].erase(endpoint_addr);
+ 
+-    string key = "default:default:" + monitor_addr.to_string();
++    // Get source IP from tunnel to construct CONFIG_DB key
++    auto tun_name = vnet_orch_->getTunnelName(vnet);
++    VxlanTunnelOrch* vxlan_orch = gDirectory.get<VxlanTunnelOrch*>();
++    auto tunnel_obj = vxlan_orch->getVxlanTunnel(tun_name);
++    IpAddress src_ip = tunnel_obj->getSrcIP();
++    
++    // CONFIG_DB key format: remote_addr|local_addr|interface|hop_type
++    string key = monitor_addr.to_string() + "|" + src_ip.to_string() + "|default|multihop";
++
+     bfd_session_producer_.del(key);
+     bfd_sessions_.erase(monitor_addr);
+ }
+diff --git a/tests/mock_tests/flowcounterrouteorch_ut.cpp b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+index e70d9a4a..ef91b58c 100644
+--- a/tests/mock_tests/flowcounterrouteorch_ut.cpp
++++ b/tests/mock_tests/flowcounterrouteorch_ut.cpp
+@@ -116,7 +116,7 @@ namespace flowcounterrouteorch_test
+ 
+             // Create dependencies ...
+             TableConnector stateDbBfdSessionTable(m_state_db.get(), STATE_BFD_SESSION_TABLE_NAME);
+-            gBfdOrch = new BfdOrch(m_app_db.get(), APP_BFD_SESSION_TABLE_NAME, stateDbBfdSessionTable);
++            gBfdOrch = new BfdOrch(m_config_db.get(), CFG_BFD_PEER_TABLE_NAME, stateDbBfdSessionTable);
+ 
+             const int portsorch_base_pri = 40;
+             vector<table_name_with_pri_t> ports_tables = {
+diff --git a/tests/mock_tests/intfsorch_ut.cpp b/tests/mock_tests/intfsorch_ut.cpp
+index a5522a5f..432ddbc1 100644
+--- a/tests/mock_tests/intfsorch_ut.cpp
++++ b/tests/mock_tests/intfsorch_ut.cpp
+@@ -108,7 +108,7 @@ namespace intfsorch_test
+ 
+             // Create dependencies ...
+             TableConnector stateDbBfdSessionTable(m_state_db.get(), STATE_BFD_SESSION_TABLE_NAME);
+-            gBfdOrch = new BfdOrch(m_app_db.get(), APP_BFD_SESSION_TABLE_NAME, stateDbBfdSessionTable);
++            gBfdOrch = new BfdOrch(m_config_db.get(), CFG_BFD_PEER_TABLE_NAME, stateDbBfdSessionTable);
+ 
+             const int portsorch_base_pri = 40;
+             vector<table_name_with_pri_t> ports_tables = {
+-- 
+2.25.1
+

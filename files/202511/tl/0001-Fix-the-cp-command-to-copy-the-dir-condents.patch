@@ -1,0 +1,26 @@
+From 30ef759c37d011d4022ca20c4ac698ca05a19f76 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Fri, 10 Apr 2026 17:57:40 +0530
+Subject: [PATCH] Fix the cp command to copy the dir contents
+
+Signed-off-by: Anish Peter <apeter@marvell.com>
+---
+ scripts/fast-reboot | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/fast-reboot b/scripts/fast-reboot
+index c795069c..4b39dfe8 100755
+--- a/scripts/fast-reboot
++++ b/scripts/fast-reboot
+@@ -594,7 +594,7 @@ function save_counters_folder() {
+             mkdir $counters_folder
+         fi
+         if [[ -d $counters_cache ]]; then
+-           cp -rf $counters_cache $counters_folder
++           cp -rf "$counters_cache/." "$counters_folder/"
+         fi
+     fi
+ }
+-- 
+2.25.1
+

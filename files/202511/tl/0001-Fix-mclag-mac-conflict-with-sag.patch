@@ -1,0 +1,662 @@
+From 7ea51fd9f1f738c14bccb9ec5143d1d2b0e97166 Mon Sep 17 00:00:00 2001
+From: Marvell <marvell@marvell.com>
+Date: Mon, 15 Dec 2025 20:04:05 +0000
+Subject: [PATCH] Fix mclag mac conflict with sag
+
+Signed-off-by: Marvell <marvell@marvell.com>
+---
+ cfgmgr/intfmgr.cpp       | 320 ++++++++++++++++++++++++++++++++-------
+ cfgmgr/intfmgr.h         |   9 +-
+ mclagsyncd/mclaglink.cpp |   6 +-
+ mclagsyncd/mclaglink.h   |   3 +-
+ tests/test_sag.py        | 111 ++++++++++++++
+ 5 files changed, 388 insertions(+), 61 deletions(-)
+
+diff --git a/cfgmgr/intfmgr.cpp b/cfgmgr/intfmgr.cpp
+index 75f78367..b97e4745 100644
+--- a/cfgmgr/intfmgr.cpp
++++ b/cfgmgr/intfmgr.cpp
+@@ -57,6 +57,11 @@ IntfMgr::IntfMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, c
+     auto stateLagConsumer = new Consumer(subscriberStateLagTable, this, STATE_LAG_TABLE_NAME);
+     Orch::addExecutor(stateLagConsumer);
+ 
++    auto subscriberMclagIntfTable = new swss::SubscriberStateTable(appDb,
++            APP_MCLAG_INTF_TABLE_NAME, TableConsumable::DEFAULT_POP_BATCH_SIZE, 150);
++    auto mclagIntfConsumer = new Consumer(subscriberMclagIntfTable, this, APP_MCLAG_INTF_TABLE_NAME);
++    Orch::addExecutor(mclagIntfConsumer);
++
+     if (!WarmStart::isWarmStart())
+     {
+         flushLoopbackIntfs();
+@@ -187,6 +192,14 @@ void IntfMgr::setIntfMac(const string &alias, const string &mac_str)
+     }
+ }
+ 
++void IntfMgr::setIntfMacAndState(const string &alias, const string &mac_str)
++{
++    SWSS_LOG_INFO("Setting MAC %s on interface %s", mac_str.c_str(), alias.c_str());
++    setIntfState(alias, false);
++    setIntfMac(alias, mac_str);
++    setIntfState(alias, true);
++}
++
+ void IntfMgr::setIntfVrf(const string &alias, const string &vrfName)
+ {
+     stringstream cmd;
+@@ -342,6 +355,9 @@ void IntfMgr::buildIntfReplayList(void)
+     m_cfgLagIntfTable.getKeys(intfList);
+     std::copy( intfList.begin(), intfList.end(), std::inserter( m_pendingReplayIntfList, m_pendingReplayIntfList.end() ) );
+ 
++    m_cfgSagTable.getKeys(intfList);
++    std::copy( intfList.begin(), intfList.end(), std::inserter( m_pendingReplayIntfList, m_pendingReplayIntfList.end() ) );
++
+     SWSS_LOG_INFO("Found %d Total Intfs to be replayed", (int)m_pendingReplayIntfList.size() );
+ }
+ 
+@@ -1076,62 +1092,113 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+             setIntfVrf(alias, vrf_name);
+         }
+ 
+-        /*Set the mac of interface*/
++        // Store config MAC if present (independent of what MAC is currently applied)
+         if (!mac.empty())
+         {
+-            setIntfMac(alias, mac);
+-            FieldValueTuple fvTuple("mac_addr", mac);
+-            data.push_back(fvTuple);
+-            m_macSetIntfList.insert(alias);
++            m_macSetIntfMap[alias] = mac;
++            SWSS_LOG_INFO("Interface %s: Stored config MAC %s", alias.c_str(), mac.c_str());
+         }
+         else
+         {
+-            if (!sag.empty())
++            // Remove mac from map if it was there before
++            auto macIt = m_macSetIntfMap.find(alias);
++            if (macIt != m_macSetIntfMap.end())
+             {
+-                // only VLAN interface can set static anycast gateway
+-                if (!alias.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++                SWSS_LOG_INFO("Interface %s: Removing config MAC from map", alias.c_str());
++                m_macSetIntfMap.erase(macIt);
++            }
++        }
++        // Process SAG configuration first
++        // MAC priority is: SAG > MCLAG > CONFIG_DB INTERFACE mac > System MAC
++        if (!sag.empty())
++        {
++            // only VLAN interface can set static anycast gateway
++            if (!alias.compare(0, strlen(VLAN_PREFIX), VLAN_PREFIX))
++            {
++                string gwmac = "";
++                if (m_cfgSagTable.hget("GLOBAL", "gateway_mac", gwmac))
+                 {
+-                    string gwmac = "";
+-                    if (m_cfgSagTable.hget("GLOBAL", "gateway_mac", gwmac))
++                    // before change interface MAC, set interface down and up to regenerate IPv6 LL by MAC
++                    if (sag == "true")
+                     {
+-                        // before change interface MAC, set interface down and up to regenerate IPv6 LL by MAC
+-                        if (sag == "true")
+-                        {
+-                            m_sagIntfList[alias] = true;
++                        m_sagIntfList[alias] = true;
+ 
+-                            setIntfState(alias, false);
+-                            setIntfMac(alias, gwmac);
+-                            setIntfState(alias, true);
+-                            // add this MAC fdb into bridge
+-                            setSagFdbEntry("replace", alias, gwmac);
++                        setIntfMacAndState(alias, gwmac);
++                        // add this MAC fdb into bridge
++                        setSagFdbEntry("replace", alias, gwmac);
+ 
+-                            FieldValueTuple fvTuple("mac_addr", gwmac);
+-                            data.push_back(fvTuple);
++                        FieldValueTuple fvTuple("mac_addr", gwmac);
++                        data.push_back(fvTuple);
++                    }
++                    else if (sag == "false")
++                    {
++                        m_sagIntfList[alias] = false;
++                        setSagFdbEntry("del", alias, gSagMacAddress.to_string());
++
++                        auto mclagIt = m_mclagIntfMacMap.find(alias);
++                        if (mclagIt != m_mclagIntfMacMap.end())
++                        {
++                            // MCLAG MAC exists, apply it
++                            setIntfMacAndState(alias, mclagIt->second);
++                            
++                            FieldValueTuple fvTuple("mac_addr", mclagIt->second);
++                             data.push_back(fvTuple);
+                         }
+-                        else if (sag == "false")
++                        else
+                         {
+-                            m_sagIntfList[alias] = false;
+-
+-                            // del the sag MAC fdb from bridge
+-                            setSagFdbEntry("del", alias, gSagMacAddress.to_string());
+-
+-                            setIntfState(alias, false);
+-                            setIntfMac(alias, gMacAddress.to_string());
+-                            setIntfState(alias, true);
+-
+-                            FieldValueTuple fvTuple("mac_addr", gMacAddress.to_string());
++                            // Check if CONFIG_DB MAC exists
++                            auto macIt = m_macSetIntfMap.find(alias);
++                            string macToApply;
++                            
++                            if (macIt != m_macSetIntfMap.end())
++                            {
++                                // Config MAC exists, apply it
++                                macToApply = macIt->second;
++                            }
++                            else
++                            {
++                                // No MCLAG or CONFIG_DB MAC, use system default
++                                macToApply = gMacAddress.to_string();
++                            }                           
++                            setIntfMacAndState(alias, macToApply);
++                            FieldValueTuple fvTuple("mac_addr", macToApply);
+                             data.push_back(fvTuple);
+-                        } else {
+-                            SWSS_LOG_ERROR("invalid SAG config \"%s\", it should be \"true\" or \"false\"", sag.c_str());
+                         }
++                    } 
++                    else 
++                    {
++                        SWSS_LOG_ERROR("invalid SAG config \"%s\", it should be \"true\" or \"false\"", sag.c_str());
+                     }
+                 }
+             }
+-            else
++        }
++        else if (!mac.empty())
++        {
++            // If SAG was already configured previously and is enabled, don't apply CONFIG_DB MAC
++            auto sagIt = m_sagIntfList.find(alias);
++            if (sagIt != m_sagIntfList.end() && sagIt->second == true)
+             {
+-                FieldValueTuple fvTuple("mac_addr", gMacAddress.to_string());
+-                data.push_back(fvTuple);
++                SWSS_LOG_INFO("Interface %s: SAG MAC is already active, not applying CONFIG_DB MAC", alias.c_str());
+             }
++            // Check if MCLAG MAC is active - it takes priority over config MAC
++            else if (m_mclagIntfMacMap.find(alias) != m_mclagIntfMacMap.end())
++            {
++                SWSS_LOG_INFO("Interface %s: MCLAG MAC is active, not applying CONFIG_DB MAC", alias.c_str());
++            }
++             else
++             {
++                // No higher priority MAC, apply CONFIG_DB MAC
++                setIntfMacAndState(alias, mac);
++             }
++            
++            FieldValueTuple fvTuple("mac_addr", mac);
++            data.push_back(fvTuple);
++        }
++        // No explicit MAC or SAG config, use default global MAC
++        else
++        {
++            FieldValueTuple fvTuple("mac_addr", gMacAddress.to_string());
++            data.push_back(fvTuple);
+         }
+ 
+         if (!proxy_arp.empty())
+@@ -1207,20 +1274,16 @@ bool IntfMgr::doIntfGeneralTask(const vector<string>& keys,
+                 setSagFdbEntry("del", alias, gSagMacAddress.to_string());
+ 
+                 // recover to global mac address
+-                setIntfState(alias, false);
+-                setIntfMac(alias, gMacAddress.to_string());
+-                setIntfState(alias, true);
++                setIntfMacAndState(alias, gMacAddress.to_string());
+             }
+             m_sagIntfList.erase(alias);
+         }
+-        else if (m_macSetIntfList.find(alias) != m_macSetIntfList.end())
++        else if (m_macSetIntfMap.find(alias) != m_macSetIntfMap.end())
+         {
+             // recover to global mac address
+-            setIntfState(alias, false);
+-            setIntfMac(alias, gMacAddress.to_string());
+-            setIntfState(alias, true);
++            setIntfMacAndState(alias, gMacAddress.to_string());
+ 
+-            m_macSetIntfList.erase(alias);
++            m_macSetIntfMap.erase(alias);
+         }
+ 
+         m_appIntfTableProducer.del(alias);
+@@ -1290,7 +1353,7 @@ bool IntfMgr::doIntfAddrTask(const vector<string>& keys,
+     return true;
+ }
+ 
+-void IntfMgr::doSagTask(const vector<string>& keys,
++bool IntfMgr::doSagTask(const vector<string>& keys,
+         const vector<FieldValueTuple> &data,
+         const string& op)
+ {
+@@ -1315,15 +1378,134 @@ void IntfMgr::doSagTask(const vector<string>& keys,
+         fvAppSag.push_back(gwmac);
+         m_appSagTableProducer.set("GLOBAL", fvAppSag);
+ 
+-        updateSagMac(mac);
++        if (!updateSagMac(mac))
++        {
++            // SAG MAC update skipped due to interfaces not ready
++            return false;
++        }
+     }
+     else if (op == DEL_COMMAND)
+     {
+         m_appSagTableProducer.del("GLOBAL");
+ 
+-        // reset mac address for enabled static-anycast-gateway's VLAN interfaces
+-        updateSagMac(gMacAddress.to_string());
++        // reset mac address for enabled SAG VLAN interfaces
++        if (!updateSagMac(gMacAddress.to_string()))
++        {
++            // SAG MAC update failed due to interfaces not ready
++            return false;
++        }
+     }
++
++    return true;
++}
++
++bool IntfMgr::doMclagIntfTask(const vector<string>& keys,
++        const vector<FieldValueTuple> &data,
++        const string& op)
++{
++    SWSS_LOG_ENTER();
++
++    string alias = keys[0];
++    string mclagMac = "";
++    string macToApply = "";  // MAC to apply and update to DB
++
++    // Extract MAC address from the data
++    for (auto idx : data)
++    {
++        const auto &field = fvField(idx);
++        const auto &value = fvValue(idx);
++
++        if (field == "mac_addr")
++        {
++            mclagMac = value;
++            break;
++        }
++    }
++
++    if (op == SET_COMMAND)
++    {
++        if (mclagMac.empty())
++        {
++            SWSS_LOG_WARN("MCLAG_INTF_TABLE SET for %s with empty MAC", alias.c_str());
++            return true;
++        }
++
++        // Store the MCLAG MAC for this interface
++        m_mclagIntfMacMap[alias] = mclagMac;
++        SWSS_LOG_NOTICE("MCLAG_INTF_TABLE: Stored MCLAG MAC %s for interface %s", 
++            mclagMac.c_str(), alias.c_str());
++
++        // Check if SAG is enabled for this interface
++        // SAG takes priority over MCLAG MAC
++        auto sagIt = m_sagIntfList.find(alias);
++        if (sagIt != m_sagIntfList.end() && sagIt->second == true)
++        {
++            SWSS_LOG_NOTICE("MCLAG_INTF_TABLE: Interface %s has SAG enabled, restoring SAG MAC (iccpd may have changed it)", 
++                alias.c_str());
++            // iccpd has already modified the kernel MAC to MCLAG MAC
++            // We must restore SAG MAC since it has higher priority
++            string sagMac = gSagMacAddress.to_string();
++            setIntfMacAndState(alias, sagMac);
++            macToApply = sagMac;
++        }
++        else
++        {
++            // Apply MCLAG MAC when SAG is not active
++            setIntfMacAndState(alias, mclagMac);
++            macToApply = mclagMac;
++        }
++    }
++    else if (op == DEL_COMMAND)
++    {
++        // Remove MCLAG MAC for this interface
++        auto it = m_mclagIntfMacMap.find(alias);
++        if (it != m_mclagIntfMacMap.end())
++        {
++            SWSS_LOG_NOTICE("MCLAG_INTF_TABLE: Removed MCLAG MAC for interface %s", alias.c_str());
++            m_mclagIntfMacMap.erase(it);
++            
++            // Restore MAC based on priority: SAG > Config MAC > Global MAC
++            auto sagIt = m_sagIntfList.find(alias);
++            if (sagIt != m_sagIntfList.end() && sagIt->second == true)
++            {
++                SWSS_LOG_INFO("MCLAG_INTF_TABLE: Interface %s has SAG enabled, SAG MAC already applied", 
++                    alias.c_str());
++                // SAG MAC is already active, no need to change
++            }
++            else
++            {
++                // Determine which MAC to restore
++                auto macIt = m_macSetIntfMap.find(alias);
++                
++                if (macIt != m_macSetIntfMap.end())
++                {
++                    // Restore config MAC
++                    macToApply = macIt->second;
++                    SWSS_LOG_INFO("MCLAG_INTF_TABLE: Restoring interface %s to config MAC %s", 
++                        alias.c_str(), macToApply.c_str());
++                }
++                else
++                {
++                    // No SAG, no CONFIG_DB MAC - restore to global MAC
++                    macToApply = gMacAddress.to_string();
++                    SWSS_LOG_INFO("MCLAG_INTF_TABLE: Restoring interface %s to global MAC", 
++                        alias.c_str());
++                }
++                
++                setIntfMacAndState(alias, macToApply);
++            }
++        }
++    }
++
++    if (!macToApply.empty())
++    {
++        vector<FieldValueTuple> fvVector;
++        FieldValueTuple macTuple("mac_addr", macToApply);
++        fvVector.push_back(macTuple);
++        m_appIntfTableProducer.set(alias, fvVector);
++    }
++
++    return true;
+ }
+ 
+ void IntfMgr::doTask(Consumer &consumer)
+@@ -1359,9 +1541,29 @@ void IntfMgr::doTask(Consumer &consumer)
+                     continue;
+                 }
+ 
++                if (table_name == APP_MCLAG_INTF_TABLE_NAME)
++                {
++                    if (!doMclagIntfTask(keys, data, op))
++                    {
++                        it++;
++                        continue;
++                    }
++                    it = consumer.m_toSync.erase(it);
++                    continue;
++                }
++
+                 if (table_name == CFG_SAG_TABLE_NAME)
+                 {
+-                    doSagTask(keys, data, op);
++                    if (!doSagTask(keys, data, op))
++                    {
++                        it++;
++                        continue;
++                    }
++                    else
++                    {
++                        // SAG task processed successfully, remove from pending list if present
++                        m_pendingReplayIntfList.erase(keys[0]);
++                    }
+                     it = consumer.m_toSync.erase(it);
+                     continue;
+                 }
+@@ -1438,10 +1640,12 @@ bool IntfMgr::enableIpv6Flag(const string &alias)
+     return (ret == 0) ? true : false;
+ }
+ 
+-void IntfMgr::updateSagMac(const std::string &macAddr)
++bool IntfMgr::updateSagMac(const std::string &macAddr)
+ {
+     vector<string> keys;
+     m_cfgVlanIntfTable.getKeys(keys);
++    bool allInterfacesReady = true;
++
+     for (auto &key: keys)
+     {
+         vector<string> entryKeys = tokenize(key, config_db_key_delimiter);
+@@ -1462,12 +1666,19 @@ void IntfMgr::updateSagMac(const std::string &macAddr)
+         {
+             if (value == "true")
+             {
++                // Check if VLAN interface exists before attempting to manipulate it
++                if (!isIntfStateOk(key) || !isIntfCreated(key))
++                {
++                    SWSS_LOG_DEBUG("VLAN interface %s not ready, skipping SAG MAC update", key.c_str());
++                    allInterfacesReady = false;
++                    continue;
++                }
++
+                 SWSS_LOG_NOTICE("set %s mac address to %s", key.c_str(), macAddr.c_str());
+ 
+                 // enable SAG, set device down and up to regenerate IPv6 LL by MAC
+-                setIntfState(key, false);
+-                setIntfMac(key, macAddr);
+-                setIntfState(key, true);
++                // SAG has highest priority, always apply SAG MAC
++                setIntfMacAndState(key, macAddr);
+ 
+                 // remove the previous sag MAC fdb from bridge
+                 setSagFdbEntry("del", key, gSagMacAddress.to_string());
+@@ -1488,4 +1699,5 @@ void IntfMgr::updateSagMac(const std::string &macAddr)
+         }
+     }
+     gSagMacAddress = MacAddress(macAddr);
++    return allInterfacesReady;
+ }
+diff --git a/cfgmgr/intfmgr.h b/cfgmgr/intfmgr.h
+index 2f89ab2d..6ce40a7c 100644
+--- a/cfgmgr/intfmgr.h
++++ b/cfgmgr/intfmgr.h
+@@ -40,19 +40,22 @@ private:
+     std::set<std::string> m_loopbackIntfList;
+     std::set<std::string> m_pendingReplayIntfList;
+     std::set<std::string> m_ipv6LinkLocalModeList;
+-    std::set<std::string> m_macSetIntfList;
++    std::map<std::string, std::string> m_macSetIntfMap;
++    std::map<std::string, std::string> m_mclagIntfMacMap;
+     std::string mySwitchType;
+ 
+     void setIntfIp(const std::string &alias, const std::string &opCmd, const IpPrefix &ipPrefix);
+     void setIntfVrf(const std::string &alias, const std::string &vrfName);
+     void setIntfMac(const std::string &alias, const std::string &macAddr);
++    void setIntfMacAndState(const std::string &alias, const std::string &macAddr);
+     bool setIntfMpls(const std::string &alias, const std::string &mpls);
+     void setIntfState(const std::string &alias, bool isUp);
+     void setSagFdbEntry(const std::string &op, const std::string &alias, const std::string &mac_str);
+ 
+     bool doIntfGeneralTask(const std::vector<std::string>& keys, std::vector<FieldValueTuple> data, const std::string& op);
+     bool doIntfAddrTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
+-    void doSagTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
++    bool doSagTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
++    bool doMclagIntfTask(const std::vector<std::string>& keys, const std::vector<FieldValueTuple>& data, const std::string& op);
+     void doTask(Consumer &consumer);
+     void doPortTableTask(const std::string& key, std::vector<FieldValueTuple> data, std::string op);
+ 
+@@ -83,7 +86,7 @@ private:
+ 
+     void updateSubIntfAdminStatus(const std::string &alias, const std::string &admin);
+     void updateSubIntfMtu(const std::string &alias, const std::string &mtu);
+-    void updateSagMac(const std::string &macAddr);
++    bool updateSagMac(const std::string &macAddr);
+     bool enableIpv6Flag(const std::string&);
+ 
+     bool m_replayDone {false};
+diff --git a/mclagsyncd/mclaglink.cpp b/mclagsyncd/mclaglink.cpp
+index 82a8919d..37a24592 100644
+--- a/mclagsyncd/mclaglink.cpp
++++ b/mclagsyncd/mclaglink.cpp
+@@ -452,11 +452,11 @@ void MclagLink::setIntfMac(char *msg)
+     cur = cur + MCLAG_SUB_OPTION_HDR_LEN;
+     mac_value.insert(0, (const char*)cur, op_hdr->op_len);
+ 
+-    SWSS_LOG_NOTICE("set mac to chip, intf key name: %s, mac: %s", intf_key.c_str(), mac_value.c_str());
++    SWSS_LOG_NOTICE("set mclag mac, intf key name: %s, mac: %s", intf_key.c_str(), mac_value.c_str());
+     vector<FieldValueTuple> attrs;
+     FieldValueTuple mac_attr("mac_addr", mac_value);
+     attrs.push_back(mac_attr);
+-    p_intf_tbl->set(intf_key, attrs);
++    p_mclag_intf_tbl->set(intf_key, attrs);
+ 
+     return;
+ }
+@@ -1805,8 +1805,8 @@ MclagLink::MclagLink(Select *select, int port) :
+     p_mclag_local_intf_tbl         = unique_ptr<Table>(new Table(p_state_db.get(), STATE_MCLAG_LOCAL_INTF_TABLE_NAME));
+     p_mclag_remote_intf_tbl        = unique_ptr<Table>(new Table(p_state_db.get(), STATE_MCLAG_REMOTE_INTF_TABLE_NAME));
+ 
++    p_mclag_intf_tbl               = unique_ptr<Table>(new Table(p_appl_db.get(), APP_MCLAG_INTF_TABLE_NAME));
+ 
+-    p_intf_tbl      = unique_ptr<ProducerStateTable>(new ProducerStateTable(p_appl_db.get(), APP_INTF_TABLE_NAME));
+     p_iso_grp_tbl   = unique_ptr<ProducerStateTable>(new ProducerStateTable(p_appl_db.get(), APP_ISOLATION_GROUP_TABLE_NAME));
+     p_fdb_tbl       = unique_ptr<ProducerStateTable>(new ProducerStateTable(p_appl_db.get(), APP_MCLAG_FDB_TABLE_NAME));
+     p_acl_table_tbl = unique_ptr<ProducerStateTable>(new ProducerStateTable(p_appl_db.get(), APP_ACL_TABLE_TABLE_NAME));
+diff --git a/mclagsyncd/mclaglink.h b/mclagsyncd/mclaglink.h
+index e433c8e2..27b13dfa 100644
+--- a/mclagsyncd/mclaglink.h
++++ b/mclagsyncd/mclaglink.h
+@@ -228,8 +228,9 @@ namespace swss {
+             unique_ptr<Table> p_mclag_cfg_table;
+             unique_ptr<Table> p_mclag_intf_cfg_table;
+ 
++            unique_ptr<Table> p_mclag_intf_tbl;
++
+             unique_ptr<ProducerStateTable> p_port_tbl;
+-            unique_ptr<ProducerStateTable> p_intf_tbl;
+             unique_ptr<ProducerStateTable> p_acl_table_tbl;
+             unique_ptr<ProducerStateTable> p_acl_rule_tbl;
+             unique_ptr<ProducerStateTable> p_lag_tbl;
+diff --git a/tests/test_sag.py b/tests/test_sag.py
+index 9032a7fa..2fec9cd8 100644
+--- a/tests/test_sag.py
++++ b/tests/test_sag.py
+@@ -12,6 +12,7 @@ class TestSag(object):
+         self.app_db = dvs.get_app_db()
+         self.cfg_db = dvs.get_config_db()
+         self.asic_db = dvs.get_asic_db()
++        self.pdb = dvs.pdb
+ 
+     def setup_interface(self, dvs, interface, vlan):
+         # bring up interface
+@@ -314,3 +315,113 @@ class TestSag(object):
+ 
+         # reset interface
+         self.reset_interface(dvs, interface, vlan)
++
++        # remove VRF so subsequent tests see only the default VRF
++        self.remove_vrf(vrf_name)
++
++    def test_SagMacPriority(self, dvs):
++        """Test MAC address priority: SAG > MCLAG > Config_DB > System"""
++        self.setup_db(dvs)
++
++        default_vrf_oid = self.get_asic_db_default_vrf_oid()
++        system_mac = self.get_system_mac(dvs)
++
++        interface = "Ethernet0"
++        vlan = "100"
++        vlan_intf = "Vlan{}".format(vlan)
++        self.setup_interface(dvs, interface, vlan)
++
++        ip = "1.1.1.1/24"
++        dvs.add_ip_address(vlan_intf, ip)
++
++        # Define test MAC addresses
++        sag_mac = "00:11:22:33:44:55"
++        config_mac = "00:aa:bb:cc:dd:ee"
++        mclag_mac = "00:99:88:77:66:55"
++
++        # Step 1: Set SAG GLOBAL mac and enable static_anycast_gateway on VLAN_INTERFACE
++        self.add_sag_mac(sag_mac)
++        fvs = dvs.get_app_db().wait_for_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++        self.check_app_db_sag_mac(fvs, sag_mac)
++
++        self.enable_sag(vlan)
++
++        # Step 2: Verify SAG MAC is applied
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": sag_mac})
++        self.check_app_db_intf(fvs, sag_mac, "true")
++        self.check_kernel_intf_mac(dvs, vlan_intf, sag_mac)
++
++        # Step 3: Set mac_addr in CONFIG_DB of the VLAN_INTERFACE
++        self.cfg_db.update_entry(swsscommon.CFG_VLAN_INTF_TABLE_NAME, vlan_intf, {"mac_addr": config_mac})
++        time.sleep(2)
++
++        # Step 4: Verify mac_addr in INTF_TABLE is still SAG mac
++        fvs = self.app_db.get_entry(swsscommon.APP_INTF_TABLE_NAME, vlan_intf)
++        assert fvs.get("mac_addr") == sag_mac, f"Expected SAG MAC {sag_mac}, got {fvs.get('mac_addr')}"
++        self.check_kernel_intf_mac(dvs, vlan_intf, sag_mac)
++
++        # Step 5: Set MCLAG_INTF_TABLE mac_addr
++        mclag_tbl = swsscommon.Table(self.pdb, "MCLAG_INTF_TABLE")
++        fvs = swsscommon.FieldValuePairs([("mac_addr", mclag_mac)])
++        mclag_tbl.set(vlan_intf, fvs)
++        time.sleep(2)
++
++        # Verify MCLAG_INTF_TABLE entry was created
++        (exists, mclag_fvs_pairs) = mclag_tbl.get(vlan_intf)
++        assert exists, f"MCLAG_INTF_TABLE entry not found for {vlan_intf}"
++        mclag_fvs = dict(mclag_fvs_pairs)
++        assert mclag_fvs.get("mac_addr") == mclag_mac, f"Expected MCLAG MAC {mclag_mac}, got {mclag_fvs.get('mac_addr')}"
++
++        # Verify that mac_addr in INTF_TABLE is still SAG mac
++        fvs = self.app_db.get_entry(swsscommon.APP_INTF_TABLE_NAME, vlan_intf)
++        assert fvs.get("mac_addr") == sag_mac, f"Expected SAG MAC {sag_mac}, got {fvs.get('mac_addr')}"
++        self.check_kernel_intf_mac(dvs, vlan_intf, sag_mac)
++
++        # Step 6: Disable SAG on the interface
++        self.disable_sag(vlan)
++
++        # Step 7: Verify MCLAG_INTF_TABLE mac is applied
++        # When SAG is disabled, next priority is: MCLAG
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": mclag_mac})
++        assert fvs.get("mac_addr") == mclag_mac, f"Expected MCLAG MAC {mclag_mac}, got {fvs.get('mac_addr')}"
++        self.check_kernel_intf_mac(dvs, vlan_intf, mclag_mac)
++
++        # Step 8: Remove MCLAG_INTF_TABLE from APP_DB
++        mclag_tbl._del(vlan_intf)
++        time.sleep(2)
++
++        # Step 9: Verify that mac_addr in CONFIG_DB is applied in INTF_TABLE
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": config_mac})
++        assert fvs.get("mac_addr") == config_mac, f"Expected Config MAC {config_mac}, got {fvs.get('mac_addr')}"
++        self.check_kernel_intf_mac(dvs, vlan_intf, config_mac)
++
++        # Step 10: Remove mac_addr in CONFIG_DB
++        self.cfg_db.update_entry(swsscommon.CFG_VLAN_INTF_TABLE_NAME, vlan_intf, {"mac_addr": ""})
++        time.sleep(2)
++
++        # Verify system_mac is applied in INTF_TABLE
++        fvs = self.app_db.wait_for_field_match(
++            swsscommon.APP_INTF_TABLE_NAME,
++            vlan_intf,
++            {"mac_addr": system_mac})
++        assert fvs.get("mac_addr") == system_mac, f"Expected System MAC {system_mac}, got {fvs.get('mac_addr')}"
++        self.check_kernel_intf_mac(dvs, vlan_intf, system_mac)
++
++        # Cleanup: delete SAG global MAC address
++        self.remove_sag_mac()
++        self.app_db.wait_for_deleted_entry(swsscommon.APP_SAG_TABLE_NAME, "GLOBAL")
++
++        # remove ip
++        dvs.remove_ip_address(vlan_intf, ip)
++
++        # reset interface
++        self.reset_interface(dvs, interface, vlan)
+-- 
+2.25.1
+

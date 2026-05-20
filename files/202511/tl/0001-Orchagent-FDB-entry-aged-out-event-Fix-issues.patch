@@ -1,0 +1,49 @@
+From 87cbe58ebb008d57158c5a20b8ed07009bb4b26a Mon Sep 17 00:00:00 2001
+From: Ashok Kumar P <apannerselva@marvell.com>
+Date: Wed, 8 Apr 2026 15:47:39 +0530
+Subject: [PATCH] Orchagent FDB entry aged out event: Fix issues
+
+1. Handle the not-found case gracefully
+2. Avoid calling remove_fdb_entry in FDB entry aged out event
+
+An SAI_FDB_EVENT_AGED notification means the ASIC already removed
+the entry from hardware. By the time orchagent processes this
+notification, the ASIC has aged it out and sent the notification,
+and the meta layer has already removed it.
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+Signed-off-by: Ashok Kumar P <apannerselva@marvell.com>
+---
+ orchagent/fdborch.cpp | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/orchagent/fdborch.cpp b/orchagent/fdborch.cpp
+index f4b3ac0b..d10c8cf4 100644
+--- a/orchagent/fdborch.cpp
++++ b/orchagent/fdborch.cpp
+@@ -541,13 +541,6 @@ void FdbOrch::update(sai_fdb_event_t        type,
+     {
+         SWSS_LOG_INFO("update: EVPN_MH_UC: Received AGE out event for bvid=0x%" PRIx64 " mac=%s port=0x%" PRIx64,
+                        entry->bv_id, update.entry.mac.to_string().c_str(), bridge_port_id);
+-
+-        auto status = sai_fdb_api->remove_fdb_entry(entry);
+-        if (status != SAI_STATUS_SUCCESS)
+-        {
+-            SWSS_LOG_INFO("FdbOrch ageout: Ignore the failure of removing FDB entry. mac=%s, bv_id=0x%" PRIx64,
+-                           update.entry.mac.to_string().c_str(), entry->bv_id);
+-        }
+  
+         auto existing_entry = m_entries.find(update.entry);
+         // we don't have such entries
+@@ -690,7 +683,7 @@ void FdbOrch::update(sai_fdb_event_t        type,
+                 attr.id = SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID;
+                 attr.value.oid = bridge_port_id;
+                 attrs.push_back(attr);
+-                status = sai_fdb_api->create_fdb_entry(entry, (uint32_t)attrs.size(), attrs.data());
++                auto status = sai_fdb_api->create_fdb_entry(entry, (uint32_t)attrs.size(), attrs.data());
+                 if (status != SAI_STATUS_SUCCESS)
+                 {
+                     SWSS_LOG_ERROR("Failed to create FDB %s on %s, rv:%d",
+-- 
+2.25.1
+

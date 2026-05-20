@@ -1,0 +1,201 @@
+From fd8e9c818ec0e36067b2fd88fd7dc2f4c8298a84 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Mon, 22 Dec 2025 18:11:48 +0530
+Subject: [PATCH] Fix buffer overflow when ipv6 interface has many prefixes
+
+When an interface has a large number of connected IPv6 prefixes,
+ospf6_link_lsa_originate() and iospf6_intra_prefix_lsa_originate_transit() crashes
+with a stack buffer overflow while attempting to include all prefixes
+in a single Link-LSA.
+
+Function used a fixed 4096-byte stack buffer that was not bounds-
+checked before writing prefix information, causing stack corruption
+when prefix count exceeded buffer capacity
+
+OSPF6: zlog_signal+0xf5                   7f85796d1365
+OSPF6: PBKDF2_SHA256+0x4c1                7f85797109c1
+OSPF6: __sigaction+0x40                   7f8579446050
+OSPF6:     ---- signal ----
+OSPF6: pthread_key_delete+0x14c           7f8579494eec     7ffcfed48290
+OSPF6: gsignal+0x12                       7f8579445fb2     7ffcfed482d0
+OSPF6: abort+0xd3                         7f8579430472     7ffcfed482e0
+OSPF6: __fsetlocking+0x28f                7f857948942f     7ffcfed483a0
+OSPF6: __fortify_fail+0x22                7f8579522202     7ffcfed484e0
+OSPF6: __stack_chk_fail+0x10              7f85795221e0     7ffcfed48500
+OSPF6: ospf6_link_lsa_originate+0x368     56280b058748     7ffcfed48510 /usr/lib/frr/ospf6d
+
+OSPF6: Received signal 6 at 1766148051
+OSPF6: zlog_signal+0xf5
+OSPF6: PBKDF2_SHA256+0x4c1
+OSPF6: __sigaction+0x40
+OSPF6:     ---- signal ----
+OSPF6: pthread_key_delete+0x14c
+OSPF6: gsignal+0x12
+OSPF6: abort+0xd3
+OSPF6: __fsetlocking+0x28f
+OSPF6: __fortify_fail+0x22
+OSPF6: __stack_chk_fail+0x10
+OSPF6: ospf6_intra_prefix_lsa_originate_transit+0x80c
+OSPF6: ?                                    4000000000
+OSPF6: ?                                  7fffd8db0aa0
+OSPF6: in thread ospf6_intra_prefix_lsa_originate_trans
+
+Fix:
+- Added buffer check to fix buffer overflow.
+- Having buffer scope for Link-LSA is acceptable as Link-LSA
+scope is link-local and its primary purpose is to provide the router's
+link-local address to all other routers attached to the link.
+Router LSA type).
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ ...-buffer-overflow-in-Link-LSA-origina.patch | 126 ++++++++++++++++++
+ src/sonic-frr/patch/series                    |   1 +
+ 2 files changed, 127 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
+
+diff --git a/src/sonic-frr/patch/0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch b/src/sonic-frr/patch/0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
+new file mode 100644
+index 000000000..4e81d7644
+--- /dev/null
++++ b/src/sonic-frr/patch/0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
+@@ -0,0 +1,126 @@
++From 01c12cf73daeddc8a37a54b10fa6b42cbf8ab346 Mon Sep 17 00:00:00 2001
++From: Ravi Minnikanti <rminnikanti@marvell.com>
++Date: Fri, 19 Dec 2025 16:38:11 +0530
++Subject: [PATCH] ospf6d: Fix stack buffer overflow in Link-LSA origination
++
++When an interface has a large number of connected IPv6 prefixes,
++ospf6_link_lsa_originate() and
++iospf6_intra_prefix_lsa_originate_transit() crashes with a stack buffer overflow
++while attempting to include all prefixes in a single Link-LSA.
++
++Function used a fixed 4096-byte stack buffer that was not bounds-
++checked before writing prefix information, causing stack corruption
++when prefix count exceeded buffer capacity
++
++OSPF6: zlog_signal+0xf5                   7f85796d1365
++OSPF6: PBKDF2_SHA256+0x4c1                7f85797109c1
++OSPF6: __sigaction+0x40                   7f8579446050
++OSPF6:     ---- signal ----
++OSPF6: pthread_key_delete+0x14c           7f8579494eec     7ffcfed48290
++OSPF6: gsignal+0x12                       7f8579445fb2     7ffcfed482d0
++OSPF6: abort+0xd3                         7f8579430472     7ffcfed482e0
++OSPF6: __fsetlocking+0x28f                7f857948942f     7ffcfed483a0
++OSPF6: __fortify_fail+0x22                7f8579522202     7ffcfed484e0
++OSPF6: __stack_chk_fail+0x10              7f85795221e0     7ffcfed48500
++OSPF6: ospf6_link_lsa_originate+0x368     56280b058748     7ffcfed48510 /usr/lib/frr/ospf6d
++
++OSPF6: Received signal 6 at 1766148051
++OSPF6: zlog_signal+0xf5
++OSPF6: PBKDF2_SHA256+0x4c1
++OSPF6: __sigaction+0x40
++OSPF6:     ---- signal ----
++OSPF6: pthread_key_delete+0x14c
++OSPF6: gsignal+0x12
++OSPF6: abort+0xd3
++OSPF6: __fsetlocking+0x28f
++OSPF6: __fortify_fail+0x22
++OSPF6: __stack_chk_fail+0x10
++OSPF6: ospf6_intra_prefix_lsa_originate_transit+0x80c
++OSPF6: ?                                    4000000000
++OSPF6: ?                                  7fffd8db0aa0
++OSPF6: in thread ospf6_intra_prefix_lsa_originate_trans
++
++Fix:
++- Added buffer check to fix buffer overflow.
++- Having buffer scope for Link-LSA is acceptable as Link-LSA
++scope is link-local and its primary purpose is to provide the router's
++link-local address to all other routers attached to the link.
++Router LSA type).
++
++Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
++---
++ ospf6d/ospf6_intra.c | 30 +++++++++++++++++++++++++++++-
++ 1 file changed, 29 insertions(+), 1 deletion(-)
++
++diff --git a/ospf6d/ospf6_intra.c b/ospf6d/ospf6_intra.c
++index da67c4ed6..86a18ff53 100644
++--- a/ospf6d/ospf6_intra.c
+++++ b/ospf6d/ospf6_intra.c
++@@ -675,6 +675,7 @@ void ospf6_link_lsa_originate(struct event *thread)
++ 	struct ospf6_link_lsa *link_lsa;
++ 	struct ospf6_route *route;
++ 	struct ospf6_prefix *op;
+++	unsigned int prefix_num = 0;
++ 
++ 	oi = (struct ospf6_interface *)EVENT_ARG(thread);
++ 
++@@ -724,21 +725,36 @@ void ospf6_link_lsa_originate(struct event *thread)
++ 	memcpy(link_lsa->options, oi->area->options, 3);
++ 	memcpy(&link_lsa->linklocal_addr, oi->linklocal_addr,
++ 	       sizeof(struct in6_addr));
++-	link_lsa->prefix_num = htonl(oi->route_connected->count);
++ 
++ 	op = lsdesc_start_lsa_type(lsa_header, OSPF6_LSTYPE_LINK);
++ 
++ 	/* connected prefix to advertise */
++ 	for (route = ospf6_route_head(oi->route_connected); route;
++ 	     route = ospf6_route_next(route)) {
+++		/* Check buffer overflow before writing prefix */
+++		size_t required_size = (caddr_t)op - (caddr_t)buffer +
+++				       sizeof(struct ospf6_prefix) +
+++				       OSPF6_PREFIX_SPACE(route->prefix.prefixlen);
+++		if (required_size > OSPF6_MAX_LSASIZE) {
+++			zlog_warn(
+++				"%s: Interface %s has too many prefixes, truncating at %u of %u (would exceed buffer)",
+++				__func__, oi->interface->name, prefix_num,
+++				oi->route_connected->count);
+++			break;
+++		}
+++
++ 		op->prefix_length = route->prefix.prefixlen;
++ 		op->prefix_options = route->prefix_options;
++ 		op->prefix_metric = htons(0);
++ 		memcpy(OSPF6_PREFIX_BODY(op), &route->prefix.u.prefix6,
++ 		       OSPF6_PREFIX_SPACE(op->prefix_length));
++ 		op = OSPF6_PREFIX_NEXT(op);
+++		prefix_num++;
++ 	}
++ 
+++	/* Update actual prefix count */
+++	link_lsa->prefix_num = htonl(prefix_num);
+++
++ 	/* Fill LSA Header */
++ 	lsa_header->age = 0;
++ 	lsa_header->type = htons(OSPF6_LSTYPE_LINK);
++@@ -1241,6 +1257,18 @@ void ospf6_intra_prefix_lsa_originate_transit(struct event *thread)
++ 	prefix_num = 0;
++ 	for (route = ospf6_route_head(route_advertise); route;
++ 	     route = ospf6_route_best_next(route)) {
+++		/* Check buffer overflow before writing prefix */
+++		size_t required_size = (caddr_t)op - (caddr_t)buffer +
+++				       sizeof(struct ospf6_prefix) +
+++				       OSPF6_PREFIX_SPACE(route->prefix.prefixlen);
+++		if (required_size > OSPF6_MAX_LSASIZE) {
+++			zlog_warn(
+++				"%s: Interface %s has too many transit prefixes, truncating at %u of %u (would exceed buffer)",
+++				__func__, oi->interface->name, prefix_num,
+++				route_advertise->count);
+++			break;
+++		}
+++
++ 		op->prefix_length = route->prefix.prefixlen;
++ 		op->prefix_options = route->prefix_options;
++ 		op->prefix_metric = htons(0);
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index b151da354..c6428c539 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -68,4 +68,5 @@
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
+ 0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+ 0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
++0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
+ evpn-mh-frr-zebra.patch
+-- 
+2.25.1
+

@@ -1,0 +1,41 @@
+From 200b8fd420132f78a2d2ae9db09cffa422e5a9b9 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Tue, 24 Mar 2026 23:39:12 +0530
+Subject: [PATCH] Vrrp Orch to delay virtual rif creation untill RIF is
+ created.
+
+Signed-off-by: Anish Peter <apeter@marvell.com>
+---
+ orchagent/vrrporch.cpp | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/orchagent/vrrporch.cpp b/orchagent/vrrporch.cpp
+index c7d4eb07..54aa9039 100644
+--- a/orchagent/vrrporch.cpp
++++ b/orchagent/vrrporch.cpp
+@@ -75,7 +75,21 @@ bool VrrpOrch::addOperation(const Request& request)
+             return true;
+         }
+     }
+-    gPortsOrch->getPort(request.getKeyString(0), port);
++    if (!gPortsOrch->getPort(request.getKeyString(0), port))
++    {
++        SWSS_LOG_NOTICE("Failed to get port for %s, will retry", request.getKeyString(0).c_str());
++        return false;
++    }
++
++    /* The parent RIF must exist before creating a virtual RIF.
++     * IntfsOrch creates the parent RIF and sets port.m_rif_id.
++     * If it hasn't been created yet, retry later. */
++    if (!port.m_rif_id)
++    {
++        SWSS_LOG_NOTICE("Router interface not ready for %s, will retry", request.getKeyString(0).c_str());
++        return false;
++    }
++
+     attr.id = SAI_ROUTER_INTERFACE_ATTR_TYPE;
+     switch(port.m_type)
+     {
+-- 
+2.25.1
+

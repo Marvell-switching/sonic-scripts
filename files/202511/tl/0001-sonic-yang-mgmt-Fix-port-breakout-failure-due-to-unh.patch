@@ -1,0 +1,88 @@
+From 5ad615607b71884fb46d9a82ec03a737262276b5 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Mon, 6 Apr 2026 20:54:57 +0530
+Subject: [PATCH] [sonic-yang-mgmt] Fix port breakout failure due to unhandled
+ empty CABLE_LENGTH|AZURE dict
+
+Problem:
+On a system where all ports are breakout-capable, if we break out ports
+one by one, the breakout fails for the last port with the error below:
+
+root@sonic:/home/admin# sudo config interface breakout Ethernet112 "2x400G[200G,100G]" -y -f
+Running Breakout Mode : 1x800G[400G,200G]
+Target Breakout Mode : 2x400G[200G,100G]
+
+Ports to be deleted :
+ {
+     "Ethernet112": "800000"
+}
+Ports to be added :
+ {
+     "Ethernet112": "400000",
+     "Ethernet116": "400000"
+}
+sonic_yang(3):Get Data Tree Failed:'CABLE_LENGTH'
+Get Data Tree Failed
+'CABLE_LENGTH'
+Port Deletion Failed
+[ERROR] Port breakout Failed!!! Opting Out
+Failed to break out Port. Error:
+root@sonic:/home/admin#
+
+This error occurs because removing dependent configuration leaves
+the CABLE_LENGTH|AZURE dict empty, which causes two failures:
+
+1. _xlateType1MapList: An empty inner dict produces an empty YANG list
+   that libyang rejects as invalid JSON during data loading.
+
+2. _revXlateType1MapList: After YANG validation, accessing
+   entry[inner_clist['@name']] raises a KeyError when the inner list
+   has been removed, preventing reverse translation back to config DB.
+
+Fix:
+- In _xlateType1MapList: skip and remove config entries with empty
+  inner dicts before attempting YANG list conversion.
+- In _revXlateType1MapList: use dict.get() to safely check for the
+  inner list and skip entries where it is missing or empty, avoiding
+  KeyError and preventing empty hashes in config DB.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ src/sonic-yang-mgmt/sonic_yang_ext.py | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/src/sonic-yang-mgmt/sonic_yang_ext.py b/src/sonic-yang-mgmt/sonic_yang_ext.py
+index 30de8c32c..9c6537c98 100644
+--- a/src/sonic-yang-mgmt/sonic_yang_ext.py
++++ b/src/sonic-yang-mgmt/sonic_yang_ext.py
+@@ -582,6 +582,12 @@ class SonicYangExtMixin(SonicYangPathMixin):
+         primaryKeys = list(config.keys())
+         for pkey in primaryKeys:
+             try:
++                # An empty inner dict would produce an empty YANG list which
++                # libyang rejects as invalid JSON.
++                if not config[pkey]:
++                    del config[pkey]
++                    continue
++
+                 vKey = None
+                 self.sysLog(syslog.LOG_DEBUG, "xlateList Extract pkey:{}".\
+                     format(pkey))
+@@ -972,9 +978,12 @@ class SonicYangExtMixin(SonicYangPathMixin):
+                 # create key of config DB table
+                 pkey, pkeydict = self._createKey(entry, listKeys)
+                 self.sysLog(syslog.LOG_DEBUG, "revXlateList pkey:{}".format(pkey))
+-                config[pkey]= dict()
+                 # fill rest of the entries
+-                inner_list = entry[inner_clist['@name']]
++                inner_list = entry.get(inner_clist['@name'])
++                # Inner list may not exist if all its entries were deleted
++                if not inner_list:
++                    continue
++                config[pkey]= dict()
+                 for index in range(len(inner_list)):
+                     self.sysLog(syslog.LOG_DEBUG, "revXlateList fkey:{} fval {}".\
+                          format(str(inner_list[index][inner_listKey]),\
+-- 
+2.25.1
+

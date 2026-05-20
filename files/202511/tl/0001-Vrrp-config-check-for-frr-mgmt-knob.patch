@@ -1,0 +1,63 @@
+From df9b8eb63fec13e1d8b57db27b5918e7814fa532 Mon Sep 17 00:00:00 2001
+From: Anish Peter <apeter@marvell.com>
+Date: Wed, 11 Feb 2026 17:24:42 +0530
+Subject: [PATCH] Vrrp config check for frr mgmt knob
+
+Signed-off-by: Anish Peter <apeter@marvell.com>
+---
+ .../tests/files/sample_config_db.json                |  1 +
+ src/sonic-yang-models/yang-models/sonic-vrrp.yang    | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index b01bf8bb1..28fc3fc7a 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -433,6 +433,7 @@
+         "DEVICE_METADATA": {
+             "localhost": {
+                 "buffer_model": "dynamic",
++                "frr_mgmt_framework_config": "true",
+                 "type": "ToRRouter",
+                 "asic_id": "06:00.0",
+                 "mac": "00:11:22:33:dd:5a",
+diff --git a/src/sonic-yang-models/yang-models/sonic-vrrp.yang b/src/sonic-yang-models/yang-models/sonic-vrrp.yang
+index 506c56284..939f703a6 100644
+--- a/src/sonic-yang-models/yang-models/sonic-vrrp.yang
++++ b/src/sonic-yang-models/yang-models/sonic-vrrp.yang
+@@ -23,6 +23,10 @@ module sonic-vrrp {
+         prefix svlan;
+     }
+ 
++    import sonic-device_metadata {
++        prefix device_metadata;
++    }
++
+     organization
+         "SONiC";
+ 
+@@ -51,6 +55,10 @@ module sonic-vrrp {
+                 key "ifname idkey";
+                 max-elements 128;
+ 
++                must "(/device_metadata:sonic-device_metadata/device_metadata:DEVICE_METADATA/device_metadata:localhost/device_metadata:frr_mgmt_framework_config = 'true')" {
++                   error-message "VRRP configuration requires frr_mgmt_framework_config to be true";
++                }
++
+                 leaf ifname {
+                     type union {
+                         type leafref {
+@@ -166,6 +174,10 @@ module sonic-vrrp {
+                 key "ifname idkey";
+                 max-elements 128;
+ 
++                must "(/device_metadata:sonic-device_metadata/device_metadata:DEVICE_METADATA/device_metadata:localhost/device_metadata:frr_mgmt_framework_config = 'true')" {
++                   error-message "VRRP6 configuration requires frr_mgmt_framework_config to be true";
++                }
++
+                 leaf ifname {
+                     type union {
+                         type leafref {
+-- 
+2.25.1
+

@@ -1,0 +1,52 @@
+From 6807c1eb31cf22ee8203b247d1b4f664a0b7f215 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Thu, 5 Feb 2026 16:33:05 +0530
+Subject: [PATCH] BFD packets lead to all control plane traffic drop
+
+It is a corner case, not hit on all devices, but being hit on few TL7 and
+TL10 devices.
+Currently we have a common queue in bfd copp rule for both HW_OFFLOAD
+and control plane BFD.
+As per IFCS team, when a packet is hitting that queue, as it is mapped
+to rxring = 4, it is expected to be reaching the MCU.
+So, NOS needs to assign a separate queue for non-HW_Offload scenarios.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ files/image_config/copp/copp_cfg.j2 | 20 ++++++++++++--------
+ 1 file changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index 636b7ab75..b8acbc778 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -87,14 +87,18 @@
+ {% if DEVICE_METADATA is defined and DEVICE_METADATA['localhost'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] is defined and DEVICE_METADATA['localhost']['frr_mgmt_framework_config'] == "true" %}
+ 	    },
+ 	    "queue5_group1": {
+-	        "trap_action":"trap",
+-	        "trap_priority":"5",
+-	        "queue": "5",
+-	        "meter_type":"packets",
+-	        "mode":"sr_tcm",
+-	        "cir":"1000",
+-	        "cbs":"1000",
+-	        "red_action":"drop"
++		    "trap_action":"trap",
++		    "trap_priority":"5",
++{% if DEVICE_METADATA is defined and DEVICE_METADATA['localhost'] is defined and DEVICE_METADATA['localhost']['bfd_data_plane_mode'] is defined and DEVICE_METADATA['localhost']['bfd_data_plane_mode'] == "enabled" %}            
++		    "queue": "5",
++{% else %}
++    	    "queue": "6",
++{% endif %}
++		    "meter_type":"packets",
++		    "mode":"sr_tcm",
++		    "cir":"1000",
++		    "cbs":"1000",
++		    "red_action":"drop"
+ 	    },
+             "queue2_group2": {
+                     "cir":"1000",
+-- 
+2.25.1
+

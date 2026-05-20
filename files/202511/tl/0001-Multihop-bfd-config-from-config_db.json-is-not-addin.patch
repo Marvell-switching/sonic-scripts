@@ -1,0 +1,47 @@
+From 946a268c80b79c95502e303125b6125dd50cc981 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Fri, 6 Mar 2026 15:50:11 +0530
+Subject: [PATCH] Multihop bfd config from config_db.json is not adding in
+ vtysh
+
+RCA: In FRR, interface is not a mandatory argument for bfd -> peer
+command although yang mandates it. However, for multihop, when we
+enter interface, it is not allowed. As a result, multihop config fails.
+
+Setting it to None, in case hop_type = multihop.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+index b2eb8b331..64598d57a 100755
+--- a/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
++++ b/src/sonic-frr-mgmt-framework/frrcfgd/frrcfgd.py
+@@ -3404,10 +3404,20 @@ class BGPConfigDaemon:
+                 # Parse BFD_PEER key: prefix contains remote_addr, key contains local_addr|interface|hop_type
+                 remote_addr = prefix
+                 key_params = key.split('|') if key else []
+-                if len(key_params) >= 2:
++                if len(key_params) == 3:
+                     local_addr = key_params[0] if key_params[0] != 'null' else None
+                     interface = key_params[1] if key_params[1] != 'null' else None
+-                    hop_type = key_params[2] if len(key_params) > 2 else 'singlehop'
++                    hop_type = key_params[2]
++
++                    # Multihop does not use interface (FRR rejects it). YANG mandates interface in
++                    # the 4-part key, so ignoring it for multihop and warn if a non-null was provided.
++                    if hop_type == 'multihop':
++                        if interface:
++                            syslog.syslog(syslog.LOG_WARNING,
++                                          'BFD multihop peer {}: interface "{}" ignored (multihop '
++                                          'sessions do not use interface). Use "null" for interface '
++                                          'in BFD_PEER key to avoid this warning.'.format(remote_addr, interface))
++                        interface = None
+ 
+                     if del_table:
+                         # Handle complete BFD peer deletion
+-- 
+2.25.1
+

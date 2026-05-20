@@ -1,0 +1,48 @@
+From 9903a9565c7274bf83f70942820a2d0a72ae347a Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 27 Feb 2025 04:32:48 -0800
+Subject: [PATCH] show interface status workaround for wistron 3200k box
+
+In transceiver related error case show interfaces status command
+takes the path of executing ipmi command which requires root
+privilage. adding sudo to run ipmi command with root privilage
+---
+ .../sw-to3200k/sonic_platform/thermal.py          | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
+index 730f5b1c6..de5b3eed3 100644
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/sw-to3200k/sonic_platform/thermal.py
+@@ -31,6 +31,15 @@ class Thermal(ThermalBase):
+ 
+     IPMI_SENSOR_NR  = ["0x30", "0x31", "0x32", "0x33", "0x34", "0x35", "0x36"]
+ 
++    def isDockerEnv(self):
++        num_docker = 0
++        with open('/proc/self/cgroup', 'r') as f:
++            num_docker = f.read().count(":/docker")
++        if num_docker > 0:
++            return True
++        else:
++            return False
++
+     def __init__(self, thermal_index):
+         self.index = thermal_index
+         self.lnc = None
+@@ -52,7 +61,11 @@ class Thermal(ThermalBase):
+         self.__initialize_threshold()
+ 
+     def __initialize_threshold(self):
+-        cmd = ["ipmitool", "raw", "0x4", "0x27"]
++        if isDockerEnv():
++            cmd = ["ipmitool", "raw", "0x4", "0x27"]
++        else:
++            cmd = ["sudo", "ipmitool", "raw", "0x4", "0x27"]
++
+         if self.lnc is None:
+             cmd.append(self.IPMI_SENSOR_NR[self.index])
+             p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+-- 
+2.25.1
+

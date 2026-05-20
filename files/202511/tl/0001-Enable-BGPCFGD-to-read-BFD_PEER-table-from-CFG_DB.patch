@@ -1,0 +1,375 @@
+From 0162e9d20d5e0cbbbbd7856e4d1e3c8c52ad3bf6 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Mon, 19 Jan 2026 14:45:41 +0530
+Subject: [PATCH] Enable BGPCFGD to read BFD_PEER table from CFG_DB
+
+Updating the read capability for BFD_PEER table, created newly in CONFIG_DB
+to be read by bgpcfgd. This is needed by staticroutebfd process when frr
+flag is not enabled.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ src/sonic-bgpcfgd/bgpcfgd/managers_bfd.py     |  8 +-
+ src/sonic-bgpcfgd/staticroutebfd/main.py      | 80 ++++++++++++++-----
+ src/sonic-bgpcfgd/tests/test_bfdmgr.py        | 12 +--
+ src/sonic-bgpcfgd/tests/test_static_rt_bfd.py | 60 +++++++-------
+ 4 files changed, 98 insertions(+), 62 deletions(-)
+
+diff --git a/src/sonic-bgpcfgd/bgpcfgd/managers_bfd.py b/src/sonic-bgpcfgd/bgpcfgd/managers_bfd.py
+index a96f1977e..966374c54 100644
+--- a/src/sonic-bgpcfgd/bgpcfgd/managers_bfd.py
++++ b/src/sonic-bgpcfgd/bgpcfgd/managers_bfd.py
+@@ -97,11 +97,11 @@ class BfdMgr(Manager):
+         if "multiplier" in data:
+             res_data["detect-multiplier"] = int(data["multiplier"])
+ 
+-        if "rx_interval" in data:
+-            res_data["receive-interval_ms"] = int(data["rx_interval"])
++        if "receive_interval" in data:
++            res_data["receive-interval_ms"] = int(data["receive_interval"])
+ 
+-        if "tx_interval" in data:
+-            res_data["transmit-interval_ms"] = int(data["tx_interval"])
++        if "transmit_interval" in data:
++            res_data["transmit-interval_ms"] = int(data["transmit_interval"])
+ 
+         if "type" in data:
+             if data["type"] == "async_active":
+diff --git a/src/sonic-bgpcfgd/staticroutebfd/main.py b/src/sonic-bgpcfgd/staticroutebfd/main.py
+index 197d3d241..040c81538 100644
+--- a/src/sonic-bgpcfgd/staticroutebfd/main.py
++++ b/src/sonic-bgpcfgd/staticroutebfd/main.py
+@@ -21,7 +21,7 @@ STATE_DB_NAME = "STATE_DB"
+ INTERFACE_TABLE_NAME = "INTERFACE"
+ PORTCHANNEL_INTERFACE_TABLE_NAME = "PORTCHANNEL_INTERFACE"
+ STATIC_ROUTE_TABLE_NAME = "STATIC_ROUTE"
+-BFD_SESSION_TABLE_NAME = "BFD_SESSION_TABLE"
++BFD_PEER_TABLE_NAME = "BFD_PEER"
+ 
+ LOCAL_CONFIG_TABLE = "config"
+ LOCAL_NEXTHOP_TABLE = "nexthop"
+@@ -98,7 +98,7 @@ def check_ip(ip):
+ class StaticRouteBfd(object):
+ 
+     SELECT_TIMEOUT = 1000
+-    BFD_DEFAULT_CFG = {"multihop": "false", "rx_interval": "50", "tx_interval": "50"}
++    BFD_DEFAULT_CFG = {"multihop": "false", "receive_interval": "50", "transmit_interval": "50"}
+ 
+     def __init__(self):
+         self.local_db = defaultdict(dict)
+@@ -115,7 +115,7 @@ class StaticRouteBfd(object):
+         self.appl_db = swsscommon.DBConnector(APPL_DB_NAME, 0, False)
+         self.state_db = swsscommon.DBConnector(STATE_DB_NAME, 0, False)
+ 
+-        self.bfd_appl_tbl = swsscommon.ProducerStateTable(self.appl_db, BFD_SESSION_TABLE_NAME)
++        self.bfd_cfg_tbl = swsscommon.Table(self.config_db, BFD_PEER_TABLE_NAME)
+ 
+         self.static_route_appl_tbl = swsscommon.Table(self.appl_db, STATIC_ROUTE_TABLE_NAME)
+ 
+@@ -173,13 +173,38 @@ class StaticRouteBfd(object):
+             if len(entry) == 0:
+                 self.remove_from_local_db(LOCAL_NEXTHOP_TABLE, nh_key)
+ 
+-    def set_bfd_session_into_appl_db(self, key, data):
+-        fvs = swsscommon.FieldValuePairs(list(data.items()))
+-        self.bfd_appl_tbl.set(key, fvs)
+-        log_debug("set bfd session to appl_db, key %s, data %s"%(key, str(data)))
++    def set_bfd_session_into_config_db(self, key, data):
++        if ':' in key:
++            parts = key.split(':')
++            if len(parts) >= 3:
++                vrf = parts[0]
++                remote_ip = parts[2]
++                local_addr = data.get("local_addr", "0.0.0.0")
++                multihop = data.get("multihop", "false")
++                hop_type = "multihop" if multihop == "true" else "singlehop"
++
++                data["vrf"] = vrf
++
++                new_key = "{}|{}|default|{}".format(remote_ip, local_addr, hop_type)
++
++                fvs = swsscommon.FieldValuePairs(list(data.items()))
++                self.bfd_cfg_tbl.set(new_key, fvs)
++                log_debug("set bfd session to config_db, key %s, data %s"%(new_key, str(data)))
+ 
+-    def del_bfd_session_from_appl_db(self, key):
+-        self.bfd_appl_tbl.delete(key)
++    def del_bfd_session_from_config_db(self, key):
++        bfd_session = self.get_local_db(LOCAL_BFD_TABLE, key)
++        if len(bfd_session) > 0:
++            local_addr = bfd_session.get("local_addr", "0.0.0.0")
++            multihop = bfd_session.get("multihop", "false")
++            hop_type = "multihop" if multihop == "true" else "singlehop"
++
++            parts = key.split(':')
++            if len(parts) >= 3:
++                remote_ip = parts[2]
++                new_key = "{}|{}|default|{}".format(remote_ip, local_addr, hop_type)
++
++                self.bfd_cfg_tbl.delete(new_key)
++                log_debug("del bfd session from config_db, key %s" % new_key)
+ 
+     def interface_set_handler(self, key, data):
+         valid, is_ipv4, if_name, ip = self.get_ip_from_key(key)
+@@ -229,12 +254,12 @@ class StaticRouteBfd(object):
+                 bfd_entry_cfg = self.BFD_DEFAULT_CFG.copy()
+                 if all([bfd_rx_interval, bfd_tx_interval, bfd_multiplier, bfd_multihop]):
+                     bfd_entry_cfg["multihop"] = bfd_multihop
+-                    bfd_entry_cfg["rx_interval"] = bfd_rx_interval
+-                    bfd_entry_cfg["tx_interval"] = bfd_tx_interval
++                    bfd_entry_cfg["receive_interval"] = bfd_rx_interval
++                    bfd_entry_cfg["transmit_interval"] = bfd_tx_interval
+                     bfd_entry_cfg["multiplier"] = bfd_multiplier
+ 
+                 bfd_entry_cfg["local_addr"] = local_addr
+-                self.set_bfd_session_into_appl_db(bfd_key, bfd_entry_cfg)
++                self.set_bfd_session_into_config_db(bfd_key, bfd_entry_cfg)
+                 bfd_entry_cfg["static_route"] = "true"
+                 self.set_local_db(LOCAL_BFD_TABLE, bfd_key, bfd_entry_cfg)
+                 del_list.append(k)
+@@ -270,13 +295,24 @@ class StaticRouteBfd(object):
+             key_new = self.strip_table_name(key, "|")
+             self.interface_set_handler(key_new, "")
+ 
+-        #restore bfd session table, static route won't create bfd session if it is already in appl_db
++        #restore bfd session table, static route won't create bfd session if it is already in config_db
+         log_info("restore bfd session table -->")
+-        keys = db.keys(db.APPL_DB, "BFD_SESSION_TABLE:*")
++        keys = db.keys(db.CONFIG_DB, "BFD_PEER|*")
+         for key in keys:
+-            data = db.get_all(db.APPL_DB, key)
+-            key_new = self.strip_table_name(key, ":")
+-            self.set_local_db(LOCAL_BFD_TABLE, key_new, data)
++            data = db.get_all(db.CONFIG_DB, key)
++            key_part = self.strip_table_name(key, "|")
++            parts = key_part.split('|')
++            if len(parts) >= 4:
++                remote_ip = parts[0]
++                local_addr = parts[1]
++                interface = parts[2]
++                hop_type = parts[3]
++                vrf = data.get("vrf", "default")
++                # Create internal key format: vrf:interface:remote_ip
++                key_new = "{}:{}:{}".format(vrf, interface, remote_ip)
++                data["local_addr"] = local_addr
++                data["multihop"] = "true" if hop_type == "multihop" else "false"
++                self.set_local_db(LOCAL_BFD_TABLE, key_new, data)
+ 
+         #restore static route table
+         log_info("restore static route table -->")
+@@ -459,7 +495,7 @@ class StaticRouteBfd(object):
+                     if len(self.get_local_db(LOCAL_NEXTHOP_TABLE, nh_key)) == 0:
+                         bfd_key = nh_vrf + ":default:" + nh_ip
+                         self.remove_from_local_db(LOCAL_BFD_TABLE, bfd_key)
+-                        self.del_bfd_session_from_appl_db(bfd_key)
++                        self.del_bfd_session_from_config_db(bfd_key)
+ 
+         self.set_local_db(LOCAL_CONFIG_TABLE, route_cfg_key, data)
+         for index in range(len(nh_list)):
+@@ -486,12 +522,12 @@ class StaticRouteBfd(object):
+                 bfd_entry_cfg = self.BFD_DEFAULT_CFG.copy()
+                 if all([bfd_rx_interval, bfd_tx_interval, bfd_multiplier, bfd_multihop]):
+                     bfd_entry_cfg["multihop"] = bfd_multihop
+-                    bfd_entry_cfg["rx_interval"] = bfd_rx_interval
+-                    bfd_entry_cfg["tx_interval"] = bfd_tx_interval
++                    bfd_entry_cfg["receive_interval"] = bfd_rx_interval
++                    bfd_entry_cfg["transmit_interval"] = bfd_tx_interval
+                     bfd_entry_cfg["multiplier"] = bfd_multiplier
+ 
+                 bfd_entry_cfg["local_addr"] = local_addr
+-                self.set_bfd_session_into_appl_db(bfd_key, bfd_entry_cfg)
++                self.set_bfd_session_into_config_db(bfd_key, bfd_entry_cfg)
+                 bfd_entry_cfg["static_route"] = "true"
+                 self.set_local_db(LOCAL_BFD_TABLE, bfd_key, bfd_entry_cfg)
+ 
+@@ -533,7 +569,7 @@ class StaticRouteBfd(object):
+                 if len(self.get_local_db(LOCAL_NEXTHOP_TABLE, nh_key)) == 0:
+                     bfd_key = nh_vrf + ":default:" + nh_ip
+                     self.remove_from_local_db(LOCAL_BFD_TABLE, bfd_key)
+-                    self.del_bfd_session_from_appl_db(bfd_key)
++                    self.del_bfd_session_from_config_db(bfd_key)
+ 
+         # do not delete it from appl_db if the route is not bfd enabled
+         if bfd_enabled:
+diff --git a/src/sonic-bgpcfgd/tests/test_bfdmgr.py b/src/sonic-bgpcfgd/tests/test_bfdmgr.py
+index 6f2ff2009..2a36b9d75 100644
+--- a/src/sonic-bgpcfgd/tests/test_bfdmgr.py
++++ b/src/sonic-bgpcfgd/tests/test_bfdmgr.py
+@@ -78,8 +78,8 @@ def test_redis_to_local_res(bfd_mgr):
+         "multihop": "false",
+         "local_addr": "127.0.0.1",
+         "multiplier": "5",
+-        "rx_interval": "300",
+-        "tx_interval": "300",
++        "receive_interval": "300",
++        "transmit_interval": "300",
+         "type": "async_active",
+     }
+     result = bfd_mgr.redis_to_local_res(data)
+@@ -97,8 +97,8 @@ def test_redis_to_local_res_no_mh(bfd_mgr):
+     data = {
+         "local_addr": "127.0.0.1",
+         "multiplier": "5",
+-        "rx_interval": "300",
+-        "tx_interval": "300",
++        "receive_interval": "300",
++        "transmit_interval": "300",
+         "type": "async_passive",
+     }
+     result = bfd_mgr.redis_to_local_res(data)
+@@ -308,8 +308,8 @@ def test_update_frr_session_success(mocked_run_command, bfd_mgr):
+         "multihop": "true",
+         "local_addr": "127.0.0.2",
+         "multiplier": "5",
+-        "rx_interval": "300",
+-        "tx_interval": "400",
++        "receive_interval": "300",
++        "transmit_interval": "400",
+         "type": "async_passive",
+     }
+ 
+diff --git a/src/sonic-bgpcfgd/tests/test_static_rt_bfd.py b/src/sonic-bgpcfgd/tests/test_static_rt_bfd.py
+index 4ea4707f8..c86aa6939 100644
+--- a/src/sonic-bgpcfgd/tests/test_static_rt_bfd.py
++++ b/src/sonic-bgpcfgd/tests/test_static_rt_bfd.py
+@@ -19,9 +19,9 @@ def set_del_test(dut, hdlr, op, args, e_bfd_dict, e_srt_dict):
+     set_del_test.bfd_dict = {}
+     set_del_test.srt_dict = {}
+ 
+-    def bfd_app_set(key, data):
++    def bfd_cfg_set(key, data):
+         set_del_test.bfd_dict["set_"+key] = data.copy()
+-    def bfd_app_del(key):
++    def bfd_cfg_del(key):
+         set_del_test.bfd_dict["del_"+key] = {}
+     def srt_app_set(key, data):
+         set_del_test.srt_dict["set_"+key] = data.copy()
+@@ -47,8 +47,8 @@ def set_del_test(dut, hdlr, op, args, e_bfd_dict, e_srt_dict):
+                     return False
+         return True
+ 
+-    dut.set_bfd_session_into_appl_db = bfd_app_set
+-    dut.del_bfd_session_from_appl_db = bfd_app_del
++    dut.set_bfd_session_into_config_db = bfd_cfg_set
++    dut.del_bfd_session_from_config_db = bfd_cfg_del
+     dut.set_static_route_into_appl_db = srt_app_set
+     dut.del_static_route_from_appl_db = srt_app_del
+ 
+@@ -128,9 +128,9 @@ def test_set_del_ipv6():
+             "nexthop": "2603:10E2:400:1::2,2603:10E2:400:2::2,2603:10e2:400:3::2"
+         }),
+         {
+-            "set_default:default:2603:10e2:400:1::2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:1::1'},
+-            "set_default:default:2603:10e2:400:2::2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:2::1'},
+-            "set_default:default:2603:10e2:400:3::2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:3::1'}
++            "set_default:default:2603:10e2:400:1::2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:1::1'},
++            "set_default:default:2603:10e2:400:2::2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:2::1'},
++            "set_default:default:2603:10e2:400:3::2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '2603:10E2:400:3::1'}
+         },
+         {}
+     )
+@@ -201,9 +201,9 @@ def test_set_del():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -294,9 +294,9 @@ def test_set_del_vrf():
+             "nexthop-vrf": "testvrf1, , default",
+         }),
+         {
+-            "set_testvrf1:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_vrfred:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_testvrf1:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_vrfred:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -362,9 +362,9 @@ def test_bfd_del():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -415,9 +415,9 @@ def test_set_2routes():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -492,9 +492,9 @@ def test_set_bfd_change_hold():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -551,9 +551,9 @@ def test_set_bfd_change_hold():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {'set_default:2.2.2.0/24': {'bfd':'false', 'nexthop': '192.168.2.2,192.168.1.2,192.168.3.2 ', 'ifname': 'if2,if1,if3', 'expiry': 'false'}}
+     )
+@@ -597,9 +597,9 @@ def test_set_bfd_change_no_hold():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.2.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.2.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.2.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {}
+     )
+@@ -663,8 +663,8 @@ def test_set_bfd_change_no_hold():
+             "ifname": "if1, if2, if3",
+         }),
+         {
+-            "set_default:default:192.168.1.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
+-            "set_default:default:192.168.3.2" : {'multihop': 'false', 'rx_interval': '50', 'tx_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
++            "set_default:default:192.168.1.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.1.1'},
++            "set_default:default:192.168.3.2" : {'multihop': 'false', 'receive_interval': '50', 'transmit_interval': '50', 'multiplier': '3', 'local_addr': '192.168.3.1'}
+         },
+         {'set_default:2.2.2.0/24': {'nexthop': '192.168.2.2', 'ifname': 'if2', 'nexthop-vrf': 'default', 'expiry': 'false'}}
+     )
+-- 
+2.25.1
+

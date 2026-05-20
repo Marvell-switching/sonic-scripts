@@ -1,0 +1,90 @@
+From f6ef310420afb27c1e7558af7adadcf102e7f1a6 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Tue, 5 Aug 2025 10:26:51 +0530
+Subject: [PATCH] [Port-breakout] Fixing the Cable length None issue during
+ port-breakout
+
+What is the issue:
+
+When Port breakout is performed, configMgmt creates the list of configs to be deleted
+and mark the value with None for the value to be deleted like below.
+
+{'BUFFER_PG': {'Ethernet0|0': None, 'Ethernet0|1-2': None,
+'Ethernet0|3-4': None, 'Ethernet0|5-7': None}, 'BUFFER_QUEUE':
+{'Ethernet0|0-2': None, 'Ethernet0|3-4': None, 'Ethernet0|5-7': None},
+'CABLE_LENGTH': {'AZURE': {'Ethernet0': None}},
+'INTERFACE': {'Ethernet0': None, 'Ethernet0|10.0.0.0/31': None},
+'PORT': {'Ethernet0': None}, 'QUEUE': {}}
+
+and perform writeConfigDB operation hoping to delete all configs.
+But for the configs which are part of dictionary and not the key like CABLE_LENGTH.
+the entry get modified to None instead of getting deleted.
+
+and if further break-out/break-in is triggered then it result in to configure
+failure like below as yang schema does not accept None value.
+
+libyang[0]: Value "None" does not satisfy the constraint "[0-9]+m" (range, length, or pattern). (path: /son
+ic-cable-length:sonic-cable-length/CABLE_LENGTH/CABLE_LENGTH_LIST[name='AZURE']/CABLE_LENGTH[port='Ethernet
+448']/length)
+libyang[0]: Invalid cable length. (path: /sonic-cable-length:sonic-cable-length/CABLE_LENGTH/CABLE_LENGTH_L
+IST[name='AZURE']/CABLE_LENGTH[port='Ethernet448']/length)
+sonic_yang(3):Data Loading Failed:Invalid cable length.
+Data Loading Failed
+Invalid cable length.
+
+ConfigMgmt Class creation failed
+Failed to break out Port. Error: Failed to load the config. Error: ConfigMgmtDPB Class creation failed
+
+Expected behaviour:
+
+Cable length config along with other configs should get deleted when the port breakout is done.
+
+Fix:
+
+Handling deletion of column key when it's value is 'None' using set_entry
+
+data: config data in a dictionary form
+{
+     'TABLE_NAME': { 'row_key': {'column_key': None, ...}, ...}
+     'MULTI_KEY_TABLE_NAME': { ('l1_key', 'l2_key', ...) : {'column_key': None, ...}, ...},
+}
+---
+ config/config_mgmt.py | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/config/config_mgmt.py b/config/config_mgmt.py
+index 4e3115bd..1cbe0a11 100644
+--- a/config/config_mgmt.py
++++ b/config/config_mgmt.py
+@@ -230,6 +230,28 @@ class ConfigMgmt():
+         self.sysLog(msg="Write in DB: {}".format(data))
+         configdb.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
+ 
++        # Handle deletion of column key when it's value is 'None' using set_entry
++        # data: config data in a dictionary form
++        # {
++        #     'TABLE_NAME': { 'row_key': {'column_key': None, ...}, ...}
++        #     'MULTI_KEY_TABLE_NAME': { ('l1_key', 'l2_key', ...) : {'column_key': None, ...}, ...},
++        # }
++        for table_name, table_data in sonic_cfggen.FormatConverter.output_to_db(data).items():
++            if table_data is None:
++                continue;
++            for row_key, row_val in table_data.items():
++                if row_val is None:
++                    continue;
++                elif isinstance(row_val, dict):
++                    entry = configdb.get_entry(table_name, row_key)
++                    if entry and isinstance(entry, dict):
++                        need_modification = 0
++                        for col_key, col_val in row_val.items():
++                            if col_key in entry and col_val is None:
++                                need_modification = 1
++                                del entry[col_key]
++                        if need_modification == 1:
++                            configdb.set_entry(table_name, row_key, entry)
+         return
+ 
+     def add_module(self, yang_module_str):
+-- 
+2.25.1
+

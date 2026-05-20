@@ -1,0 +1,221 @@
+From 5535c2345e80835492b712f1581c4ae49c2edd75 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 11:59:16 +0530
+Subject: [PATCH] OSPF GR: Yang infra changes
+
+Yang infra changes for OSPF GR
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ .../tests/files/sample_config_db.json         |  3 +-
+ .../yang_model_tests/tests/warm_restart.json  | 30 ++++++
+ .../tests_config/warm_restart.json            | 94 +++++++++++++++++++
+ .../yang-models/sonic-warm-restart.yang       | 33 +++++++
+ 4 files changed, 159 insertions(+), 1 deletion(-)
+
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 102728597..0e08de132 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -1644,7 +1644,8 @@
+         },
+         "WARM_RESTART": {
+             "bgp": {
+-                "bgp_timer": "500"
++                "bgp_timer": "500",
++                "warm_restart_protocol": "bgp"
+             }
+         },
+         "PORT_STORM_CONTROL": {
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/warm_restart.json b/src/sonic-yang-models/tests/yang_model_tests/tests/warm_restart.json
+index 2abc88944..ade1bd634 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests/warm_restart.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/warm_restart.json
+@@ -29,5 +29,35 @@
+     "WARM_RESTART_TEST_WITH_INCORRECT_NEIGHSYNCD_TIMER": {
+         "desc": "Configure Warm restart for neighsyncd module with an out of range neighsyncd timer.",
+         "eStr": ["Timer must be 1..9999"]
++    },
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_WARM_RESTART_PROTOCOL": {
++        "desc": "Configuration of warm_restart_protocol with incorrect module name.",
++        "eStr" : ["warm_restart_protocol is only supported for module bgp"]
++    },
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_OSPF_TIMER": {
++        "desc": "Configuration of ospf_timer with incorrect module name.",
++        "eStr" : ["ospf_timer is only supported for module bgp"]
++    },
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_OSPF_EOIU": {
++        "desc": "Configuration of ospf_eoiu with incorrect module name.",
++        "eStr" : ["ospf_eoiu is only supported for module bgp"]
++    },
++    "WARM_RESTART_TEST_WITH_INCORRECT_OSPF_TIMER": {
++        "desc": "Configure Warm restart for bgp module with an out of range ospf timer.",
++        "eStr": ["Timer must be 1..3600"]
++    },
++    "WARM_RESTART_TEST_WITH_OSPF_FIELDS": {
++        "desc": "Configure an entry in WARM_RESTART table with OSPF fields."
++    },
++    "WARM_RESTART_TEST_WITH_BGP_AND_OSPF_FIELDS_COEXIST": {
++        "desc": "Configure an entry with both BGP and OSPF fields coexisting. YANG allows this; mutual exclusivity is enforced at CLI level."
++    },
++    "WARM_RESTART_TEST_WITH_OSPF_TIMER_ZERO": {
++        "desc": "Configure OSPF timer with value 0, which is below the valid range.",
++        "eStr": ["Timer must be 1..3600"]
++    },
++    "WARM_RESTART_TEST_WITH_INVALID_PROTOCOL": {
++        "desc": "Configure warm_restart_protocol with an invalid value (isis).",
++        "eStr": ["Invalid enumeration value \"isis\""]
+     }
+ }
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/warm_restart.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/warm_restart.json
+index e6a55c463..5eea916b7 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests_config/warm_restart.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/warm_restart.json
+@@ -86,6 +86,100 @@
+                 }]
+             }
+         }
++    },
++
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_WARM_RESTART_PROTOCOL": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "teamd",
++                        "warm_restart_protocol": "ospf"
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_OSPF_TIMER": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "teamd",
++                        "ospf_timer": 500
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_WITH_MUST_CONDITION_FAILURE_TEST_FOR_OSPF_EOIU": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "teamd",
++                        "ospf_eoiu": true
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_TEST_WITH_INCORRECT_OSPF_TIMER": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "bgp",
++                        "ospf_timer": 3601
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_TEST_WITH_OSPF_FIELDS": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "bgp",
++                        "warm_restart_protocol": "ospf",
++                        "ospf_timer": 300,
++                        "ospf_eoiu": true
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_TEST_WITH_BGP_AND_OSPF_FIELDS_COEXIST": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "bgp",
++                        "warm_restart_protocol": "ospf",
++                        "bgp_eoiu": true,
++                        "bgp_timer": 300,
++                        "ospf_eoiu": true,
++                        "ospf_timer": 180
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_TEST_WITH_OSPF_TIMER_ZERO": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "bgp",
++                        "ospf_timer": 0
++                }]
++            }
++        }
++    },
++
++    "WARM_RESTART_TEST_WITH_INVALID_PROTOCOL": {
++        "sonic-warm-restart:sonic-warm-restart": {
++            "sonic-warm-restart:WARM_RESTART": {
++                "WARM_RESTART_LIST": [{
++                        "module": "bgp",
++                        "warm_restart_protocol": "isis"
++                }]
++            }
++        }
+     }
+ 
+ }
+diff --git a/src/sonic-yang-models/yang-models/sonic-warm-restart.yang b/src/sonic-yang-models/yang-models/sonic-warm-restart.yang
+index 3025260d2..3045e2600 100644
+--- a/src/sonic-yang-models/yang-models/sonic-warm-restart.yang
++++ b/src/sonic-yang-models/yang-models/sonic-warm-restart.yang
+@@ -97,6 +97,39 @@ module sonic-warm-restart  {
+                        "Timer value for swss module";
+                 }
+ 
++                leaf warm_restart_protocol {
++                    type enumeration {
++                        enum bgp {
++                            description "Use BGP for warm restart";
++                        }
++                        enum ospf {
++                            description "Use OSPF for warm restart";
++                        }
++                    }
++                    must "current()/../module = 'bgp'" { error-message "warm_restart_protocol is only supported for module bgp."; }
++                    description
++                       "Routing protocol to use for warm restart of the bgp container";
++                }
++
++                leaf ospf_timer {
++                    type uint16 {
++                        range "1..3600" {
++                            error-message "Timer must be 1..3600";
++                            error-app-tag timer-invalid;
++                        }
++                    }
++                    must "current()/../module = 'bgp'" { error-message "ospf_timer is only supported for module bgp."; }
++                    description
++                       "Timer value for OSPF GR period in seconds";
++                }
++
++                leaf ospf_eoiu {
++                    type boolean;
++                    must "current()/../module = 'bgp'" { error-message "ospf_eoiu is only supported for module bgp."; }
++                    description
++                       "OSPF End-of-Initial Update (EOIU) signal enable/disable";
++                }
++
+             } /* end of list WARM_RESTART_LIST */
+         } /* end of container WARM_RESTART */
+     } /* end of container sonic-warm-restart */
+-- 
+2.25.1
+

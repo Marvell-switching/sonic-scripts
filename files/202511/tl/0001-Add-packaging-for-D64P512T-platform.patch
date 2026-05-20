@@ -1,0 +1,50 @@
+From 0ffcaa575dd37c4e7742d0eb4b6782c5b883a407 Mon Sep 17 00:00:00 2001
+From: Pavan Naregundi <pnaregundi@marvell.com>
+Date: Mon, 1 Sep 2025 15:02:38 +0530
+Subject: [PATCH] Add packaging for D64P512T platform
+
+Signed-off-by: Pavan Naregundi <pnaregundi@marvell.com>
+---
+ platform/marvell-teralynx/one-image.mk                | 1 +
+ platform/marvell-teralynx/platform-modules-marvell.mk | 6 ++++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/platform/marvell-teralynx/one-image.mk b/platform/marvell-teralynx/one-image.mk
+index 658d60212..f0c819fa3 100755
+--- a/platform/marvell-teralynx/one-image.mk
++++ b/platform/marvell-teralynx/one-image.mk
+@@ -10,6 +10,7 @@ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NETBERG_AURORA_715_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(SMCI_SSE_T7132S_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(WISTRON_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(TL10_DBMVTX9180_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(D64P512T_PLATFORM_MODULE)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_TERALYNX_DRV)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_TERALYNX_DEB)
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(PDDF_PLATFORM_MODULE)
+diff --git a/platform/marvell-teralynx/platform-modules-marvell.mk b/platform/marvell-teralynx/platform-modules-marvell.mk
+index 43e25690a..bdadea368 100644
+--- a/platform/marvell-teralynx/platform-modules-marvell.mk
++++ b/platform/marvell-teralynx/platform-modules-marvell.mk
+@@ -1,8 +1,10 @@
+ # Teralynx 10 Platform
+ 
+ TL10_DBMVTX9180_VERSION = 1.0
++D64P512T_VERSION = 1.0
+ 
+ export TL10_DBMVTX9180_VERSION
++export D64P512T_VERSION
+ 
+ TL10_DBMVTX9180_PLATFORM = sonic-platform-marvell-dbmvtx9180_$(TL10_DBMVTX9180_VERSION)_$(CONFIGURED_ARCH).deb
+ $(TL10_DBMVTX9180_PLATFORM)_SRC_PATH = $(PLATFORM_PATH)/sonic-platform-marvell-teralynx
+@@ -11,3 +13,7 @@ $(TL10_DBMVTX9180_PLATFORM)_PLATFORM = x86_64-marvell_dbmvtx9180-r0
+ 
+ SONIC_DPKG_DEBS += $(TL10_DBMVTX9180_PLATFORM)
+ 
++D64P512T_PLATFORM_MODULE = sonic-platform-marvell-d64p512t_$(D64P512T_VERSION)_$(CONFIGURED_ARCH).deb
++$(D64P512T_PLATFORM_MODULE)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON) $(PDDF_PLATFORM_MODULE_SYM)
++$(D64P512T_PLATFORM_MODULE)_PLATFORM = x86_64-marvell_d64p512t-r0
++$(eval $(call add_extra_package,$(TL10_DBMVTX9180_PLATFORM),$(D64P512T_PLATFORM_MODULE)))
+\ No newline at end of file
+-- 
+2.25.1
+

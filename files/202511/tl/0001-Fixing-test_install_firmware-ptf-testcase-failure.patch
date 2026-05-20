@@ -1,0 +1,26 @@
+From 71549a2b576f7f45eeedf2bb0d48c8ee197f2b2b Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Mon, 10 Nov 2025 16:36:46 +0530
+Subject: [PATCH] Fixing test_install_firmware ptf testcase failure
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ .../6512-32r/sonic_platform/component.py                        | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/component.py b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/component.py
+index 40a0ba551..7515f5f66 100755
+--- a/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/component.py
++++ b/platform/marvell-teralynx/sonic-platform-modules-wistron/6512-32r/sonic_platform/component.py
+@@ -178,7 +178,7 @@ class Component(ComponentBase):
+         Returns:
+             A boolean, True if install successfully, False if not
+         """
+-        raise NotImplementedError
++        return False
+ 
+     def get_presence(self):
+         """
+-- 
+2.25.1
+

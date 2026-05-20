@@ -1,0 +1,874 @@
+From 2c5cf115a54d2e843998d7ec5caf6ef527bbcf4e Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Fri, 9 Jan 2026 16:07:28 +0530
+Subject: [PATCH] EVPN MH Yang Community Changes
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ src/sonic-yang-models/setup.py                |   1 +
+ .../tests/files/sample_config_db.json         |  21 +-
+ .../tests/yang_model_tests/tests/evpn.json    |  57 +++
+ .../yang_model_tests/tests/portchannel.json   |  10 +
+ .../yang_model_tests/tests_config/evpn.json   | 407 ++++++++++++++++++
+ .../tests_config/portchannel.json             |  96 +++++
+ .../yang-models/sonic-evpn.yang               | 151 +++++++
+ .../yang-models/sonic-portchannel.yang        |   9 +
+ 8 files changed, 752 insertions(+), 2 deletions(-)
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests/evpn.json
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests_config/evpn.json
+ create mode 100644 src/sonic-yang-models/yang-models/sonic-evpn.yang
+
+diff --git a/src/sonic-yang-models/setup.py b/src/sonic-yang-models/setup.py
+index eb549943f..fa9e0339a 100644
+--- a/src/sonic-yang-models/setup.py
++++ b/src/sonic-yang-models/setup.py
+@@ -129,6 +129,7 @@ yang_files = [
+     'sonic-events-host.yang',
+     'sonic-events-swss.yang',
+     'sonic-events-syncd.yang',
++    'sonic-evpn.yang',
+     'sonic-exp-fc-map.yang',
+     'sonic-extension.yang',
+     'sonic-fabric-monitor.yang',
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 65772673e..6ce70b1b6 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -108,7 +108,8 @@
+                 "tpid": "0x8100",
+                 "mtu": "9100",
+                 "lacp_key": "auto",
+-                "mode":"trunk"
++                "mode":"trunk",
++                "system_mac": "02:26:9b:73:c1:1a"
+             },
+             "PortChannel0004": {
+                 "admin_status": "up",
+@@ -133,7 +134,8 @@
+                 "tpid": "0x8100",
+                 "fast_rate": "false",
+                 "fallback" : "true",
+-                "mode":"routed"
++                "mode":"routed",
++                "system_mac": "aa:bb:cc:dd:ee:ff"
+             }
+         },
+         "PORTCHANNEL_INTERFACE": {
+@@ -1233,6 +1235,7 @@
+             }
+         },
+         "INTERFACE": {
++            "Ethernet120": {},
+             "Ethernet112": {},
+             "Ethernet14": {},
+             "Ethernet16": {},
+@@ -3140,6 +3143,20 @@
+             "DEBUG_4|DIP_LINK_LOCAL": {},
+             "DEBUG_4|SIP_LINK_LOCAL": {}
+         },
++        "EVPN_ETHERNET_SEGMENT": {
++            "Ethernet120": {
++                "type": "TYPE_0_OPERATOR_CONFIGURED",
++                "esi": "00:01:02:03:04:05:06:07:08:FF",
++                "df_pref": "12012"
++            }
++        },
++        "EVPN_MH_GLOBAL": {
++            "default" : {
++                "startup_delay": "1800",
++                "mac_holdtime": "1000",
++                "neigh_holdtime": "600"
++            }
++         },
+         "HIGH_FREQUENCY_TELEMETRY_PROFILE": {
+             "dummy": {
+                 "stream_state": "disabled",
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/evpn.json b/src/sonic-yang-models/tests/yang_model_tests/tests/evpn.json
+new file mode 100644
+index 000000000..c391e7965
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/evpn.json
+@@ -0,0 +1,57 @@
++{
++    "EVPN_ES_VALID_TEST": {
++        "desc": "Valid EVPN Ethernet Segment Configuration"
++    },
++    "EVPN_PORTCHANNEL_VALID_TEST": {
++        "desc": "Valid EVPN Ethernet Segment Configuration with PortChannel interfaces"
++    },
++    "EVPN_INVALID_AUTO_W_ESI_0": {
++        "desc": "Invalid Type 0 ES Configuration w/ AUTO ESI",
++        "eStr": "Invalid use of 'AUTO' with Type 0 ESI or a manual ESI w/ AUTO type in not empty"
++    },
++    "EVPN_INVALID_TYPE_3_W_MANUAL_ESI": {
++        "desc": "Invalid Type 3 ES Configuration w/ Manual ESI",
++        "eStr": "Invalid use of 'AUTO' with Type 0 ESI or a manual ESI w/ AUTO type in not empty"
++    },
++    "EVPN_INVALID_TYPE_0_ESI_LENGTH": {
++        "desc": "Type 0 Manual ESI with invalid length string",
++        "eStr": "Provided ESI is not valid"
++    },
++    "EVPN_INVALID_TYPE_0_ESI_BYTE": {
++        "desc": "Type 0 Manual ESI with an invalid byte",
++        "eStr": "Provided ESI is not valid"
++    },
++    "EVPN_INVALID_TYPE_0_ESI_BYTE_RANGE": {
++        "desc": "Type 0 Manual ESI with a byte out of range 0-0xFF",
++        "eStr": "Provided ESI is not valid"
++    },
++    "EVPN_INVALID_DF_PREF": {
++        "desc": "ES DF Preference value out of range",
++        "eStr": "Invalid value \"12341234\" in \"df_pref\" element"
++    },
++    "EVPN_MH_VALID_TEST": {
++        "desc": "Valid EVPN Ethernet Segment Configuration"
++    },
++    "EVPN_INVALID_STARTUP_DELAY": {
++        "desc": "Global Startup Delay value out of range",
++        "eStr": "Startup Delay value out of range"
++    },
++    "EVPN_INVALID_MAC_HOLDTIME": {
++        "desc": "Global MAC Holdtime value out of range",
++        "eStr": "MAC Holdtime value out of range"
++    },
++    "EVPN_INVALID_NEIGH_HOLDTIME": {
++        "desc": "Global Neighbor Holdtime value out of range",
++        "eStr": "Neighbor Holdtime value out of range"
++    },
++    "EVPN_INVALID_IFNAME_NOT_EXISTS": {
++        "desc": "Invalid ifname that doesn't exist in PORT table",
++        "eStrKey" : "InvalidValue",
++        "eStr": ["Ethernet99"]
++    },
++    "EVPN_INVALID_PORTCHANNEL_NOT_EXISTS": {
++        "desc": "Invalid ifname that doesn't exist in PORTCHANNEL table",
++        "eStrKey" : "InvalidValue",
++        "eStr": ["PortChannel0099"]
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/portchannel.json b/src/sonic-yang-models/tests/yang_model_tests/tests/portchannel.json
+index e1b504ddb..b53eb9916 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests/portchannel.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/portchannel.json
+@@ -93,5 +93,15 @@
+     "PORTCHANNEL_INTERFACE_INVALID_MAC_ADDR": {
+         "desc": "Set invalid interface mac address.",
+         "eStrKey": "Pattern"
++    },
++    "PORTCHANNEL_SYSTEM_MAC_VALID": {
++        "desc": "Configure valid LACP system MAC address."
++    },
++    "PORTCHANNEL_SYSTEM_MAC_UPPERCASE": {
++        "desc": "Configure LACP system MAC address with uppercase characters."
++    },
++    "PORTCHANNEL_SYSTEM_MAC_INVALID": {
++        "desc": "Configure invalid LACP system MAC address.",
++        "eStrKey": "Pattern"
+     }
+ }
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/evpn.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/evpn.json
+new file mode 100644
+index 000000000..c83ed2ce8
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/evpn.json
+@@ -0,0 +1,407 @@
++{
++    "EVPN_ES_VALID_TEST": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    },
++                    {
++                        "name": "Ethernet11",
++                        "lanes": "5,6,7,8",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "AUTO",
++                        "type": "TYPE_3_MAC_BASED",
++                        "df_pref": 12345
++                    },
++                    {
++                        "ifname": "Ethernet11",
++                        "esi": "00:01:02:03:04:05:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_PORTCHANNEL_VALID_TEST": {
++        "sonic-portchannel:sonic-portchannel": {
++            "sonic-portchannel:PORTCHANNEL": {
++                "PORTCHANNEL_LIST": [
++                    {
++                        "name": "PortChannel0001",
++                        "admin_status": "up",
++                        "min_links": "1",
++                        "mtu": "9100",
++                        "mode": "routed"
++                    },
++                    {
++                        "name": "PortChannel0002",
++                        "admin_status": "up",
++                        "min_links": "2",
++                        "mtu": "9100",
++                        "mode": "trunk"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "PortChannel0001",
++                        "esi": "AUTO",
++                        "type": "TYPE_3_MAC_BASED",
++                        "df_pref": 5000
++                    },
++                    {
++                        "ifname": "PortChannel0002",
++                        "esi": "00:01:02:03:04:05:06:07:08:AA",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_AUTO_W_ESI_0": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    },
++                    {
++                        "name": "Ethernet11",
++                        "lanes": "5,6,7,8",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    },
++                    {
++                        "name": "Ethernet11"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "AUTO",
++                        "type": "TYPE_3_MAC_BASED"
++                    },
++                    {
++                        "ifname": "Ethernet11",
++                        "esi": "AUTO",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_TYPE_3_W_MANUAL_ESI": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    },
++                    {
++                        "name": "Ethernet11",
++                        "lanes": "5,6,7,8",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    },
++                    {
++                        "name": "Ethernet11"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "00:01:02:03:04:05:06:07:08:AA",
++                        "type": "TYPE_3_MAC_BASED"
++                    },
++                    {
++                        "ifname": "Ethernet11",
++                        "esi": "00:01:02:03:04:05:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_TYPE_0_ESI_LENGTH": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "00:01:02:03:04:05",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_TYPE_0_ESI_BYTE": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "00:01:02:03:04:ZZ:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_TYPE_0_ESI_BYTE_RANGE": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "00:01:02:03:04:1234:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_DF_PREF": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 1000
++                    }
++                ]
++            }
++        },
++        "sonic-interface:sonic-interface": {
++            "sonic-interface:INTERFACE": {
++                "INTERFACE_LIST": [
++                    {
++                        "name": "Ethernet10"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet10",
++                        "esi": "00:01:02:03:04:12:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED",
++                        "df_pref": 12341234
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_MH_VALID_TEST": {
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_MH_GLOBAL": {
++                "EVPN_MH_GLOBAL_LIST": [
++                    {
++                        "default_key": "default",
++                        "startup_delay": 1800,
++                        "mac_holdtime": 1000,
++                        "neigh_holdtime": 600
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_STARTUP_DELAY": {
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_MH_GLOBAL": {
++                "EVPN_MH_GLOBAL_LIST": [
++                    {
++                        "default_key": "default",
++                        "startup_delay": 3601,
++                        "mac_holdtime": 1000,
++                        "neigh_holdtime": 600
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_MAC_HOLDTIME": {
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_MH_GLOBAL": {
++                "EVPN_MH_GLOBAL_LIST": [
++                    {
++                        "default_key": "default",
++                        "startup_delay": 1800,
++                        "mac_holdtime": 86401,
++                        "neigh_holdtime": 600
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_NEIGH_HOLDTIME": {
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_MH_GLOBAL": {
++                "EVPN_MH_GLOBAL_LIST": [
++                    {
++                        "default_key": "default",
++                        "startup_delay": 1800,
++                        "mac_holdtime": 1000,
++                        "neigh_holdtime": 86401
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_IFNAME_NOT_EXISTS": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "name": "Ethernet10",
++                        "lanes": "1,2,3,4",
++                        "speed": 10000
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "Ethernet99",
++                        "esi": "00:01:02:03:04:05:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    },
++    "EVPN_INVALID_PORTCHANNEL_NOT_EXISTS": {
++        "sonic-portchannel:sonic-portchannel": {
++            "sonic-portchannel:PORTCHANNEL": {
++                "PORTCHANNEL_LIST": [
++                    {
++                        "name": "PortChannel0001",
++                        "admin_status": "up",
++                        "min_links": "1",
++                        "mtu": "9100",
++                        "mode": "routed"
++                    }
++                ]
++            }
++        },
++        "sonic-evpn:sonic-evpn": {
++            "sonic-evpn:EVPN_ETHERNET_SEGMENT": {
++                "EVPN_ETHERNET_SEGMENT_LIST": [
++                    {
++                        "ifname": "PortChannel0099",
++                        "esi": "00:01:02:03:04:05:06:07:08:FF",
++                        "type": "TYPE_0_OPERATOR_CONFIGURED"
++                    }
++                ]
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/portchannel.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/portchannel.json
+index c4c404e58..50eab6d48 100644
+--- a/src/sonic-yang-models/tests/yang_model_tests/tests_config/portchannel.json
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/portchannel.json
+@@ -652,5 +652,101 @@
+                 ]
+             }
+         }
++    },
++    "PORTCHANNEL_SYSTEM_MAC_VALID": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "eth0",
++                        "description": "Ethernet0",
++                        "lanes": "65",
++                        "mtu": 9000,
++                        "name": "Ethernet0",
++                        "speed": 25000,
++                        "mode": "routed"
++                    }
++                ]
++            }
++        },
++        "sonic-portchannel:sonic-portchannel": {
++            "sonic-portchannel:PORTCHANNEL": {
++                "PORTCHANNEL_LIST": [
++                    {
++                        "admin_status": "up",
++                        "min_links": "1",
++                        "mtu": "9100",
++                        "name": "PortChannel0001",
++                        "mode": "routed",
++                        "system_mac": "aa:bb:cc:dd:ee:ff"
++                    }
++                ]
++            }
++        }
++    },
++    "PORTCHANNEL_SYSTEM_MAC_UPPERCASE": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "eth0",
++                        "description": "Ethernet0",
++                        "lanes": "65",
++                        "mtu": 9000,
++                        "name": "Ethernet0",
++                        "speed": 25000,
++                        "mode": "routed"
++                    }
++                ]
++            }
++        },
++        "sonic-portchannel:sonic-portchannel": {
++            "sonic-portchannel:PORTCHANNEL": {
++                "PORTCHANNEL_LIST": [
++                    {
++                        "admin_status": "up",
++                        "min_links": "1",
++                        "mtu": "9100",
++                        "name": "PortChannel0001",
++                        "mode": "routed",
++                        "system_mac": "AA:BB:CC:DD:EE:FF"
++                    }
++                ]
++            }
++        }
++    },
++    "PORTCHANNEL_SYSTEM_MAC_INVALID": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "eth0",
++                        "description": "Ethernet0",
++                        "lanes": "65",
++                        "mtu": 9000,
++                        "name": "Ethernet0",
++                        "speed": 25000,
++                        "mode": "routed"
++                    }
++                ]
++            }
++        },
++        "sonic-portchannel:sonic-portchannel": {
++            "sonic-portchannel:PORTCHANNEL": {
++                "PORTCHANNEL_LIST": [
++                    {
++                        "admin_status": "up",
++                        "min_links": "1",
++                        "mtu": "9100",
++                        "name": "PortChannel0001",
++                        "mode": "routed",
++                        "system_mac": "invalid:mac:address"
++                    }
++                ]
++            }
++        }
+     }
+ }
+diff --git a/src/sonic-yang-models/yang-models/sonic-evpn.yang b/src/sonic-yang-models/yang-models/sonic-evpn.yang
+new file mode 100644
+index 000000000..265b69893
+--- /dev/null
++++ b/src/sonic-yang-models/yang-models/sonic-evpn.yang
+@@ -0,0 +1,151 @@
++module sonic-evpn {
++    yang-version 1.1;
++
++    namespace "http://github.com/sonic-net/sonic-evpn";
++    prefix sevpn;
++
++    import sonic-port {
++        prefix port;
++    }
++
++    import sonic-portchannel {
++        prefix lag;
++    }
++
++    organization
++        "SONiC";
++
++    contact
++        "SONiC";
++
++    description
++        "SONIC EVPN";
++
++    revision 2024-05-08 {
++        description
++            "First revision.";
++    }
++
++    revision 2024-06-14 {
++        description
++            "Add global EVPN Multihoming configuration.";
++    }
++
++    typedef esi-type {
++        type enumeration {
++            enum TYPE_0_OPERATOR_CONFIGURED {
++                value 0;
++                description "Type 0 ESI - Operator Configured";
++            }
++            enum TYPE_3_MAC_BASED {
++                value 3;
++                description "Type 3 ESI - MAC-Based ESI";
++            }
++        }
++    }
++
++    container sonic-evpn {
++
++        container EVPN_ETHERNET_SEGMENT {
++            description "CONFIG_DB EVPN_ETHERNET_SEGMENT Table";
++
++            list EVPN_ETHERNET_SEGMENT_LIST {
++
++                key "ifname";
++
++                leaf ifname {
++                    type union {
++                        type leafref {
++                            path "/port:sonic-port/port:PORT/port:PORT_LIST/port:name";
++                        }
++                        type leafref {
++                            path "/lag:sonic-portchannel/lag:PORTCHANNEL/lag:PORTCHANNEL_LIST/lag:name";
++                        }
++                    }
++                }
++
++                leaf esi {
++                    type string {
++                        /*
++                         * Valid ESIs include:
++                         * AUTO (Anything but Type 0)
++                         * 00:01:02:03:04:05:06:07:08:09 (Only Type 0)
++                         */
++                        pattern "AUTO|([a-fA-F0-9]{1,2}:){9}[a-fA-F0-9]{1,2}" {
++                            error-message "Provided ESI is not valid";
++                            error-app-tag esi-invalid;
++                        }
++                    }
++                }
++
++                leaf type {
++                    type esi-type;
++                }
++
++                leaf df_pref {
++                    type uint16 {
++                        range "1..65535" {
++                            error-message "DF Preference value out of range";
++                            error-app-tag df-pref-invalid;
++                        }
++                    }
++                    default 32767;
++                }
++
++                /*
++                 * 'AUTO' ESI is not allowed for Type 0 ESIs.
++                 * 'AUTO' ESI is mandatory for all other ESI types.
++                 */
++                must "(type = 'TYPE_0_OPERATOR_CONFIGURED' and esi != 'AUTO') or
++                      (type != 'TYPE_0_OPERATOR_CONFIGURED' and esi = 'AUTO')" {
++                    error-message "Invalid use of 'AUTO' with Type 0 ESI or a manual ESI w/ AUTO type";
++                    error-app-tag auto-esi-type-invalid;
++                }
++            }
++        }
++        container EVPN_MH_GLOBAL {
++            description "CONFIG_DB EVPN_MH_GLOBAL Table";
++
++            list EVPN_MH_GLOBAL_LIST {
++                key "default_key";
++
++                leaf default_key {
++                    type string {
++                        length 1..128;
++                    }
++                }
++
++                leaf startup_delay {
++                    type uint16 {
++                        range "0..3600" {
++                            error-message "Startup Delay value out of range";
++                            error-app-tag startup-delay-invalid;
++                        }
++                    }
++                    default 300;
++                }
++
++                leaf mac_holdtime {
++                    type uint32 {
++                        range "0..86400" {
++                            error-message "MAC Holdtime value out of range";
++                            error-app-tag mac-holdtime-invalid;
++                        }
++                    }
++                    default 1080;
++                }
++
++
++                leaf neigh_holdtime {
++                    type uint32 {
++                        range "0..86400" {
++                            error-message "Neighbor Holdtime value out of range";
++                            error-app-tag neigh-holdtime-invalid;
++                        }
++                    }
++                    default 1080;
++                }
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/yang-models/sonic-portchannel.yang b/src/sonic-yang-models/yang-models/sonic-portchannel.yang
+index 7cbaafb59..bf222e025 100644
+--- a/src/sonic-yang-models/yang-models/sonic-portchannel.yang
++++ b/src/sonic-yang-models/yang-models/sonic-portchannel.yang
+@@ -28,6 +28,10 @@ module sonic-portchannel {
+ 
+     description "PORTCHANNEL yang Module for SONiC OS";
+ 
++    revision 2025-06-24 {
++        description "Add LACP System MAC address";
++    }
++
+     revision 2021-06-13 {
+         description "Change min-links valid range from 1-128 to 1-1024";
+     }
+@@ -120,6 +124,11 @@ module sonic-portchannel {
+                     type stypes:boolean_type;
+                 }
+ 
++                leaf system_mac {
++                    description "LACP System MAC";
++                    type yang:mac-address;
++                }
++
+             } /* end of list PORTCHANNEL_LIST */
+ 
+         } /* end of container PORTCHANNEL */
+-- 
+2.25.1
+

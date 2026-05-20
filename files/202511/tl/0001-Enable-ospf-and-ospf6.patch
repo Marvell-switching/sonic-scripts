@@ -1,0 +1,59 @@
+From 0a30c811cc031d8f9d25aae0779788df719e7b54 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Wed, 12 Nov 2025 16:51:08 +0530
+Subject: [PATCH] Enable ospf and ospf6
+
+Both ospf and ospf6 trap and daemons are enabled only when
+frr_mgmt_framework_config is set to true in DEVICE_METADATA|localhost
+CONFIG_DB table
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+---
+ .../frr/supervisord/supervisord.conf.j2            | 14 ++++++++++++++
+ files/image_config/copp/copp_cfg.j2                |  5 +++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2 b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+index 33bbf37d6..71f9687df 100644
+--- a/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
++++ b/dockers/docker-fpm-frr/frr/supervisord/supervisord.conf.j2
+@@ -132,6 +132,20 @@ stderr_syslog=true
+ dependent_startup=true
+ dependent_startup_wait_for=zebra:running
+ 
++[program:ospf6d]
++command=/usr/lib/frr/ospf6d -A 127.0.0.1 -P 0 -M snmp
++priority=5
++stopsignal=KILL
++autostart=false
++autorestart=false
++startsecs=0
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++dependent_startup_wait_for=zebra:running
++
+ [program:pimd]
+ command=/usr/lib/frr/pimd -A 127.0.0.1 -P 0
+ priority=5
+diff --git a/files/image_config/copp/copp_cfg.j2 b/files/image_config/copp/copp_cfg.j2
+index 865e2618d..ff7c870e9 100755
+--- a/files/image_config/copp/copp_cfg.j2
++++ b/files/image_config/copp/copp_cfg.j2
+@@ -153,6 +153,11 @@
+ 	        "trap_ids": "bfd,bfdv6",
+ 	        "trap_group": "queue5_group1",
+ 	        "always_enabled": "true"
++	    },
++	    "ospf": {
++		    "trap_ids": "ospf,ospfv6",
++		    "trap_group": "queue4_group1",
++		    "always_enabled": "true"
+ {% endif %}
+ 	    }
+     }
+-- 
+2.25.1
+

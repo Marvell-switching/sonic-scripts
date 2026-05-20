@@ -1,0 +1,88 @@
+From 1f43484b7003ea659fbc1bbbd3bc1ab57391be1f Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Mon, 12 Jan 2026 10:01:33 +0530
+Subject: [PATCH] SONICDC-476 remotevtep OperStatus down
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The `show vxlan remotevtep` command incorrectly displays `OperStatus` as `oper_down` for EVPN-created remote VTEPs, even though the tunnels are operational and traffic is flowing normally.
+
+The `show vxlan remotevtep` command reads from `STATE_DB` table `VXLAN_TUNNEL_TABLE` and retrieves the `operstatus` field. This field was being incorrectly set to "down" when EVPN tunnels were created.
+
+```
+FRR (BGP EVPN Route)
+    ↓
+VxlanTunnelOrch::addTunnelUser()
+    ↓
+VxlanTunnel::createDynamicDIPTunnel()
+    ↓
+VxlanTunnel::createTunnelHw()
+    ↓
+VxlanTunnelOrch::addRemoveStateTableEntry()
+    → STATE_DB: VXLAN_TUNNEL_TABLE|<tunnel_name>
+       ✗ operstatus = "down"  (INCORRECT)
+    ↓
+PortsOrch::addTunnel()
+    → m_portList[tunnel_alias].m_oper_status = SAI_PORT_OPER_STATUS_DOWN  (INCORRECT)
+```
+
+```
+User Command: show vxlan remotevtep
+    ↓
+show/vxlan.py::remotevtep()
+    ↓
+Read STATE_DB: VXLAN_TUNNEL_TABLE|*
+    ↓
+For each entry:
+    - Get 'operstatus' field
+    - Display as 'oper_' + operstatus
+    ↓
+Result: "oper_down" (because operstatus was "down")
+```
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ orchagent/portsorch.cpp | 2 +-
+ orchagent/vxlanorch.cpp | 5 ++++-
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 5cefa38d..b1d007d0 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -8001,7 +8001,7 @@ bool PortsOrch::addTunnel(string tunnel_alias, sai_object_id_t tunnel_id, bool h
+     {
+         tunnel.m_learn_mode = SAI_BRIDGE_PORT_FDB_LEARNING_MODE_DISABLE;
+     }
+-    tunnel.m_oper_status = SAI_PORT_OPER_STATUS_DOWN;
++    tunnel.m_oper_status = SAI_PORT_OPER_STATUS_UP;
+     m_portList[tunnel_alias] = tunnel;
+     saiOidToAlias[tunnel_id] = tunnel_alias;
+ 
+diff --git a/orchagent/vxlanorch.cpp b/orchagent/vxlanorch.cpp
+index e5bd31fd..b37def63 100644
+--- a/orchagent/vxlanorch.cpp
++++ b/orchagent/vxlanorch.cpp
+@@ -1643,6 +1643,9 @@ bool  VxlanTunnelOrch::addTunnelUser(const std::string remote_vtep, uint32_t vni
+         gPortsOrch->addTunnel(port_tunnel_name,dip_tunnel->getTunnelId(), false);
+         gPortsOrch->getPort(port_tunnel_name,tunnelPort);
+         gPortsOrch->addBridgePort(tunnelPort);
++
++        // Update the operational status to UP in STATE_DB after successfully adding tunnel port
++        updateDbTunnelOperStatus(port_tunnel_name, SAI_PORT_OPER_STATUS_UP);
+     }
+ 
+     return true;
+@@ -1863,7 +1866,7 @@ void VxlanTunnelOrch::addRemoveStateTableEntry(string tunnel_name,
+               fvVector.emplace_back("tnl_src", "EVPN");
+           }
+   
+-          fvVector.emplace_back("operstatus", "down");
++          fvVector.emplace_back("operstatus", "up");
+           m_stateVxlanTable.set(tunnel_name, fvVector);
+           SWSS_LOG_INFO("adding tunnel %s during warmboot", tunnel_name.c_str());
+       }
+-- 
+2.25.1
+

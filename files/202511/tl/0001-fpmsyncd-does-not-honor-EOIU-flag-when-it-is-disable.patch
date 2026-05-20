@@ -1,0 +1,67 @@
+From b392dc7faa602d6e3b37970dd045562769ce0799 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Fri, 3 Apr 2026 12:32:03 +0530
+Subject: [PATCH] fpmsyncd does not honor EOIU flag when it is disabled
+
+Although supervisord handles the <proto>_eoiu_marker.py, but fpmsyncd
+was not honoring the config done by the user. It has its own eoiu timer
+and was being triggered everytime.
+
+This change is to add a fix such that eoiu timer is only triggered when
+user sets eoiu flag as true.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ fpmsyncd/fpmsyncd.cpp | 29 ++++++++++++++++++++++++-----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/fpmsyncd/fpmsyncd.cpp b/fpmsyncd/fpmsyncd.cpp
+index 5a14dca5..ef6a5df1 100644
+--- a/fpmsyncd/fpmsyncd.cpp
++++ b/fpmsyncd/fpmsyncd.cpp
+@@ -105,6 +105,19 @@ int main(int argc, char **argv)
+     bool ospfMode = (appName == "ospf");
+     SWSS_LOG_NOTICE("Warm-Restart protocol: %s (appName: %s)", warmRestartProtocol.c_str(), appName.c_str());
+ 
++    /* Determine if EOIU signal is enabled for the active protocol */
++    std::string eoiuEnabledStr;
++    if (ospfMode)
++    {
++        cfgWarmRestartTable.hget("bgp", "ospf_eoiu", eoiuEnabledStr);
++    }
++    else
++    {
++        cfgWarmRestartTable.hget("bgp", "bgp_eoiu", eoiuEnabledStr);
++    }
++    bool eoiuEnabled = (eoiuEnabledStr == "true");
++    SWSS_LOG_NOTICE("Warm-Restart EOIU enabled: %s", eoiuEnabled ? "true" : "false");
++
+     RedisPipeline pipeline(&db, ROUTE_SYNC_PPL_SIZE);
+     RouteSync sync(&pipeline, appName);
+ 
+@@ -215,11 +228,17 @@ int main(int argc, char **argv)
+                     SWSS_LOG_NOTICE("Warm-Restart timer started.");
+                 }
+ 
+-                // Also start periodic eoiu check timer, first wait 5 seconds, then check every 1 second
+-                eoiuCheckTimer.setInterval(timespec{5, 0});
+-                eoiuCheckTimer.start();
+-                s.addSelectable(&eoiuCheckTimer);
+-                SWSS_LOG_NOTICE("Warm-Restart eoiuCheckTimer timer started.");
++                if (eoiuEnabled)
++                {
++                    eoiuCheckTimer.setInterval(timespec{5, 0});
++                    eoiuCheckTimer.start();
++                    s.addSelectable(&eoiuCheckTimer);
++                    SWSS_LOG_NOTICE("Warm-Restart eoiuCheckTimer timer started.");
++                }
++                else
++                {
++                    SWSS_LOG_NOTICE("Warm-Restart EOIU disabled, using timer-only reconciliation.");
++                }
+             }
+             else
+             {
+-- 
+2.25.1
+

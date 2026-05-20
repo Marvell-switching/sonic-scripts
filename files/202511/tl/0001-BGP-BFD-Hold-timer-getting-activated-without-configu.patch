@@ -1,0 +1,136 @@
+From 9bb4eb3809879ad940fcd82dbf14465167911d3d Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Mon, 30 Mar 2026 10:03:43 +0530
+Subject: [PATCH] BGP BFD Hold timer getting activated without configuration
+
+There are 2 issues.
+Apparantly both issues have been merged in 2 parts recently.
+
+https://github.com/FRRouting/frr/pull/20223
+Hence picking up fix from community.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ ...mode-flag-when-we-configure-BFD-hold.patch | 55 +++++++++++++++++++
+ ...old-timer-ONLY-if-hold-time-is-confi.patch | 35 ++++++++++++
+ src/sonic-frr/patch/series                    |  2 +
+ 3 files changed, 92 insertions(+)
+ create mode 100644 src/sonic-frr/patch/0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
+ create mode 100644 src/sonic-frr/patch/0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+
+diff --git a/src/sonic-frr/patch/0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch b/src/sonic-frr/patch/0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
+new file mode 100644
+index 000000000..eb066f6b0
+--- /dev/null
++++ b/src/sonic-frr/patch/0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
+@@ -0,0 +1,55 @@
++From c081dc242356071c4bdf36dd054b0bb2be33a2ed Mon Sep 17 00:00:00 2001
++From: Donatas Abraitis <donatas@opensourcerouting.org>
++Date: Tue, 9 Dec 2025 06:56:55 +0200
++Subject: [PATCH 1/2] bgpd: Set strict mode flag when we configure BFD
++ hold-timer
++
++hold-timer is a part of BFD strict mode, but we missed setting the flag, and
++as a result we don't see "neighbor X bfd strict hold-time Y" in show running.
++
++Fixes: 04e0140c22622085927b7db44c7d8e0ed0735aff ("bgpd: Add Hold Time(r) for BFD strict mode")
++
++Signed-off-by: Donatas Abraitis <donatas@opensourcerouting.org>
++Signed-off-by: sarabjeets <sarabjeets@marvell.com>
++---
++ bgpd/bgp_bfd.c | 14 +++++++++++---
++ 1 file changed, 11 insertions(+), 3 deletions(-)
++
++diff --git a/bgpd/bgp_bfd.c b/bgpd/bgp_bfd.c
++index c7090c730..a88b145ae 100644
++--- a/bgpd/bgp_bfd.c
+++++ b/bgpd/bgp_bfd.c
++@@ -118,8 +118,13 @@ void bgp_peer_config_apply(struct peer *p, struct peer_group *pg)
++ 
++ 	/* When called on a group, apply to all peers. */
++ 	if (CHECK_FLAG(p->sflags, PEER_STATUS_GROUP)) {
++-		for (ALL_LIST_ELEMENTS_RO(p->group->peer, n, pn))
+++		for (ALL_LIST_ELEMENTS_RO(p->group->peer, n, pn)) {
+++			if (peergroup_flag_check(pn, PEER_FLAG_BFD_STRICT))
+++				peer_flag_set(pn, PEER_FLAG_BFD_STRICT);
+++			else
+++				peer_flag_unset(pn, PEER_FLAG_BFD_STRICT);
++ 			bgp_peer_config_apply(pn, pg);
+++		}
++ 		return;
++ 	}
++ 
++@@ -644,10 +649,13 @@ DEFPY (neighbor_bfd_strict_hold_time,
++ 
++ 	event_cancel(&peer->bfd_config->t_hold_timer);
++ 
++-	if (no)
+++	if (no) {
++ 		peer->bfd_config->hold_time = BFD_DEF_STRICT_HOLD_TIME;
++-	else
+++		peer_flag_unset(peer, PEER_FLAG_BFD_STRICT);
+++	} else {
++ 		peer->bfd_config->hold_time = hold_time;
+++		peer_flag_set(peer, PEER_FLAG_BFD_STRICT);
+++	}
++ 
++ 	bgp_peer_config_apply(peer, peer->group);
++ 
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch b/src/sonic-frr/patch/0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+new file mode 100644
+index 000000000..b37bc7529
+--- /dev/null
++++ b/src/sonic-frr/patch/0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+@@ -0,0 +1,35 @@
++From bc67cdc2e30dd28b925de9e8399aa8f57c720fc9 Mon Sep 17 00:00:00 2001
++From: Donatas Abraitis <donatas@opensourcerouting.org>
++Date: Tue, 9 Dec 2025 08:00:28 +0200
++Subject: [PATCH] bgpd: Start BFD hold timer ONLY if hold-time is configured
++ (not zero)
++
++The issue is that this hold timer is triggered always if hold time is not configured.
++
++We should trigger it ONLY if it's configured and not ZERO.
++
++Fixes: 04e0140 ("bgpd: Add Hold Time(r) for BFD strict mode")
++
++Signed-off-by: Donatas Abraitis <donatas@opensourcerouting.org>
++Signed-off-by: sarabjeets <sarabjeets@marvell.com>
++---
++ bgpd/bgp_bfd.c | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++diff --git a/bgpd/bgp_bfd.c b/bgpd/bgp_bfd.c
++index c7090c730..a448b133d 100644
++--- a/bgpd/bgp_bfd.c
+++++ b/bgpd/bgp_bfd.c
++@@ -85,7 +85,8 @@ static void bfd_session_status_update(struct bfd_session_params *bsp,
++ 		 * when the source address is changed, e.g. 0.0.0.0 -> 10.0.0.1.
++ 		 */
++ 		if (bss->last_event > peer->uptime) {
++-			if (!peer->holdtime) {
+++			if ((CHECK_FLAG(peer->flags, PEER_FLAG_TIMER) && !peer->holdtime) ||
+++			    !peer->bgp->default_holdtime) {
++ 				event_add_timer(bm->master, bgp_bfd_strict_holdtime_expire, peer,
++ 						peer->bfd_config->hold_time,
++ 						&peer->bfd_config->t_hold_timer);
++-- 
++2.25.1
++
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 45e56c1c9..3ff40ca3e 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -65,4 +65,6 @@
+ 0101-sbfd-config-does-not-get-deleted-with-bfd-config.patch
+ 0102-BFD-Tx-Rx-intervals-not-updating-even-with-Polling-c.patch
+ 0103-ospf6d-Fix-stack-buffer-overflow-in-Link-LSA-origina.patch
++0104-bgpd-Set-strict-mode-flag-when-we-configure-BFD-hold.patch
++0105-bgpd-Start-BFD-hold-timer-ONLY-if-hold-time-is-confi.patch
+ evpn-mh-frr-zebra.patch
+-- 
+2.25.1
+

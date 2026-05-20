@@ -1,0 +1,69 @@
+From e7cc32e8684af32308f98ac09cdb4229308ec07b Mon Sep 17 00:00:00 2001
+From: Anshul Dubela <adubela@marvell.com>
+Date: Wed, 25 Feb 2026 09:05:57 +0530
+Subject: [PATCH] The STP manager (stpmgrd) failed to add ebtables rules
+
+The fix introduces stp.sh script, and the stp.service.j2 file to call this script before starting the STP manager service.
+
+The stp.sh script adds the ebtables rule only if it is not present, and removes the rule when STP is disabled. This makes rule management more responsive to STP state, improving reliability and maintainability.
+
+Signed-off-by: Anshul Dubela <adubela@marvell.com>
+---
+ cfgmgr/stpmgr.cpp | 22 ++--------------------
+ 1 file changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/cfgmgr/stpmgr.cpp b/cfgmgr/stpmgr.cpp
+index 890574b9..f0932c29 100644
+--- a/cfgmgr/stpmgr.cpp
++++ b/cfgmgr/stpmgr.cpp
+@@ -44,8 +44,6 @@ StpMgr::StpMgr(DBConnector *confDb, DBConnector *applDb, DBConnector *statDb,
+     // Initialize all VLANs to Invalid instance
+     fill_n(m_vlanInstMap, MAX_VLANS, INVALID_INSTANCE);
+ 
+-    int ret = system("ebtables -D FORWARD -d 01:00:0c:cc:cc:cd -j DROP");
+-    SWSS_LOG_DEBUG("ebtables ret %d", ret);
+ }
+ 
+ void StpMgr::doTask(Consumer &consumer)
+@@ -109,13 +107,6 @@ void StpMgr::doStpGlobalTask(Consumer &consumer)
+                     {
+                         if (l2ProtoEnabled == L2_NONE)
+                         {
+-                            const std::string cmd = std::string("") +
+-                                " ebtables -A FORWARD -d 01:00:0c:cc:cc:cd -j DROP";
+-                            std::string res;
+-                            int ret = swss::exec(cmd, res);
+-                            if (ret != 0)
+-                                SWSS_LOG_ERROR("ebtables add failed for PVST %d", ret);
+-
+                             l2ProtoEnabled = L2_PVSTP;
+                         }
+                         msg.stp_mode = L2_PVSTP;
+@@ -154,16 +145,6 @@ void StpMgr::doStpGlobalTask(Consumer &consumer)
+             // Initialize all VLANs to Invalid instance
+             fill_n(m_vlanInstMap, MAX_VLANS, INVALID_INSTANCE);
+ 
+-            // Remove ebtables rule based on protocol mode
+-            if (l2ProtoEnabled == L2_PVSTP)
+-            {
+-                const std::string pvst_cmd =
+-                    "ebtables -D FORWARD -d 01:00:0c:cc:cc:cd -j DROP";
+-                std::string res_pvst;
+-                int ret_pvst = swss::exec(pvst_cmd, res_pvst);
+-                if (ret_pvst != 0)
+-                    SWSS_LOG_ERROR("ebtables del failed for PVST %d", ret_pvst);
+-            }
+             l2ProtoEnabled = L2_NONE;
+         }
+ 
+@@ -1488,4 +1469,5 @@ bool StpMgr::isInstanceMapped(uint16_t instance) {
+         }
+     }
+     return false; // Instance not, found
+-}
+\ No newline at end of file
++}
++
+-- 
+2.25.1
+

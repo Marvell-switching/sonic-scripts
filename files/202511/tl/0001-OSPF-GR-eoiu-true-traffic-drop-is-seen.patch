@@ -1,0 +1,334 @@
+From 299d5c227a6500079859f9e841b3d3d02f6ec639 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 22 Apr 2026 11:48:32 +0530
+Subject: [PATCH] OSPF GR: eoiu = true, traffic drop is seen
+
+RCA: When eoiu is true, then after warm-reboot, as soon as adjacencies
+are full for ospf, we were setting the flag "eoiu = reached", as a result
+fpmsyncd was going ahead and checking the restorationVector (old data from
+APP_DB) and refreshVector (new paths arriving to fpmsyncd). At this
+time, as FRR has not run SPF and not concluded the forwarding paths,
+refreshVector has only the directly connected paths and not the OSPF
+learned paths. Hence we go ahead and delete this path from the device as
+stale.
+When OSPF relearns, traffic recovers.
+
+Fix: Once all the paths come, they reach "show ip route ospf" table.
+After that SPF is run and the selected path reaches "show ip fib ospf" table.
+Wait till the routes have come to fib table has come and is stable at 2 second
+interval. This checking of fib table at a interval of 2 sec allows if there are
+more routes being learnt, then allow SPF to run for them as well. Only
+when fib is stable and same twice at 2 second interval, then set the eoiu = reached.
+Considering SPF takes few milliseconds to run, 2 sec is a safe interval
+to check fib table again.
+Once the routes are in fib table, the only next step pending is
+communicating the same to fpmsyncd. After eoiu = true, fpmsyncd has 3
+sec hold timer, this timer again gives enough buffer to selected routes to get
+communicated to fomsyncd (which again happens in few ms).
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ fpmsyncd/ospf_eoiu_marker.py | 247 +++++++++++++++++++++++++++--------
+ 1 file changed, 194 insertions(+), 53 deletions(-)
+
+diff --git a/fpmsyncd/ospf_eoiu_marker.py b/fpmsyncd/ospf_eoiu_marker.py
+index cf0e4af5..645bc1a2 100644
+--- a/fpmsyncd/ospf_eoiu_marker.py
++++ b/fpmsyncd/ospf_eoiu_marker.py
+@@ -5,17 +5,21 @@ Description: ospf_eoiu_marker.py -- populating OSPF EOIU marker flag in STATE_DB
+     The script is started by supervisord in the bgp (routing) docker when the docker is started.
+     It does not do anything if neither system nor bgp warm restart is enabled.
+ 
+-    The script checks OSPF neighbor state via vtysh CLI periodically (every 1 second).
+-    It checks whether all OSPF neighbors have reached the "Full" adjacency state
+-    using `show ip ospf neighbor json`.
+-
+-    Once all neighbors are Full (or there are no neighbors), it sets an EOIU flag
+-    in STATE_DB at OSPF_STATE_TABLE|IPv4|eoiu.
++    The script uses two gates before signaling EOIU:
++    1. Check OSPF neighbor state via `show ip ospf neighbor json` until all
++       discovered neighbors reach the "Full" adjacency state.
++    2. Check the selected OSPF forwarding view in zebra via
++       `show ip fib ospf json` until the FIB snapshot remains stable across
++       two polls. This confirms SPF has run, zebra has selected the routes
++       that will be exported over FPM, and primary / backup nexthop state
++       has settled.
++
++    Once both gates pass, the script sets an EOIU flag in STATE_DB at
++    OSPF_STATE_TABLE|IPv4|eoiu.
+ 
+     fpmsyncd may hold a few seconds (2~5 seconds) after getting the flag before
+-    starting routing reconciliation. This should be enough for all routes to be
+-    synced to fpmsyncd from ospf via zebra/FPM. If not, the system is probably
+-    already in a wrong state.
++    starting routing reconciliation. This is enough because once the zebra FIB
++    view is stable, only zebra -> FPM -> fpmsyncd delivery remains.
+ 
+     For any reason the script fails to set the EOIU flag in STATE_DB,
+     the warm_restart ospf_timer will kick in later as a safety net.
+@@ -44,6 +48,47 @@ class OspfStateCheck():
+     # Check OSPF neighbor state every 1 second
+     CHECK_INTERVAL = 1
+ 
++    # Require the selected OSPF FIB view to remain stable for 2 seconds.
++    ROUTE_STABILITY_INTERVAL = 2
++
++    # Use the OSPF-filtered FIB view so zebra returns only OSPF-installed
++    # prefixes. This keeps the JSON output small even on DUTs with many
++    # BGP/connected/static routes.
++    FIB_QUERY_COMMAND = "vtysh -c 'show ip fib ospf json'"
++
++    # Only compare fields that describe the selected forwarding state we care
++    # about. This avoids false instability from CLI/debug fields such as
++    # "uptime" while still catching real route, nexthop, and backup-nexthop
++    # changes that would affect what fpmsyncd eventually receives via FPM.
++    ROUTE_SNAPSHOT_FIELDS = (
++        "prefix",
++        "prefixLen",
++        "protocol",
++        "instance",
++        "vrfName",
++        "distance",
++        "metric",
++        "tag",
++        "nexthopGroupId",
++        "ospfPathType",
++        "ospfAreaId",
++        "ospfTag",
++    )
++
++    NEXTHOP_SNAPSHOT_FIELDS = (
++        "ip",
++        "afi",
++        "interfaceIndex",
++        "interfaceName",
++        "unreachable",
++        "blackhole",
++        "vrf",
++        "active",
++        "linkDown",
++        "backupIndex",
++        "weight",
++    )
++
+     def __init__(self):
+         self.ospf_eoiu = False
+ 
+@@ -67,66 +112,162 @@ class OspfStateCheck():
+ 
+     def check_ospf_neighbors_full(self):
+         """
+-        Check if all OSPF neighbors are in Full state.
++        Check if discovered OSPF neighbors are all in Full state.
+ 
+         Returns:
+-            True  - all neighbors are Full, or there are no neighbors
+-            False - some neighbors are not yet Full, or ospfd is not reachable
+-            None  - error occurred (vtysh unreachable, JSON parse failure)
++            (True, True)   - neighbors exist and all are Full
++            (False, True)  - neighbors exist but some are not yet Full
++            (False, False) - no neighbors discovered yet
++            (None, None)   - error occurred
+         """
++        cmd = "vtysh -c 'show ip ospf neighbor json'"
+         try:
+-            cmd = "vtysh -c 'show ip ospf neighbor json'"
+-            output = subprocess.getoutput(cmd)
+-            neighbor_info = json.loads(output)
+-
+-            # The JSON output has a top-level "neighbors" dict.
+-            # Each key is a neighbor router-id mapping to a list of
+-            # adjacencies (one per interface).
+-            # Each adjacency has a "converged" field: "Full", "Init", etc.
+-            #
+-            # If there are no neighbors: {"neighbors": {}} or just {}
+-            neighbors = neighbor_info.get("neighbors", {})
+-
+-            if not neighbors:
+-                syslog.syslog('OSPF has no neighbors, marking EOIU reached')
+-                return True
+-
+-            for router_id, adjacencies in neighbors.items():
+-                for adj in adjacencies:
+-                    converged = adj.get("converged", "")
+-                    if converged != "Full":
+-                        syslog.syslog(syslog.LOG_DEBUG,
+-                                      'OSPF neighbor {} not Full yet (state: {})'.format(
+-                                          router_id, converged))
+-                        return False
+-
+-            syslog.syslog('All OSPF neighbors are Full')
+-            return True
++            neighbor_info = json.loads(subprocess.getoutput(cmd))
++        except Exception:
++            syslog.syslog(syslog.LOG_ERR,
++                          "*ERROR* vtysh [{}] failed: {}".format(
++                              cmd, traceback.format_exc()))
++            return (None, None)
++
++        # The JSON output has a top-level "neighbors" dict. Each key is a
++        # neighbor router-id mapping to a list of adjacencies (one per
++        # interface). Each adjacency has a "converged" field such as
++        # "Full", "Init", etc.
++        neighbors = neighbor_info.get("neighbors", {})
++        if not neighbors:
++            return (False, False)
++
++        for router_id, adjacencies in neighbors.items():
++            for adj in adjacencies:
++                converged = adj.get("converged", "")
++                if converged != "Full":
++                    syslog.syslog(syslog.LOG_DEBUG,
++                                  'OSPF neighbor {} not Full yet (state: {})'.format(
++                                      router_id, converged))
++                    return (False, True)
++
++        syslog.syslog('All OSPF neighbors are Full')
++        return (True, True)
++
++    def _sort_snapshot_items(self, items):
++        return sorted(items, key=lambda item: json.dumps(item, sort_keys=True))
++
++    def _normalize_nexthop(self, nexthop):
++        normalized = {}
++        for field in self.NEXTHOP_SNAPSHOT_FIELDS:
++            if field in nexthop:
++                normalized[field] = nexthop[field]
++        return normalized
++
++    def _normalize_route(self, prefix, route):
++        normalized = {}
++        for field in self.ROUTE_SNAPSHOT_FIELDS:
++            if field == "prefix":
++                normalized[field] = route.get(field, prefix)
++            elif field in route:
++                normalized[field] = route[field]
++
++        nexthops = [
++            self._normalize_nexthop(nexthop)
++            for nexthop in route.get("nexthops", [])
++            if isinstance(nexthop, dict)
++        ]
++        if nexthops:
++            normalized["nexthops"] = self._sort_snapshot_items(nexthops)
++
++        backup_nexthops = [
++            self._normalize_nexthop(nexthop)
++            for nexthop in route.get("backupNexthops", [])
++            if isinstance(nexthop, dict)
++        ]
++        if backup_nexthops:
++            normalized["backupNexthops"] = self._sort_snapshot_items(
++                backup_nexthops)
++
++        return normalized
++
++    def get_ospf_fib_snapshot(self):
++        """
++        Return a normalized snapshot of the selected OSPF FIB view in zebra.
+ 
++        The snapshot includes both primary nexthops ("nexthops") and backup
++        nexthops ("backupNexthops"). Backup identity comes from the array name
++        itself, not from a per-entry boolean inside each nexthop object.
++        """
++        cmd = self.FIB_QUERY_COMMAND
++        try:
++            fib_info = json.loads(subprocess.getoutput(cmd))
+         except Exception:
+             syslog.syslog(syslog.LOG_ERR,
+-                          "*ERROR* check_ospf_neighbors_full Exception: %s" %
+-                          (traceback.format_exc()))
++                          "*ERROR* vtysh [{}] failed: {}".format(
++                              cmd, traceback.format_exc()))
+             return None
+ 
++        if not isinstance(fib_info, dict):
++            syslog.syslog(syslog.LOG_ERR,
++                          "*ERROR* get_ospf_fib_snapshot: unexpected JSON type {}".format(
++                              type(fib_info).__name__))
++            return None
++
++        ospf_fib = []
++        for prefix, routes in fib_info.items():
++            if not isinstance(routes, list):
++                continue
++
++            for route in routes:
++                if not isinstance(route, dict):
++                    continue
++
++                if route.get("protocol") != "ospf":
++                    continue
++
++                ospf_fib.append(self._normalize_route(prefix, route))
++
++        return tuple(self._sort_snapshot_items(ospf_fib))
++
++    def check_ospf_routes_stable(self, deadline):
++        """
++        Check whether the selected OSPF FIB view in zebra stays stable across
++        two polls separated by ROUTE_STABILITY_INTERVAL seconds.
++        """
++        first = self.get_ospf_fib_snapshot()
++        if first is None or not first:
++            return False
++
++        remaining = deadline - time.monotonic()
++        if remaining < self.ROUTE_STABILITY_INTERVAL:
++            return False
++
++        time.sleep(self.ROUTE_STABILITY_INTERVAL)
++
++        second = self.get_ospf_fib_snapshot()
++        if second is None or not second:
++            return False
++
++        return second == first
++
+     def wait_for_ospf_eoiu(self):
+         """
+-        Poll OSPF neighbor state until all neighbors are Full or timeout.
++        Poll OSPF neighbor state and zebra FIB state until EOIU is safe to
++        signal or timeout.
+ 
+-        The polling loop runs every CHECK_INTERVAL seconds and times out
+-        after DEF_TIME_OUT seconds. If ospfd is not reachable initially
++        The polling loop runs every CHECK_INTERVAL seconds and times out after
++        DEF_TIME_OUT seconds. If ospfd or zebra is not reachable initially
+         (vtysh fails), the loop retries until timeout.
+         """
+-        wait_time = self.DEF_TIME_OUT
+-        while wait_time >= 0:
+-            result = self.check_ospf_neighbors_full()
+-            if result is True:
+-                self.ospf_eoiu = True
+-                syslog.syslog("OSPF IPv4 EOIU reached")
++        deadline = time.monotonic() + self.DEF_TIME_OUT
++        while time.monotonic() <= deadline:
++            all_full, has_neighbors = self.check_ospf_neighbors_full()
++            if all_full and has_neighbors:
++                if self.check_ospf_routes_stable(deadline):
++                    self.ospf_eoiu = True
++                    syslog.syslog("OSPF IPv4 EOIU reached")
++                    break
++
++            if time.monotonic() >= deadline:
+                 break
+ 
+             time.sleep(self.CHECK_INTERVAL)
+-            wait_time -= self.CHECK_INTERVAL
+ 
+         if not self.ospf_eoiu:
+             syslog.syslog(syslog.LOG_ERR,
+@@ -166,7 +307,7 @@ def main():
+     # Set initial EOIU state to unknown
+     ospf_state_check.set_ospf_eoiu_marker("unknown")
+ 
+-    # Poll OSPF neighbor state
++    # Poll OSPF neighbor and zebra FIB state
+     try:
+         ospf_state_check.wait_for_ospf_eoiu()
+     except Exception as e:
+-- 
+2.25.1
+

@@ -1,0 +1,319 @@
+From 7b0045939856960025b6819dad6607f727e3f812 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Wed, 25 Feb 2026 11:48:44 +0530
+Subject: [PATCH] OSPF GR: CLI and test infra changes
+
+CLI and test infra changes for OSPF GR
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ config/main.py       |  81 +++++++++++++++++++++++++++++
+ show/warm_restart.py |  39 +++++++++-----
+ tests/config_test.py | 120 +++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 228 insertions(+), 12 deletions(-)
+
+diff --git a/config/main.py b/config/main.py
+index 2400c843..695598bb 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -3800,6 +3800,9 @@ def warm_restart_bgp_timer(ctx, seconds):
+         if seconds not in range(1, 3600):
+             ctx.fail("bgp warm restart timer must be in range 1-3600")
+     try:
++        entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
++        if entry.get('warm_restart_protocol') == 'ospf':
++            click.echo("Warning: warm_restart_protocol is set to 'ospf'; bgp_timer is saved but will not take effect until protocol is switched to 'bgp'")
+         db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
+     except ValueError as e:
+         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+@@ -3823,10 +3826,88 @@ def warm_restart_teamsyncd_timer(ctx, seconds):
+ def warm_restart_bgp_eoiu(ctx, enable):
+     db = ValidatedConfigDBConnector(ctx.obj['db'])
+     try:
++        entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
++        if entry.get('warm_restart_protocol') == 'ospf':
++            click.echo("Warning: warm_restart_protocol is set to 'ospf'; bgp_eoiu is saved but will not take effect until protocol is switched to 'bgp'")
+         db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
+     except ValueError as e:
+         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+ 
++@warm_restart.command('protocol')
++@click.argument('protocol', metavar='<protocol>', required=True, type=click.Choice(["bgp", "ospf"]))
++@click.pass_context
++def warm_restart_protocol(ctx, protocol):
++    """Set warm restart protocol for routing (bgp or ospf)"""
++    db = ValidatedConfigDBConnector(ctx.obj['db'])
++    try:
++        if protocol == 'ospf':
++            metadata = ctx.obj['db'].get_entry('DEVICE_METADATA', 'localhost')
++            if metadata.get('frr_mgmt_framework_config') != 'true':
++                ctx.fail("OSPF GR requires frr_mgmt_framework_config to be enabled in DEVICE_METADATA")
++        entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
++        cleared_fields = []
++
++        if protocol == 'ospf':
++            for field in ['bgp_eoiu', 'bgp_timer']:
++                if field in entry:
++                    cleared_fields.append(field)
++        elif protocol == 'bgp':
++            for field in ['ospf_eoiu', 'ospf_timer']:
++                if field in entry:
++                    cleared_fields.append(field)
++
++        if cleared_fields:
++            for field in cleared_fields:
++                del entry[field]
++            entry['warm_restart_protocol'] = protocol
++            # Delete and recreate: mod_entry can't remove individual fields,
++            # so we delete the whole entry and write back without the cleared fields.
++            db.mod_entry('WARM_RESTART', 'bgp', None)
++            db.mod_entry('WARM_RESTART', 'bgp', entry)
++            click.echo("Note: cleared {} (not applicable when protocol={})".format(
++                ', '.join(cleared_fields), protocol))
++        else:
++            db.mod_entry('WARM_RESTART', 'bgp', {'warm_restart_protocol': protocol})
++    except ValueError as e:
++        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
++
++@warm_restart.command('ospf_timer')
++@click.argument('seconds', metavar='<seconds>', required=True, type=int)
++@click.pass_context
++def warm_restart_ospf_timer(ctx, seconds):
++    """Set OSPF warm restart timer duration in seconds"""
++    db = ValidatedConfigDBConnector(ctx.obj['db'])
++    metadata = ctx.obj['db'].get_entry('DEVICE_METADATA', 'localhost')
++    if metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("OSPF GR requires frr_mgmt_framework_config to be enabled in DEVICE_METADATA")
++    if ADHOC_VALIDATION:
++        if seconds not in range(1, 3600):
++            ctx.fail("ospf warm restart timer must be in range 1-3600")
++    try:
++        entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
++        if entry.get('warm_restart_protocol', 'bgp') != 'ospf':
++            click.echo("Warning: warm_restart_protocol is not set to 'ospf'; ospf_timer is saved but will not take effect until protocol is switched to 'ospf'")
++        db.mod_entry('WARM_RESTART', 'bgp', {'ospf_timer': seconds})
++    except ValueError as e:
++        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
++
++@warm_restart.command('ospf_eoiu')
++@click.argument('enable', metavar='<enable>', default='true', required=False, type=click.Choice(["true", "false"]))
++@click.pass_context
++def warm_restart_ospf_eoiu(ctx, enable):
++    """Enable or disable OSPF EOIU during warm restart"""
++    db = ValidatedConfigDBConnector(ctx.obj['db'])
++    metadata = ctx.obj['db'].get_entry('DEVICE_METADATA', 'localhost')
++    if metadata.get('frr_mgmt_framework_config') != 'true':
++        ctx.fail("OSPF GR requires frr_mgmt_framework_config to be enabled in DEVICE_METADATA")
++    try:
++        entry = ctx.obj['db'].get_entry('WARM_RESTART', 'bgp')
++        if entry.get('warm_restart_protocol', 'bgp') != 'ospf':
++            click.echo("Warning: warm_restart_protocol is not set to 'ospf'; ospf_eoiu is saved but will not take effect until protocol is switched to 'ospf'")
++        db.mod_entry('WARM_RESTART', 'bgp', {'ospf_eoiu': enable})
++    except ValueError as e:
++        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
++
+ def vrf_add_management_vrf(config_db):
+     """Enable management vrf in config DB"""
+ 
+diff --git a/show/warm_restart.py b/show/warm_restart.py
+index 2d0ea4b6..5f87e83a 100644
+--- a/show/warm_restart.py
++++ b/show/warm_restart.py
+@@ -93,29 +93,44 @@ def config(redis_unix_socket_path):
+                 r.append(state_db.get(state_db.STATE_DB, enable_k, "enable"))
+ 
+             if k not in data:
++                r.append("N/A")
+                 r.append("NULL")
+                 r.append("NULL")
+                 r.append("NULL")
++            elif k == 'bgp':
++                # For the bgp component, display protocol-aware fields
++                protocol = data[k].get('warm_restart_protocol', 'bgp')
++                r.append(protocol)
++
++                if protocol == 'ospf':
++                    if 'ospf_timer' in data[k]:
++                        r.append("ospf_timer")
++                        r.append(data[k]['ospf_timer'])
++                    else:
++                        r.append("NULL")
++                        r.append("NULL")
++                    r.append(data[k].get('ospf_eoiu', 'NULL'))
++                else:
++                    # protocol == 'bgp' (default)
++                    if 'bgp_timer' in data[k]:
++                        r.append("bgp_timer")
++                        r.append(data[k]['bgp_timer'])
++                    else:
++                        r.append("NULL")
++                        r.append("NULL")
++                    r.append(data[k].get('bgp_eoiu', 'NULL'))
+             elif 'neighsyncd_timer' in data[k]:
++                r.append("N/A")
+                 r.append("neighsyncd_timer")
+                 r.append(data[k]['neighsyncd_timer'])
+                 r.append("NULL")
+-            elif 'bgp_timer' in data[k] or 'bgp_eoiu' in data[k]:
+-                if 'bgp_timer' in data[k]:
+-                    r.append("bgp_timer")
+-                    r.append(data[k]['bgp_timer'])
+-                else:
+-                    r.append("NULL")
+-                    r.append("NULL")
+-                if 'bgp_eoiu' in data[k]:
+-                    r.append(data[k]['bgp_eoiu'])
+-                else:
+-                    r.append("NULL")
+             elif 'teamsyncd_timer' in data[k]:
++                r.append("N/A")
+                 r.append("teamsyncd_timer")
+                 r.append(data[k]['teamsyncd_timer'])
+                 r.append("NULL")
+             else:
++                r.append("N/A")
+                 r.append("NULL")
+                 r.append("NULL")
+                 r.append("NULL")
+@@ -124,6 +139,6 @@ def config(redis_unix_socket_path):
+ 
+         return table
+ 
+-    header = ['name', 'enable', 'timer_name', 'timer_duration', 'eoiu_enable']
++    header = ['name', 'enable', 'protocol', 'timer_name', 'timer_duration', 'eoiu_enable']
+     click.echo(tabulate(tablelize(keys, data, enable_table_keys, prefix), header))
+     state_db.close(state_db.STATE_DB)
+diff --git a/tests/config_test.py b/tests/config_test.py
+index 9de178c8..659e2674 100644
+--- a/tests/config_test.py
++++ b/tests/config_test.py
+@@ -3092,6 +3092,126 @@ class TestConfigWarmRestart(object):
+         assert result.exit_code != 0
+         assert "Invalid ConfigDB. Error" in result.output
+ 
++    def test_warm_restart_protocol_valid(self):
++        runner = CliRunner()
++        db = Db()
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["protocol"], ["bgp"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code == 0
++
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        result = runner.invoke(config.config.commands["warm_restart"].commands["protocol"], ["ospf"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code == 0
++
++    def test_warm_restart_protocol_invalid(self):
++        runner = CliRunner()
++        db = Db()
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["protocol"], ["isis"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++
++    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
++    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
++    def test_warm_restart_protocol_yang_validation(self):
++        config.ADHOC_VALIDATION = False
++        runner = CliRunner()
++        db = Db()
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["protocol"], ["bgp"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++        assert "Invalid ConfigDB. Error" in result.output
++
++    def test_warm_restart_ospf_timer(self):
++        config.ADHOC_VALIDATION = True
++        runner = CliRunner()
++        db = Db()
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_timer"], ["0"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++        assert "ospf warm restart timer must be in range 1-3600" in result.output
++
++    def test_warm_restart_ospf_timer_valid(self):
++        runner = CliRunner()
++        db = Db()
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_timer"], ["300"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code == 0
++
++    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
++    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
++    def test_warm_restart_ospf_timer_yang_validation(self):
++        config.ADHOC_VALIDATION = False
++        runner = CliRunner()
++        db = Db()
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_timer"], ["300"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++        assert "Invalid ConfigDB. Error" in result.output
++
++    def test_warm_restart_ospf_eoiu_valid(self):
++        runner = CliRunner()
++        db = Db()
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_eoiu"], ["true"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code == 0
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_eoiu"], ["false"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code == 0
++
++    def test_warm_restart_ospf_eoiu_invalid(self):
++        runner = CliRunner()
++        db = Db()
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_eoiu"], ["yes"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++
++    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
++    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
++    def test_warm_restart_ospf_eoiu_yang_validation(self):
++        config.ADHOC_VALIDATION = False
++        runner = CliRunner()
++        db = Db()
++        db.cfgdb.mod_entry('DEVICE_METADATA', 'localhost', {'frr_mgmt_framework_config': 'true'})
++        obj = {'db':db.cfgdb}
++
++        result = runner.invoke(config.config.commands["warm_restart"].commands["ospf_eoiu"], ["true"], obj=obj)
++        print(result.exit_code)
++        print(result.output)
++        assert result.exit_code != 0
++        assert "Invalid ConfigDB. Error" in result.output
++
+     @classmethod
+     def teardown_class(cls):
+         print("TEARDOWN")
+-- 
+2.25.1
+

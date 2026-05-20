@@ -1,0 +1,43 @@
+From 218d30abed656744b4568dbd85fad2ce4068939f Mon Sep 17 00:00:00 2001
+From: Rakshitha SK <rsk@marvell.com>
+Date: Tue, 24 Mar 2026 09:56:41 +0530
+Subject: [PATCH] Fix gNMI crash due to duplicate edges in dependency
+
+Problem:
+Adding BGP YANG modules to import.mk caused gNMI/translib to crash
+on startup, making gNMI unusable.
+
+Root Cause:
+Duplicate edges were added in GetOrderedDepTables() when both leafref
+and dependent-on pointed to the same table, causing go-toposort panic.
+
+Fix:
+Add duplicate edge check in dependent-on block to avoid adding the same
+edge twice.
+
+Signed-off-by: Rakshitha SK <rsk@marvell.com>
+---
+ cvl/cvl_api.go | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/cvl/cvl_api.go b/cvl/cvl_api.go
+index 18e7632..2a59b7a 100644
+--- a/cvl/cvl_api.go
++++ b/cvl/cvl_api.go
+@@ -854,6 +854,13 @@ func (c *CVL) GetOrderedDepTables(yangModule, tableName string) ([]string, CVLRe
+ 		for _, tn := range tblLists {
+ 			for _, depTblName := range modelInfo.tableInfo[tn].dependentTables {
+ 				if tbl == depTblName {
++					toName, exists := dupEdgeCheck[depTblName]
++					if exists && (toName == redisTblTo) {
++						// Skip duplicate edge already added via leafref block.
++						// Duplicate AddEdge corrupts g.outputs index in go-toposort causing panic.
++						CVL_LOG(INFO_DEBUG, "GetOrderedDepTables(): Skipping duplicate edge %s -> %s", depTblName, redisTblTo)
++						continue
++					}
+ 					graph.AddNodes(depTblName)
+ 					graph.AddEdge(depTblName, redisTblTo)
+ 					dupEdgeCheck[depTblName] = redisTblTo
+-- 
+2.25.1
+

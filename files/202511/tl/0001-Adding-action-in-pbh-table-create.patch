@@ -1,0 +1,27 @@
+From 55dd42a2656b8a2477fd3ff6479d111c963f8fec Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Wed, 19 Nov 2025 18:19:19 +0530
+Subject: [PATCH] Adding action in pbh table create
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/pbhorch.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/orchagent/pbhorch.cpp b/orchagent/pbhorch.cpp
+index e2146cb3..b1162d92 100644
+--- a/orchagent/pbhorch.cpp
++++ b/orchagent/pbhorch.cpp
+@@ -249,6 +249,9 @@ bool PbhOrch::createPbhTable(const PbhTable &table)
+         .withMatch(std::make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_IPV6_NEXT_HEADER))
+         .withMatch(std::make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT))
+         .withMatch(std::make_shared<AclTableMatch>(SAI_ACL_TABLE_ATTR_FIELD_INNER_ETHER_TYPE))
++        .withAction(SAI_ACL_ACTION_TYPE_SET_LAG_HASH_ID)
++        .withAction(SAI_ACL_ACTION_TYPE_SET_ECMP_HASH_ID)
++        .withAction(SAI_ACL_ACTION_TYPE_COUNTER)
+         .build();
+ 
+     if (!pbhTable.validateAddType(pbhTableType))
+-- 
+2.25.1
+

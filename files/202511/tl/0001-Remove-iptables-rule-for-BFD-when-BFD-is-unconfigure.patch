@@ -1,0 +1,139 @@
+From 018770ceee61edcd2834654d33df660dbc506c16 Mon Sep 17 00:00:00 2001
+From: sarabjeets <sarabjeets@marvell.com>
+Date: Mon, 19 Jan 2026 17:04:30 +0530
+Subject: [PATCH] Remove iptables rule for BFD when BFD is unconfigured
+
+Currently, caclmgrd unsubscribes from BFD tables in STATE_DB after
+adding the exception to allow BFD traffic.
+
+However, when BFD is unconfigured, this exceptions are not removed.
+
+Modified the new design such that caclmgrd now does not unsubscribes.
+Rather it now keeps a count on the number of BFD sessions created. if at
+any time, number of BFD session count reaches 0, it will remove the
+rule.
+
+Signed-off-by: sarabjeets <sarabjeets@marvell.com>
+---
+ scripts/caclmgrd | 70 +++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 49 insertions(+), 21 deletions(-)
+
+diff --git a/scripts/caclmgrd b/scripts/caclmgrd
+index f08a363..7f30203 100755
+--- a/scripts/caclmgrd
++++ b/scripts/caclmgrd
+@@ -125,6 +125,7 @@ class ControlPlaneAclManager(logger.Logger):
+ 
+     DualToR = False
+     bfdAllowed = False
++    bfdSessionCount = 0
+     VxlanAllowed = False
+     VxlanSrcIP = ""
+     # a map from dpu name to port
+@@ -660,9 +661,9 @@ class ControlPlaneAclManager(logger.Logger):
+         iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + ['iptables', '-A', 'INPUT', '-s', '127.0.0.1', '-i', 'lo', '-j', 'ACCEPT'])
+         iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + ['ip6tables', '-A', 'INPUT', '-s', '::1', '-i', 'lo', '-j', 'ACCEPT'])
+ 
+-
++        # Add iptables/ip6tables commands to allow BFD protocol if enabled
+         if self.bfdAllowed:
+-            iptables_cmds += self.get_bfd_iptable_commands(namespace)
++            iptables_cmds += self.get_bfd_iptable_commands(namespace, operation='add')
+ 
+         if self.VxlanAllowed:
+             fvs = swsscommon.FieldValuePairs([("src_ip", self.VxlanSrcIP)])
+@@ -990,18 +991,33 @@ class ControlPlaneAclManager(logger.Logger):
+         finally:
+             new_config_db_connector.close("CONFIG_DB")
+ 
+-    def get_bfd_iptable_commands(self, namespace):
++    def get_bfd_iptable_commands(self, namespace, operation):
++        """
++        Generate iptables commands for BFD protocol.
++        Args:
++            namespace: The namespace to apply the rules
++            operation: 'add' to insert rules, 'delete' to remove rules
++        """
+         iptables_cmds = []
+-        # Add iptables/ip6tables commands to allow all BFD singlehop and multihop sessions
+-        iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['iptables', '-I', 'INPUT', '2', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
+-        iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['ip6tables', '-I', 'INPUT', '2', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
++        if operation == 'add':
++            # Add iptables/ip6tables commands to allow all BFD singlehop and multihop sessions
++            iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['iptables', '-I', 'INPUT', '2', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
++            iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['ip6tables', '-I', 'INPUT', '2', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
++        elif operation == 'delete':
++            # Delete iptables/ip6tables commands to allow all BFD singlehop and multihop sessions
++            iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['iptables', '-D', 'INPUT', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
++            iptables_cmds.append(self.iptables_cmd_ns_prefix[namespace] + self.exclude_mgmt_port(['ip6tables', '-D', 'INPUT', '-p', 'udp', '-m', 'multiport', '--dports', '3784,4784', '-j', 'ACCEPT']))
+         return iptables_cmds
+ 
+     def allow_bfd_protocol(self, namespace):
+-        iptables_cmds = self.get_bfd_iptable_commands(namespace)
++        iptables_cmds = self.get_bfd_iptable_commands(namespace, operation='add')
+         if iptables_cmds:
+             self.run_commands(iptables_cmds)
+ 
++    def block_bfd_protocol(self, namespace):
++        iptables_cmds = self.get_bfd_iptable_commands(namespace, operation='delete')
++        if iptables_cmds:
++            self.run_commands(iptables_cmds)
+ 
+     def get_vxlan_port_iptable_commands(self, namespace, data):
+         iptables_cmds = []
+@@ -1219,26 +1235,38 @@ class ControlPlaneAclManager(logger.Logger):
+                     if not key:
+                         break
+ 
+-                    if op == 'SET' and not self.bfdAllowed:
+-                        self.allow_bfd_protocol(namespace)
+-                        self.bfdAllowed = True
+-                        '''remove both the subscription of software and hardware offload BFD
+-                           once the bfdAllowed is set to True'''
+-                        sel.removeSelectable(subscribe_bfd_session)
+-                        sel.removeSelectable(subscribe_bfd_software_session)
++                    if op == 'SET':
++                        if not self.bfdAllowed:
++                            self.allow_bfd_protocol(namespace)
++                            self.bfdAllowed = True
++                        self.bfdSessionCount += 1
++                        self.log_info("BFD session added. Total sessions: {}".format(self.bfdSessionCount))
++                    elif op == 'DEL':
++                        self.bfdSessionCount -= 1
++                        self.log_info("BFD session removed. Total sessions: {}".format(self.bfdSessionCount))
++                        if self.bfdSessionCount <= 0 and self.bfdAllowed:
++                            self.bfdAllowed = False
++                            self.block_bfd_protocol(namespace)
++                            self.bfdSessionCount = 0
+ 
+                 while True:
+                     key, op, fvs = subscribe_bfd_software_session.pop()
+                     if not key:
+                         break
+ 
+-                    if op == 'SET' and not self.bfdAllowed:
+-                        self.allow_bfd_protocol(namespace)
+-                        self.bfdAllowed = True
+-                        '''remove both the subscription of software and hardware offload BFD
+-                           once the bfdAllowed is set to True'''
+-                        sel.removeSelectable(subscribe_bfd_session)
+-                        sel.removeSelectable(subscribe_bfd_software_session)
++                    if op == 'SET':
++                        if not self.bfdAllowed:
++                            self.allow_bfd_protocol(namespace)
++                            self.bfdAllowed = True
++                        self.bfdSessionCount += 1
++                        self.log_info("BFD software session added. Total sessions: {}".format(self.bfdSessionCount))
++                    elif op == 'DEL':
++                        self.bfdSessionCount -= 1
++                        self.log_info("BFD software session removed. Total sessions: {}".format(self.bfdSessionCount))
++                        if self.bfdSessionCount <= 0 and self.bfdAllowed:
++                            self.bfdAllowed = False
++                            self.block_bfd_protocol(namespace)
++                            self.bfdSessionCount = 0
+ 
+                 if self.DualToR:
+                     '''dhcp packet mark update'''
+-- 
+2.25.1
+

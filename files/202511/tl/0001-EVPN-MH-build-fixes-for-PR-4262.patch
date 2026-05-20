@@ -1,0 +1,315 @@
+From 1d5cb4756efc93618449b0bacc88e5cc1c7a46b4 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Thu, 9 Apr 2026 12:39:43 +0530
+Subject: [PATCH] EVPN MH build fixes for PR 4262
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ fdbsyncd/fdbsync.cpp                          | 29 +++++++++--
+ fpmsyncd/routesync.cpp                        |  4 ++
+ fpmsyncd/routesync.h                          |  4 +-
+ orchagent/fdborch.cpp                         | 52 ++++++++++++-------
+ orchagent/fdborch.h                           | 10 +++-
+ orchagent/orchdaemon.cpp                      |  1 +
+ tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp | 11 +++-
+ 7 files changed, 83 insertions(+), 28 deletions(-)
+
+diff --git a/fdbsyncd/fdbsync.cpp b/fdbsyncd/fdbsync.cpp
+index 3b984df2..03266004 100644
+--- a/fdbsyncd/fdbsync.cpp
++++ b/fdbsyncd/fdbsync.cpp
+@@ -902,6 +902,17 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+         }
+     }
+ 
++    /* Drop MH peer sync entries that have no VTEP or NHG destination */
++    if (tb[NDA_FLAGS_EXT] && nlmsg_type == RTM_NEWNEIGH && dest_type == UNKNOWN)
++    {
++        uint32_t ext_flags = *(uint32_t *)RTA_DATA(tb[NDA_FLAGS_EXT]);
++        if (ext_flags & NTF_EXT_MH_PEER_SYNC)
++        {
++            SWSS_LOG_INFO("Dropping MH peer sync entry with no VTEP/NHG");
++            return;
++        }
++    }
++
+     ifindex = rtnl_neigh_get_ifindex(neigh);
+     if (m_intf_info.find(ifindex) != m_intf_info.end())
+     {
+@@ -969,11 +980,23 @@ void FdbSync::onMsgNbr(int nlmsg_type, struct nl_object *obj, struct nlmsghdr *h
+             SWSS_LOG_INFO("Remote VTEP MAC sent without NDA_DST attribute");
+             return;
+         }
+-        else
++
++        /* Validate the VTEP address from the raw NDA_DST attribute.
++         * If dst is 0.0.0.0 (e.g. MH peer sync with no remote VTEP),
++         * drop the entry. */
++        if (tb[NDA_DST] && RTA_PAYLOAD(tb[NDA_DST]) == sizeof(struct in_addr))
+         {
+-            SWSS_LOG_INFO("Tunnel IP %s", nl_addr2str(vtep_addr, buf, sizeof(buf)));
+-            dest_type = VTEP;
++            struct in_addr dst_v4;
++            memcpy(&dst_v4, RTA_DATA(tb[NDA_DST]), sizeof(dst_v4));
++            if (dst_v4.s_addr == 0)
++            {
++                SWSS_LOG_INFO("Remote VTEP MAC sent with zero NDA_DST, dropping");
++                return;
++            }
+         }
++
++        SWSS_LOG_INFO("Tunnel IP %s", nl_addr2str(vtep_addr, buf, sizeof(buf)));
++        dest_type = VTEP;
+     }
+ 
+     if (state & NUD_NOARP)
+diff --git a/fpmsyncd/routesync.cpp b/fpmsyncd/routesync.cpp
+index d36278f0..2839c77e 100644
+--- a/fpmsyncd/routesync.cpp
++++ b/fpmsyncd/routesync.cpp
+@@ -14,6 +14,7 @@
+ #include "converter.h"
+ #include <string.h>
+ #include <arpa/inet.h>
++#include <linux/pkt_cls.h>
+ #include <linux/nexthop.h>
+ 
+ using namespace std;
+@@ -165,6 +166,9 @@ RouteSync::RouteSync(RedisPipeline *pipeline, const std::string &appName) :
+     m_label_routeTable(createProducerStateTable(pipeline, APP_LABEL_ROUTE_TABLE_NAME, true, m_zmqClient)),
+     m_vnet_routeTable(pipeline, APP_VNET_RT_TABLE_NAME, true),
+     m_vnet_tunnelTable(pipeline, APP_VNET_RT_TUNNEL_TABLE_NAME, true),
++    m_evpn_shlTable(pipeline, "EVPN_SPLIT_HORIZON_TABLE", true),
++    m_evpn_dfTable(pipeline, "EVPN_DF_TABLE", true),
++    m_evpn_esBackupNhgTable(pipeline, "EVPN_ES_BACKUP_NHG_TABLE", true),
+     m_warmStartHelper(pipeline, m_routeTable.get(), APP_ROUTE_TABLE_NAME, "bgp", appName),
+     m_srv6MySidTable(pipeline, APP_SRV6_MY_SID_TABLE_NAME, true),
+     m_srv6SidListTable(pipeline, APP_SRV6_SID_LIST_TABLE_NAME, true),
+diff --git a/fpmsyncd/routesync.h b/fpmsyncd/routesync.h
+index ff96ff0d..80672c53 100644
+--- a/fpmsyncd/routesync.h
++++ b/fpmsyncd/routesync.h
+@@ -193,8 +193,6 @@ class Srv6SidListTableFieldValueTupleWrapper : public FieldValueTupleWrapperBase
+        : FieldValueTupleWrapperBase(std::move(_key), _nbZmqEnabled) {}
+ 
+     vector<FieldValueTuple> fieldValueTupleVector() override;
+-    virtual ~RouteSync();
+-
+ 
+     string path = string();
+ };
+@@ -206,6 +204,8 @@ public:
+ 
+     RouteSync(RedisPipeline *pipeline, const std::string &appName = "bgp");
+ 
++    virtual ~RouteSync();
++
+     virtual void onMsg(int nlmsg_type, struct nl_object *obj);
+ 
+     virtual void onMsgRaw(struct nlmsghdr *obj);
+diff --git a/orchagent/fdborch.cpp b/orchagent/fdborch.cpp
+index 4a4be737..d382cf27 100644
+--- a/orchagent/fdborch.cpp
++++ b/orchagent/fdborch.cpp
+@@ -113,7 +113,8 @@ bool FdbOrch::storeFdbEntryState(const FdbUpdate& update)
+         fdbdata.type = update.type;
+         fdbdata.sai_fdb_type = update.sai_fdb_type;
+         fdbdata.origin = FDB_ORIGIN_LEARN;
+-        fdbdata.remote_ip = "";
++        fdbdata.dest_type = IFNAME;
++        fdbdata.dest_value = portName;
+         fdbdata.esi = "";
+         fdbdata.vni = 0;
+         fdbdata.is_l2_only_vni = false;
+@@ -578,7 +579,8 @@ void FdbOrch::update(sai_fdb_event_t        type,
+                 fdbData.bridge_port_id = SAI_NULL_OBJECT_ID;
+                 fdbData.type = update.type;
+                 fdbData.origin = existing_entry->second.origin;
+-                fdbData.remote_ip = existing_entry->second.remote_ip;
++                fdbData.dest_type = existing_entry->second.dest_type;
++                fdbData.dest_value = existing_entry->second.dest_value;
+                 fdbData.esi = existing_entry->second.esi;
+                 fdbData.vni = existing_entry->second.vni;
+                 fdbData.is_l2_only_vni = existing_entry->second.is_l2_only_vni;
+@@ -991,7 +993,8 @@ void FdbOrch::doTask(Consumer& consumer)
+         {
+             string port = "";
+             string type = "dynamic";
+-            string remote_ip = "";
++            NEXT_HOP_VALUE_TYPE dest_type = UNKNOWN;
++            string dest_value = "";
+             string esi = "";
+             unsigned int vni = 0;
+             string sticky = "";
+@@ -1018,7 +1021,7 @@ void FdbOrch::doTask(Consumer& consumer)
+                     if (fvField(i) == "remote_vtep") {
+                         dest_type = VTEP;
+                         dest_value = fvValue(i);
+-                        // Creating an IpAddress object to validate if remote_ip is valid
++                        // Creating an IpAddress object to validate if dest_value is valid
+                         // if invalid it will throw the exception and we will ignore the
+                         // event
+                         try {
+@@ -1071,27 +1074,34 @@ void FdbOrch::doTask(Consumer& consumer)
+ 
+             if(origin == FDB_ORIGIN_VXLAN_ADVERTIZED)
+             {
+-                VxlanTunnelOrch* tunnel_orch = gDirectory.get<VxlanTunnelOrch*>();
+-
+-                if (tunnel_orch->isDipTunnelsSupported())
++                if (dest_type == IFNAME)
+                 {
+-                    if(!remote_ip.length())
+-                    {
+-                        it = consumer.m_toSync.erase(it);
+-                        continue;
+-                    }
+-                    port = tunnel_orch->getTunnelPortName(remote_ip);
++                    port = dest_value;
+                 }
+                 else
+                 {
+-                    EvpnNvoOrch* evpn_nvo_orch = gDirectory.get<EvpnNvoOrch*>();
+-                    VxlanTunnel* sip_tunnel = evpn_nvo_orch->getEVPNVtep();
+-                    if (sip_tunnel == NULL)
++                    VxlanTunnelOrch* tunnel_orch = gDirectory.get<VxlanTunnelOrch*>();
++
++                    if (tunnel_orch->isDipTunnelsSupported())
+                     {
+-                        it = consumer.m_toSync.erase(it);
+-                        continue;
++                        if(!dest_value.length())
++                        {
++                            it = consumer.m_toSync.erase(it);
++                            continue;
++                        }
++                        port = tunnel_orch->getTunnelPortName(dest_value);
++                    }
++                    else
++                    {
++                        EvpnNvoOrch* evpn_nvo_orch = gDirectory.get<EvpnNvoOrch*>();
++                        VxlanTunnel* sip_tunnel = evpn_nvo_orch->getEVPNVtep();
++                        if (sip_tunnel == NULL)
++                        {
++                            it = consumer.m_toSync.erase(it);
++                            continue;
++                        }
++                        port = tunnel_orch->getTunnelPortName(sip_tunnel->getSrcIP().to_string(), true);
+                     }
+-                    port = tunnel_orch->getTunnelPortName(sip_tunnel->getSrcIP().to_string(), true);
+                 }
+             }
+ 
+@@ -1102,12 +1112,14 @@ void FdbOrch::doTask(Consumer& consumer)
+             fdbData.bridge_port_id = SAI_NULL_OBJECT_ID;
+             fdbData.type = type;
+             fdbData.origin = origin;
+-            fdbData.remote_ip = remote_ip;
++            fdbData.dest_type = dest_type;
++            fdbData.dest_value = dest_value;
+             fdbData.esi = esi;
+             fdbData.vni = vni;
+             fdbData.is_flush_pending = false;
+             fdbData.discard = discard;
+             fdbData.is_l2_only_vni = is_l2_only_vni;
++            fdbData.allow_mac_move = false;
+ 
+             if (addFdbEntry(entry, port, fdbData))
+             {
+diff --git a/orchagent/fdborch.h b/orchagent/fdborch.h
+index 2a5ab0b0..902f6b67 100644
+--- a/orchagent/fdborch.h
++++ b/orchagent/fdborch.h
+@@ -68,13 +68,15 @@ struct FdbData
+     bool is_flush_pending;
+ 
+     /* Remote FDB related info */
+-    string remote_ip;
++    NEXT_HOP_VALUE_TYPE dest_type;
++    string dest_value;
+     string    esi;
+     unsigned int vni;
+     sai_fdb_entry_type_t sai_fdb_type;
+     string discard;
+     /* Flag to indicate L2-only VNI (asymmetric IRB) */
+     bool is_l2_only_vni;
++    bool allow_mac_move;
+ };
+ 
+ struct SavedFdbEntry
+@@ -116,6 +118,7 @@ public:
+     bool getPort(const MacAddress&, uint16_t, Port&);
+ 
+     bool removeFdbEntry(const FdbEntry& entry, FdbOrigin origin=FDB_ORIGIN_PROVISIONED);
++    bool is_fdb_programmed_to_vxlan_tunnel(FdbEntry& entry);
+     /* Check if FDB entry is for L2-only VNI (asymmetric IRB) */
+     bool isFdbEntryL2OnlyVni(const FdbEntry& entry) const
+     {
+@@ -131,13 +134,16 @@ public:
+     static const int fdborch_pri;
+     void flushFDBEntries(sai_object_id_t bridge_port_oid,
+                          sai_object_id_t vlan_oid);
++    void flushAllFDBEntries(sai_object_id_t bridge_port_oid,
++                            sai_object_id_t vlan_oid);
+     void flushFdbByVlan(const string &);
+     void notifyObserversFDBFlush(Port &p, sai_object_id_t&);
+ 
+ private:
+     PortsOrch *m_portsOrch;
+     map<FdbEntry, FdbData> m_entries;
+-    fdb_entries_by_port_t saved_fdb_entries;
++    fdb_entries_by_port_t m_entries_by_port;
++    saved_fdb_entries_by_port_t saved_fdb_entries;
+     vector<Table*> m_appTables;
+     Table m_fdbStateTable;
+     Table m_mclagFdbStateTable;
+diff --git a/orchagent/orchdaemon.cpp b/orchagent/orchdaemon.cpp
+index 16d374b9..b4df5613 100644
+--- a/orchagent/orchdaemon.cpp
++++ b/orchagent/orchdaemon.cpp
+@@ -13,6 +13,7 @@
+ #include "sairedis.h"
+ #include "chassisorch.h"
+ #include "stporch.h"
++#include "shlorch.h"
+ 
+ using namespace std;
+ using namespace swss;
+diff --git a/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp b/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
+index a253a92d..970ac9ee 100644
+--- a/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
++++ b/tests/mock_tests/fdborch/fdborch_vxlan_ut.cpp
+@@ -178,13 +178,20 @@ namespace fdborch_vxlan_ut
+             };
+             gSrv6Orch = new Srv6Orch(m_config_db.get(), m_app_db.get(), srv6_tables, gSwitchOrch, gVrfOrch, gNeighOrch);
+             gDirectory.set(gSrv6Orch);
++            vector<string> ars_tables = {
++                CFG_ARS_PROFILE,
++                CFG_ARS_INTERFACE,
++                CFG_ARS_OBJECT,
++                CFG_ARS_NEXTHOP
++            };
++            gArsOrch = new ArsOrch(m_config_db.get(), m_app_db.get(), m_state_db.get(), ars_tables, gVrfOrch);
+ 
+             const int routeorch_pri = 5;
+             vector<table_name_with_pri_t> route_tables = {
+                 { APP_ROUTE_TABLE_NAME, routeorch_pri },
+                 { APP_LABEL_ROUTE_TABLE_NAME, routeorch_pri }
+             };
+-            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch);
++            gRouteOrch = new RouteOrch(m_app_db.get(), route_tables, gSwitchOrch, gNeighOrch, gIntfsOrch, gVrfOrch, gFgNhgOrch, gSrv6Orch, gArsOrch);
+             gDirectory.set(gRouteOrch);
+ 
+             INIT_SAI_API_MOCK(fdb);
+@@ -221,6 +228,8 @@ namespace fdborch_vxlan_ut
+ 
+             delete gRouteOrch;
+             gRouteOrch = nullptr;
++            delete gArsOrch;
++            gArsOrch = nullptr;
+ 
+             //delete gL2NhgOrch;
+             //gL2NhgOrch = nullptr;
+-- 
+2.25.1
+

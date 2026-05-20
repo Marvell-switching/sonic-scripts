@@ -1,0 +1,584 @@
+From 08c78dcaac6aa28480003fe707143db7d22bdac9 Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Wed, 5 Nov 2025 12:01:54 +0530
+Subject: [PATCH] ARS_Yang_changes
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ .../config_teralynx_MVTX9180_64x100G.yaml     |   3 +
+ src/sonic-yang-models/setup.py                |   1 +
+ .../tests/files/sample_config_db.json         |  52 +++-
+ .../tests/yang_model_tests/tests/ars.json     |  30 ++
+ .../yang_model_tests/tests_config/ars.json    | 133 +++++++++
+ .../yang-models/sonic-ars.yang                | 261 ++++++++++++++++++
+ .../yang-templates/sonic-acl.yang.j2          |   6 +
+ 7 files changed, 484 insertions(+), 2 deletions(-)
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests/ars.json
+ create mode 100644 src/sonic-yang-models/tests/yang_model_tests/tests_config/ars.json
+ create mode 100644 src/sonic-yang-models/yang-models/sonic-ars.yang
+
+diff --git a/device/marvell/x86_64-marvell_dbmvtx9180-r0/dbmvtx9180_64x100G/config_teralynx_MVTX9180_64x100G.yaml b/device/marvell/x86_64-marvell_dbmvtx9180-r0/dbmvtx9180_64x100G/config_teralynx_MVTX9180_64x100G.yaml
+index 1abf66695..bed1dbe9f 100644
+--- a/device/marvell/x86_64-marvell_dbmvtx9180-r0/dbmvtx9180_64x100G/config_teralynx_MVTX9180_64x100G.yaml
++++ b/device/marvell/x86_64-marvell_dbmvtx9180-r0/dbmvtx9180_64x100G/config_teralynx_MVTX9180_64x100G.yaml
+@@ -24,6 +24,9 @@ nodes:
+     sys_clk: "1800"
+     ifc_clk: "1800"
+     mac_clk: "1600"
++    ecmp_alb_enable: "1"
++    alb_port_state_enable: "1"
++    ecmp_alb_timeout_step_size: "2"
+     txring:
+     - txring_id: "0"
+       desc_count: "1024"
+diff --git a/src/sonic-yang-models/setup.py b/src/sonic-yang-models/setup.py
+index 2c78bdc11..eb549943f 100644
+--- a/src/sonic-yang-models/setup.py
++++ b/src/sonic-yang-models/setup.py
+@@ -79,6 +79,7 @@ def print_yang_files_validation_report(yang_files_list):
+ yang_files = [
+     'sonic-acl.yang',
+     'sonic-asic-sensors.yang',
++    'sonic-ars.yang',
+     'sonic-auto_techsupport.yang',
+     'sonic-banner.yang',
+     'sonic-bgp-aggregate-address.yang',
+diff --git a/src/sonic-yang-models/tests/files/sample_config_db.json b/src/sonic-yang-models/tests/files/sample_config_db.json
+index 34cbb9b32..f97ee0962 100644
+--- a/src/sonic-yang-models/tests/files/sample_config_db.json
++++ b/src/sonic-yang-models/tests/files/sample_config_db.json
+@@ -2279,7 +2279,7 @@
+                 "type": "DWRR",
+                 "weight": "10"
+             }
+-	},
++        },
+ 
+         "WRED_PROFILE": {
+             "Wred1": {
+@@ -3084,7 +3084,7 @@
+                 "ca_crt": "root.pem",
+                 "grpc_ssl_credential": "azureclient.ms"
+             }
+-	},
++        },
+         "BANNER_MESSAGE": {
+             "global": {
+                 "state": "enabled",
+@@ -3184,6 +3184,54 @@
+                 "product-name" : "product name",
+                 "serial-no" : "1234-5678-91A"
+             }
++        },
++        "ARS_PROFILE": {
++            "ars_profile_default": {
++                "algorithm": "ewma",
++                "ars_nhg_path_selector_mode": "interface",
++                "ars_lag_path_selector_mode": "interface",
++                "default_ars_object": "ars_obj_name",
++                "max_flows": "2048",
++                "sampling_interval": "10",
++                "past_load_min_value": "0",
++                "past_load_max_value": "10",
++                "past_load_weight": "6",
++                "future_load_min_value": "10",
++                "future_load_max_value": "50",
++                "future_load_weight": "10",
++                "current_load_min_value": "20",
++                "current_load_max_value": "30",
++                "ipv4_enable": "true",
++                "ipv6_enable": "true"
++            }
++        },
++        "ARS_OBJECT": {
++            "ars_obj_name": {
++                "assign_mode": "per_flowlet_quality",
++                "flowlet_idle_time": "256",
++                "max_flows": "512",
++                "primary_path_threshold": "100",
++                "alternative_path_cost": "250"
++            }
++        },
++        "ARS_NEXTHOP": {
++            "default|1.1.1.10": {
++                "ars_obj_name": "ars_obj_name"
++            },
++            "default|2.2.2.20": {
++                "ars_obj_name": "ars_obj_name",
++                "role": "alternative_path"
++            },
++            "default|3.3.3.30": {
++                "ars_obj_name": "ars_obj_name"
++            }
++        },
++        "ARS_INTERFACE": {
++            "Ethernet0": {
++                "scaling_factor": "100",
++                "ars_obj_name": "ars_obj_name"
++            },
++            "Ethernet8": {}
+         }
+     },
+     "SAMPLE_CONFIG_DB_UNKNOWN": {
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests/ars.json b/src/sonic-yang-models/tests/yang_model_tests/tests/ars.json
+new file mode 100644
+index 000000000..362e30a09
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests/ars.json
+@@ -0,0 +1,30 @@
++{
++    "ARS_TEST": {
++        "desc": "Sample config in ARS."
++    },
++    "ARS_TEST_TOO_MANY_PROFILES": {
++        "desc": "ARS configuration with more than one profile ARS_PROFILE_LIST table.",
++        "eStr": "Too many ARS_PROFILE_LIST elements."
++    },
++    "ARS_TEST_INTERFACE_INVALID_LINK": {
++        "desc": "Interface configuration with invalid name in ARS_INTERFACE_LIST table.",
++        "eStrKey": "InvalidValue",
++        "eStr": [
++            "if_name"
++        ]
++    },
++    "ARS_TEST_OBJECT_INVALID_MODE": {
++        "desc": "ARS_OBJECT configuration with an invalid value for 'assign_mode'.",
++        "eStrKey": "InvalidValue",
++        "eStr": [
++            "assign_mode"
++        ]
++    },
++    "ARS_TEST_NEXTHOP_INVALID_IP": {
++        "desc": "Verify nexthop_ip fails validation when an invalid IP address is used.",
++        "eStrKey": "InvalidValue",
++        "eStr": [
++            "nexthop_ip"
++        ]
++    }
++}
+diff --git a/src/sonic-yang-models/tests/yang_model_tests/tests_config/ars.json b/src/sonic-yang-models/tests/yang_model_tests/tests_config/ars.json
+new file mode 100644
+index 000000000..b5aaf1856
+--- /dev/null
++++ b/src/sonic-yang-models/tests/yang_model_tests/tests_config/ars.json
+@@ -0,0 +1,133 @@
++{
++    "ARS_TEST": {
++        "sonic-port:sonic-port": {
++            "sonic-port:PORT": {
++                "PORT_LIST": [
++                    {
++                        "admin_status": "up",
++                        "alias": "Ethernet1",
++                        "description": "Ethernet1",
++                        "lanes": "65",
++                        "mtu": "9000",
++                        "name": "Ethernet1",
++                        "tpid": "0x8100",
++                        "speed": "25000"
++                    },
++                    {
++                        "admin_status": "up",
++                        "alias": "Ethernet2",
++                        "description": "Ethernet2",
++                        "lanes": "65",
++                        "mtu": "9000",
++                        "name": "Ethernet2",
++                        "tpid": "0x8100",
++                        "speed": "25000"
++                    },
++                    {
++                        "admin_status": "up",
++                        "alias": "Ethernet3",
++                        "description": "Ethernet3",
++                        "lanes": "65",
++                        "mtu": "9000",
++                        "name": "Ethernet3",
++                        "tpid": "0x8100",
++                        "speed": "25000"
++                    }
++                ]
++            }
++        },
++        "sonic-ars:sonic-ars": {
++            "sonic-ars:ARS_PROFILE": {
++                "ARS_PROFILE_LIST": [
++                    {
++                        "profile_name": "global",
++                        "algorithm": "ewma",
++                        "max_flows": "2048",
++   	                    "ars_nhg_path_selector_mode": "interface",
++                        "ars_lag_path_selector_mode": "interface"
++                    }
++                ]
++            },
++           "sonic-ars:ARS_INTERFACE": {
++                "ARS_INTERFACE_LIST": [
++                {
++                    "if_name": "Ethernet1",
++                    "scaling_factor": "100"
++                },
++                {
++                    "if_name": "Ethernet2",
++                    "scaling_factor": "1000"
++                }]
++           },
++           "sonic-ars:ARS_NEXTHOP": {
++                "ARS_NEXTHOP_LIST": [
++                {
++                    "vrf_name": "default",
++                    "nexthop_ip": "10.0.0.1"
++                },
++                {
++                    "vrf_name": "default",
++                    "nexthop_ip": "10.1.0.1"
++                }]
++           },
++           "sonic-ars:ARS_OBJECT": {
++                "ARS_OBJECT_LIST": [
++                {
++                    "ars_obj_name": "ars_obj_name",
++                    "assign_mode": "per_packet_quality"
++                }]
++           }
++       }
++    },
++    "ARS_TEST_TOO_MANY_PROFILES": {
++        "sonic-ars:sonic-ars": {
++            "sonic-ars:ARS_PROFILE": {
++                "ARS_PROFILE_LIST": [
++                    {
++                        "profile_name": "group1",
++                        "algorithm": "ewma"
++                    },
++                    {
++                        "profile_name": "group2",
++                        "sampling_interval": "10"
++                    }
++                ]
++            }
++        }
++    },
++    "ARS_TEST_INTERFACE_INVALID_LINK": {
++        "sonic-ars:sonic-ars": {
++            "sonic-ars:ARS_INTERFACE": {
++                "ARS_INTERFACE_LIST": [
++                    {
++                        "if_name": "EthernetXXX"
++                    }
++                ]
++            }
++        }
++    },
++    "ARS_TEST_OBJECT_INVALID_MODE": {
++        "sonic-ars:sonic-ars": {
++            "sonic-ars:ARS_OBJECT": {
++                "ARS_OBJECT_LIST": [
++                    {
++                        "ars_obj_name": "ars_obj_default",
++                        "assign_mode": "invalid_mode_value"
++                    }
++                ]
++            }
++        }
++    },
++    "ARS_TEST_NEXTHOP_INVALID_IP": {
++        "sonic-ars:sonic-ars": {
++            "sonic-ars:ARS_NEXTHOP": {
++                "ARS_NEXTHOP_LIST": [
++                    {
++                        "vrf_name": "default",
++                        "nexthop_ip": "300.1.2.3"
++                    }
++                ]
++            }
++        }
++    }
++}
+diff --git a/src/sonic-yang-models/yang-models/sonic-ars.yang b/src/sonic-yang-models/yang-models/sonic-ars.yang
+new file mode 100644
+index 000000000..72e9c1b09
+--- /dev/null
++++ b/src/sonic-yang-models/yang-models/sonic-ars.yang
+@@ -0,0 +1,261 @@
++module sonic-ars {
++    namespace "http://github.com/sonic-net/sonic-ars";
++    prefix sars;
++    yang-version 1.1;
++
++    import ietf-yang-types {
++        prefix yang;
++    }
++    import ietf-inet-types {
++        prefix inet;
++    }
++    import sonic-types {
++        prefix stypes;
++    }
++    import sonic-vrf {
++        prefix vrf;
++    }
++    import sonic-port {
++        prefix port;
++    }
++    organization
++        "SONiC";
++    contact
++        "SONiC";
++    description
++        "SONIC Adaptive Routing and Switching";
++    revision 2025-10-30 {
++        description
++            "Initial revision.";
++    }
++    container sonic-ars {
++    container ARS_PROFILE {
++        list ARS_PROFILE_LIST {
++            key "profile_name";
++            max-elements 1;
++            leaf profile_name {
++                description "ARS Profile Name";
++                type string;
++            }
++            leaf algorithm {
++                description "ARS quality algorithm";
++                type enumeration {
++                    enum ewma {
++                    description "Exponentially Weighted Moving Average algorithm";
++                    }
++                }
++            }
++            leaf ars_nhg_path_selector_mode {
++                description "ARS selection mode for nexthop (global/interface/nexthop)";
++                type enumeration {
++                    enum global {
++                        description "ARS object selection is global.";
++                    }
++                    enum interface {
++                        description "Uses list of configured interfaces for ARS object selection.";
++                    }
++                    enum nexthop {
++                        description "Uses list of configured nexthops for ARS object selection.";
++                    }
++                }
++                default "interface";
++            }
++
++            leaf ars_lag_path_selector_mode {
++                description "ARS selection mode for LAG (global/interface)";
++                type enumeration {
++                    enum global {
++                        description "ARS LAG selection is global.";
++                    }
++                    enum interface {
++                        description "Uses list of configured interfaces for ARS LAG selection.";
++                    }
++                }
++                default "interface";
++            }
++
++            leaf default_ars_object {
++                description "Default ARS object name for both nexthop group and LAG.";
++                type leafref {
++                    path "/sars:sonic-ars/sars:ARS_OBJECT/sars:ARS_OBJECT_LIST/sars:ars_obj_name";
++                }
++              }
++
++            leaf max_flows {
++                type uint32;
++                description  "Maximum number of flows that can be maintained per ARS profile.";
++            }
++
++            leaf sampling_interval {
++                type uint32;
++                description  "Sampling interval in microseconds for quality measure computation.";
++            }
++
++            leaf past_load_min_value {
++                type uint16;
++                description "Past load min value.";
++            }
++
++            leaf past_load_max_value {
++                type uint16;
++                description "Past load max value.";
++            }
++
++            leaf past_load_weight {
++                type uint16;
++                description "Past load weight.";
++            }
++
++            leaf future_load_min_value {
++                type uint16;
++                description "Future load min value.";
++            }
++
++            leaf future_load_max_value {
++                type uint16;
++                description "Future load max value.";
++            }
++
++            leaf future_load_weight {
++                type uint16;
++                description "Future load weight.";
++            }
++
++            leaf current_load_min_value {
++                type uint16;
++                description "Current load min value.";
++            }
++
++            leaf current_load_max_value {
++                type uint16;
++                description "Current load max value.";
++            }
++
++            leaf ipv4_enable {
++                type boolean;
++                description "Whether ARS is enabled over IPv4 packets";
++            }
++
++            leaf ipv6_enable {
++                type boolean;
++                description "Whether ARS is enabled over IPv6 packets";
++            }
++        }
++        /* end of list ARS_PROFILE_LIST */
++    }
++    /* end of container ARS_PROFILE */
++    container ARS_INTERFACE {
++            list ARS_INTERFACE_LIST {
++                description  "List of interfaces participating in ARS";
++                    key "if_name";
++                    leaf if_name {
++                type union {
++                type leafref {
++                    path "/port:sonic-port/port:PORT/port:PORT_LIST/port:name";
++                }
++                    }
++                description "ARS-enabled interface name";
++            }
++
++            leaf scaling_factor {
++                type uint32;
++                default "1";
++                description "This factor used to normalize load measurements across ports with different speeds.";
++            }
++                        leaf ars_obj_name {
++                            description "ARS object name, inherited from 'default_ars_object' unless explicitly configured.";
++                            type leafref {
++                                path "/sars:sonic-ars/sars:ARS_OBJECT/sars:ARS_OBJECT_LIST/sars:ars_obj_name";
++                            }
++                        }
++        }
++        /* end of list ARS_INTERFACE_LIST */
++    }
++    /* end of container ARS_INTERFACE */
++
++    container ARS_NEXTHOP {
++        description "ARS-enabled Nexthop Groups";
++        list ARS_NEXTHOP_LIST {
++            key "vrf_name nexthop_ip";
++            leaf vrf_name {
++                type union {
++                    type string {
++                        pattern "default";
++                    }
++                    type leafref {
++                        path "/vrf:sonic-vrf/vrf:VRF/vrf:VRF_LIST/vrf:name";
++                    }
++                }
++                description "VRF name";
++            } 
++            leaf nexthop_ip{
++                type inet:ip-address;
++                description "Nexthop IP which is a member of a nexthop group for which ARS behavior is desired.";
++            }
++                        leaf ars_obj_name {
++                            description "ARS object name, inherited from 'default_ars_object' unless explicitly configured.";
++                            type leafref {
++                                path "/sars:sonic-ars/sars:ARS_OBJECT/sars:ARS_OBJECT_LIST/sars:ars_obj_name";
++                            }
++                        }
++
++                        leaf role {
++                            type enumeration {
++                                enum primary_path {
++                                    description "Member is participating in primary path.";
++                                }
++                                enum alternative_path {
++                                    description "Member is participating in alternative path.";
++                                }
++                            }
++                            default primary_path;
++                            description "NHG member's role.";
++                        }
++        }
++        /* end of list ARS_NEXTHOP_LIST */
++    }
++    /* end of container ARS_NEXTHOP */
++    container ARS_OBJECT {
++        description "ARS-enabled Object Groups";
++        list ARS_OBJECT_LIST {
++            key "ars_obj_name";
++            leaf ars_obj_name {
++                description "ARS Object Name";
++                type string;
++            }
++            leaf assign_mode {
++                type enumeration {
++                    enum per_flowlet_quality{
++                        description "Per flow-let assignment based on flow quality";
++                    }
++                    enum per_packet_quality {
++                        description "Per packet flow assignment based on port load";
++                    }
++                }
++            }
++            leaf flowlet_idle_time {
++                type uint16 {
++                    range 2..2047;
++                }
++                description  "Idle duration in microseconds. This duration is to classifying a flow-let in a macro flow.";
++            }
++            leaf max_flows {
++                type uint32;
++                description  "Maximum number of flow states that can be maintained per ARS object.";
++            }
++            leaf primary_path_threshold {
++                type uint32;
++                default "16";
++                description  "Primary path metric threshold.";
++            }
++            leaf alternative_path_cost {
++                type uint32;
++                default "0";
++                description  "Alternative path cost.";
++            }
++        }
++        /* end of list ARS_OBJECT_LIST */
++        }
++    /* end of container ARS_OBJECT */
++    }
++}
+diff --git a/src/sonic-yang-models/yang-templates/sonic-acl.yang.j2 b/src/sonic-yang-models/yang-templates/sonic-acl.yang.j2
+index 5a88cb218..b0082816d 100644
+--- a/src/sonic-yang-models/yang-templates/sonic-acl.yang.j2
++++ b/src/sonic-yang-models/yang-templates/sonic-acl.yang.j2
+@@ -306,6 +306,12 @@ module sonic-acl {
+ 					description "Tunnel Termination Flag";
+ 					type boolean;
+ 				}
++
++				leaf DISABLE_ARS_FORWARDING {
++					description "Disable ARS forwarding on matching packets";
++					type boolean;
++					default false;
++				}
+ 			}
+ 			/* end of ACL_RULE_LIST */
+ 		}
+-- 
+2.25.1
+

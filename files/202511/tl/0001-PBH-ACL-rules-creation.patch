@@ -1,0 +1,173 @@
+From 2069b8e6f004f181465ddbf9e7812017a0163ccd Mon Sep 17 00:00:00 2001
+From: apannerselva <apannerselva@marvell.com>
+Date: Mon, 13 Apr 2026 15:12:54 +0530
+Subject: [PATCH] PBH ACL rules creation
+
+Signed-off-by: apannerselva <apannerselva@marvell.com>
+---
+ orchagent/pbhorch.cpp | 90 +++++++++++++++++++++++++++++++++----------
+ 1 file changed, 69 insertions(+), 21 deletions(-)
+
+diff --git a/orchagent/pbhorch.cpp b/orchagent/pbhorch.cpp
+index b1162d92..29f98eee 100644
+--- a/orchagent/pbhorch.cpp
++++ b/orchagent/pbhorch.cpp
+@@ -697,6 +697,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+     }
+ 
+     std::shared_ptr<AclRulePbh> pbhRule;
++    std::vector<sai_acl_entry_attr_t> ruleQualifiers;
+ 
+     if (rule.flow_counter.is_set)
+     {
+@@ -730,6 +731,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: GRE_KEY", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_GRE_KEY);
+     }
+ 
+     if (rule.ether_type.is_set)
+@@ -746,6 +748,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: ETHER_TYPE", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_ETHER_TYPE);
+     }
+ 
+     if (rule.ip_protocol.is_set)
+@@ -762,6 +765,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: IP_PROTOCOL", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_IP_PROTOCOL);
+     }
+ 
+     if (rule.ipv6_next_header.is_set)
+@@ -778,6 +782,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: IPV6_NEXT_HEADER", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER);
+     }
+ 
+     if (rule.l4_dst_port.is_set)
+@@ -794,6 +799,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: L4_DST_PORT", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_L4_DST_PORT);
+     }
+ 
+     if (rule.inner_ether_type.is_set)
+@@ -810,6 +816,7 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+             SWSS_LOG_ERROR("Failed to configure PBH rule(%s) match: INNER_ETHER_TYPE", rule.key.c_str());
+             return false;
+         }
++        ruleQualifiers.push_back(SAI_ACL_ENTRY_ATTR_FIELD_INNER_ETHER_TYPE);
+     }
+ 
+     if (rule.hash.is_set && rule.packet_action.is_set)
+@@ -838,37 +845,78 @@ bool PbhOrch::updatePbhRule(const PbhRule &rule)
+         return false;
+     }
+ 
+-    // Mellanox W/A
+-    if (this->pbhCap.getAsicVendor() == PbhAsicVendor::MELLANOX)
++    /* Check if SAI supports set operation on ACL entry match fields.
++     * Check each qualifier that is set in this rule.
++     * If any qualifier does not support set, fall back to delete+create path.
++     */
++    sai_attr_capability_t aclFieldSetCap;
++    bool aclEntryFieldSetSupported = true;
++
++    for (const auto &qualAttr : ruleQualifiers)
+     {
+-        const auto &hMeta = rule.hash.meta;
+-        const auto &paMeta = rule.packet_action.meta;
++        if (sai_query_attribute_capability(gSwitchId, SAI_OBJECT_TYPE_ACL_ENTRY,
++                qualAttr, &aclFieldSetCap) != SAI_STATUS_SUCCESS ||
++            !aclFieldSetCap.set_implemented)
++        {
++            SWSS_LOG_NOTICE("ACL entry field attr %d does not support set for PBH rule(%s)",
++                            qualAttr, rule.key.c_str());
++            aclEntryFieldSetSupported = false;
++            break;
++        }
++    }
+ 
+-        auto cond1 = std::find(uFields.cbegin(), uFields.cend(), hMeta.name) != uFields.cend();
+-        auto cond2 = std::find(uFields.cbegin(), uFields.cend(), paMeta.name) != uFields.cend();
++    if (!aclEntryFieldSetSupported)
++    {
++        // Use delete+create path since incremental update is not supported
++        SWSS_LOG_NOTICE("ACL entry field set not supported, using delete+create for PBH rule(%s)",
++                        rule.key.c_str());
+ 
+-        if (cond1 || cond2)
++        if (!this->aclOrch->removeAclRule(rule.table, rule.name))
+         {
+-            auto pbhRulePtr = dynamic_cast<AclRulePbh*>(this->aclOrch->getAclRule(rule.table, rule.name));
++            SWSS_LOG_ERROR("Failed to remove PBH rule(%s) in SAI", rule.key.c_str());
++            return false;
++        }
+ 
+-            if (pbhRulePtr == nullptr)
+-            {
+-                SWSS_LOG_ERROR("Failed to update PBH rule(%s) in SAI: invalid object type", rule.key.c_str());
+-                return false;
+-            }
++        if (!this->aclOrch->addAclRule(pbhRule, rule.table))
++        {
++            SWSS_LOG_ERROR("Failed to recreate PBH rule(%s) in SAI", rule.key.c_str());
++            return false;
++        }
++    }
++    else
++    {
++        // Mellanox W/A
++        if (this->pbhCap.getAsicVendor() == PbhAsicVendor::MELLANOX)
++        {
++            const auto &hMeta = rule.hash.meta;
++            const auto &paMeta = rule.packet_action.meta;
++
++            auto cond1 = std::find(uFields.cbegin(), uFields.cend(), hMeta.name) != uFields.cend();
++            auto cond2 = std::find(uFields.cbegin(), uFields.cend(), paMeta.name) != uFields.cend();
+ 
+-            if (!pbhRulePtr->disableAction())
++            if (cond1 || cond2)
+             {
+-                SWSS_LOG_ERROR("Failed to disable PBH rule(%s) action", rule.key.c_str());
+-                return false;
++                auto pbhRulePtr = dynamic_cast<AclRulePbh*>(this->aclOrch->getAclRule(rule.table, rule.name));
++
++                if (pbhRulePtr == nullptr)
++                {
++                    SWSS_LOG_ERROR("Failed to update PBH rule(%s) in SAI: invalid object type", rule.key.c_str());
++                    return false;
++                }
++
++                if (!pbhRulePtr->disableAction())
++                {
++                    SWSS_LOG_ERROR("Failed to disable PBH rule(%s) action", rule.key.c_str());
++                    return false;
++                }
+             }
+         }
+-    }
+ 
+-    if (!this->aclOrch->updateAclRule(pbhRule))
+-    {
+-        SWSS_LOG_ERROR("Failed to update PBH rule(%s) in SAI", rule.key.c_str());
+-        return false;
++        if (!this->aclOrch->updateAclRule(pbhRule))
++        {
++            SWSS_LOG_ERROR("Failed to update PBH rule(%s) in SAI", rule.key.c_str());
++            return false;
++        }
+     }
+ 
+     if (!this->pbhHlpr.decRefCount(rObj))
+-- 
+2.25.1
+

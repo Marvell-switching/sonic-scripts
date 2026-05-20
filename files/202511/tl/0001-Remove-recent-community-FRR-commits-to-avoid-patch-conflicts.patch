@@ -1,0 +1,30 @@
+From a0ba40fc76d878166af744460d30adde351556f2 Mon Sep 17 00:00:00 2001
+From: Keshav Gupta <keshavg@marvell.com>
+Date: Thu, 7 May 2026 17:24:41 +0530
+Subject: [PATCH] Remove recent community FRR commits to avoid patch conflicts
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Removes recent commits from the community FRR series file applied after 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
+  to avoid conflicts with existing patches.
+- The removed commits will be reapplied after the SONiC‑FRR local patches.
+
+Signed-off-by: Keshav Gupta <keshavg@marvell.com>
+---
+ src/sonic-frr/patch/series | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index 0dcae1e73..e033f9923 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -66,5 +66,3 @@
+ 0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms.patch
+ 0104-SONiC-ONLY-zebra-skip-if-add-update-in-speed-timer-for-unready-ifp.patch
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
+-0106-bgpd-Fix-suppress-fib-pending-config-race-condition.patch
+-0107-zebra-defer-rib-sweep-until-metaqueue-drained.patch
+-- 
+2.25.1
+

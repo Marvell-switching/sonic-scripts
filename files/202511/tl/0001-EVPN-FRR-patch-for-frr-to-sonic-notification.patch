@@ -1,0 +1,455 @@
+From 82eca4a15de7b106f88f0fa00c4f0fcf0ac48717 Mon Sep 17 00:00:00 2001
+From: Parthiv Shah <parthiv@marvell.com>
+Date: Fri, 13 Mar 2026 15:08:13 +0530
+Subject: [PATCH] EVPN FRR patch for frr to sonic notification
+
+Signed-off-by: Parthiv Shah <parthiv@marvell.com>
+---
+ .../dplane_fpm_sonic/dplane_fpm_sonic.c       | 211 +++++++++++++++++-
+ src/sonic-frr/patch/evpn-mh-frr-zebra.patch   | 181 +++++++++++++++
+ src/sonic-frr/patch/series                    |   1 +
+ 3 files changed, 392 insertions(+), 1 deletion(-)
+ create mode 100644 src/sonic-frr/patch/evpn-mh-frr-zebra.patch
+
+diff --git a/src/sonic-frr/dplane_fpm_sonic/dplane_fpm_sonic.c b/src/sonic-frr/dplane_fpm_sonic/dplane_fpm_sonic.c
+index 19312ae0b..1d753515c 100644
+--- a/src/sonic-frr/dplane_fpm_sonic/dplane_fpm_sonic.c
++++ b/src/sonic-frr/dplane_fpm_sonic/dplane_fpm_sonic.c
+@@ -167,6 +167,40 @@ enum custom_rtattr_srv6_localsid_action {
+ 	FPM_SRV6_LOCALSID_ACTION_UDT46				= 21,
+ };
+ 
++/*
++ * EVPN Multihoming FPM message types and structures.
++ * These match the definitions in sonic-swss fpmsyncd/fpm/fpm.h
++ */
++enum fpm_evpn_msg_types {
++	RTM_FPM_FIRST			= 140,
++	RTM_FPM_ADD_EVPN_SHL		= 143,
++	RTM_FPM_DEL_EVPN_SHL		= 144,
++	RTM_FPM_ADD_EVPN_DF		= 145,
++	RTM_FPM_DEL_EVPN_DF		= 146,
++	RTM_FPM_ADD_EVPN_ES_BACKUP_NHG	= 147,
++	RTM_FPM_DEL_EVPN_ES_BACKUP_NHG	= 148,
++};
++
++struct fpm_evpn_shl_msg {
++	int esm_ifindex;
++	uint16_t esm_vid;
++};
++
++struct fpm_evpn_df_msg {
++	int edm_ifindex;
++	uint16_t edm_vid;
++	int edm_non_df;
++};
++
++struct fpm_evpn_backup_nhg_msg {
++	int ebnm_ifindex;
++	int ebnm_backup_nhg_id;
++};
++
++/* Attribute types for SHL VTEP IP addresses */
++#define FPM_EVPN_SHL_IPV4_ADDR	1
++#define FPM_EVPN_SHL_IPV6_ADDR	2
++
+ static const char *prov_name = "dplane_fpm_sonic";
+ 
+ static atomic_bool fpm_cleaning_up;
+@@ -2439,6 +2473,169 @@ static ssize_t netlink_sidlist_msg_encode(int cmd,
+ 	return NLMSG_ALIGN(req->n.nlmsg_len);
+ }
+ 
++/*
++ * Encode EVPN multihoming BR_PORT_UPDATE into FPM netlink messages.
++ *
++ * A single BR_PORT_UPDATE dplane context is expanded into multiple FPM
++ * messages:
++ *   - One RTM_FPM_ADD/DEL_EVPN_SHL per VLAN (with VTEP IP attributes)
++ *   - One RTM_FPM_ADD/DEL_EVPN_DF per VLAN
++ *   - One RTM_FPM_ADD/DEL_EVPN_ES_BACKUP_NHG for the port
++ *
++ * Returns total bytes written to nl_buf, or 0 if nothing to encode.
++ */
++static ssize_t
++fpm_nl_encode_evpn_br_port(struct zebra_dplane_ctx *ctx,
++			   uint8_t *nl_buf, size_t buf_size)
++{
++	ifindex_t ifindex = dplane_ctx_get_ifindex(ctx);
++	uint32_t flags = dplane_ctx_get_br_port_flags(ctx);
++	uint32_t sph_filter_cnt = dplane_ctx_get_br_port_sph_filter_cnt(ctx);
++	const struct in_addr *sph_filters = dplane_ctx_get_br_port_sph_filters(ctx);
++	uint32_t backup_nhg_id = dplane_ctx_get_br_port_backup_nhg_id(ctx);
++	uint32_t vlan_cnt = dplane_ctx_get_br_port_vlan_cnt(ctx);
++	const vlanid_t *vlans = dplane_ctx_get_br_port_vlans(ctx);
++	bool non_df = !!(flags & DPLANE_BR_PORT_NON_DF);
++	bool is_clear = (sph_filter_cnt == 0 && backup_nhg_id == 0
++			 && !non_df);
++	size_t offset = 0;
++	uint32_t i;
++
++	if (IS_ZEBRA_DEBUG_FPM)
++		zlog_debug("%s: ifindex %u flags 0x%x sph_cnt %u nhg 0x%x vlans %u %s",
++			   __func__, ifindex, flags, sph_filter_cnt,
++			   backup_nhg_id, vlan_cnt,
++			   is_clear ? "(clear)" : "");
++
++	/*
++	 * Encode SHL messages - one per VLAN.
++	 * Each message: nlmsghdr + fpm_evpn_shl_msg + rtattr per VTEP IP
++	 */
++	for (i = 0; i < vlan_cnt; i++) {
++		struct nlmsghdr *nlh;
++		struct fpm_evpn_shl_msg *shl;
++		uint16_t shl_type;
++		size_t msg_len;
++		uint32_t j;
++
++		shl_type = is_clear ? RTM_FPM_DEL_EVPN_SHL
++				    : RTM_FPM_ADD_EVPN_SHL;
++
++		/* Calculate message size: nlmsghdr + shl_msg + rtattrs */
++		msg_len = NLMSG_ALIGN(NLMSG_LENGTH(sizeof(*shl)));
++		if (!is_clear) {
++			for (j = 0; j < sph_filter_cnt; j++)
++				msg_len += RTA_SPACE(sizeof(struct in_addr));
++		}
++
++		if (offset + msg_len > buf_size) {
++			zlog_warn("%s: buffer full encoding SHL vlan %u",
++				  __func__, vlans[i]);
++			break;
++		}
++
++		nlh = (struct nlmsghdr *)(nl_buf + offset);
++		memset(nlh, 0, msg_len);
++		nlh->nlmsg_len = (uint32_t)msg_len;
++		nlh->nlmsg_type = shl_type;
++		nlh->nlmsg_flags = 0;
++
++		shl = (struct fpm_evpn_shl_msg *)NLMSG_DATA(nlh);
++		shl->esm_ifindex = (int)ifindex;
++		shl->esm_vid = vlans[i];
++
++		/* Append VTEP IP attributes for ADD messages */
++		if (!is_clear && sph_filter_cnt > 0) {
++			struct rtattr *rta;
++
++			rta = (struct rtattr *)((char *)shl
++				+ NLMSG_ALIGN(sizeof(*shl)));
++			for (j = 0; j < sph_filter_cnt; j++) {
++				rta->rta_type = FPM_EVPN_SHL_IPV4_ADDR;
++				rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
++				memcpy(RTA_DATA(rta), &sph_filters[j],
++				       sizeof(struct in_addr));
++				rta = (struct rtattr *)((char *)rta
++					+ RTA_SPACE(sizeof(struct in_addr)));
++			}
++		}
++
++		offset += NLMSG_ALIGN(msg_len);
++	}
++
++	/*
++	 * Encode DF messages - one per VLAN.
++	 * Each message: nlmsghdr + fpm_evpn_df_msg
++	 */
++	for (i = 0; i < vlan_cnt; i++) {
++		struct nlmsghdr *nlh;
++		struct fpm_evpn_df_msg *df;
++		uint16_t df_type;
++		size_t msg_len;
++
++		df_type = is_clear ? RTM_FPM_DEL_EVPN_DF
++				   : RTM_FPM_ADD_EVPN_DF;
++
++		msg_len = NLMSG_ALIGN(NLMSG_LENGTH(sizeof(*df)));
++
++		if (offset + msg_len > buf_size) {
++			zlog_warn("%s: buffer full encoding DF vlan %u",
++				  __func__, vlans[i]);
++			break;
++		}
++
++		nlh = (struct nlmsghdr *)(nl_buf + offset);
++		memset(nlh, 0, msg_len);
++		nlh->nlmsg_len = (uint32_t)msg_len;
++		nlh->nlmsg_type = df_type;
++		nlh->nlmsg_flags = 0;
++
++		df = (struct fpm_evpn_df_msg *)NLMSG_DATA(nlh);
++		df->edm_ifindex = (int)ifindex;
++		df->edm_vid = vlans[i];
++		df->edm_non_df = non_df ? 1 : 0;
++
++		offset += NLMSG_ALIGN(msg_len);
++	}
++
++	/*
++	 * Encode Backup NHG message - one per port (not per-VLAN).
++	 * nlmsghdr + fpm_evpn_backup_nhg_msg
++	 */
++	{
++		struct nlmsghdr *nlh;
++		struct fpm_evpn_backup_nhg_msg *nhg;
++		uint16_t nhg_type;
++		size_t msg_len;
++
++		nhg_type = is_clear ? RTM_FPM_DEL_EVPN_ES_BACKUP_NHG
++				    : RTM_FPM_ADD_EVPN_ES_BACKUP_NHG;
++
++		msg_len = NLMSG_ALIGN(NLMSG_LENGTH(sizeof(*nhg)));
++
++		if (offset + msg_len > buf_size) {
++			zlog_warn("%s: buffer full encoding backup NHG",
++				  __func__);
++			goto done;
++		}
++
++		nlh = (struct nlmsghdr *)(nl_buf + offset);
++		memset(nlh, 0, msg_len);
++		nlh->nlmsg_len = (uint32_t)msg_len;
++		nlh->nlmsg_type = nhg_type;
++		nlh->nlmsg_flags = 0;
++
++		nhg = (struct fpm_evpn_backup_nhg_msg *)NLMSG_DATA(nlh);
++		nhg->ebnm_ifindex = (int)ifindex;
++		nhg->ebnm_backup_nhg_id = (int)backup_nhg_id;
++
++		offset += NLMSG_ALIGN(msg_len);
++	}
++
++done:
++	return (ssize_t)offset;
++}
++
+ #define DPLANE_FPM_NL_BUF_SIZE 65536
+ /**
+  * Encode data plane operation context into netlink and enqueue it in the FPM
+@@ -2667,6 +2864,19 @@ static int fpm_nl_enqueue(struct fpm_nl_ctx *fnc, struct zebra_dplane_ctx *ctx)
+ 				 fnc, 0, &fnc->t_ribreset);
+ 		break;
+ 
++	case DPLANE_OP_BR_PORT_UPDATE:
++		rv = fpm_nl_encode_evpn_br_port(ctx, nl_buf, sizeof(nl_buf));
++		if (rv <= 0) {
++			if (IS_ZEBRA_DEBUG_FPM)
++				zlog_debug(
++					"%s: fpm_nl_encode_evpn_br_port: nothing to encode",
++					__func__);
++			return 0;
++		}
++
++		nl_buf_len = (size_t)rv;
++		break;
++
+ 	/* Un-handled by FPM at this time. */
+ 	case DPLANE_OP_PW_INSTALL:
+ 	case DPLANE_OP_PW_UNINSTALL:
+@@ -2683,7 +2893,6 @@ static int fpm_nl_enqueue(struct fpm_nl_ctx *fnc, struct zebra_dplane_ctx *ctx)
+ 	case DPLANE_OP_RULE_DELETE:
+ 	case DPLANE_OP_RULE_UPDATE:
+ 	case DPLANE_OP_NEIGH_DISCOVER:
+-	case DPLANE_OP_BR_PORT_UPDATE:
+ 	case DPLANE_OP_IPTABLE_ADD:
+ 	case DPLANE_OP_IPTABLE_DELETE:
+ 	case DPLANE_OP_IPSET_ADD:
+diff --git a/src/sonic-frr/patch/evpn-mh-frr-zebra.patch b/src/sonic-frr/patch/evpn-mh-frr-zebra.patch
+new file mode 100644
+index 000000000..348c6f9c9
+--- /dev/null
++++ b/src/sonic-frr/patch/evpn-mh-frr-zebra.patch
+@@ -0,0 +1,181 @@
++diff --git a/zebra/zebra_dplane.c b/zebra/zebra_dplane.c
++index 9c252cc63..7195e91bd 100644
++--- a/zebra/zebra_dplane.c
+++++ b/zebra/zebra_dplane.c
++@@ -189,6 +189,8 @@ struct dplane_br_port_info {
++ 	/* DPLANE_BR_PORT_XXX - see zebra_dplane.h*/
++ 	uint32_t flags;
++ 	uint32_t backup_nhg_id;
+++	uint32_t vlan_cnt;
+++	vlanid_t vlans[DPLANE_BR_PORT_MAX_VLANS];
++ };
++ 
++ /*
++@@ -3165,6 +3167,22 @@ dplane_ctx_get_br_port_backup_nhg_id(const struct zebra_dplane_ctx *ctx)
++ 	return ctx->u.br_port.backup_nhg_id;
++ }
++ 
+++uint32_t
+++dplane_ctx_get_br_port_vlan_cnt(const struct zebra_dplane_ctx *ctx)
+++{
+++	DPLANE_CTX_VALID(ctx);
+++
+++	return ctx->u.br_port.vlan_cnt;
+++}
+++
+++const vlanid_t *
+++dplane_ctx_get_br_port_vlans(const struct zebra_dplane_ctx *ctx)
+++{
+++	DPLANE_CTX_VALID(ctx);
+++
+++	return ctx->u.br_port.vlans;
+++}
+++
++ /* Accessors for PBR iptable information */
++ void dplane_ctx_get_pbr_iptable(const struct zebra_dplane_ctx *ctx,
++ 				struct zebra_pbr_iptable *table)
++@@ -4976,7 +4994,8 @@ done:
++ enum zebra_dplane_result
++ dplane_br_port_update(const struct interface *ifp, bool non_df,
++ 		      uint32_t sph_filter_cnt,
++-		      const struct in_addr *sph_filters, uint32_t backup_nhg_id)
+++		      const struct in_addr *sph_filters, uint32_t backup_nhg_id,
+++		      uint32_t vlan_cnt, const vlanid_t *vlans)
++ {
++ 	enum zebra_dplane_result result = ZEBRA_DPLANE_REQUEST_FAILURE;
++ 	uint32_t flags = 0;
++@@ -5025,6 +5044,12 @@ dplane_br_port_update(const struct interface *ifp, bool non_df,
++ 	memcpy(ctx->u.br_port.sph_filters, sph_filters,
++ 	       sizeof(ctx->u.br_port.sph_filters[0]) * sph_filter_cnt);
++ 
+++	ctx->u.br_port.vlan_cnt = MIN(vlan_cnt, DPLANE_BR_PORT_MAX_VLANS);
+++	if (ctx->u.br_port.vlan_cnt)
+++		memcpy(ctx->u.br_port.vlans, vlans,
+++		       sizeof(ctx->u.br_port.vlans[0])
+++			       * ctx->u.br_port.vlan_cnt);
+++
++ 	/* Enqueue for processing on the dplane pthread */
++ 	ret = dplane_update_enqueue(ctx);
++ 
++diff --git a/zebra/zebra_dplane.h b/zebra/zebra_dplane.h
++index cabc70c23..4317a1166 100644
++--- a/zebra/zebra_dplane.h
+++++ b/zebra/zebra_dplane.h
++@@ -258,6 +258,9 @@ enum dplane_op_e {
++ 
++ #define DPLANE_BR_PORT_NON_DF (1 << 0)
++ 
+++/* Max VLANs that can be associated with an ES for BR_PORT_UPDATE */
+++#define DPLANE_BR_PORT_MAX_VLANS 256
+++
++ /* Definitions for the dplane 'netconf' apis, corresponding to the netlink
++  * NETCONF api.
++  * Sadly, netlink sends incremental updates, so its messages may contain
++@@ -805,6 +808,10 @@ const struct in_addr *
++ dplane_ctx_get_br_port_sph_filters(const struct zebra_dplane_ctx *ctx);
++ uint32_t
++ dplane_ctx_get_br_port_backup_nhg_id(const struct zebra_dplane_ctx *ctx);
+++uint32_t
+++dplane_ctx_get_br_port_vlan_cnt(const struct zebra_dplane_ctx *ctx);
+++const vlanid_t *
+++dplane_ctx_get_br_port_vlans(const struct zebra_dplane_ctx *ctx);
++ 
++ /* Accessors for neighbor table information */
++ uint8_t dplane_ctx_neightable_get_family(const struct zebra_dplane_ctx *ctx);
++@@ -879,7 +886,8 @@ enum zebra_dplane_result dplane_route_notif_update(
++  */
++ enum zebra_dplane_result dplane_br_port_update(
++ 	const struct interface *ifp, bool non_df, uint32_t sph_filter_cnt,
++-	const struct in_addr *sph_filters, uint32_t backup_nhg_id);
+++	const struct in_addr *sph_filters, uint32_t backup_nhg_id,
+++	uint32_t vlan_cnt, const vlanid_t *vlans);
++ 
++ /* Forward ref of nhg_hash_entry */
++ struct nhg_hash_entry;
++diff --git a/zebra/zebra_evpn_mh.c b/zebra/zebra_evpn_mh.c
++index 75e7e2017..1b3b67cfa 100644
++--- a/zebra/zebra_evpn_mh.c
+++++ b/zebra/zebra_evpn_mh.c
++@@ -1618,6 +1618,10 @@ static struct zebra_evpn_es_vtep *zebra_evpn_es_vtep_find(
++ static bool zebra_evpn_es_br_port_dplane_clear(struct zebra_evpn_es *es)
++ {
++ 	struct in_addr sph_filters[ES_VTEP_MAX_CNT];
+++	vlanid_t vlans[DPLANE_BR_PORT_MAX_VLANS];
+++	uint32_t vlan_cnt = 0;
+++	struct zebra_evpn_es_evi *es_evi;
+++	struct listnode *node;
++ 
++ 	if (!(es->flags & ZEBRA_EVPNES_BR_PORT))
++ 		return false;
++@@ -1625,9 +1629,22 @@ static bool zebra_evpn_es_br_port_dplane_clear(struct zebra_evpn_es *es)
++ 	if (IS_ZEBRA_DEBUG_EVPN_MH_ES)
++ 		zlog_debug("es %s br-port dplane clear", es->esi_str);
++ 
+++	/* Collect VLANs so per-VLAN DEL messages can be generated
+++	 * by the FPM encoder. Must be called while es_evi_list still
+++	 * has entries.
+++	 */
+++	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, node, es_evi)) {
+++		if (!(es_evi->flags & ZEBRA_EVPNES_EVI_LOCAL))
+++			continue;
+++		if (es_evi->zevpn && es_evi->zevpn->vid) {
+++			if (vlan_cnt < DPLANE_BR_PORT_MAX_VLANS)
+++				vlans[vlan_cnt++] = es_evi->zevpn->vid;
+++		}
+++	}
+++
++ 	memset(&sph_filters, 0, sizeof(sph_filters));
++ 	dplane_br_port_update(es->zif->ifp, false /* non_df */, 0, sph_filters,
++-			      0 /* backup_nhg_id */);
+++			      0 /* backup_nhg_id */, vlan_cnt, vlans);
++ 	return true;
++ }
++ 
++@@ -1648,6 +1665,9 @@ static bool zebra_evpn_es_br_port_dplane_update(struct zebra_evpn_es *es,
++ 	struct listnode *node = NULL;
++ 	struct zebra_evpn_es_vtep *es_vtep;
++ 	uint32_t sph_filter_cnt = 0;
+++	vlanid_t vlans[DPLANE_BR_PORT_MAX_VLANS];
+++	uint32_t vlan_cnt = 0;
+++	struct zebra_evpn_es_evi *es_evi;
++ 
++ 	if (!(es->flags & ZEBRA_EVPNES_LOCAL))
++ 		return zebra_evpn_es_br_port_dplane_clear(es);
++@@ -1686,8 +1706,19 @@ static bool zebra_evpn_es_br_port_dplane_update(struct zebra_evpn_es *es,
++ 		}
++ 	}
++ 
+++	/* Collect VLANs associated with this ES via the ES-EVI list */
+++	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, node, es_evi)) {
+++		if (!(es_evi->flags & ZEBRA_EVPNES_EVI_LOCAL))
+++			continue;
+++		if (es_evi->zevpn && es_evi->zevpn->vid) {
+++			if (vlan_cnt < DPLANE_BR_PORT_MAX_VLANS)
+++				vlans[vlan_cnt++] = es_evi->zevpn->vid;
+++		}
+++	}
+++
++ 	dplane_br_port_update(es->zif->ifp, !!(es->flags & ZEBRA_EVPNES_NON_DF),
++-			      sph_filter_cnt, sph_filters, backup_nhg_id);
+++			      sph_filter_cnt, sph_filters, backup_nhg_id,
+++			      vlan_cnt, vlans);
++ 
++ 	return true;
++ }
++@@ -2390,6 +2421,16 @@ static void zebra_evpn_local_es_del(struct zebra_evpn_es **esp)
++ 			   es->nhg_id, zif ? zif->ifp->name : "-");
++ 	}
++ 
+++	/* Flush BR port dplane state (SHL/DF/NHG) BEFORE removing ES-EVIs
+++	 * so per-VLAN DEL messages can be generated for current VLANs.
+++	 * Clear the BR_PORT flag to prevent duplicate dplane work in
+++	 * zebra_evpn_es_local_info_clear().
+++	 */
+++	if (es->flags & ZEBRA_EVPNES_BR_PORT) {
+++		zebra_evpn_es_br_port_dplane_clear(es);
+++		es->flags &= ~ZEBRA_EVPNES_BR_PORT;
+++	}
+++
++ 	/* remove all ES-EVIs associated with the ES */
++ 	for (ALL_LIST_ELEMENTS(es->es_evi_list, node, nnode, es_evi))
++ 		zebra_evpn_local_es_evi_do_del(es_evi);
+diff --git a/src/sonic-frr/patch/series b/src/sonic-frr/patch/series
+index e033f9923..487f01821 100644
+--- a/src/sonic-frr/patch/series
++++ b/src/sonic-frr/patch/series
+@@ -66,3 +66,4 @@
+ 0103-SONiC-ONLY-bgpd-reduce-suppress-fib-advertisement-delay-to-50ms.patch
+ 0104-SONiC-ONLY-zebra-skip-if-add-update-in-speed-timer-for-unready-ifp.patch
+ 0105-bgpd-Show-all-advertised-paths-including-non-best-paths-only-if-addpath-is-enabled.patch
++evpn-mh-frr-zebra.patch
+-- 
+2.25.1
+
