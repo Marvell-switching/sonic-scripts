@@ -5,10 +5,10 @@
 
 # arguments
 INPUT=$@
-BUILD_SAISERVER="N"
-BUILD_RPC="N"
-OTHER_BUILD_OPTIONS=""
-NO_CACHE="N"
+BUILD_SAISERVER="${BUILD_SAISERVER:-N}"
+BUILD_RPC="${BUILD_RPC:-N}"
+OTHER_BUILD_OPTIONS="${OTHER_BUILD_OPTIONS:-}"
+NO_CACHE="${NO_CACHE:-N}"
 VERIFY_PATCHES="N"
 PATCHING_CONFIG_AND_STOP="N"
 # l_ -- local to avoid potential collision with sonic-buildimage project rules
@@ -24,23 +24,6 @@ ARTIFACTS_DIR=/sonic-artifacts
 DIR_PREFIX="ABU"
 ENABLE_DOCKER_BASE_PULL_YN="ENABLE_DOCKER_BASE_PULL=y"
 
-# Determine "wrong" architecture sub-string vs MACHINE_ARCH
-MACHINE_ARCH=$(uname -m)
-case "$MACHINE_ARCH" in
-    x86_64|i386|i686)
-        ARCH_WRONG_SSTR="arm"
-        ;;
-    aarch64|armv7l|armv8l)
-        ARCH_WRONG_SSTR="amd"
-        ;;
-    *)
-        ARCH_WRONG_SSTR="UNKNOWN"
-        ;;
-esac
-if [[ "$INPUT" == *"$ARCH_WRONG_SSTR"* ]]; then
-    echo "Wrong input. Only NATIVE-ARCH build supported. Check arm vs amd"
-    exit 1
-fi
 
 # Script-debug/trace option "-e"
 #set -e
@@ -53,34 +36,40 @@ print_usage()
     echo "   [-c <sonic-buildimage_commit>]"
     echo "   [--patch_script <http or full_local path_of_patch_script>]"
     echo "   [--url <sonic-buildimage_url>]"
-    echo "   [--SAI <url full path to mrvllibsai_*.deb>]"
-    echo "   [-s] [-r] [--mark_no_del_ws] [--no-cache]"
+    echo "   [--SAI_VER <virsion number 1.NN.1-K>]"
+    echo "   [--SAI <URL or absolute local path to mrvllibsai_*.deb>]"
+    echo "   [-s] [-r] [--no-cache] [--verify_patches]"
     echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
-    echo "   [--verify_patches] [--clean_dockers] [--clean_ws]"
+    echo "   [--mark_no_del_ws] [--clean_dockers] [--clean_ws]"
     echo ""
     echo "    -s : Build docker saiserver v2"
     echo "    -r : ENABLE_SYNCD_RPC=y"
     echo "    -c : checkout commit id"
     echo "    -C : clone, patching, make-CONFIGURE and exit before full make"
     echo "                             (for inspection and re-config)"
+    echo "    --tl  -1  -2  -3     Apply Extra patches from customers directories"
     echo "    --no-cache: Build without any pre cache"
-    echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
-    echo "    --admin_password: Set admin password"
-    echo "    --other_build_options: Other sonic build options"
+    echo "    --other_build_options: Other sonic build options like INCLUDE_ICCPD=y"
     echo "    --verify_patches:    Apply patches, don't compile. Abort on failure"
     echo "        export DEVEL=y   Ignore patch apply failures but continue"
-    echo "    --clean_dockers: clean up build dockers"
-    echo "    --tl  -1  -2  -3     Apply Extra patches from customers directories"
+    echo "    --admin_password: Set admin password"
+    echo "    --clean_dockers: clean stopped containers"
+    echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
 echo """Examples:
-./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
+./sonic_build_script.sh -b 202511 -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
   -c 021569412
 ./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
-  --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r
-./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
-  --patch_script /wrk/sonic-scripts/marvell_sonic_patch_script.sh -r \\
-  --SAI http://10.2.141.103:8080/mrvllibsai/mrvllibsai_1.16.1-1_arm64.deb
-./sonic_build_script.sh -b trixie -p marvell-prestera -a arm64 ........ -r
+  --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
+  --SAI_VER 1.18.1-1
+./sonic_build_script.sh -b 202511 -p marvell-prestera -a amd64 \\
+  --patch_script /local-scripts-path/marvell_sonic_patch_script.sh -r
+./sonic_build_script.sh -b 202511 -p marvell-prestera -a arm64 \\
+  --patch_script /local-scripts-path/marvell_sonic_patch_script.sh -r \\
+  --SAI http://192.168.1.2:8080/<path>/mrvllibsai_1.17.1-1_arm64.deb
+./sonic_build_script.sh -b 202511 -p marvell-prestera -a arm64 \\
+  --patch_script /local-scripts-path/marvell_sonic_patch_script.sh -r \\
+  --SAI /local-path/mrvllibsai_1.17.1-1_arm64.deb
 """
 }
 
@@ -151,6 +140,11 @@ parse_arguments()
                 ;;
             --url)
                 GIT_HUB_URL="$2"
+                shift # past argument
+                shift # past value
+                ;;
+            --SAI_VER)
+                SAI_VERSION="$2"
                 shift # past argument
                 shift # past value
                 ;;
@@ -241,6 +235,32 @@ parse_arguments()
         #ENABLE_DOCKER_BASE_PULL_YN=""
         #NO_CACHE=Y
         #echo -e "\n Force: no ENABLE_DOCKER_BASE_PULL and no-cache\n"
+    fi
+}
+
+check_privilege_and_arch()
+{
+    if [[ $EUID -eq 0 ]]; then
+        echo "ERROR: build should not run as privileged/root user"
+        exit 1
+    fi
+
+    # Determine "wrong" architecture sub-string vs MACHINE_ARCH
+    MACHINE_ARCH=$(uname -m)
+    case "$MACHINE_ARCH" in
+        x86_64|i386|i686)
+            ARCH_WRONG_SSTR="arm"
+            ;;
+        aarch64|armv7l|armv8l)
+            ARCH_WRONG_SSTR="amd"
+            ;;
+        *)
+            ARCH_WRONG_SSTR="UNKNOWN"
+            ;;
+    esac
+    if [[ "$INPUT" == *"$ARCH_WRONG_SSTR"* ]]; then
+        echo "Wrong input. Only NATIVE-ARCH build supported. Check arm vs amd"
+        exit 1
     fi
 }
 
@@ -340,22 +360,22 @@ check_free_space()
 	  done
 	fi
 
-df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
-do
-    usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
-    if [ $usep -ge $ALERT ]; then
-        echo "Not enough space. Please check build server to free space."
-        echo "Optionally you can use --clean_dockers or --clean_ws after pushing your local changes"
-        exit 1
-    fi
-done
+    df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
+    do
+        usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
+        if [ $usep -ge $ALERT ]; then
+            echo "Not enough space. Please check build server to free space."
+            echo "Optionally you can use --clean_dockers or --clean_ws after pushing your local changes"
+            exit 1
+        fi
+    done
 }
 
 cleanup_server()
 {
     if [ -v CLEAN_DOCKERS ]; then
-        # Remove all stopped containers
-        docker system prune -a --volumes -f
+        # Remove all stopped containers (sometimes 'sudo' must)
+        sudo docker system prune -a --volumes -f
     fi
 
     # check for disk space and cleanup
@@ -422,16 +442,30 @@ commit_id_update()
     echo ""
 }
 
-patch_sai_url_path()
+patch_sai_mk_path()
 {
-    # Handle input --SAI $SAI_URL_PATH like
-    # --SAI http://10.2.141.103:8080/mrvllibsai/mrvllibsai_1.16.1-1_arm64.deb
-
-    # Check url file availability
-    wget --timeout=2 --spider $SAI_URL_PATH
-    check_error $? "SAI-URL check"
-
     SAI_MK_FILE=platform/${BUILD_PLATFORM}/sai.mk
+
+    # Handle input --SAI_VER $SAI_VERSION and/or --SAI $SAI_URL_PATH
+    #          --SAI_VER 1.17.1-21
+    #   URL:   --SAI http://192.168.1.2:8080/<path>/mrvllibsai_1.17.1-1_arm64.deb
+    #   Local: --SAI /local-path/mrvllibsai_1.17.1-21_amd64.deb
+
+    if [[ -z "${SAI_VERSION}" && -z "${SAI_URL_PATH}" ]]; then return 0; fi
+
+    if ! [ -z "${SAI_VERSION}" ]; then
+        safe_sai_version=${SAI_VERSION//&/\\&}
+        sed -i -E \
+            "s|^(MRVL_SAI_VERSION =) .*|\1 ${safe_sai_version}|" \
+            "${SAI_MK_FILE}" >/dev/null 2>&1
+        check_error $? "SAI-VERSION patching"
+    fi
+
+    if [ -z "${SAI_URL_PATH}" ]; then
+        return 0
+    fi
+    # Local: SONIC_COPY_DEBS runs "cp" inside the Docker slave, host paths are not "visible" for it.
+    # The $(CURDIR)/target path exists in the container, so copy the .deb into SAI_STAGE_REL=target/.mrvl-sai-staging
     SAI_DEB_URL=$(dirname "$SAI_URL_PATH")
     SAI_DEB_FILE=$(basename "$SAI_URL_PATH")
 
@@ -439,13 +473,35 @@ patch_sai_url_path()
     safe_url_path=${SAI_DEB_URL//&/\\&}
     safe_file_name=${SAI_DEB_FILE//&/\\&}
 
-    # Use '|' as the sed delimiter to avoid escaping '/'
-    sed -i -E \
-        -e "s|^MRVL_SAI_URL_PREFIX *=.*|MRVL_SAI_URL_PREFIX = $safe_url_path|" \
-        -e "s|^MRVL_SAI *=.*|MRVL_SAI = ${safe_file_name}|" \
-        "${SAI_MK_FILE}" >/dev/null 2>&1
+    if [[ "$SAI_URL_PATH" == /* ]] && [[ "$SAI_URL_PATH" != *"://"* ]]; then
+        test -f "$SAI_URL_PATH" && test -r "$SAI_URL_PATH"
+        check_error $? "SAI local path missing or not readable"
 
-    check_error $? "SAI-URL patching"
+        SAI_STAGE_REL="${SAI_STAGE_REL:-platform/${BUILD_PLATFORM}/.mrvl-sai-staging}"
+        mkdir -p "${SAI_STAGE_REL}"
+        check_error $? "SAI local staging mkdir"
+        cp -f "$SAI_URL_PATH" "${SAI_STAGE_REL}/${SAI_DEB_FILE}"
+        check_error $? "SAI local staging cp"
+
+        staging_mrvl_path="\$(CURDIR)/${SAI_STAGE_REL}"
+        sed -i -E \
+            -e "s|^MRVL_SAI_URL_PREFIX *=.*|MRVL_SAI_URL_PREFIX = ${staging_mrvl_path}|" \
+            -e "s|^MRVL_SAI *=.*|MRVL_SAI = ${safe_file_name}|" \
+            -e "s|^\\$\(MRVL_SAI\)_URL *=.*|\$\(MRVL_SAI\)_PATH = \$\(MRVL_SAI_URL_PREFIX\)|" \
+            -e "s|^SONIC_ONLINE_DEBS \\+= \\$\(MRVL_SAI\)|SONIC_COPY_DEBS += \$\(MRVL_SAI\)|" \
+            "${SAI_MK_FILE}" >/dev/null 2>&1
+        check_error $? "SAI-PATH patching"
+    else
+        # Remote URL ==> sai.mk uses $(MRVL_SAI)_URL
+        wget --timeout=2 --spider "$SAI_URL_PATH"
+        check_error $? "SAI-URL check"
+
+        sed -i -E \
+            -e "s|^MRVL_SAI_URL_PREFIX *=.*|MRVL_SAI_URL_PREFIX = $safe_url_path|" \
+            -e "s|^MRVL_SAI *=.*|MRVL_SAI = ${safe_file_name}|" \
+            "${SAI_MK_FILE}" >/dev/null 2>&1
+        check_error $? "SAI-URL patching"
+    fi
 }
 
 patch_ws()
@@ -468,9 +524,7 @@ patch_ws()
         check_error $? "patch_script"
         commit_id_update
 
-        if ! [ -z "${SAI_URL_PATH}" ]; then
-            patch_sai_url_path
-        fi
+        patch_sai_mk_path
     fi
 }
 
@@ -564,8 +618,12 @@ copy_build_artifacts()
 {
     # Ensure that artifacts is a NFS mount, to avoid modifying permissions of local directories
     if ! grep -s " ${ARTIFACTS_DIR} " /proc/mounts | grep -q "nfs"; then
-        echo "$ARTIFACTS_DIR is not an NFS mount. Copy to artifacts directory failed"
-        return 1
+        echo "-------------------------------------------------------------"
+        echo "$ARTIFACTS_DIR is not an NFS mount. No copy_build_artifacts"
+        echo "Use files <commit_log.txt>, <build_cmd.txt> and"
+        echo "          <${TARGET}>"
+        echo "-------------------------------------------------------------"
+        return 0
     fi
 
     BUILD_ARTIFACTS_DIR=${ARTIFACTS_DIR}/${BUILD_PLATFORM_ARCH}/${BRANCH}/${SONIC_SOURCE_DIR}/
@@ -581,9 +639,9 @@ copy_build_artifacts()
 
     cp commit_log.txt $BUILD_ARTIFACTS_DIR
     cp build_args.txt $BUILD_ARTIFACTS_DIR
+    cp build_cmd.txt $BUILD_ARTIFACTS_DIR
     cp ${TARGET} $BUILD_ARTIFACTS_DIR
-    cp target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb $BUILD_ARTIFACTS_DIR
-    cp target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
+    #cp target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
     if [ "$BUILD_SAISERVER" == "Y" ]; then
         cp target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz $BUILD_ARTIFACTS_DIR
     fi
@@ -592,7 +650,8 @@ copy_build_artifacts()
 
 main()
 {
-    parse_arguments $@
+    parse_arguments $INPUT
+    check_privilege_and_arch
     # Shell-script DEBUG setting
     # set -x
 
@@ -609,12 +668,14 @@ main()
         echo "export NOSTRETCH=1"  >> build_cmd.txt
         echo "export NOBUSTER=1"   >> build_cmd.txt
         echo "export NOBULLSEYE=1" >> build_cmd.txt
-        #echo "export SONIC_IMAGE_VERSION=${SONIC_SOURCE_DIR}" >> build_cmd.txt
         export NOJESSIE=1
         export NOSTRETCH=1
         export NOBUSTER=1
         export NOBULLSEYE=1
-        #export SONIC_IMAGE_VERSION=${SONIC_SOURCE_DIR}
+        export SONIC_BUILD_JOBS="${SONIC_BUILD_JOBS:-8}"
+        echo "export SONIC_BUILD_JOBS=${SONIC_BUILD_JOBS}" >> build_cmd.txt
+        #export SONIC_IMAGE_VERSION=SONIC-OS-${SONIC_SOURCE_DIR}
+        #echo "export SONIC_IMAGE_VERSION=SONIC-OS-${SONIC_SOURCE_DIR}" >> build_cmd.txt
         if [ "${l_DEBIAN}" == "trixie" ]; then
             echo "export NOBOOKWORM=0" >> build_cmd.txt
             echo "export NOTRIXIE=0" >> build_cmd.txt
@@ -631,4 +692,4 @@ main()
     exit 0
 }
 
-main $@
+main $INPUT

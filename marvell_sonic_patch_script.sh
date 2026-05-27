@@ -31,7 +31,7 @@ fi
 
 log()
 {
-	echo $@
+	echo -e "$@"
 	echo $@ >> ${FULL_PATH}/${LOG_FILE}
 }
 
@@ -155,6 +155,18 @@ wget_cp()
     fi
 }
 
+wget_cp_silent()
+{
+    if [[ "$1" == *:* ]]; then
+        # Is URL - use wget     -P dstDir
+        wget --timeout=2 -c $1  $2 $3  2>/dev/null
+    else
+        # Dir or File is on local path
+        dstDir="${3:-.}"
+        cp -r $1 $dstDir  2>/dev/null
+    fi
+}
+
 apply_sonicbuildimage_patches()
 {
  SERIES_FILE=$1
@@ -248,18 +260,18 @@ main()
 
 	# wget patch series file
     PATCH_SERIES_FILE=series_${PLATFORM}_${ARCH}
-	wget_cp $WGET_PATH/${PATCH_SERIES_FILE} -P ./patches/
+	wget_cp_silent $WGET_PATH/${PATCH_SERIES_FILE} -P ./patches/
 	if [ ! -f ${PATCH_SERIES_FILE} ]; then
 		PATCH_SERIES_FILE=series_${PLATFORM}
 		wget_cp $WGET_PATH/${PATCH_SERIES_FILE} -P ./patches/
 		if [ ! -f ./patches/${PATCH_SERIES_FILE} ]; then
-			log "ERROR: Series file series_${PLATFORM}_${ARCH} not found"
+			log "ERROR: Series file series_${PLATFORM} not found"
 		    exit 1
 		fi
 	fi
 
 	# ----- Apply patches -------------------------------
-	log "Apply sonicbuildimage patches"
+	log "\n--- Apply sonicbuildimage patches -----\n"
     CSD=.
 	apply_sonicbuildimage_patches $PATCH_SERIES_FILE "$CSD" || exit 1
 
@@ -270,16 +282,18 @@ main()
             *)  var="PATCH_CUSTOM_${CSD}" ;;
         esac
         [ "${!var}" = "Y" ] || continue
+        mkdir ./patches/$CSD
         wget_cp $WGET_PATH/$CSD/series -P ./patches/$CSD
         apply_sonicbuildimage_patches series "$CSD" || exit 1
     done
 
+	echo "\n--- make init -----------"
 	echo "make init" >> build_cmd.txt
 	make init
 	git submodule sync --recursive
 	git submodule update --init --recursive
 
-	log "Apply submodule patches"
+	log "\n--- Apply submodule patches ---\n"
 	# Apply submodule patches
     CSD=.
 	apply_submodule_patches $PATCH_SERIES_FILE "$CSD" || exit 1
@@ -294,7 +308,7 @@ main()
         apply_submodule_patches series "$CSD" || exit 1
     done
 
-	log "Apply hwsku changes"
+	log "\n--- Apply hwsku changes ---\n"
 	# Apply hwsku changes
 	apply_hwsku_changes
 	log "Patch script - DONE"
