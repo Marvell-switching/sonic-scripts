@@ -1,10 +1,7 @@
 ##-------------------------------------------------------------------------------------
-## 3706490f8 - 2026-04-25 mssonicbld : [submodule] Update submodule sonic-dash-ha to the latest HEAD automatically (#26949)
-##
 ## Patches with PR:
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
-## 4372    https://github.com/sonic-net/sonic-utilities/pull/4372
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
 ## 0703    https://github.com/sonic-net/sonic-buildimage/pull/27136
 ##-------------------------------------------------------------------------------------
@@ -14,27 +11,22 @@
 # OPTIONAL
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 
-# From BOOKWORM
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
 0064-build_templates-marvell-blacklist-with-kempld.patch            |sonic-buildimage
 0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
-# TRIXIE specific and strictly-ordered patches
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
+0043-marvell-prestera-rpc-pin-ptf_nn_agent.py-to-use-nnpy.patch     |sonic-buildimage
 0703-syncd-trixie-marvell-prestera.patch                            |sonic-buildimage
 
-# Strictly ordered performance/stability patch-SET ----------------------------
 0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
 0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
-
-# OPTIONAL not to apply
-#0070-marvell-prestera-Uboot-print_menu-improve.patch                |sonic-buildimage
-#0020-arm64-kdump-support-add-support-in-kdump-config.patch          |src/sonic-utilities
-#0021-arm64-kdump-support-Install-kdump-utils-for-either-a.patch     |sonic-buildimage
 
 # Extension WISTRON
 #20250-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch      |sonic-buildimage
 #20250-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch      |sonic-buildimage
 #0057-sonic-platform-wistron-rules-for-trixie.patch                  |sonic-buildimage
 
+# mrvllib version update if needed
+#0777-marvell-prestera-sai-1.17.1-13.patch                           |sonic-buildimage
