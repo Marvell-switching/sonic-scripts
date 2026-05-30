@@ -12,7 +12,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 rm -f $R_TAR_GZ sonic_build_r_*.sh
-cp build-utils/sonic_build_r_${RELEASE}*.sh .
+cp build-utils/sbuild_r_${RELEASE}*.sh .
 tar czf $R_TAR_GZ \
     --exclude='files/master/TBD' \
     --exclude='files/master/tl' \
