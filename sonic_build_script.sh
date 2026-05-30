@@ -320,55 +320,43 @@ check_error_with_retry()
     fi
 }
 
-check_free_space()
+check_free_disk_space()
 {
     local dir=$1
-    local ALERT=$2
+    local min_required_free_GB=$2
 
-	if [ -v CLEAN_WS ]; then
-	  df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
-	  do
-		echo "$output"
-		usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
-		partition=$(echo "$output" | awk '{ print $2 }' )
-		if [ $usep -ge $ALERT ]; then
-			echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
-				ls -1  | grep "${DIR_PREFIX}-" | grep "-err" | while read -r dir_name;
-						do
-							echo "Removing $dir_name"
-							if [ ! -f $dir_name/no_del_ws ]; then
-								sudo rm -rf $dir_name
-							fi
-						done
-						# Check space again after removing errored build
-						df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output_new;
-					do
-						echo "$output_new"
-						usep=$(echo "$output_new" | awk '{ print $1}' | cut -d'%' -f1 )
-						if [ $usep -ge $ALERT ]; then
-							# Remove build dirs
-							ls -1  | grep "${DIR_PREFIX}-" | while read -r dir_name;
-						do
-							echo "Removing $dir_name"
-							if [ ! -f $dir_name/no_del_ws ]; then
-								sudo rm -rf $dir_name
-							fi
-						done
-						fi
-					done
-		fi
-	  done
-	fi
+    # df -H Avail is like "85G" / "512M"; min_required_free_GB is a plain integer (GiB scale).
+    local avail_GB
+    avail_GB=$(df -h "$dir" | awk 'NR==2 {
+        v = $4
+        gsub(/,/, "", v)
+        if (v ~ /^[0-9.]+G$/)  { sub(/G$/, "", v);  printf "%.0f", v+0;       exit }
+        if (v ~ /^[0-9.]+T$/)  { sub(/T$/, "", v);  printf "%.0f", (v+0)*1000; exit }
+        if (v ~ /^[0-9.]+M$/)  { sub(/M$/, "", v);  printf "%.0f", (v+0)/1000; exit }
+        if (v ~ /^[0-9.]+k$/)  { sub(/k$/, "", v);  print 0;                   exit }
+        if (v ~ /^[0-9.]+$/)  { print v+0; exit }
+        print 0
+    }')
 
-    df -H $dir | grep -vE '^Filesystem' | awk '{ print $5 " " $1 }' | while read -r output;
-    do
-        usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
-        if [ $usep -ge $ALERT ]; then
-            echo "Not enough space. Please check build server to free space."
-            echo "Optionally you can use --clean_dockers or --clean_ws after pushing your local changes"
-            exit 1
-        fi
-    done
+    if ! [[ "$avail_GB" =~ ^[0-9]+$ ]] \
+        || ! [[ "$min_required_free_GB" =~ ^[0-9]+$ ]] \
+        || [ "$avail_GB" -lt "$min_required_free_GB" ]; then
+        echo "Not enough free disk space (avail ~${avail_GB} GB, need >= ${min_required_free_GB} GB)"
+        df -h "$dir" | awk '{ print $4 "   " $1 }'
+        echo " Try to:"
+        echo "  - remove old sonic-buildimage"
+        echo "  - clean var-cache: sudo rm -rf /var/cache/sonic/"
+        echo "  - clean docker-containers (in /var/lib)"
+        echo "     sudo docker container prune -f"
+        echo "     sudo docker builder prune -a -f"
+        echo "     sudo docker image   prune -a -f"
+        echo "     sudo docker volume  prune -a -f"
+        echo "     sudo docker system prune -a --volumes -f #most aggressive"
+        echo " Check free space after removing by the"
+        echo "     df -h ."
+        echo ""
+        exit 1
+    fi
 }
 
 cleanup_server()
@@ -378,8 +366,8 @@ cleanup_server()
         sudo docker system prune -a --volumes -f
     fi
 
-    # check for disk space and cleanup
-    check_free_space . 65
+    # check free disk-space <pwd> <min_required_free_GB>
+    check_free_disk_space . 85 #GB
 }
 
 clone_ws()
