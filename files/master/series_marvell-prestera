@@ -3,7 +3,6 @@
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
-## 0703    https://github.com/sonic-net/sonic-buildimage/pull/27136
 ##-------------------------------------------------------------------------------------
 
 # Apply optional and oldest first, but newest - last for easy debug
@@ -17,7 +16,6 @@
 
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 0043-marvell-prestera-rpc-pin-ptf_nn_agent.py-to-use-nnpy.patch     |sonic-buildimage
-0703-syncd-trixie-marvell-prestera.patch                            |sonic-buildimage
 
 0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
 0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
