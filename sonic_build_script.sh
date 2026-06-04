@@ -35,6 +35,7 @@ print_usage()
     echo " $0 -b <branch> -p <platform> -a <arch>"
     echo "   [-c <sonic-buildimage_commit>]"
     echo "   [--patch_script <http or full_local path_of_patch_script>]"
+    echo "              \__if Not present go with canonic build without patching"
     echo "   [--url <sonic-buildimage_url>]"
     echo "   [--SAI_VER <virsion number 1.NN.1-K>]"
     echo "   [--SAI <URL or absolute local path to mrvllibsai_*.deb>]"
