@@ -1,0 +1,56 @@
+From 57334c606a7841b89e1e09ea6f3aeb7071ea7a4b Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 1 Jun 2026 19:21:54 +0300
+Subject: [PATCH 1/1] swss-syncd time.monotonic
+
+PROBLEM:
+On chrony or "date -s SET" command the wall-time is changed
+and abrupts the wall/realtime taken by the time.time().
+FIX:
+Use the time.monotonic() which is not changed un date/wall-time.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ config/main.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/config/main.py b/config/main.py
+index a495c933..ce222fe1 100644
+--- a/config/main.py
++++ b/config/main.py
+@@ -857,12 +857,12 @@ def storm_control_delete_entry(port_name, storm_type):
+ def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
+     if timeout == 0:
+         return True
+-    start = time.time()
++    start = time.monotonic()
+     empty = False
+     app_db = SonicV2Connector(host='127.0.0.1')
+     app_db.connect(app_db.APPL_DB)
+ 
+-    while not empty and time.time() - start < timeout:
++    while not empty and time.monotonic() - start < timeout:
+         non_empty_table_count = 0
+         for table in tables:
+             keys = app_db.keys(app_db.APPL_DB, table)
+@@ -1006,7 +1006,7 @@ def get_service_finish_timestamp(service):
+ 
+ 
+ def wait_service_restart_finish(service, last_timestamp, timeout=30):
+-    start_time = time.time()
++    start_time = time.monotonic()
+     elapsed_time = 0
+     while elapsed_time < timeout:
+         current_timestamp = get_service_finish_timestamp(service)
+@@ -1014,7 +1014,7 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
+             return
+ 
+         time.sleep(1)
+-        elapsed_time = time.time() - start_time
++        elapsed_time = time.monotonic() - start_time
+ 
+     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
+ 
+-- 
+2.34.1
+
