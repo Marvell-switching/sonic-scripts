@@ -13,7 +13,7 @@ SONIC_SOURCE_DIR="$(basename "$(dirname "$CURR_DIR")")"
 # Extract BRANCH as second field between first and second '-'
 BRANCH="$(echo "$SONIC_SOURCE_DIR" | cut -d'-' -f2)"
 case "$BRANCH" in
-    master|202505|202511)
+    master|202505|202511|202605)
         l_DEBIAN=bookworm
         ;;
     trixie)
@@ -78,10 +78,10 @@ copy_build_artifacts()
     if [ "$TARG_SUFFIX" = "" ]; then
         cp -a ${TARGET} $BUILD_ARTIFACTS_DIR
         echo "${LOG_PATH}/$TARGET_FILE" >> $ARTIFACTS_LOG
-        if [ -f target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb ]; then
-            cp -a target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb $BUILD_ARTIFACTS_DIR
-        fi
-        cp -a target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
+        #if [ -f target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb ]; then
+        #    cp -a target/debs/${l_DEBIAN}/swss-dbg_1.0.0_*.deb $BUILD_ARTIFACTS_DIR
+        #fi
+        #cp -a target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
         if [ -f target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz ]; then
             cp -a target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz $BUILD_ARTIFACTS_DIR
         fi
