@@ -1,0 +1,65 @@
+From 887434a6b552d2cce76ce8f9a88dc5eaa534a7b3 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sat, 22 Nov 2025 15:05:44 +0200
+Subject: [PATCH 1/1] marvell-prestera: Uboot print_menu improve
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/platform_arm64.conf | 12 +++++++-----
+ platform/marvell-prestera/platform_armhf.conf | 14 ++++++++------
+ 2 files changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/platform/marvell-prestera/platform_arm64.conf b/platform/marvell-prestera/platform_arm64.conf
+index 5c4be072c..3f9bd8582 100644
+--- a/platform/marvell-prestera/platform_arm64.conf
++++ b/platform/marvell-prestera/platform_arm64.conf
+@@ -244,11 +244,13 @@ prepare_boot_menu() {
+         fw_setenv ${FW_ARG} fdt_name $fdt_name > /dev/null
+         fw_setenv ${FW_ARG} fit_name $fit_name > /dev/null
+         fw_setenv ${FW_ARG} sonic_version_1 $demo_volume_revision_label > /dev/null
+-        BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
+-        BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
+-        BOOT3='echo " > Boot3: ONIE - run onie_boot";echo;'
+-        BORDER='echo "---------------------------------------------------";echo;'
+-        fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
++        BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";'
++        BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";'
++        BOOT3='echo " > Boot3: ONIE - run onie_boot";'
++        BORDER='echo "---------------------------------------------------";'
++        CURR="echo " Current  $do_boot_once;"
++        BORD='echo "---------";echo;'
++        fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER $CURR $BORD" > /dev/null
+ 
+         fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+         uuid=$(blkid | grep "$demo_volume_label" | sed -ne 's/.* UUID=\"\([^"]*\)\".*/\1/p')
+diff --git a/platform/marvell-prestera/platform_armhf.conf b/platform/marvell-prestera/platform_armhf.conf
+index 189ae0a45..3b432551e 100644
+--- a/platform/marvell-prestera/platform_armhf.conf
++++ b/platform/marvell-prestera/platform_armhf.conf
+@@ -183,15 +183,17 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} initrd_name_old $initrd_name_old > /dev/null
+     fw_setenv ${FW_ARG} fdt_name_old $fdt_name_old > /dev/null
+     fw_setenv ${FW_ARG} sonic_version_2 $sonic_version_2 > /dev/null
+-    BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
+-    BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
++    BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";'
++    BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";'
+     if [ "$PLATFORM" = "armhf-nokia_ixs7215_52x-r0" ]; then
+-        BOOT3='echo " > Boot3: ONIE - run onie_bootcmd";echo;'
++        BOOT3='echo " > Boot3: ONIE - run onie_bootcmd";'
+     else
+-        BOOT3='echo " > Boot3: ONIE - run onie_nand_boot";echo;'
++        BOOT3='echo " > Boot3: ONIE - run onie_nand_boot";'
+     fi
+-    BORDER='echo "---------------------------------------------------";echo;'
+-    fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
++    BORDER='echo "---------------------------------------------------";'
++    CURR="echo " Current  $do_boot_once;"
++    BORD='echo "---------";echo;'
++    fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER $CURR $BORD" > /dev/null
+ 
+     fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4 ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+     fw_setenv ${FW_ARG} linuxargs_old "net.ifnames=0 loopfstype=squashfs loop=$image_dir_old/$FILESYSTEM_SQUASHFS  varlog_size=$VAR_LOG_SIZE loglevel=4 ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
+-- 
+2.34.1
+

@@ -261,7 +261,7 @@ main()
 	# wget patch series file
     PATCH_SERIES_FILE=series_${PLATFORM}_${ARCH}
 	wget_cp_silent $WGET_PATH/${PATCH_SERIES_FILE} -P ./patches/
-	if [ ! -f ${PATCH_SERIES_FILE} ]; then
+	if [ ! -f ./patches/${PATCH_SERIES_FILE} ]; then
 		PATCH_SERIES_FILE=series_${PLATFORM}
 		wget_cp $WGET_PATH/${PATCH_SERIES_FILE} -P ./patches/
 		if [ ! -f ./patches/${PATCH_SERIES_FILE} ]; then
