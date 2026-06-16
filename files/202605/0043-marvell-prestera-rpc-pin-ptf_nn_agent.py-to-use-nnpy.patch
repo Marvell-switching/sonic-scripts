@@ -1,0 +1,38 @@
+From bfd6fea5e030ed94109ca5861104e8d619077fd7 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 25 May 2026 15:20:42 +0300
+Subject: [PATCH 1/1] marvell-prestera-rpc: pin ptf_nn_agent.py to use nnpy in
+ copp ptf
+
+Pin(revert) ptf_nn_agent.py download URL to the last upstream PTF commit
+(23ebe7237f) that still uses nnpy, matching the fix already applied
+to docker-ptf in PR #26912.
+
+The upstream p4lang/ptf master branch switched from nnpy to pynng
+(p4lang/ptf@ebc00f9), but docker-syncd-mrvl-teralynx-rpc only
+installs nnpy, causing ptf_nn_agent.py to fail with:
+  Cannot find pynng package
+
+This blocks COPP module tests from running.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../docker-syncd-mrvl-prestera-rpc/Dockerfile.j2                | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2 b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
+index 3941d8b15..6f82f3ee5 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc/Dockerfile.j2
+@@ -37,7 +37,7 @@ RUN pip3 install cffi    \
+  && pip3 install nnpy    \
+  && mkdir -p /opt       \
+  && cd /opt             \
+- && wget https://raw.githubusercontent.com/p4lang/ptf/master/ptf_nn/ptf_nn_agent.py
++ && wget https://raw.githubusercontent.com/p4lang/ptf/23ebe7237f3c284032bda02fbd1f4a98f1bc12f4/ptf_nn/ptf_nn_agent.py
+ 
+ COPY ["ptf_nn_agent.conf", "/etc/supervisor/conf.d/"]
+ 
+-- 
+2.34.1
+

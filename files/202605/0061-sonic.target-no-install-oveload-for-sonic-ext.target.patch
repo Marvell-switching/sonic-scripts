@@ -1,0 +1,44 @@
+From 52cdc81db3585515f9c16be2c295e9c2d5f0b3ea Mon Sep 17 00:00:00 2001
+From: Yan Markman <32263981+yanmarkman@users.noreply.github.com>
+Date: Mon, 19 Jan 2026 20:16:24 +0200
+Subject: [PATCH 1/1] sonic.target no-install oveload for sonic-ext.target
+ (#61)
+
+Overload an original source-file files/build_templates/sonic.target
+with Disabled [Install] section.
+Needed for correct/designed sonic-ext.target work.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ debian/rules                         | 2 ++
+ platform/files-overload/sonic.target | 5 +++++
+ 2 files changed, 7 insertions(+)
+ create mode 100644 platform/files-overload/sonic.target
+
+diff --git a/debian/rules b/debian/rules
+index ab9c4b9..5ade2fe 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -31,6 +31,8 @@ override_dh_auto_build:
+ 		    ${MOD_SRC_DIR}/debian/mrvlprestera.install.template \
+ 		    > ${MOD_SRC_DIR}/debian/mrvlprestera.install; \
+ 	fi
++	cp -f ${MOD_SRC_DIR}/platform/files-overload/sonic.target \
++	      ${MOD_SRC_DIR}/../../../files/build_templates/sonic.target
+ 
+ override_dh_auto_test:
+ 	# No tests to run
+diff --git a/platform/files-overload/sonic.target b/platform/files-overload/sonic.target
+new file mode 100644
+index 0000000..b088699
+--- /dev/null
++++ b/platform/files-overload/sonic.target
+@@ -0,0 +1,5 @@
++[Unit]
++Description=SONiC services target.
++
++#[Install]
++#WantedBy=multi-user.target
+-- 
+2.34.1
+
