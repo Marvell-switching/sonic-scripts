@@ -431,6 +431,13 @@ commit_id_update()
     echo ""
 }
 
+sonic_get_version_patching()
+{
+    # Replace   local branch_name=$(git rev-parse --abbrev-ref HEAD) by the BRANCH
+    local VER_SH=functions.sh
+    sed -i "s|^[[:space:]]*local branch_name=.*|    local branch_name=${BRANCH}|" "$VER_SH"
+}
+
 patch_sai_mk_path()
 {
     SAI_MK_FILE=platform/${BUILD_PLATFORM}/sai.mk
@@ -512,6 +519,7 @@ patch_ws()
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
         commit_id_update
+        sonic_get_version_patching
 
         patch_sai_mk_path
     fi
