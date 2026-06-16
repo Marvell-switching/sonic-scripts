@@ -53,8 +53,8 @@ rEXTRA_OPT=$@
 if [[ -n $MV_EXTRA_PATCH_SETS && "$CANONIC_BUILD" != "Y" && "$rARCH" == "amd64" ]]; then
 # patches from    "-1  -2  -3"
 rEXTRA_PATCH_SETS="-1"
+export OTHER_BUILD_OPTIONS="INCLUDE_ICCPD=y"
 fi
-#export OTHER_BUILD_OPTIONS="INCLUDE_ICCPD=y"
 
 #==============================================================================
 SONIC_BUILD_SH_CMD="./sonic_build_script.sh $rBRANCH $rBUILD_PLATFORM $rBUILD_PLATFORM_ARCH \
