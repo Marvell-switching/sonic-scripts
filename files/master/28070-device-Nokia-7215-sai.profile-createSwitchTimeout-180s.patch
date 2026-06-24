@@ -1,0 +1,41 @@
+From 645abcba4a82b318a06a27debf553aba30e0512e Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Wed, 24 Jun 2026 11:47:43 +0300
+Subject: [PATCH 1/1] device: Nokia-7215 sai.profile: createSwitchTimeout=180s
+
+PROBLEM:
+Nokia-7214/armhf/AC3x has long time for SONIC/swss/syncd
+start and "restart".
+"orinary", the existing createSwitchTimeout=120s is enough
+for reboot and for "config reload"(e.g. restart).
+But sometimes after "deploy-minigraph + config reload"
+the 120s is Not enough.
+
+syslog in that case:
+swss#orchagent: :- wait: SELECT operation result: TIMEOUT on getresponse
+                failure in create operation, SAI API: SAI_API_SWITCH
+
+SOLUTION:
+Increase createSwitchTimeout in the sai.profile from 120s to 180s.
+
+NOTE: Needed and done for One slow/weak "device/nokia armhf"
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile b/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
+index 61ad9bae0..2fdf55a1e 100644
+--- a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
++++ b/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
+@@ -2,5 +2,5 @@ mode=1
+ hwId=et6448m
+ SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/profile.ini
+ switchProfile=/usr/share/sonic/hwsku/SAI-M0-48x1G-4x10G.xml
+-createSwitchTimeout=120
++createSwitchTimeout=180
+ customEVlanUpdate=1
+-- 
+2.34.1
+
