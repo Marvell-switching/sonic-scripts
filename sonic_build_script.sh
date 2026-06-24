@@ -39,10 +39,12 @@ print_usage()
     echo "   [--url <sonic-buildimage_url>]"
     echo "   [--SAI_VER <virsion number 1.NN.1-K>]"
     echo "   [--SAI <URL or absolute local path to mrvllibsai_*.deb>]"
+    echo "   [--eSAI]"
     echo "   [-s] [-r] [--no-cache] [--verify_patches]"
     echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
     echo "   [--mark_no_del_ws] [--clean_dockers] [--clean_ws]"
     echo ""
+    echo "    --eSAI: Build with eSAI hwsku and mrvllibsai*.deb"
     echo "    -s : Build docker saiserver v2"
     echo "    -r : ENABLE_SYNCD_RPC=y"
     echo "    -c : checkout commit id"
@@ -153,6 +155,10 @@ parse_arguments()
                 SAI_URL_PATH="$2"
                 shift # past argument
                 shift # past value
+                ;;
+            --eSAI)
+                export SAI_SET_ESAI="Y"
+                shift # past argument
                 ;;
             --admin_password)
                 ADMIN_PASSWORD="$2"
