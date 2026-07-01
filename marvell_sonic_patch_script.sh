@@ -17,7 +17,7 @@
 
 # PREDEFINED VALUES
 CUR_DIR=$(basename `pwd`)
-LOG_FILE=patches_result.log
+LOG_FILE=build_patches.log
 FULL_PATH=`pwd`
 err_cnt=0
 PATCH_SERIES_FILE=
@@ -32,7 +32,7 @@ fi
 log()
 {
 	echo -e "$@"
-	echo $@ >> ${FULL_PATH}/${LOG_FILE}
+	echo -e "$@" >> ${FULL_PATH}/${LOG_FILE}
 }
 
 print_usage()
@@ -146,8 +146,15 @@ parse_arguments()
 wget_cp()
 {
     if [[ "$1" == *:* ]]; then
-        # Is URL - use wget     -P dstDir
-        wget --timeout=2 -c $1  $2 $3
+        # Is URL - use wget      -P dstDir
+        # wget --timeout=2 -c $1  $2 $3
+        local url="$1"
+        if [ "$2" = "-P" ] && [ -n "$3" ]; then
+            curl --connect-timeout 2 --speed-time 2 --speed-limit 1 -C - -fsSL \
+                -o "$3/$(basename "$url")" "$url"
+        else
+            curl --connect-timeout 2 --speed-time 2 --speed-limit 1 -C - -fsSLO "$url"
+        fi
     else
         # Dir or File is on local path
         dstDir="${3:-.}"
@@ -158,8 +165,15 @@ wget_cp()
 wget_cp_silent()
 {
     if [[ "$1" == *:* ]]; then
-        # Is URL - use wget     -P dstDir
-        wget --timeout=2 -c $1  $2 $3  2>/dev/null
+        # Is URL - use wget      -P dstDir
+        # wget --timeout=2 -c $1  $2 $3  2>/dev/null
+        local url="$1"
+        if [ "$2" = "-P" ] && [ -n "$3" ]; then
+            curl --connect-timeout 2 --speed-time 2 --speed-limit 1 -C - -fsSL \
+                -o "$3/$(basename "$url")" "$url" 2>/dev/null
+        else
+            curl --connect-timeout 2 --speed-time 2 --speed-limit 1 -C - -fsSLO "$url" 2>/dev/null
+        fi
     else
         # Dir or File is on local path
         dstDir="${3:-.}"
@@ -192,6 +206,8 @@ apply_sonicbuildimage_patches()
 		fi
 		log "PATCH ERROR: Failed to apply sonicbuildimage $PATCH_DIR/$patch_file, skeep and continue"
 		git am --skip
+	else
+		log "${patch_file} \t\t applied in <root>/"
 	fi
  done
 }
@@ -220,6 +236,8 @@ apply_submodule_patches()
 		fi
 		log "PATCH ERROR: Failed to apply submodule $CWD/$PATCH_DIR/${patch}, skeep and continue"
 		git am --skip
+	else
+		log "${patch} \t\t applied in ${dir}"
 	fi
 	popd
  done
@@ -280,6 +298,9 @@ main()
 		    exit 1
 		fi
 	fi
+
+    log "\n Apply patches on top of SONIC-buildimage commit\n"
+    log "  ${UPSTREAM_COMMIT}\n"
 
 	# ----- Apply patches -------------------------------
 	log "\n--- Apply sonicbuildimage patches -----\n"

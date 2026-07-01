@@ -74,6 +74,7 @@ echo """Examples:
   --patch_script /local-scripts-path/marvell_sonic_patch_script.sh -r \\
   --SAI /local-path/mrvllibsai_1.17.1-1_arm64.deb
 """
+echo -e "ARTIFACTS: sonic-buildimage/target/sonic-marvell-prestera-arm64.bin ; build_cmd.txt, build_patches.log\n"
 }
 
 parse_arguments()
@@ -156,6 +157,11 @@ parse_arguments()
                 shift # past argument
                 shift # past value
                 ;;
+            --mvsai) # full command "curl hash URL"
+                mvsai_setup "$2"
+                shift # past argument
+                shift # past value
+                ;;
             --eSAI)
                 export SAI_SET_ESAI="Y"
                 shift # past argument
@@ -193,6 +199,12 @@ parse_arguments()
                 ;;
         esac
     done
+
+    if [ -z "${LIBSAI_GET_ENA:-}" ] \
+        && { [ "${CI_LIBSAI_GET_ENA}" = "Y" ] || [ "${CI_LIBSAI_GET_ENA}" = "y" ]; }; then
+        LIBSAI_GET_ENA=Y
+        LIBSAI_GET_CMD="${CI_LIBSAI_GET_CMD:-}"
+    fi
 
     if [ -z "${BRANCH}" ]; then
         echo "Branch is not set. Please check usage."
@@ -237,11 +249,8 @@ parse_arguments()
     fi
 
     # TRIXIE overrides
-    if [ "${BRANCH}" == "master" ] || [ "${BRANCH}" = "202511" ]; then
+    if [ "${BRANCH}" == "master" ] || [ "${BRANCH}" = "202511" ] || [ "${BRANCH}" = "202601" ]; then
         l_DEBIAN="trixie"
-        #ENABLE_DOCKER_BASE_PULL_YN=""
-        #NO_CACHE=Y
-        #echo -e "\n Force: no ENABLE_DOCKER_BASE_PULL and no-cache\n"
     fi
 }
 
@@ -413,6 +422,7 @@ clone_ws()
 commit_id_get_upstream()
 {
     export UPSTREAM_ID="$(git rev-parse --short HEAD)"
+    export UPSTREAM_COMMIT="$(git log --pretty=format:'%h %cs %an : %s' -1)"
 }
 
 commit_id_update()
@@ -442,6 +452,34 @@ sonic_get_version_patching()
     # Replace   local branch_name=$(git rev-parse --abbrev-ref HEAD) by the BRANCH
     local VER_SH=functions.sh
     sed -i "s|^[[:space:]]*local branch_name=.*|    local branch_name=${BRANCH}|" "$VER_SH"
+    if [ "${SAI_SET_ESAI}" = "Y" ]; then
+        # add "-esai" suffix to end
+        sed -i 's#)}" | sed#)}-esai" | sed#' "$VER_SH"
+        sed -i 's#${dirty}" | sed#${dirty}-esai" | sed#' "$VER_SH"
+    fi
+}
+
+mvsai_setup()
+{
+    LIBSAI_GET_ENA=Y
+    LIBSAI_GET_CMD="$1"
+    [ -n "$LIBSAI_GET_CMD" ] || exit 1
+}
+
+mvsai_run_get_cmd()
+{
+    [ "${LIBSAI_GET_ENA}" = "Y" ] || return 0
+    [ -n "${LIBSAI_GET_CMD:-}" ] || exit 1
+    local url
+
+    url=$(printf '%s\n' "$LIBSAI_GET_CMD" | grep -oE 'https?://[^[:space:]"'\''`]+' | tail -1)
+    [ -n "$url" ] || exit 1
+    LIBSAI_GET_FILE=$(basename "$url")
+    LIBSAI_GET_VER=$(printf '%s\n' "$url" | grep -oE 'SAI_[^/]+' | head -1)
+    echo "CI download: curl ${LIBSAI_GET_VER}/...${LIBSAI_GET_VER}" >> build_cmd.txt
+    eval "$LIBSAI_GET_CMD"
+    check_error $? "CI SAI download failed"
+    SAI_URL_PATH="$(pwd)/${LIBSAI_GET_FILE}"
 }
 
 patch_sai_mk_path()
@@ -453,7 +491,10 @@ patch_sai_mk_path()
     #   URL:   --SAI http://192.168.1.2:8080/<path>/mrvllibsai_1.17.1-1_arm64.deb
     #   Local: --SAI /local-path/mrvllibsai_1.17.1-21_amd64.deb
 
-    if [[ -z "${SAI_VERSION}" && -z "${SAI_URL_PATH}" ]]; then return 0; fi
+    if [[ -z "${SAI_VERSION}" && -z "${SAI_URL_PATH}" ]] \
+        && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        return 0
+    fi
 
     if ! [ -z "${SAI_VERSION}" ]; then
         safe_sai_version=${SAI_VERSION//&/\\&}
@@ -463,6 +504,12 @@ patch_sai_mk_path()
         check_error $? "SAI-VERSION patching"
     fi
 
+    if [ -z "${SAI_URL_PATH}" ] && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        return 0
+    fi
+    if [ "${LIBSAI_GET_ENA}" = "Y" ]; then
+        mvsai_run_get_cmd
+    fi
     if [ -z "${SAI_URL_PATH}" ]; then
         return 0
     fi
@@ -495,7 +542,7 @@ patch_sai_mk_path()
         check_error $? "SAI-PATH patching"
     else
         # Remote URL ==> sai.mk uses $(MRVL_SAI)_URL
-        wget --timeout=2 --spider "$SAI_URL_PATH"
+        curl --connect-timeout 2 --max-time 2 -fsIL "$SAI_URL_PATH"
         check_error $? "SAI-URL check"
 
         sed -i -E \
@@ -516,7 +563,7 @@ patch_ws()
         fi
         URL=${PATCH_SCRIPT_URL%marvell_sonic_patch_script.sh}
         if [ "$isUrl" = "1" ]; then
-            wget --timeout=2 -c $PATCH_SCRIPT_URL
+            curl --connect-timeout 2 --speed-time 2 --speed-limit 1 -C - -fsSLO "$PATCH_SCRIPT_URL"
         else
             cp $PATCH_SCRIPT_URL .
         fi
