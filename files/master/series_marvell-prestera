@@ -4,6 +4,7 @@
 ## 0041    https://github.com/sonic-net/sonic-buildimage/pull/25468
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
 ## 28070   https://github.com/sonic-net/sonic-buildimage/pull/28070
+## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
 ##-------------------------------------------------------------------------------------
 
 # Apply optional and oldest first, but newest - last for easy debug
@@ -18,6 +19,7 @@
 28070-device-Nokia-7215-sai.profile-createSwitchTimeout-180s.patch  |sonic-buildimage
 0041-grub2-grub_cmd_sleep-increase-tolerance-to-14sec.patch         |sonic-buildimage
 0043-marvell-prestera-rpc-pin-ptf_nn_agent.py-to-use-nnpy.patch     |sonic-buildimage
+28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch    |sonic-buildimage
 
 0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
 0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera

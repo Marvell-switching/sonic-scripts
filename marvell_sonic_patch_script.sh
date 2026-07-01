@@ -227,23 +227,34 @@ apply_submodule_patches()
 
 apply_hwsku_changes()
 {
-	if [ "$PLATFORM" == "marvell" ] || [ "$PLATFORM" == "marvell-prestera" ]; then
-		# Download hwsku
-		wget_cp $WGET_PATH/prestera_hwsku.tgz -P ./patches/
-		if [ $? -eq 0 ]; then
-			rm -fr device/marvell/x86_64-marvell_db* || true
-			tar -C device/ -xzf ./patches/prestera_hwsku.tgz
-		fi
-	fi
-	if [ "$PLATFORM" == "innovium" ] || [ "$PLATFORM" == "marvell-teralynx" ]; then
-		# Download hwsku
-		wget_cp $WGET_PATH/teralynx_hwsku.tgz -P ./patches/
-		if [ $? -eq 0 ]; then
-			rm -fr device/celestica/x86_64-cel_midstone-r0 || true
-			rm -fr device/wistron || true
-			tar -C device/ -xzf ./patches/teralynx_hwsku.tgz
-		fi
-	fi
+    if [ "$PLATFORM" == "marvell" ] || [ "$PLATFORM" == "marvell-prestera" ]; then
+        HWSKU_NAME=prestera_hwsku
+        if [ -n "$SAI_SET_ESAI" ]; then
+            wget_cp $WGET_PATH/$HWSKU_NAME-esai.tgz -P ./patches/
+            if [ $? -eq 0 ]; then
+                rm -fr device/marvell/x86_64-marvell_db* || true
+                # rm some-others TBD
+                tar -C device/ -xzf ./patches/$HWSKU_NAME-esai.tgz
+            else
+                log "ERROR: eSAI build must have $HWSKU_NAME-esai.tgz"
+                exit 1
+            fi
+        else
+            wget_cp $WGET_PATH/$HWSKU_NAME.tgz -P ./patches/
+            if [ $? -eq 0 ]; then
+                rm -fr device/marvell/x86_64-marvell_db* || true
+                tar -C device/ -xzf ./patches/$HWSKU_NAME.tgz
+            fi
+        fi
+    fi
+    if [ "$PLATFORM" == "innovium" ] || [ "$PLATFORM" == "marvell-teralynx" ]; then
+        wget_cp $WGET_PATH/teralynx_hwsku.tgz -P ./patches/
+        if [ $? -eq 0 ]; then
+            rm -fr device/celestica/x86_64-cel_midstone-r0 || true
+            rm -fr device/wistron || true
+            tar -C device/ -xzf ./patches/teralynx_hwsku.tgz
+        fi
+    fi
 }
 
 main()
