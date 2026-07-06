@@ -304,6 +304,12 @@ check_error_with_retry()
 {
     n=0
     res=$1
+
+    if [[ "x$NO_CACHE" = "xY" ]]; then
+        # Retry would not help, check error directly
+        check_error $res $2
+        return $res
+    fi
     #set +x
     if [[ $res -ne 0 && $SONIC_BUILD_JOBS -ge 1 ]]; then
         sync
