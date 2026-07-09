@@ -250,8 +250,11 @@ apply_hwsku_changes()
         if [ -n "$SAI_SET_ESAI" ]; then
             wget_cp $WGET_PATH/$HWSKU_NAME-esai.tgz -P ./patches/
             if [ $? -eq 0 ]; then
-                rm -fr device/marvell/x86_64-marvell_db* || true
-                # rm some-others TBD
+                # Cleanup .tgz below second-level directories before extracting
+                tar -tf ./patches/$HWSKU_NAME-esai.tgz | awk -F/ 'NF>=2 {print $1 "/" $2}' | sort -u |
+                    while read dir; do
+                        find "device/$dir" -mindepth 1 \( -type f -o -type l \) -delete
+                    done
                 tar -C device/ -xzf ./patches/$HWSKU_NAME-esai.tgz
             else
                 log "ERROR: eSAI build must have $HWSKU_NAME-esai.tgz"
@@ -308,13 +311,27 @@ main()
 	apply_sonicbuildimage_patches $PATCH_SERIES_FILE "$CSD" || exit 1
 
     # CSD - Customer-Set-Directory
-    for CSD in tl 1 2 3; do
+    CSD_LIST="tl 1 2 3"
+    if [ -n "$SAI_SET_ESAI" ]; then
+        # Check PATCH_CUSTOM_ESAI presence since they are optional
+        CSD=esai
+        mkdir -p ./patches/$CSD
+        wget_cp_silent $WGET_PATH/$CSD/series -P ./patches/$CSD
+        if [ -f ./patches/$CSD/series ]; then
+            CSD_LIST="$CSD_LIST $CSD"
+            PATCH_CUSTOM_ESAI="Y"
+            rm ./patches/$CSD/series
+        fi
+    fi
+
+    for CSD in $CSD_LIST; do
         case "$CSD" in
+          esai) var="PATCH_CUSTOM_ESAI" ;;
             tl) var="PATCH_CUSTOM_TL" ;;
             *)  var="PATCH_CUSTOM_${CSD}" ;;
         esac
         [ "${!var}" = "Y" ] || continue
-        mkdir ./patches/$CSD
+        mkdir -p ./patches/$CSD
         wget_cp $WGET_PATH/$CSD/series -P ./patches/$CSD
         apply_sonicbuildimage_patches series "$CSD" || exit 1
     done
@@ -330,9 +347,9 @@ main()
     CSD=.
 	apply_submodule_patches $PATCH_SERIES_FILE "$CSD" || exit 1
 
-    # CSD - Customer-Set-Directory
-    for CSD in tl 1 2 3; do
+    for CSD in $CSD_LIST; do
         case "$CSD" in
+          esai) var="PATCH_CUSTOM_ESAI" ;;
             tl) var="PATCH_CUSTOM_TL" ;;
             *)  var="PATCH_CUSTOM_${CSD}" ;;
         esac

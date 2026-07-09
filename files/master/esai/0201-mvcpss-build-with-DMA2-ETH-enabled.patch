@@ -1,0 +1,49 @@
+From 18564257f56a6979d9f0c703170ea27815c87b4a Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 9 Jul 2026 18:03:09 +0300
+Subject: [PATCH 1/1] mvcpss: build with DMA2 and ETH enabled
+
+Build mvcpss.ko (super-set) module with all enabled flags
+CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y
+for all Marvell devices.
+The DMA-V2-driver with huge-page memory allocation required for
+"next generation" eSAI.
+NOTE - user-space CPSS knows to work without (previous) and with DMA.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ debian/rules | 18 +-----------------
+ 1 file changed, 1 insertion(+), 17 deletions(-)
+
+diff --git a/debian/rules b/debian/rules
+index 134954b..f01790b 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -49,23 +49,7 @@ override_dh_auto_build:
+ 		cp -r $(MOD_SRC_DIR)/../$(PRESTERA_MODULE_PREFIX)/* $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/; \
+ 		cd $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/$(PRESTERA_MODULE_SRC); \
+ 		make clean; \
+-		if [ $$mod = "rd98dx35xx_cn9131" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y || exit 1; \
+-		elif [ $$mod = "rd98dx45xx_cn9131" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y || exit 1; \
+-        elif [ $$mod = "rd98dx35xx-x86" ];then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y|| exit 1; \
+-		elif [ $$mod = "rd98dx35xx" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVMBUS=y CONFIG_KM_MVINT=y || exit 1; \
+-		elif [ $$mod = "db98cx8580-32cd" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y || exit 1; \
+-		elif [ $$mod = "db98cx8514-10cc" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y || exit 1; \
+-		elif [ $$mod = "db98cx8540-16cd" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y || exit 1; \
+-		elif [ $$mod = "db98cx8522-10cc" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y || exit 1; \
+-		fi; \
++		make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y CONFIG_KM_MVETH=y || exit 1; \
+ 		cd $(MOD_SRC_DIR)/$${mod}; \
+ 		python3 setup.py build; \
+ 		python3 setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}; \
+-- 
+2.34.1
+

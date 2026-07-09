@@ -1,0 +1,6 @@
+
+#28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch is added in main series-list
+
+#0201-mvcpss-build-with-DMA2-ETH-enabled.patch     |platform/marvell-prestera/sonic-platform-marvell
+0201-mvcpss-build-arm64-with-DMA2-enabled.patch   |platform/marvell-prestera/sonic-platform-marvell
+
