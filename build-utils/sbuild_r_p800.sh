@@ -4,7 +4,7 @@
 ##############################################################
 # <<  Release build-configuration
 SONIC_BRANCH=202605
-SONIC_COMMIT_ID=9c84048a4
+SONIC_COMMIT_ID=63f17ae50
 #MRVLLIBSAI_VER=1.18.1-1     - already set as 202605 Default
 ##CANONIC_BUILD=Y
 #MV_EXTRA_PATCH_SETS=Y
