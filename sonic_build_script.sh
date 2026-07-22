@@ -36,7 +36,6 @@ print_usage()
     echo "   [-c <sonic-buildimage_commit>]"
     echo "   [--patch_script <http or full_local path_of_patch_script>]"
     echo "              \__if Not present go with canonic build without patching"
-    echo "   [--url <sonic-buildimage_url>]"
     echo "   [--SAI_VER <virsion number 1.NN.1-K>]"
     echo "   [--SAI <URL or absolute local path to mrvllibsai_*.deb>]"
     echo "   [--eSAI]"
@@ -59,7 +58,7 @@ print_usage()
     echo "    --clean_dockers: clean stopped containers"
     echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
 echo """Examples:
-./sonic_build_script.sh -b 202511 -p marvell -a arm64 \\
+./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
   -c 021569412
 ./sonic_build_script.sh -b master -p marvell-prestera -a arm64 \\
