@@ -615,7 +615,7 @@ build_ws()
     fi
 
     # Build Sonic
-    echo -e "$INPUT\n" > build_args.txt
+    echo -e "$@\n" > build_args.txt
     echo $BUILD_OPTIONS >> build_args.txt
     echo "" >> build_cmd.txt
 
@@ -705,7 +705,7 @@ copy_build_artifacts()
 
 main()
 {
-    parse_arguments $INPUT
+    parse_arguments "$@"
     check_privilege_and_arch
     # Shell-script DEBUG setting
     # set -x
@@ -747,4 +747,4 @@ main()
     exit 0
 }
 
-main $INPUT
+main "$@"
