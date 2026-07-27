@@ -20,7 +20,7 @@ MIRROR="publicmirror.azurecr.io"
 VERSION_CONTROL_COMPONENTS="deb,py2,py3,web,git,docker"
 REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
-ARTIFACTS_DIR=/sonic-artifacts
+ARTIFACTS_DIR="${ARTIFACTS_DIR:-/sonic-artifacts}"
 DIR_PREFIX="ABU"
 ENABLE_DOCKER_BASE_PULL_YN="ENABLE_DOCKER_BASE_PULL=y"
 
@@ -696,7 +696,7 @@ copy_build_artifacts()
     cp build_args.txt $BUILD_ARTIFACTS_DIR
     cp build_cmd.txt $BUILD_ARTIFACTS_DIR
     cp ${TARGET} $BUILD_ARTIFACTS_DIR
-    #cp target/debs/${l_DEBIAN}/sonic-platform-*.deb $BUILD_ARTIFACTS_DIR
+    #cp target/debs/${l_DEBIAN}/sonic-platform-*.deb "$BUILD_ARTIFACTS_DIR" >/dev/null 2>&1 || true
     if [ "$BUILD_SAISERVER" == "Y" ]; then
         cp target/docker-saiserverv2-${PLATFORM_SHORT_NAME}.gz $BUILD_ARTIFACTS_DIR
     fi
