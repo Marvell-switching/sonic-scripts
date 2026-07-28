@@ -21,7 +21,7 @@ VERSION_CONTROL_COMPONENTS="deb,py2,py3,web,git,docker"
 REL_BUILD_TSTAMP=$(date +'%d-%m-%Y_%H-%M')
 CACHE_DIR=/var/cache/sonic-mrvl
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-/sonic-artifacts}"
-DIR_PREFIX="ABU"
+DIR_PREFIX="ABP"
 ENABLE_DOCKER_BASE_PULL_YN="ENABLE_DOCKER_BASE_PULL=y"
 
 
@@ -42,6 +42,7 @@ print_usage()
     echo "   [-s] [-r] [--no-cache] [--verify_patches]"
     echo "   [--admin_password <password>] [--other_build_options <sonic_build_options>]"
     echo "   [--mark_no_del_ws] [--clean_dockers] [--clean_ws]"
+    echo "   [--suffix <suff>]"
     echo ""
     echo "    --eSAI: Build with eSAI hwsku and mrvllibsai*.deb"
     echo "    -s : Build docker saiserver v2"
@@ -57,6 +58,7 @@ print_usage()
     echo "    --admin_password: Set admin password"
     echo "    --clean_dockers: clean stopped containers"
     echo "    --mark_no_del_ws: Do not cleanup ws during cleanup"
+    echo "    --suffix: add -<suff> characters to the end of ABP-xxxx-suff directory-name"
 echo """Examples:
 ./sonic_build_script.sh -b 202411 -p marvell -a arm64 \\
   --patch_script https://github.com/Marvell-switching/sonic-scripts/raw/refs/heads/master/marvell_sonic_patch_script.sh -r \\
@@ -190,6 +192,11 @@ parse_arguments()
             -h|--help)
                 print_usage
                 exit 1
+                ;;
+            --suffix)
+                DIR_SUFFIX="$2"
+                shift # past argument
+                shift # past value
                 ;;
             *)
                 echo "ERROR: Unknown option '$1'"
@@ -393,11 +400,22 @@ cleanup_server()
 
 clone_ws()
 {
+    if [ -n $DIR_SUFFIX ]; then
+        DIR_SUFFIX="-${DIR_SUFFIX}"
+    fi
+    if [ "${SAI_SET_ESAI}" = "Y" ]; then
+        if [ -n $DIR_SUFFIX ]; then
+            DIR_SUFFIX="-esai${DIR_SUFFIX}"
+        else
+            DIR_SUFFIX="-esai"
+        fi
+    fi
+
     # Clone the Sonic source code
     if [ -z $BRANCH_COMMIT ]; then
-        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-${REL_BUILD_TSTAMP}${DIR_SUFFIX}
     else
-        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-$BRANCH_COMMIT
+        SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-${BRANCH_COMMIT}${DIR_SUFFIX}
     fi
     sudo rm -rf $SONIC_SOURCE_DIR
     mkdir $SONIC_SOURCE_DIR
