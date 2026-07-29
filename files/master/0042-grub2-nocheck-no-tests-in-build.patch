@@ -1,0 +1,32 @@
+From a2a658f7aca595f7b32161a271ba0309b76fd4f4 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 27 Jul 2026 23:16:15 +0300
+Subject: [PATCH 1/1] grub2: nocheck no tests in build
+
+grub2 build on Intel-x86_64 machine quite frequently fails on testing
+(quite random).
+The failure is unreasonable and not related to Marvell-prestera build.
+
+Solution: build native amd64 with option DEB_BUILD_OPTIONS=nocheck.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ src/grub2/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/grub2/Makefile b/src/grub2/Makefile
+index dc1c7e50d..d354e9ec9 100644
+--- a/src/grub2/Makefile
++++ b/src/grub2/Makefile
+@@ -40,7 +40,7 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
+ ifeq ($(CROSS_BUILD_ENVIRON), y)
+ 	dpkg-buildpackage -b -us -uc -a$(CONFIGURED_ARCH) -Pcross,nocheck -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+ else
+-	dpkg-buildpackage -b -us -uc -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
++	DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -b -us -uc -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
+ endif
+ 	popd
+ 
+-- 
+2.34.1
+
