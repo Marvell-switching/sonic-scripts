@@ -44,7 +44,7 @@ print_usage()
     echo "   [--mark_no_del_ws] [--clean_dockers] [--clean_ws]"
     echo "   [--suffix <suff>]"
     echo ""
-    echo "    --eSAI: Build with eSAI hwsku and mrvllibsai*.deb"
+    echo "    --eSAI: Build with eSAI hwsku and mrvllibsai*.deb (pSAI is default)"
     echo "    -s : Build docker saiserver v2"
     echo "    -r : ENABLE_SYNCD_RPC=y"
     echo "    -c : checkout commit id"
@@ -154,7 +154,7 @@ parse_arguments()
                 shift # past value
                 ;;
             --SAI)
-                SAI_URL_PATH="$2"
+                export SAI_URL_PATH="$2"
                 shift # past argument
                 shift # past value
                 ;;

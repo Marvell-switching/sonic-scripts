@@ -1,6 +1,11 @@
-
 #28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch is added in main series-list
+# 201       https://github.com/Marvell-switching/sonic-platform-arm64/pull/17
+# 202..205  https://github.com/sonic-net/sonic-buildimage/pull/28717
 
 #0201-mvcpss-build-with-DMA2-ETH-enabled.patch     |platform/marvell-prestera/sonic-platform-marvell
 0201-mvcpss-build-arm64-with-DMA2-enabled.patch   |platform/marvell-prestera/sonic-platform-marvell
 
+0202-marvell-gbsyncd-phy-add-docker-gbsyncd-mrvl-componen.patch     |sonic-buildimage
+0203-marvell-gbsyncd-phy-enable-docker-in-marvell-prester.patch     |sonic-buildimage
+0204-marvell-gbsyncd-phy-add-rd98DX35xx_cn9131-device-hws.patch     |sonic-buildimage
+0205-marvell-gbsyncd-phy-fix-gbsyncd.service-gearbox-Cond.patch     |sonic-buildimage

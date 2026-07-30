@@ -13,6 +13,10 @@
 0042-grub2-nocheck-no-tests-in-build.patch                          |sonic-buildimage
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
+# OPTIONAL: Boot-up Stability by process decoupling
+#0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
+#0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
+
 # FALCON specific
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
 0064-build_templates-marvell-blacklist-with-kempld.patch            |sonic-buildimage
@@ -24,10 +28,7 @@
 0043-marvell-prestera-rpc-pin-ptf_nn_agent.py-to-use-nnpy.patch     |sonic-buildimage
 28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch    |sonic-buildimage
 
-0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
-0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
-
-# Extension WISTRON
+# Legacy Extension WISTRON
 #20250-1-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch      |sonic-buildimage
 #20250-2-Add-Wistron-platform-ES1227-54TS-and-ES2227-54TS.patch      |sonic-buildimage
 #0057-sonic-platform-wistron-rules-for-trixie.patch                  |sonic-buildimage
