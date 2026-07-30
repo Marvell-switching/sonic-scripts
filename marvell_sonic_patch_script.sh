@@ -243,28 +243,71 @@ apply_submodule_patches()
  done
 }
 
+prestera_hwsku_fetch_tgz()
+{
+    local base="$1"
+    local got_tgz=
+    local try
+
+    if [ -n "$SAI_DEB_DIR" ] && [ -n "$SAI_HWSKU_VER" ]; then
+        try="${base}-${SAI_HWSKU_VER}.tgz"
+        wget_cp "$SAI_DEB_DIR/$try" -P ./patches/
+        if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
+            got_tgz=$try
+        fi
+    fi
+    if [ -z "$got_tgz" ] && [ -n "$SAI_DEB_DIR" ]; then
+        try="${base}.tgz"
+        wget_cp "$SAI_DEB_DIR/$try" -P ./patches/
+        if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
+            got_tgz=$try
+        fi
+    fi
+    if [ -z "$got_tgz" ] && [ -n "$SAI_HWSKU_VER" ]; then
+        try="${base}-${SAI_HWSKU_VER}.tgz"
+        wget_cp $WGET_PATH/$try -P ./patches/
+        if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
+            got_tgz=$try
+        fi
+    fi
+    if [ -z "$got_tgz" ]; then
+        try="${base}.tgz"
+        wget_cp $WGET_PATH/$try -P ./patches/
+        if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
+            got_tgz=$try
+        fi
+    fi
+    echo "$got_tgz"
+}
+
 apply_hwsku_changes()
 {
     if [ "$PLATFORM" == "marvell" ] || [ "$PLATFORM" == "marvell-prestera" ]; then
         HWSKU_NAME=prestera_hwsku
+        SAI_DEB_DIR=
+        SAI_HWSKU_VER=
+        if [ -n "$SAI_URL_PATH" ]; then
+            SAI_DEB_DIR=$(dirname "$SAI_URL_PATH")
+            SAI_HWSKU_VER=$(basename "$SAI_URL_PATH" | sed -E 's/^mrvllibsai_([0-9]+\.[0-9]+\.[0-9]+-[0-9]+)_.*\.deb$/\1/')
+        fi
         if [ -n "$SAI_SET_ESAI" ]; then
-            wget_cp $WGET_PATH/$HWSKU_NAME-esai.tgz -P ./patches/
-            if [ $? -eq 0 ]; then
-                # Cleanup .tgz below second-level directories before extracting
-                tar -tf ./patches/$HWSKU_NAME-esai.tgz | awk -F/ 'NF>=2 {print $1 "/" $2}' | sort -u |
-                    while read dir; do
-                        find "device/$dir" -mindepth 1 \( -type f -o -type l \) -delete
-                    done
-                tar -C device/ -xzf ./patches/$HWSKU_NAME-esai.tgz
+            HWSKU_TGZ=$(prestera_hwsku_fetch_tgz "${HWSKU_NAME}-esai")
+            if [ -n "$HWSKU_TGZ" ]; then
+                ## # Cleanup .tgz below second-level directories before extracting
+                ## tar -tf ./patches/$HWSKU_TGZ | awk -F/ 'NF>=2 {print $1 "/" $2}' | sort -u |
+                ##     while read dir; do
+                ##         find "device/$dir" -mindepth 1 \( -type f -o -type l \) -delete
+                ##     done
+                tar -C device/ -xzf ./patches/$HWSKU_TGZ
             else
                 log "ERROR: eSAI build must have $HWSKU_NAME-esai.tgz"
                 exit 1
             fi
         else
-            wget_cp $WGET_PATH/$HWSKU_NAME.tgz -P ./patches/
-            if [ $? -eq 0 ]; then
+            HWSKU_TGZ=$(prestera_hwsku_fetch_tgz "$HWSKU_NAME")
+            if [ -n "$HWSKU_TGZ" ]; then
                 rm -fr device/marvell/x86_64-marvell_db* || true
-                tar -C device/ -xzf ./patches/$HWSKU_NAME.tgz
+                tar -C device/ -xzf ./patches/$HWSKU_TGZ
             fi
         fi
     fi

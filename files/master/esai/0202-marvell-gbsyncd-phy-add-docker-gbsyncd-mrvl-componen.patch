@@ -1,0 +1,223 @@
+From 773fbfcb28429c23cc48877e7cace02203eb7d46 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 30 Jul 2026 12:41:03 +0300
+Subject: [PATCH 1/4] marvell: gbsyncd phy add docker-gbsyncd-mrvl component
+
+Add Marvell Prestera external-PHY gbsyncd support.
+
+PHYs are driven by a separate gbsyncd container (syncd -g 1, GB_ASIC_DB) using the
+same mrvllibsai/libsai.so as main syncd, with gearbox_config.json, context_config.json,
+and per-PHY hwsku JSON. Build with INCLUDE_GBSYNCD=y.
+
+Add platform/components/docker-gbsyncd-mrvl image.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/components/docker-gbsyncd-mrvl.dep   | 12 ++++
+ platform/components/docker-gbsyncd-mrvl.mk    | 11 ++++
+ .../docker-gbsyncd-mrvl/Dockerfile.j2         | 35 ++++++++++++
+ .../docker-gbsyncd-mrvl/critical_processes.j2 |  1 +
+ .../docker-gbsyncd-mrvl/docker-init.sh        | 16 ++++++
+ .../components/docker-gbsyncd-mrvl/start.sh   | 16 ++++++
+ .../docker-gbsyncd-mrvl/supervisord.conf.j2   | 56 +++++++++++++++++++
+ 7 files changed, 147 insertions(+)
+ create mode 100644 platform/components/docker-gbsyncd-mrvl.dep
+ create mode 100644 platform/components/docker-gbsyncd-mrvl.mk
+ create mode 100644 platform/components/docker-gbsyncd-mrvl/Dockerfile.j2
+ create mode 100644 platform/components/docker-gbsyncd-mrvl/critical_processes.j2
+ create mode 100755 platform/components/docker-gbsyncd-mrvl/docker-init.sh
+ create mode 100755 platform/components/docker-gbsyncd-mrvl/start.sh
+ create mode 100644 platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
+
+diff --git a/platform/components/docker-gbsyncd-mrvl.dep b/platform/components/docker-gbsyncd-mrvl.dep
+new file mode 100644
+index 00000000..da5b2ff3
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl.dep
+@@ -0,0 +1,12 @@
++DPATH       := $($(DOCKER_GBSYNCD_BASE)_PATH)
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST)
++DEP_FILES   += platform/components/docker-gbsyncd-mrvl.mk
++DEP_FILES   += platform/components/docker-gbsyncd-mrvl.dep
++DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
++DEP_FILES   += $(shell git ls-files $(DPATH))
++
++$(DOCKER_GBSYNCD_BASE)_CACHE_MODE  := GIT_CONTENT_SHA
++$(DOCKER_GBSYNCD_BASE)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(DOCKER_GBSYNCD_BASE)_DEP_FILES   := $(DEP_FILES)
++
++$(eval $(call add_dbg_docker,$(DOCKER_GBSYNCD_BASE),$(DOCKER_GBSYNCD_BASE_DBG)))
+diff --git a/platform/components/docker-gbsyncd-mrvl.mk b/platform/components/docker-gbsyncd-mrvl.mk
+new file mode 100644
+index 00000000..3d968a8a
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl.mk
+@@ -0,0 +1,11 @@
++DOCKER_GBSYNCD_PLATFORM_CODE = mrvl
++
++# MRVL_SAI (mrvllibsai_*.deb) is defined and registered as a SONIC_ONLINE_DEBS
++# entry in platform/marvell-prestera/sai.mk. It ships libsai.so (eSAI), which
++# is loaded by both the NPU syncd and this PHY (gearbox) syncd.
++
++include $(PLATFORM_PATH)/../template/docker-gbsyncd-trixie.mk
++$(DOCKER_GBSYNCD_BASE)_VERSION = 1.0.0
++$(DOCKER_GBSYNCD_BASE)_PACKAGE_NAME = gbsyncd
++$(DOCKER_GBSYNCD_BASE)_PATH = $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl
++$(DOCKER_GBSYNCD_BASE)_DEPENDS += $(SYNCD) $(MRVL_SAI)
+diff --git a/platform/components/docker-gbsyncd-mrvl/Dockerfile.j2 b/platform/components/docker-gbsyncd-mrvl/Dockerfile.j2
+new file mode 100644
+index 00000000..3aba3fd5
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl/Dockerfile.j2
+@@ -0,0 +1,35 @@
++{% from "dockers/dockerfile-macros.j2" import install_debian_packages, copy_files, rsync_from_builder_stage %}
++ARG BASE=docker-config-engine-trixie-{{DOCKER_USERNAME}}:{{DOCKER_USERTAG}}
++
++FROM $BASE AS base
++
++ARG docker_container_name
++
++## Make apt-get non-interactive
++ENV DEBIAN_FRONTEND=noninteractive
++
++RUN apt-get update
++
++RUN apt-get install -f -y iproute2 libcap2-bin
++
++{% if docker_gbsyncd_mrvl_debs.strip() -%}
++# Copy MRVL_SAI (libsai.so) Debian package dependency
++{{ copy_files("debs/", docker_gbsyncd_mrvl_debs.split(' '), "/debs/") }}
++
++# Install MRVL_SAI and implicitly install its dependencies
++{{ install_debian_packages(docker_gbsyncd_mrvl_debs.split(' ')) }}
++{%- endif %}
++
++COPY ["docker-init.sh", "/usr/bin/"]
++COPY ["start.sh", "/usr/bin/"]
++
++COPY ["critical_processes.j2", "/usr/share/sonic/templates"]
++COPY ["supervisord.conf.j2", "/usr/share/sonic/templates"]
++
++
++FROM $BASE
++
++{{ rsync_from_builder_stage() }}
++
++ENV DEBIAN_FRONTEND=noninteractive
++ENTRYPOINT ["/usr/bin/docker-init.sh"]
+diff --git a/platform/components/docker-gbsyncd-mrvl/critical_processes.j2 b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
+new file mode 100644
+index 00000000..bdd6903c
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
+@@ -0,0 +1 @@
++program:syncd
+diff --git a/platform/components/docker-gbsyncd-mrvl/docker-init.sh b/platform/components/docker-gbsyncd-mrvl/docker-init.sh
+new file mode 100755
+index 00000000..93a1b931
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl/docker-init.sh
+@@ -0,0 +1,16 @@
++#! /bin/sh
++
++GB_CONFIG=/usr/share/sonic/hwsku/gearbox_config.json
++
++if [ ! -f $GB_CONFIG ]; then
++   exit 0
++fi
++
++CFGGEN_ARG="-j $GB_CONFIG"
++
++mkdir -p /etc/supervisor/conf.d/
++
++sonic-cfggen $CFGGEN_ARG -t /usr/share/sonic/templates/supervisord.conf.j2 > /etc/supervisor/conf.d/supervisord.conf
++sonic-cfggen $CFGGEN_ARG -t /usr/share/sonic/templates/critical_processes.j2 > /etc/supervisor/critical_processes
++
++exec /usr/local/bin/supervisord
+diff --git a/platform/components/docker-gbsyncd-mrvl/start.sh b/platform/components/docker-gbsyncd-mrvl/start.sh
+new file mode 100755
+index 00000000..88442be4
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl/start.sh
+@@ -0,0 +1,16 @@
++#!/usr/bin/env bash
++
++HWSKU_DIR=/usr/share/sonic/hwsku
++
++mkdir -p /etc/sai.d/
++
++# Create/Copy the psai.profile to /etc/sai.d/psai.profile.
++# eSAI always loads the same full board XML (SAI_INIT_CONFIG_FILE) that the
++# NPU syncd uses; it internally filters and initializes only the PHY parts.
++if [ -f $HWSKU_DIR/psai.profile.j2 ]; then
++    sonic-cfggen -d -t $HWSKU_DIR/psai.profile.j2 > /etc/sai.d/psai.profile
++else
++    if [ -f $HWSKU_DIR/psai.profile ]; then
++        cp $HWSKU_DIR/psai.profile /etc/sai.d/psai.profile
++    fi
++fi
+diff --git a/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2 b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
+new file mode 100644
+index 00000000..0ae31c85
+--- /dev/null
++++ b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
+@@ -0,0 +1,56 @@
++[supervisord]
++logfile_maxbytes=1MB
++logfile_backups=2
++nodaemon=true
++
++[eventlistener:dependent-startup]
++command=python3 -m supervisord_dependent_startup
++autostart=true
++autorestart=unexpected
++startretries=0
++exitcodes=0,3
++events=PROCESS_STATE
++buffer_size=1024
++
++[eventlistener:supervisor-proc-exit-listener]
++command=/usr/bin/supervisor-proc-exit-listener-rs --container-name gbsyncd
++events=PROCESS_STATE_EXITED,PROCESS_STATE_RUNNING,PROCESS_STATE_FATAL
++autostart=true
++autorestart=unexpected
++buffer_size=1024
++
++[program:rsyslogd]
++command=/usr/sbin/rsyslogd -n -iNONE
++priority=1
++autostart=false
++autorestart=unexpected
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++
++[program:start]
++command=/usr/bin/start.sh
++priority=2
++autostart=false
++autorestart=false
++startsecs=0
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++dependent_startup_wait_for=rsyslogd:running
++
++[program:syncd]
++command=/usr/bin/syncd -s -p /etc/sai.d/psai.profile -x /usr/share/sonic/hwsku/context_config.json -g 1
++priority=3
++autostart=false
++autorestart=false
++stdout_logfile=NONE
++stdout_syslog=true
++stderr_logfile=NONE
++stderr_syslog=true
++dependent_startup=true
++dependent_startup_wait_for=start:exited
+-- 
+2.25.1
+

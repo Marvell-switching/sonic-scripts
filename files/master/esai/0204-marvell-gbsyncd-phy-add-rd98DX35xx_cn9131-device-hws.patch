@@ -1,0 +1,1904 @@
+From 0f0680998d781ca284abc8d0d51811e34610fd5f Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 30 Jul 2026 12:41:04 +0300
+Subject: [PATCH 3/4] marvell: gbsyncd phy add rd98DX35xx_cn9131 device hwsku
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add Marvell Prestera external-PHY gbsyncd support.
+
+PHYs are driven by a separate gbsyncd container (syncd -g 1, GB_ASIC_DB) using the
+same mrvllibsai/libsai.so as main syncd, with gearbox_config.json, context_config.json,
+and per-PHY hwsku JSON. Build with INCLUDE_GBSYNCD=y.
+
+First board: AC5X-RD-ext (rd98DX35xx_cn9131) — gbsyncd.ini, context/gearbox/phy0-6 configs, psai.profile.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ .../gbsyncd.ini                               |   1 +
+ .../rd98DX35xx_cn9131/context_config.json     |  62 +++++
+ .../rd98DX35xx_cn9131/gearbox_config.json     | 151 ++++++++++
+ .../rd98DX35xx_cn9131/phy0_config.json        | 262 ++++++++++++++++++
+ .../rd98DX35xx_cn9131/phy1_config.json        | 262 ++++++++++++++++++
+ .../rd98DX35xx_cn9131/phy2_config.json        | 262 ++++++++++++++++++
+ .../rd98DX35xx_cn9131/phy3_config.json        | 262 ++++++++++++++++++
+ .../rd98DX35xx_cn9131/phy4_config.json        | 262 ++++++++++++++++++
+ .../rd98DX35xx_cn9131/phy5_config.json        | 134 +++++++++
+ .../rd98DX35xx_cn9131/phy6_config.json        | 134 +++++++++
+ .../rd98DX35xx_cn9131/psai.profile            |   1 +
+ 11 files changed, 1793 insertions(+)
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/gbsyncd.ini
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/context_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/gearbox_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy0_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy1_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy2_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy3_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy4_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy5_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy6_config.json
+ create mode 100644 device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/psai.profile
+
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/gbsyncd.ini b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/gbsyncd.ini
+new file mode 100644
+index 00000000..e6a5b72c
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/gbsyncd.ini
+@@ -0,0 +1 @@
++platform=gbsyncd-mrvl
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/context_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/context_config.json
+new file mode 100644
+index 00000000..ed7b1dac
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/context_config.json
+@@ -0,0 +1,62 @@
++{
++    "CONTEXTS": [
++        {
++            "guid": 0,
++            "name": "asic0",
++            "dbAsic": "ASIC_DB",
++            "dbCounters": "COUNTERS_DB",
++            "dbFlex": "FLEX_COUNTER_DB",
++            "dbState": "STATE_DB",
++            "zmq_enable": false,
++            "zmq_endpoint": "tcp://127.0.0.1:5555",
++            "zmq_ntf_endpoint": "tcp://127.0.0.1:5556",
++            "switches": [
++                {
++                    "index": 0,
++                    "hwinfo": ""
++                }
++            ]
++        },
++        {
++            "guid": 1,
++            "name": "phys",
++            "dbAsic": "GB_ASIC_DB",
++            "dbCounters": "GB_COUNTERS_DB",
++            "dbFlex": "GB_FLEX_COUNTER_DB",
++            "dbState": "STATE_DB",
++            "zmq_enable": false,
++            "zmq_endpoint": "tcp://127.0.0.1:5565",
++            "zmq_ntf_endpoint": "tcp://127.0.0.1:5566",
++            "switches": [
++                {
++                    "index": 0,
++                    "hwinfo": "mdio1_0_0/0"
++                },
++                {
++                    "index": 1,
++                    "hwinfo": "mdio1_0_1/0"
++                },
++                {
++                    "index": 2,
++                    "hwinfo": "mdio1_0_2/0"
++                },
++                {
++                    "index": 3,
++                    "hwinfo": "mdio1_0_3/0"
++                },
++                {
++                    "index": 4,
++                    "hwinfo": "mdio0_0_0/0"
++                },
++                {
++                    "index": 5,
++                    "hwinfo": "mdio0_0_1/0"
++                },
++                {
++                    "index": 6,
++                    "hwinfo": "mdio0_0_2/0"
++                }
++            ]
++        }
++    ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/gearbox_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/gearbox_config.json
+new file mode 100644
+index 00000000..acb01aea
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/gearbox_config.json
+@@ -0,0 +1,151 @@
++{
++  "phys": [
++    {
++      "phy_id": 0,
++      "name": "phy0",
++      "address": "0",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "",
++      "config_file": "/usr/share/sonic/hwsku/phy0_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 1,
++      "context_id": 1,
++      "hwinfo": "mdio1_0_0/0"
++    },
++    {
++      "phy_id": 1,
++      "name": "phy1",
++      "address": "1",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "",
++      "config_file": "/usr/share/sonic/hwsku/phy1_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 1,
++      "context_id": 1,
++      "hwinfo": "mdio1_0_1/0"
++    },
++    {
++      "phy_id": 2,
++      "name": "phy2",
++      "address": "2",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "",
++      "config_file": "/usr/share/sonic/hwsku/phy2_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 1,
++      "context_id": 1,
++      "hwinfo": "mdio1_0_2/0"
++    },
++    {
++      "phy_id": 3,
++      "name": "phy3",
++      "address": "3",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "",
++      "config_file": "/usr/share/sonic/hwsku/phy3_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 1,
++      "context_id": 1,
++      "hwinfo": "mdio1_0_3/0"
++    },
++    {
++      "phy_id": 4,
++      "name": "phy4",
++      "address": "4",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "/usr/share/sonic/firmware/phy/v0A0F0A00_13937_13912_e2580.hdr",
++      "config_file": "/usr/share/sonic/hwsku/phy4_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 0,
++      "context_id": 1,
++      "hwinfo": "mdio0_0_0/0"
++    },
++    {
++      "phy_id": 5,
++      "name": "phy5",
++      "address": "5",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "/usr/share/sonic/firmware/phy/v0A0F0A00_13937_13912_e2540.hdr",
++      "config_file": "/usr/share/sonic/hwsku/phy5_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 0,
++      "context_id": 1,
++      "hwinfo": "mdio0_0_1/0"
++    },
++    {
++      "phy_id": 6,
++      "name": "phy6",
++      "address": "6",
++      "lib_name": "/usr/lib/libsai.so",
++      "firmware_path": "/usr/share/sonic/firmware/phy/v0A0F0A00_13937_13912_e2540.hdr",
++      "config_file": "/usr/share/sonic/hwsku/phy6_config.json",
++      "sai_init_config_file": "/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml",
++      "phy_access": "mdio",
++      "bus_id": 0,
++      "context_id": 1,
++      "hwinfo": "mdio0_0_2/0"
++    }
++  ],
++  "interfaces": [
++    { "name": "Ethernet0",  "index": 1,  "phy_id": 0, "system_lanes": [0],  "line_lanes": [0] },
++    { "name": "Ethernet1",  "index": 2,  "phy_id": 0, "system_lanes": [1],  "line_lanes": [1] },
++    { "name": "Ethernet2",  "index": 3,  "phy_id": 0, "system_lanes": [2],  "line_lanes": [2] },
++    { "name": "Ethernet3",  "index": 4,  "phy_id": 0, "system_lanes": [3],  "line_lanes": [3] },
++    { "name": "Ethernet4",  "index": 5,  "phy_id": 0, "system_lanes": [4],  "line_lanes": [4] },
++    { "name": "Ethernet5",  "index": 6,  "phy_id": 0, "system_lanes": [5],  "line_lanes": [5] },
++    { "name": "Ethernet6",  "index": 7,  "phy_id": 0, "system_lanes": [6],  "line_lanes": [6] },
++    { "name": "Ethernet7",  "index": 8,  "phy_id": 0, "system_lanes": [7],  "line_lanes": [7] },
++
++    { "name": "Ethernet8",  "index": 9,  "phy_id": 1, "system_lanes": [8],  "line_lanes": [0] },
++    { "name": "Ethernet9",  "index": 10, "phy_id": 1, "system_lanes": [9],  "line_lanes": [1] },
++    { "name": "Ethernet10", "index": 11, "phy_id": 1, "system_lanes": [10], "line_lanes": [2] },
++    { "name": "Ethernet11", "index": 12, "phy_id": 1, "system_lanes": [11], "line_lanes": [3] },
++    { "name": "Ethernet12", "index": 13, "phy_id": 1, "system_lanes": [12], "line_lanes": [4] },
++    { "name": "Ethernet13", "index": 14, "phy_id": 1, "system_lanes": [13], "line_lanes": [5] },
++    { "name": "Ethernet14", "index": 15, "phy_id": 1, "system_lanes": [14], "line_lanes": [6] },
++    { "name": "Ethernet15", "index": 16, "phy_id": 1, "system_lanes": [15], "line_lanes": [7] },
++
++    { "name": "Ethernet16", "index": 17, "phy_id": 2, "system_lanes": [16], "line_lanes": [0] },
++    { "name": "Ethernet17", "index": 18, "phy_id": 2, "system_lanes": [17], "line_lanes": [1] },
++    { "name": "Ethernet18", "index": 19, "phy_id": 2, "system_lanes": [18], "line_lanes": [2] },
++    { "name": "Ethernet19", "index": 20, "phy_id": 2, "system_lanes": [19], "line_lanes": [3] },
++    { "name": "Ethernet20", "index": 21, "phy_id": 2, "system_lanes": [20], "line_lanes": [4] },
++    { "name": "Ethernet21", "index": 22, "phy_id": 2, "system_lanes": [21], "line_lanes": [5] },
++    { "name": "Ethernet22", "index": 23, "phy_id": 2, "system_lanes": [22], "line_lanes": [6] },
++    { "name": "Ethernet23", "index": 24, "phy_id": 2, "system_lanes": [23], "line_lanes": [7] },
++
++    { "name": "Ethernet24", "index": 25, "phy_id": 3, "system_lanes": [24], "line_lanes": [0] },
++    { "name": "Ethernet25", "index": 26, "phy_id": 3, "system_lanes": [25], "line_lanes": [1] },
++    { "name": "Ethernet26", "index": 27, "phy_id": 3, "system_lanes": [26], "line_lanes": [2] },
++    { "name": "Ethernet27", "index": 28, "phy_id": 3, "system_lanes": [27], "line_lanes": [3] },
++    { "name": "Ethernet28", "index": 29, "phy_id": 3, "system_lanes": [28], "line_lanes": [4] },
++    { "name": "Ethernet29", "index": 30, "phy_id": 3, "system_lanes": [29], "line_lanes": [5] },
++    { "name": "Ethernet30", "index": 31, "phy_id": 3, "system_lanes": [30], "line_lanes": [6] },
++    { "name": "Ethernet31", "index": 32, "phy_id": 3, "system_lanes": [31], "line_lanes": [7] },
++
++    { "name": "Ethernet32", "index": 33, "phy_id": 4, "system_lanes": [32], "line_lanes": [0] },
++    { "name": "Ethernet33", "index": 34, "phy_id": 4, "system_lanes": [33], "line_lanes": [1] },
++    { "name": "Ethernet34", "index": 35, "phy_id": 4, "system_lanes": [34], "line_lanes": [2] },
++    { "name": "Ethernet35", "index": 36, "phy_id": 4, "system_lanes": [35], "line_lanes": [3] },
++    { "name": "Ethernet36", "index": 37, "phy_id": 4, "system_lanes": [36], "line_lanes": [4] },
++    { "name": "Ethernet37", "index": 38, "phy_id": 4, "system_lanes": [37], "line_lanes": [5] },
++    { "name": "Ethernet38", "index": 39, "phy_id": 4, "system_lanes": [38], "line_lanes": [6] },
++    { "name": "Ethernet39", "index": 40, "phy_id": 4, "system_lanes": [39], "line_lanes": [7] },
++
++    { "name": "Ethernet40", "index": 41, "phy_id": 5, "system_lanes": [40], "line_lanes": [0] },
++    { "name": "Ethernet41", "index": 42, "phy_id": 5, "system_lanes": [41], "line_lanes": [1] },
++    { "name": "Ethernet42", "index": 43, "phy_id": 5, "system_lanes": [42], "line_lanes": [2] },
++    { "name": "Ethernet43", "index": 44, "phy_id": 5, "system_lanes": [43], "line_lanes": [3] },
++
++    { "name": "Ethernet44", "index": 45, "phy_id": 6, "system_lanes": [44], "line_lanes": [0] },
++    { "name": "Ethernet45", "index": 46, "phy_id": 6, "system_lanes": [45], "line_lanes": [1] },
++    { "name": "Ethernet46", "index": 47, "phy_id": 6, "system_lanes": [46], "line_lanes": [2] },
++    { "name": "Ethernet47", "index": 48, "phy_id": 6, "system_lanes": [47], "line_lanes": [3] }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy0_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy0_config.json
+new file mode 100644
+index 00000000..79cc9885
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy0_config.json
+@@ -0,0 +1,262 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    },
++    {
++      "index": 4,
++      "local_lane_id": 4,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 4,
++      "line_rx_lanemap": 4,
++      "line_to_system_lanemap": 4,
++      "mdio_addr": ""
++    },
++    {
++      "index": 5,
++      "local_lane_id": 5,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 5,
++      "line_rx_lanemap": 5,
++      "line_to_system_lanemap": 5,
++      "mdio_addr": ""
++    },
++    {
++      "index": 6,
++      "local_lane_id": 6,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 6,
++      "line_rx_lanemap": 6,
++      "line_to_system_lanemap": 6,
++      "mdio_addr": ""
++    },
++    {
++      "index": 7,
++      "local_lane_id": 7,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 7,
++      "line_rx_lanemap": 7,
++      "line_to_system_lanemap": 7,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 1,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 2,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 3,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 4,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 5,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 6,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 7,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 8,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy1_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy1_config.json
+new file mode 100644
+index 00000000..b6b0e31a
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy1_config.json
+@@ -0,0 +1,262 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    },
++    {
++      "index": 4,
++      "local_lane_id": 4,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 4,
++      "line_rx_lanemap": 4,
++      "line_to_system_lanemap": 4,
++      "mdio_addr": ""
++    },
++    {
++      "index": 5,
++      "local_lane_id": 5,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 5,
++      "line_rx_lanemap": 5,
++      "line_to_system_lanemap": 5,
++      "mdio_addr": ""
++    },
++    {
++      "index": 6,
++      "local_lane_id": 6,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 6,
++      "line_rx_lanemap": 6,
++      "line_to_system_lanemap": 6,
++      "mdio_addr": ""
++    },
++    {
++      "index": 7,
++      "local_lane_id": 7,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 7,
++      "line_rx_lanemap": 7,
++      "line_to_system_lanemap": 7,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 9,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 10,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 11,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 12,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 13,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 14,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 15,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 16,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy2_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy2_config.json
+new file mode 100644
+index 00000000..7b5336b4
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy2_config.json
+@@ -0,0 +1,262 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    },
++    {
++      "index": 4,
++      "local_lane_id": 4,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 4,
++      "line_rx_lanemap": 4,
++      "line_to_system_lanemap": 4,
++      "mdio_addr": ""
++    },
++    {
++      "index": 5,
++      "local_lane_id": 5,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 5,
++      "line_rx_lanemap": 5,
++      "line_to_system_lanemap": 5,
++      "mdio_addr": ""
++    },
++    {
++      "index": 6,
++      "local_lane_id": 6,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 6,
++      "line_rx_lanemap": 6,
++      "line_to_system_lanemap": 6,
++      "mdio_addr": ""
++    },
++    {
++      "index": 7,
++      "local_lane_id": 7,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 7,
++      "line_rx_lanemap": 7,
++      "line_to_system_lanemap": 7,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 17,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 18,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 19,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 20,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 21,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 22,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 23,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 24,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy3_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy3_config.json
+new file mode 100644
+index 00000000..c605f92d
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy3_config.json
+@@ -0,0 +1,262 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    },
++    {
++      "index": 4,
++      "local_lane_id": 4,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 4,
++      "line_rx_lanemap": 4,
++      "line_to_system_lanemap": 4,
++      "mdio_addr": ""
++    },
++    {
++      "index": 5,
++      "local_lane_id": 5,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 5,
++      "line_rx_lanemap": 5,
++      "line_to_system_lanemap": 5,
++      "mdio_addr": ""
++    },
++    {
++      "index": 6,
++      "local_lane_id": 6,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 6,
++      "line_rx_lanemap": 6,
++      "line_to_system_lanemap": 6,
++      "mdio_addr": ""
++    },
++    {
++      "index": 7,
++      "local_lane_id": 7,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 7,
++      "line_rx_lanemap": 7,
++      "line_to_system_lanemap": 7,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 25,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 26,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 27,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 28,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 29,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 30,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 31,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 32,
++      "mdio_addr": "",
++      "system_speed": 1000,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 1000,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy4_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy4_config.json
+new file mode 100644
+index 00000000..ee6d639d
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy4_config.json
+@@ -0,0 +1,262 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    },
++    {
++      "index": 4,
++      "local_lane_id": 4,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 4,
++      "line_rx_lanemap": 4,
++      "line_to_system_lanemap": 4,
++      "mdio_addr": ""
++    },
++    {
++      "index": 5,
++      "local_lane_id": 5,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 5,
++      "line_rx_lanemap": 5,
++      "line_to_system_lanemap": 5,
++      "mdio_addr": ""
++    },
++    {
++      "index": 6,
++      "local_lane_id": 6,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 6,
++      "line_rx_lanemap": 6,
++      "line_to_system_lanemap": 6,
++      "mdio_addr": ""
++    },
++    {
++      "index": 7,
++      "local_lane_id": 7,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 7,
++      "line_rx_lanemap": 7,
++      "line_to_system_lanemap": 7,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 33,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 34,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 35,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 36,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 37,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 38,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 39,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 40,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy5_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy5_config.json
+new file mode 100644
+index 00000000..c97fbf71
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy5_config.json
+@@ -0,0 +1,134 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 41,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 42,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 43,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 44,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy6_config.json b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy6_config.json
+new file mode 100644
+index 00000000..8765554d
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/phy6_config.json
+@@ -0,0 +1,134 @@
++{
++  "lanes": [
++    {
++      "index": 0,
++      "local_lane_id": 0,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 0,
++      "line_rx_lanemap": 0,
++      "line_to_system_lanemap": 0,
++      "mdio_addr": ""
++    },
++    {
++      "index": 1,
++      "local_lane_id": 1,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 1,
++      "line_rx_lanemap": 1,
++      "line_to_system_lanemap": 1,
++      "mdio_addr": ""
++    },
++    {
++      "index": 2,
++      "local_lane_id": 2,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 2,
++      "line_rx_lanemap": 2,
++      "line_to_system_lanemap": 2,
++      "mdio_addr": ""
++    },
++    {
++      "index": 3,
++      "local_lane_id": 3,
++      "system_side": true,
++      "tx_polarity": 0,
++      "rx_polarity": 0,
++      "line_tx_lanemap": 3,
++      "line_rx_lanemap": 3,
++      "line_to_system_lanemap": 3,
++      "mdio_addr": ""
++    }
++  ],
++  "ports": [
++    {
++      "index": 45,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 46,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 47,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    },
++    {
++      "index": 48,
++      "mdio_addr": "",
++      "system_speed": 2500,
++      "system_fec": "none",
++      "system_auto_neg": false,
++      "system_loopback": "none",
++      "system_training": false,
++      "line_speed": 2500,
++      "line_fec": "none",
++      "line_auto_neg": false,
++      "line_media_type": "copper",
++      "line_intf_type": "none",
++      "line_loopback": "none",
++      "line_training": false,
++      "line_adver_speed": [],
++      "line_adver_fec": [],
++      "line_adver_auto_neg": false,
++      "line_adver_asym_pause": false,
++      "line_adver_media_type": "copper"
++    }
++  ]
++}
+diff --git a/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/psai.profile b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/psai.profile
+new file mode 100644
+index 00000000..2addcda1
+--- /dev/null
++++ b/device/marvell/arm64-marvell_rd98DX35xx_cn9131-r0/rd98DX35xx_cn9131/psai.profile
+@@ -0,0 +1 @@
++SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/esai_config_ac5x_rd_ext.xml
+-- 
+2.25.1
+
