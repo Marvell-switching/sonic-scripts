@@ -1,0 +1,192 @@
+From: SONiC Dev <sonic-dev@lists.sonicfoundation.dev>
+Date: Mon, 3 Aug 2026 00:00:00 +0000
+Subject: [PATCH] marvell-prestera: add sswsyncd support
+
+Build and install the sswsyncd package (dsserve) on Marvell Prestera,
+bind-mount /var/run/sswsyncd into syncd and gbsyncd containers, and
+wrap PHY syncd with dsserve for the shared diagnostic socket.
+
+Requires sonic-sairedis syncd_start.sh / syncd_init_common.sh
+so NPU syncd is launched via dsserve when /usr/bin/dsserve is present.
+
+---
+diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64 b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
+index 36e690e2..b9b19252 100644
+--- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
++++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
+@@ -22,4 +22,5 @@ sgml-base==1.31
+ swig==4.1.0-0.2
+ swig4.0==4.1.0-0.2
+ syncd==1.0.0
++sswsyncd==1.0.0
+ xml-core==0.18+nmu1
+diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
+index 36e690e2..b9b19252 100644
+--- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
++++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
+@@ -22,4 +22,5 @@ sgml-base==1.31
+ swig==4.1.0-0.2
+ swig4.0==4.1.0-0.2
+ syncd==1.0.0
++sswsyncd==1.0.0
+ xml-core==0.18+nmu1
+diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64 b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
+index 06de598e..e3190d34 100644
+--- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
++++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
+@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u2
+ sgml-base==1.31+nmu1
+ swig==4.3.0-1
+ syncd==1.0.0
++sswsyncd==1.0.0
+ xml-core==0.19
+diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
+index 06de598e..e3190d34 100644
+--- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
++++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
+@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u2
+ sgml-base==1.31+nmu1
+ swig==4.3.0-1
+ syncd==1.0.0
++sswsyncd==1.0.0
+ xml-core==0.19
+diff --git a/files/build_templates/docker_image_ctl.j2 b/files/build_templates/docker_image_ctl.j2
+index 49941938..e51693fe 100644
+--- a/files/build_templates/docker_image_ctl.j2
++++ b/files/build_templates/docker_image_ctl.j2
+@@ -787,6 +787,11 @@ start() {
+         -v /var/run/docker-syncd$DEV:/var/run/sswsyncd \
+ {%- endif %}
+ {%- endif %}
++{%- if sonic_asic_platform == "marvell-prestera" %}
++{%- if docker_container_name == "syncd" %}
++        -v /var/run/docker-syncd$DEV:/var/run/sswsyncd \
++{%- endif %}
++{%- endif %}
+ {%- if docker_container_name == "pmon" %}
+     -v /usr/share/sonic/firmware:/usr/share/sonic/firmware:rw \
+     $(if [ -d /host/bmc ]; then echo "-v /host/bmc:/host/bmc:rw"; fi) \
+diff --git a/platform/components/docker-gbsyncd-mrvl.mk b/platform/components/docker-gbsyncd-mrvl.mk
+index 3d968a8a..74336dc5 100644
+--- a/platform/components/docker-gbsyncd-mrvl.mk
++++ b/platform/components/docker-gbsyncd-mrvl.mk
+@@ -8,4 +8,4 @@ include $(PLATFORM_PATH)/../template/docker-gbsyncd-trixie.mk
+ $(DOCKER_GBSYNCD_BASE)_VERSION = 1.0.0
+ $(DOCKER_GBSYNCD_BASE)_PACKAGE_NAME = gbsyncd
+ $(DOCKER_GBSYNCD_BASE)_PATH = $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl
+-$(DOCKER_GBSYNCD_BASE)_DEPENDS += $(SYNCD) $(MRVL_SAI)
++$(DOCKER_GBSYNCD_BASE)_DEPENDS += $(SYNCD) $(MRVL_SAI) $(SSWSYNCD)
+diff --git a/platform/components/docker-gbsyncd-mrvl/critical_processes.j2 b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
+index bdd6903c..608f1714 100644
+--- a/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
++++ b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
+@@ -1 +1 @@
+-program:syncd
++program:dsserve
+diff --git a/platform/components/docker-gbsyncd-mrvl/start.sh b/platform/components/docker-gbsyncd-mrvl/start.sh
+index 88442be4..8ff766e1 100755
+--- a/platform/components/docker-gbsyncd-mrvl/start.sh
++++ b/platform/components/docker-gbsyncd-mrvl/start.sh
+@@ -1,6 +1,9 @@
+ #!/usr/bin/env bash
+ 
+ HWSKU_DIR=/usr/share/sonic/hwsku
++SYNCD_SOCKET_FILE=/var/run/sswsyncd/sswgbsyncd.socket
++
++rm -f ${SYNCD_SOCKET_FILE}
+ 
+ mkdir -p /etc/sai.d/
+ 
+diff --git a/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2 b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
+index 0ae31c85..75b0ff02 100644
+--- a/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
++++ b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
+@@ -44,7 +44,7 @@ dependent_startup=true
+ dependent_startup_wait_for=rsyslogd:running
+ 
+ [program:syncd]
+-command=/usr/bin/syncd -s -p /etc/sai.d/psai.profile -x /usr/share/sonic/hwsku/context_config.json -g 1
++command=/usr/bin/dsserve -f /var/run/sswsyncd/sswgbsyncd.socket /usr/bin/syncd -s -p /etc/sai.d/psai.profile -x /usr/share/sonic/hwsku/context_config.json -g 1
+ priority=3
+ autostart=false
+ autorestart=false
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
+index d8c4d22e..6c6b5814 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
+@@ -24,5 +24,6 @@ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += --privileged -t
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/machine.conf:/etc/machine.conf
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /etc/sonic:/etc/sonic:ro
+ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /host/warmboot:/var/warmboot
++$(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += -v /var/run/docker-syncd:/var/run/sswsyncd
+ 
+ SONIC_TRIXIE_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
+index 885374ca..b7a8792d 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
+@@ -5,6 +5,7 @@ include $(PLATFORM_PATH)/../template/docker-syncd-trixie.mk
+ 
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
+ $(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
++$(DOCKER_SYNCD_BASE)_DEPENDS += $(SSWSYNCD)
+ 
+ $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
+                                 $(LIBSWSSCOMMON_DBG) \
+@@ -16,3 +17,4 @@ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
+ $(DOCKER_SYNCD_BASE)_MACHINE = marvell-prestera
+ 
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/warmboot:/var/warmboot
++$(DOCKER_SYNCD_BASE)_RUN_OPT += -v /var/run/docker-syncd:/var/run/sswsyncd
+diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes b/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
+index bdd6903c..608f1714 100644
+--- a/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
++++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
+@@ -1 +1 @@
+-program:syncd
++program:dsserve
+diff --git a/platform/marvell-prestera/rules.dep b/platform/marvell-prestera/rules.dep
+index bc3eb86d..172b30ba 100644
+--- a/platform/marvell-prestera/rules.dep
++++ b/platform/marvell-prestera/rules.dep
+@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/mrvl-prestera.dep
+ include $(PLATFORM_PATH)/platform-nokia.dep
+ endif
+ include $(PLATFORM_PATH)/sai.dep
++include $(PLATFORM_PATH)/sswsyncd.dep
+ ifeq ($(INCLUDE_GBSYNCD), y)
+ include $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl.dep
+ endif
+diff --git a/platform/marvell-prestera/rules.mk b/platform/marvell-prestera/rules.mk
+index 2b17a3f5..2f3ba4a6 100644
+--- a/platform/marvell-prestera/rules.mk
++++ b/platform/marvell-prestera/rules.mk
+@@ -1,4 +1,5 @@
+ include $(PLATFORM_PATH)/sai.mk
++include $(PLATFORM_PATH)/sswsyncd.mk
+ ifeq ($(INCLUDE_GBSYNCD), y)
+ include $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl.mk
+ endif
+diff --git a/platform/marvell-prestera/sswsyncd.dep b/platform/marvell-prestera/sswsyncd.dep
+new file mode 100644
+index 00000000..7aae9b13
+--- /dev/null
++++ b/platform/marvell-prestera/sswsyncd.dep
+@@ -0,0 +1,7 @@
++DPATH       := $(PLATFORM_PATH)/../broadcom/sswsyncd
++DEP_FILES   := $(SONIC_COMMON_FILES_LIST) platform/marvell-prestera/sswsyncd.mk
++DEP_FILES   += $(wildcard $(DPATH)/*)
++
++$(SSWSYNCD)_CACHE_MODE  := GIT_CONTENT_SHA
++$(SSWSYNCD)_DEP_FLAGS   := $(SONIC_COMMON_FLAGS_LIST)
++$(SSWSYNCD)_DEP_FILES   := $(DEP_FILES)
+diff --git a/platform/marvell-prestera/sswsyncd.mk b/platform/marvell-prestera/sswsyncd.mk
+new file mode 100644
+index 00000000..d8000a30
+--- /dev/null
++++ b/platform/marvell-prestera/sswsyncd.mk
+@@ -0,0 +1,4 @@
++SSWSYNCD = sswsyncd_1.0.0_$(CONFIGURED_ARCH).deb
++$(SSWSYNCD)_SRC_PATH = $(PLATFORM_PATH)/../broadcom/sswsyncd
++
++SONIC_DPKG_DEBS += $(SSWSYNCD)

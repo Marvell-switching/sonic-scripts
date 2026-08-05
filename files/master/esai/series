@@ -9,3 +9,5 @@
 0203-marvell-gbsyncd-phy-enable-docker-in-marvell-prester.patch     |sonic-buildimage
 0204-marvell-gbsyncd-phy-add-rd98DX35xx_cn9131-device-hws.patch     |sonic-buildimage
 0205-marvell-gbsyncd-phy-fix-gbsyncd.service-gearbox-Cond.patch     |sonic-buildimage
+0206-sairedis-marvell-syncd-with-mdio_access_use_npu.patch          |src/sonic-sairedis
+0207-marvell-prestera-sswsyncd.patch                                |sonic-buildimage

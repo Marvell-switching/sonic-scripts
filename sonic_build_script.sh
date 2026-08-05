@@ -400,11 +400,11 @@ cleanup_server()
 
 clone_ws()
 {
-    if [ -n $DIR_SUFFIX ]; then
+    if [ -n "$DIR_SUFFIX" ]; then
         DIR_SUFFIX="-${DIR_SUFFIX}"
     fi
     if [ "${SAI_SET_ESAI}" = "Y" ]; then
-        if [ -n $DIR_SUFFIX ]; then
+        if [ -n "$DIR_SUFFIX" ]; then
             DIR_SUFFIX="-esai${DIR_SUFFIX}"
         else
             DIR_SUFFIX="-esai"
@@ -412,7 +412,7 @@ clone_ws()
     fi
 
     # Clone the Sonic source code
-    if [ -z $BRANCH_COMMIT ]; then
+    if [ -z "$BRANCH_COMMIT" ]; then
         SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-${REL_BUILD_TSTAMP}${DIR_SUFFIX}
     else
         SONIC_SOURCE_DIR=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-${BRANCH_COMMIT}${DIR_SUFFIX}

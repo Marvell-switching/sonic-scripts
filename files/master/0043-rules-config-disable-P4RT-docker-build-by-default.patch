@@ -1,0 +1,35 @@
+From 8b527e90ff2759bad0039533fe8202f3ca1f25a2 Mon Sep 17 00:00:00 2001
+From: Local Build <build@local>
+Date: Tue, 4 Aug 2026 19:42:43 +0300
+Subject: [PATCH] rules/config: disable P4RT docker build by default
+
+Upstream enabled INCLUDE_P4RT=y in sonic-buildimage #27960 (07683ed85).
+That change adds docker-sonic-p4rt to default image builds and requires
+building sonic-p4rt via Bazel (sonic-pins), which fails in environments
+that cannot download Bazel from releases.bazel.build.
+
+Do not revert 07683ed85: keep the sonic-pins submodule bump and the
+sonic-p4rt Makefile workaround. Only disable P4RT at the SONiC config
+layer so default builds skip sonic-p4rt and docker-sonic-p4rt.
+
+Signed-off-by: Local Build <build@local>
+---
+ rules/config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rules/config b/rules/config
+index 40c46fd..c660c2d 100644
+--- a/rules/config
++++ b/rules/config
+@@ -211,7 +211,7 @@ INCLUDE_DHCP_RELAY = y
+ INCLUDE_DHCP_SERVER ?= n
+ 
+ # INCLUDE_P4RT - build docker-p4rt for P4RT support
+-INCLUDE_P4RT = y
++INCLUDE_P4RT = n
+ 
+ # INCLUDE_PTF - build docker-ptf and docker-ptf-sai test containers.
+ # These are only needed for PTF (Packet Test Framework) testing and are
+-- 
+2.25.1
+

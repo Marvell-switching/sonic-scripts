@@ -6,11 +6,14 @@
 ## 28251   https://github.com/sonic-net/sonic-buildimage/pull/28251
 #
 ## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
+#
+## 0104    https://github.com/Marvell-switching/mrvl-prestera/pull/66
 ##-------------------------------------------------------------------------------------
 
-# OPTIONAL: Build-adjust and MRVL-board specific
-0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
+# OPTIONAL or TMP
+#0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 0042-grub2-nocheck-no-tests-in-build.patch                          |sonic-buildimage
+#0043-rules-config-disable-P4RT-docker-build-by-default.patch        |sonic-buildimage
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
 # OPTIONAL: Boot-up Stability by process decoupling
@@ -20,7 +23,7 @@
 # FALCON specific
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
 0064-build_templates-marvell-blacklist-with-kempld.patch            |sonic-buildimage
-0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
+#0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 28251-marvell-prestera-sai-1.18.1-1.patch                           |sonic-buildimage
 
