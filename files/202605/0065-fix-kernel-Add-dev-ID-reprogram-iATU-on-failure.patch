@@ -1,0 +1,133 @@
+From 983f037131d26cd98b08b9a802d7d303e2dbdbce Mon Sep 17 00:00:00 2001
+From: Elad Nachman <enachman@marvell.com>
+Date: Wed, 29 Jul 2026 16:36:38 +0300
+Subject: [PATCH 1/1] fix(kernel): Add dev ID, reprogram iATU on failure
+
+Add AC5X device ID for device ID 0x9805
+When writing to tx_queue, if we read 0xbadad as the
+register value for Traffic Generator configuration, this
+means iATU configuration was overwritten since the driver
+was probed. reconfigure it with a maximum 128 retries to
+prevent endless loop in case ATU number + BAR2 size mismatch
+(for example, 4MB BAR2 size and ATU number of 5 will never work).
+
+Signed-off-by: Elad Nachman <enachman@marvell.com>
+---
+ .../linuxNoKernelModule/drivers/ethDriver.c   | 58 ++++++++++++++-----
+ 1 file changed, 45 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+index 82eb258..0e0abb3 100644
+--- a/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
++++ b/drivers/generic/cpssEnabler/linuxNoKernelModule/drivers/ethDriver.c
+@@ -78,6 +78,7 @@ disclaimer.
+ #define PCI_DEVICE_ID_HARRIER 0x9041
+ #define PCI_DEVICE_ID_AC5X_1  0x9803
+ #define PCI_DEVICE_ID_AC5X_2  0x981f
++#define PCI_DEVICE_ID_AC5X_3  0x9805
+ #define PCI_DEVICE_ID_ALDRIN2 0xcc0f
+ #define PCI_DEVICE_ID_IML     0xa000
+ #define PCI_DEVICE_ID_AC5     0xb400
+@@ -175,7 +176,6 @@ enum {
+ /* Configurable constants */
+ #define DRV_NAME "mvppnd_netdev"
+ #define MAX_NETDEVS (2 << 10)
+-#define DEF_ATU_WIN_AC5X 3
+ 
+ /* How long to wait for SDMA to take ownership of a descriptor */
+ static const unsigned long TX_WAIT_FOR_CPU_OWENERSHIP_USEC = 100000;
+@@ -184,7 +184,7 @@ static const unsigned long TX_QUEUE_SIZE = 10000;
+ static const u16 DEFAULT_NAPI_POLL_WEIGHT = NAPI_POLL_WEIGHT;
+ static const u8 MAX_EMPTY_NAPI_POLL = 20;
+ static const int RX_THREAD_UDELAY = 5000;
+-static const u16 DEFAULT_ATU_WIN = 3;
++static const u16 DEFAULT_ATU_WIN = 5; /* PSAI writes to "atu_win" with 3 so this should be backward compatible with PSAI */
+ /* MG windows - one for coherent and max 2 for streaming, indexes below */
+ static const u8 DEFAULT_MG_WIN = 0xE;
+ static const u8 MG_WIN_COHERENT_IDX = 0;
+@@ -591,6 +591,9 @@ static int mvppnd_setup_iatu_window(struct mvppnd_dev *ppdev, int mg_cluster)
+ 		  0x10);
+ 
+ 	iowrite32(reg_addr_base, ppdev->pdev.bar0 + winx_offs + 0x14);
++	pr_info("mvppnd_setup_iatu_window atuwin %u mg %u mgregbase %x ofs %x bar0 %lx regbase %x\n",
++			ppdev->pdev.atu_win, mg_cluster, ppdev->device_data->mg_reg_base,
++			winx_offs, (unsigned long)ppdev->pdev.bar0, reg_addr_base);
+ 
+ 	ppdev->regs_offs = ppdev->pdev.atu_win * (ATU_WIN_SIZE + 1);
+ 
+@@ -1977,6 +1980,9 @@ static ssize_t mvppnd_store_tx_queue(struct kobject *kobj,
+ 				     struct kobj_attribute *attr,
+ 				     const char *buf, size_t count)
+ {
++	int i, iter = 128;
++	int err = 0;
++	u32 val;
+ 	struct mvppnd_dev *ppdev = container_of(attr, struct mvppnd_dev,
+ 						attr_tx_queue);
+ 	if ((sscanf(buf, "%d", &ppdev->tx_queue_num) != 1) ||
+@@ -1988,18 +1994,42 @@ static ssize_t mvppnd_store_tx_queue(struct kobject *kobj,
+ 		return -EINVAL;
+ 	}
+ 
+-	/* Verify that the requested queue is not used by Packet Generator */
+-	if (mvppnd_read_reg(ppdev, REG_ADDR_PG_CFG_QUEUE +
+-			    REG_ADDR_PG_CFG_QUEUE_OFFSET_FORMULA *
+-			    ppdev->tx_queue_num)) {
+-		dev_err(ppdev->dev,
+-			"Queue %d is used by Packet Generator\n",
+-			ppdev->tx_queue_num);
+-		ppdev->tx_queue_num = -1;
+-		return -EINVAL;
+-	}
++	do {
++		/* Verify that the requested queue is not used by Packet Generator */
++		val = mvppnd_read_reg(ppdev, REG_ADDR_PG_CFG_QUEUE +
++				    REG_ADDR_PG_CFG_QUEUE_OFFSET_FORMULA *
++				    ppdev->tx_queue_num);
++
++		if (val == 0xbadad)
++			err++;
++		else {
++			err = 0;
++
++			if (val) {
++				for (i = 0; i < 8; i++) {
++
++					dev_err(ppdev->dev, "q %d tg regval %x\n", i,
++						mvppnd_read_reg(ppdev, REG_ADDR_PG_CFG_QUEUE +
++								REG_ADDR_PG_CFG_QUEUE_OFFSET_FORMULA * i));
++				}
++				dev_err(ppdev->dev,
++					"Queue %d is used by Packet Generator\n",
++					ppdev->tx_queue_num);
++				dev_err(ppdev->dev, "regs %lx ofs %x",
++					(unsigned long)ppdev->regs, ppdev->regs_offs);
++				ppdev->tx_queue_num = -1;
++				return -EINVAL;
++			}
++		}
+ 
+-	return count;
++		if (err) { /* probably CPSS overwrote our iATU settings:  */
++			pr_err("iATU not programmed correctly, reinitializing...\n");
++			mvppnd_setup_iatu_window(ppdev, ppdev->pdev.mg_cluster);
++		}
++
++	} while ( err && --iter > 0);
++
++	return err ? -ETIMEDOUT : count;
+ }
+ 
+ static ssize_t mvppnd_show_atu_win(struct kobject *kobj,
+@@ -4120,6 +4150,8 @@ static const struct pci_device_id mvppnd_pci_tbl[] = {
+ 	  (kernel_ulong_t)&ac5x_private_data},
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL, PCI_DEVICE_ID_AC5X_2), 0, 0,
+ 	  (kernel_ulong_t)&ac5x_private_data},
++	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL, PCI_DEVICE_ID_AC5X_3), 0, 0,
++	  (kernel_ulong_t)&ac5x_private_data},
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL, PCI_DEVICE_ID_IML), 0, 0,
+ 	  (kernel_ulong_t)&ac5x_private_data},
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL, PCI_DEVICE_ID_AC5), 0, 0,
+-- 
+2.34.1
+

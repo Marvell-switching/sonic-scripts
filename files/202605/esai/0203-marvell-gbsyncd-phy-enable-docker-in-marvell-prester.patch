@@ -1,0 +1,46 @@
+From 2ebb6bf32fa78a7532558a3e8158b6a37cb3e306 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 30 Jul 2026 12:41:03 +0300
+Subject: [PATCH 2/4] marvell: gbsyncd phy enable docker in marvell-prestera
+ rules
+
+Add Marvell Prestera external-PHY gbsyncd support.
+
+PHYs are driven by a separate gbsyncd container (syncd -g 1, GB_ASIC_DB) using the
+same mrvllibsai/libsai.so as main syncd, with gearbox_config.json, context_config.json,
+and per-PHY hwsku JSON. Build with INCLUDE_GBSYNCD=y.
+
+Include docker-gbsyncd-mrvl.mk and .dep when INCLUDE_GBSYNCD=y.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/rules.dep | 3 +++
+ platform/marvell-prestera/rules.mk  | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/platform/marvell-prestera/rules.dep b/platform/marvell-prestera/rules.dep
+index c31677b4..bc3eb86d 100644
+--- a/platform/marvell-prestera/rules.dep
++++ b/platform/marvell-prestera/rules.dep
+@@ -9,3 +9,6 @@ include $(PLATFORM_PATH)/mrvl-prestera.dep
+ include $(PLATFORM_PATH)/platform-nokia.dep
+ endif
+ include $(PLATFORM_PATH)/sai.dep
++ifeq ($(INCLUDE_GBSYNCD), y)
++include $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl.dep
++endif
+diff --git a/platform/marvell-prestera/rules.mk b/platform/marvell-prestera/rules.mk
+index 74792e98..2b17a3f5 100644
+--- a/platform/marvell-prestera/rules.mk
++++ b/platform/marvell-prestera/rules.mk
+@@ -1,4 +1,7 @@
+ include $(PLATFORM_PATH)/sai.mk
++ifeq ($(INCLUDE_GBSYNCD), y)
++include $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl.mk
++endif
+ include $(PLATFORM_PATH)/docker-syncd-mrvl-prestera.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl-prestera-rpc.mk
+ include $(PLATFORM_PATH)/docker-saiserver-mrvl-prestera.mk
+-- 
+2.25.1
+

@@ -1,0 +1,35 @@
+From ae57fc4c98da0a36a83db609acc175f5f7f8eb98 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 23 Jul 2026 22:25:56 +0300
+Subject: [PATCH 1/1] mvcpss: build arm64 with DMA2 enabled
+
+Build mvcpss.ko (super-set) module arm64 with extra enabled flag MVDMA2
+ CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y
+Keep the CONFIG_KM_MVETH out.
+
+The MVDMA2 driver is required for "next generation" eSAI.
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ debian/rules | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/debian/rules b/debian/rules
+index 134954b..f5c9a70 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -50,9 +50,9 @@ override_dh_auto_build:
+ 		cd $(MOD_SRC_DIR)/$${mod}/$(MRVL_MODULE_DIR)/$(PRESTERA_MODULE_SRC); \
+ 		make clean; \
+ 		if [ $$mod = "rd98dx35xx_cn9131" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y || exit 1; \
++			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y || exit 1; \
+ 		elif [ $$mod = "rd98dx45xx_cn9131" ]; then \
+-			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y || exit 1; \
++			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y || exit 1; \
+         elif [ $$mod = "rd98dx35xx-x86" ];then \
+ 			make modules -C $(KERNEL_SRC)/build M=`pwd` CONFIG_KM_MVPCI=y CONFIG_KM_MVINT=y CONFIG_KM_MVDMA2=y|| exit 1; \
+ 		elif [ $$mod = "rd98dx35xx" ]; then \
+-- 
+2.34.1
+

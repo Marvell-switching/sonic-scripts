@@ -1,0 +1,37 @@
+From 8dff7c112c562f6938e889b03e67b45b558504c4 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sat, 20 Jun 2026 22:39:10 +0300
+Subject: [PATCH 1/1] marvell-platfrom: add SAI dependency to
+ DOCKER_MGMT_FRAMEWORK
+
+The MRVL_SAI now has shlibs-based dependency description, is included
+into build dependency graph. libsai.so consumers also should be updated
+in the way like:
+
+DOCKER_MGMT_FRAMEWORK = docker-sonic-mgmt-framework.gz
+$(DOCKER_MGMT_FRAMEWORK)_DEPENDS += $(MRVL_SAI)
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/sai.mk | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/platform/marvell-prestera/sai.mk b/platform/marvell-prestera/sai.mk
+index 18f41ff13..aa12a662c 100644
+--- a/platform/marvell-prestera/sai.mk
++++ b/platform/marvell-prestera/sai.mk
+@@ -13,6 +13,11 @@ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binarie
+ MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
+ $(MRVL_SAI)_URL = $(MRVL_SAI_URL_PREFIX)/$(MRVL_SAI)
+ 
++# The MRVL_SAI now has shlibs-based dependency description, is included
++# into build dependency graph. libsai.so consumers also should be updated.
++DOCKER_MGMT_FRAMEWORK = docker-sonic-mgmt-framework.gz
++$(DOCKER_MGMT_FRAMEWORK)_DEPENDS += $(MRVL_SAI)
++
+ SONIC_ONLINE_DEBS += $(MRVL_SAI)
+ $(MRVL_SAI)_SKIP_VERSION=y
+ $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
+-- 
+2.34.1
+
