@@ -289,6 +289,10 @@ apply_hwsku_changes()
         if [ -n "$SAI_URL_PATH" ]; then
             SAI_DEB_DIR=$(dirname "$SAI_URL_PATH")
             SAI_HWSKU_VER=$(basename "$SAI_URL_PATH" | sed -E 's/^mrvllibsai_([0-9]+\.[0-9]+\.[0-9]+-[0-9]+)_.*\.deb$/\1/')
+        else
+            if [ -n "$SAI_VERSION" ]; then
+                SAI_HWSKU_VER=$SAI_VERSION
+            fi
         fi
         if [ -n "$SAI_SET_ESAI" ]; then
             HWSKU_TGZ=$(prestera_hwsku_fetch_tgz "${HWSKU_NAME}-esai")
