@@ -446,6 +446,16 @@ commit_id_get_upstream()
 {
     export UPSTREAM_ID="$(git rev-parse --short HEAD)"
     export UPSTREAM_COMMIT="$(git log --pretty=format:'%h %cs %an : %s' -1)"
+
+    # Expand dirname with UPSTREAM_ID (disabled since could cause problem for CI/Jenkins)
+    #if [ -z "$BRANCH_COMMIT" ]; then
+    #    cd ../..    # ABPxx/sonic-buildimage/
+    #    SONIC_SOURCE_DIR1=$DIR_PREFIX-$BRANCH-$REL_BUILD_TSTAMP-${UPSTREAM_ID}${DIR_SUFFIX}
+    #    abp_path="$PWD"
+    #    mv "$abp_path"/$SONIC_SOURCE_DIR "$abp_path"/$SONIC_SOURCE_DIR1
+    #    cd "$abp_path"/$SONIC_SOURCE_DIR1/sonic-buildimage
+    #    SONIC_SOURCE_DIR=$SONIC_SOURCE_DIR1
+    #fi
 }
 
 commit_id_update()
@@ -503,6 +513,30 @@ mvsai_run_get_cmd()
     eval "$LIBSAI_GET_CMD"
     check_error $? "CI SAI download failed"
     SAI_URL_PATH="$(pwd)/${LIBSAI_GET_FILE}"
+}
+
+sai_url_check()
+{
+    if [[ -z "${SAI_VERSION}" && -z "${SAI_URL_PATH}" ]] \
+        && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        return 0
+    fi
+    if [ -z "${SAI_URL_PATH}" ] && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        return 0
+    fi
+    if [ "${LIBSAI_GET_ENA}" = "Y" ]; then
+        return 0
+    fi
+    if [ -z "${SAI_URL_PATH}" ]; then
+        return 0
+    fi
+    if [[ "$SAI_URL_PATH" == /* ]] && [[ "$SAI_URL_PATH" != *"://"* ]]; then
+        test -f "$SAI_URL_PATH" && test -r "$SAI_URL_PATH"
+        check_error $? "SAI local path missing or not readable"
+    else
+        curl --connect-timeout 2 --max-time 2 -fsIL "$SAI_URL_PATH" >/dev/null
+        check_error $? "SAI-URL check <$SAI_URL_PATH>"
+    fi
 }
 
 patch_sai_mk_path()
@@ -565,7 +599,7 @@ patch_sai_mk_path()
         check_error $? "SAI-PATH patching"
     else
         # Remote URL ==> sai.mk uses $(MRVL_SAI)_URL
-        curl --connect-timeout 2 --max-time 2 -fsIL "$SAI_URL_PATH"
+        curl --connect-timeout 2 --max-time 2 -fsIL "$SAI_URL_PATH" >/dev/null
         check_error $? "SAI-URL check"
 
         sed -i -E \
@@ -578,6 +612,7 @@ patch_sai_mk_path()
 
 patch_ws()
 {
+    # if NOT canonic == if patched
     if [ -v PATCH_SCRIPT_URL ]; then
         if [[ "$PATCH_SCRIPT_URL" == *:* ]]; then
             isUrl=1
@@ -591,13 +626,12 @@ patch_ws()
             cp $PATCH_SCRIPT_URL .
         fi
         commit_id_get_upstream
+
         echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}
         check_error $? "patch_script"
         commit_id_update
         sonic_get_version_patching
-
-        patch_sai_mk_path
     fi
 }
 
@@ -606,6 +640,8 @@ build_ws()
     local startTime=$SECONDS
 
     # Set the build options
+    sudo mkdir $CACHE_DIR
+    sudo chmod a+w $CACHE_DIR
     mkdir -p $CACHE_DIR/$BRANCH/$BUILD_PLATFORM_ARCH
     BUILD_OPTIONS=""
     if [ "$NO_CACHE" == "N" ]; then
@@ -730,9 +766,11 @@ main()
 
     cleanup_server
 
+    sai_url_check
     clone_ws
-
     patch_ws
+    patch_sai_mk_path
+
     if [ "$VERIFY_PATCHES" == "Y" ]; then
         exit 0
     fi
