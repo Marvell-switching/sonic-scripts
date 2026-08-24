@@ -149,7 +149,7 @@ parse_arguments()
                 shift # past value
                 ;;
             --SAI_VER)
-                SAI_VERSION="$2"
+                export SAI_VERSION="$2"
                 shift # past argument
                 shift # past value
                 ;;

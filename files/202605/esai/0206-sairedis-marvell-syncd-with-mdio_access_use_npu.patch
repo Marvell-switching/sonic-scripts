@@ -1,0 +1,43 @@
+From 9e85bcf5f9b40a9134128037a440f409468a38c2 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Mon, 3 Aug 2026 13:59:45 +0300
+Subject: [PATCH 1/1] sairedis: marvell syncd with mdio_access_use_npu
+
+Add flag MDIO_ACCESS_USE_NPU for Marvell syncd build
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ configure.ac      | 1 +
+ syncd/Makefile.am | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 9f862d56..0bf74eba 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -19,6 +19,7 @@ AM_CONDITIONAL(SONIC_ASIC_PLATFORM_BAREFOOT,   test x$CONFIGURED_PLATFORM = xbar
+ AM_CONDITIONAL(SONIC_ASIC_PLATFORM_BROADCOM,   test x$CONFIGURED_PLATFORM = xbroadcom)
+ AM_CONDITIONAL(SONIC_ASIC_PLATFORM_MELLANOX,   test x$CONFIGURED_PLATFORM = xmellanox)
+ AM_CONDITIONAL(SONIC_ASIC_PLATFORM_CLOUNIX,   test x$CONFIGURED_PLATFORM = xclounix)
++AM_CONDITIONAL(SONIC_ASIC_PLATFORM_MARVELL,   test x$CONFIGURED_PLATFORM = xmarvell-prestera)
+ 
+ AM_COND_IF([SONIC_ASIC_PLATFORM_MELLANOX],
+            AC_DEFINE([MELLANOX], [1], [Define to 1 on Mellanox Platform]))
+diff --git a/syncd/Makefile.am b/syncd/Makefile.am
+index c5bb32f3..a4a8ccb9 100644
+--- a/syncd/Makefile.am
++++ b/syncd/Makefile.am
+@@ -87,6 +87,10 @@ if SONIC_ASIC_PLATFORM_BROADCOM
+ libSyncd_a_CXXFLAGS += -DMDIO_ACCESS_USE_NPU
+ endif
+ 
++if SONIC_ASIC_PLATFORM_MARVELL
++libSyncd_a_CXXFLAGS += -DMDIO_ACCESS_USE_NPU
++endif
++
+ if SONIC_ASIC_PLATFORM_CLOUNIX
+ syncd_CXXFLAGS += -DSAI_SUPPORT_UNINIT_DATA_PLANE_ON_REMOVAL
+ libSyncd_a_CXXFLAGS += -DSAI_SUPPORT_UNINIT_DATA_PLANE_ON_REMOVAL
+-- 
+2.34.1
+

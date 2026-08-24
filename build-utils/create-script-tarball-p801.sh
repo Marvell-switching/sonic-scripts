@@ -15,8 +15,8 @@ rm -f $R_TAR_GZ sonic_build_r_*.sh
 cp build-utils/sbuild_r_${RELEASE}*.sh .
 cp build-utils/README_series_r_${RELEASE}.txt .
 tar czf $R_TAR_GZ \
-    --exclude='files/master/TBD' \
-    --exclude='files/master/tl' \
+    --exclude='*esai*' \
+    --exclude='files/master' \
     --exclude='files/202605/tl' \
     files/202605 \
     *.sh \
