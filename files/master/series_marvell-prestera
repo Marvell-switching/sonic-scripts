@@ -1,7 +1,6 @@
 ## <master> Patches with PR:
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
-## 28070   https://github.com/sonic-net/sonic-buildimage/pull/28070
 ## 28251 - https://github.com/sonic-net/sonic-buildimage/pull/28251
 #        \ https://github.com/sonic-net/sonic-buildimage/pull/29103
 ## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
@@ -12,7 +11,7 @@
 # OPTIONAL or TMP
 #0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 0042-grub2-nocheck-no-tests-in-build.patch                          |sonic-buildimage
-0043-rules-config-disable-P4RT-docker-build-by-default.patch        |sonic-buildimage
+#0043-rules-config-disable-P4RT-docker-build-by-default.patch        |sonic-buildimage
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
 # FALCON specific
@@ -24,8 +23,6 @@
 28251-marvell-prestera-P8.0.0-sai-1.18.1-1.patch                    |sonic-buildimage
 28251-marvell-prestera-P8.0.1-sai-1.18.1-11.patch                   |sonic-buildimage
 
-28070-device-Nokia-7215-sai.profile-createSwitchTimeout-180s.patch  |sonic-buildimage
-#0043-marvell-prestera-rpc-pin-ptf_nn_agent.py-to-use-nnpy.patch     |sonic-buildimage
 28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch    |sonic-buildimage
 
 # OPTIONAL: Boot-up Stability by process decoupling
