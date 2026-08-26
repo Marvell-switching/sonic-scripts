@@ -2,7 +2,7 @@
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
 ## 28251 - https://github.com/sonic-net/sonic-buildimage/pull/28251
-#        \ https://github.com/sonic-net/sonic-buildimage/pull/29103
+#        \ https://github.com/sonic-net/sonic-buildimage/pull/29103 merged
 ## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
 #
 ## 0104    https://github.com/Marvell-switching/mrvl-prestera/pull/66
@@ -19,9 +19,6 @@
 #0064-build_templates-marvell-blacklist-with-kempld-old.patch        |sonic-buildimage
 0064-build_templates-marvell-blacklist-with-kempld-21aug.patch      |sonic-buildimage
 #0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
-
-28251-marvell-prestera-P8.0.0-sai-1.18.1-1.patch                    |sonic-buildimage
-28251-marvell-prestera-P8.0.1-sai-1.18.1-11.patch                   |sonic-buildimage
 
 28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch    |sonic-buildimage
 
