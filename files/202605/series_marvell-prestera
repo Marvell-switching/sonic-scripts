@@ -12,7 +12,6 @@
 # OPTIONAL or TMP
 0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
 0042-grub2-nocheck-no-tests-in-build.patch                          |sonic-buildimage
-#0043-rules-config-disable-P4RT-docker-build-by-default.patch        |sonic-buildimage
 0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 
 # FALCON specific
@@ -30,3 +29,4 @@
 # OPTIONAL: Boot-up Stability by process decoupling
 0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
 0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
+
