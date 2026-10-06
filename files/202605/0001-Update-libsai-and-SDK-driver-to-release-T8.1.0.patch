@@ -1,0 +1,34 @@
+From 190be68319a71359ef5a7cc50081ce6237225d8c Mon Sep 17 00:00:00 2001
+From: Spandan Dasgupta <sdasgupta@marvell.com>
+Date: Tue, 6 Oct 2026 17:24:43 +0530
+Subject: [PATCH] Update-libsai-and-SDK-driver-to-release-T8.1.0
+
+---
+ platform/marvell-teralynx/mrvl-teralynx | 2 +-
+ platform/marvell-teralynx/sai.mk        | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell-teralynx/mrvl-teralynx b/platform/marvell-teralynx/mrvl-teralynx
+index 405f10e53..3b31a1a16 160000
+--- a/platform/marvell-teralynx/mrvl-teralynx
++++ b/platform/marvell-teralynx/mrvl-teralynx
+@@ -1 +1 @@
+-Subproject commit 405f10e5305fc7100dc21783406dc69e25dacfc2
++Subproject commit 3b31a1a16a631375bb0eb5cb32e3edf80d52d68f
+diff --git a/platform/marvell-teralynx/sai.mk b/platform/marvell-teralynx/sai.mk
+index 055eb2810..052a4b7aa 100755
+--- a/platform/marvell-teralynx/sai.mk
++++ b/platform/marvell-teralynx/sai.mk
+@@ -1,7 +1,7 @@
+ # MRVL_TERALYNX SAI
+ 
+-SAI_RELEASE=1.18.1-1
+-MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/master/$(SAI_RELEASE)
++SAI_RELEASE=T8.1.0
++MRVL_TERALYNX_SAI_ONLINE = https://github.com/Marvell-switching/sonic-marvell-teralynx-binaries/raw/main/debian/202605/$(SAI_RELEASE)
+ 
+ MRVL_TERALYNX_LIBSAI = isai.deb
+ MRVL_TERALYNX_HSAI   = saihdr.deb
+-- 
+2.25.1
+
