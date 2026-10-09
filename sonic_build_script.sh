@@ -212,6 +212,10 @@ parse_arguments()
         LIBSAI_GET_CMD="${CI_LIBSAI_GET_CMD:-}"
     fi
 
+    if [ "${LIBSAI_GET_ENA_HWSKU}" = "y" ]; then
+        LIBSAI_GET_ENA_HWSKU=Y
+    fi
+
     if [ -z "${BRANCH}" ]; then
         echo "Branch is not set. Please check usage."
         print_usage
@@ -502,6 +506,7 @@ mvsai_setup()
 mvsai_run_get_cmd()
 {
     [ "${LIBSAI_GET_ENA}" = "Y" ] || return 0
+    [ -n "${LIBSAI_GET_DONE:-}" ] && return 0
     [ -n "${LIBSAI_GET_CMD:-}" ] || exit 1
     local url
 
@@ -513,6 +518,36 @@ mvsai_run_get_cmd()
     eval "$LIBSAI_GET_CMD"
     check_error $? "CI SAI download failed"
     SAI_URL_PATH="$(pwd)/${LIBSAI_GET_FILE}"
+    export SAI_URL_PATH
+    LIBSAI_GET_DONE=1
+}
+
+# LIBSAI_GET_ENA_HWSKU is independent of LIBSAI_GET_ENA (YY, YN, NY).
+# Same as mvsai_run_get_cmd: run the curl as written, into the deb directory.
+mvsai_run_get_hwsku_cmd()
+{
+    [ "${LIBSAI_GET_ENA_HWSKU}" = "Y" ] || return 0
+    [ -n "${LIBSAI_GET_HWSKU_DONE:-}" ] && return 0
+    [ -n "${LIBSAI_GET_CMD_HWSKU:-}" ] || exit 1
+    local url dir rc back
+
+    url=$(printf '%s\n' "$LIBSAI_GET_CMD_HWSKU" | grep -oE 'https?://[^[:space:]"'\''`]+' | tail -1)
+    [ -n "$url" ] || exit 1
+    LIBSAI_GET_HWSKU_FILE=$(basename "$url")
+    echo "CI download: curl .../${LIBSAI_GET_HWSKU_FILE}" >> build_cmd.txt
+    dir=$(pwd)
+    if [ -n "${SAI_URL_PATH:-}" ] && [[ "$SAI_URL_PATH" != *"://"* ]] && [ -d "$(dirname "$SAI_URL_PATH")" ]; then
+        dir=$(dirname "$SAI_URL_PATH")
+    fi
+    back=$(pwd)
+    cd "$dir" || exit 1
+    eval "$LIBSAI_GET_CMD_HWSKU"
+    rc=$?
+    cd "$back" || exit 1
+    check_error $rc "CI HWSKU download failed"
+    SAI_URL_PATH_HWSKU="${dir}/${LIBSAI_GET_HWSKU_FILE}"
+    export SAI_URL_PATH_HWSKU
+    LIBSAI_GET_HWSKU_DONE=1
 }
 
 sai_url_check()
@@ -550,6 +585,7 @@ patch_sai_mk_path()
 
     if [[ -z "${SAI_VERSION}" && -z "${SAI_URL_PATH}" ]] \
         && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        mvsai_run_get_hwsku_cmd
         return 0
     fi
 
@@ -562,11 +598,13 @@ patch_sai_mk_path()
     fi
 
     if [ -z "${SAI_URL_PATH}" ] && [ "${LIBSAI_GET_ENA}" != "Y" ]; then
+        mvsai_run_get_hwsku_cmd
         return 0
     fi
     if [ "${LIBSAI_GET_ENA}" = "Y" ]; then
         mvsai_run_get_cmd
     fi
+    mvsai_run_get_hwsku_cmd
     if [ -z "${SAI_URL_PATH}" ]; then
         return 0
     fi
@@ -626,6 +664,10 @@ patch_ws()
             cp $PATCH_SCRIPT_URL .
         fi
         commit_id_get_upstream
+
+        # Deb and hwsku tarball must be local before the patch script looks beside the deb.
+        mvsai_run_get_cmd
+        mvsai_run_get_hwsku_cmd
 
         echo "bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}" >> build_cmd.txt
         bash marvell_sonic_patch_script.sh --branch ${BRANCH} --platform ${BUILD_PLATFORM} --arch ${BUILD_PLATFORM_ARCH} --url ${URL}

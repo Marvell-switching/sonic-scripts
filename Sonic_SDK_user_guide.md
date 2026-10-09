@@ -321,6 +321,8 @@ Auto-CI/Jenkins may use one of two approaches:
 ```bash
 export LIBSAI_GET_ENA=Y
 export LIBSAI_GET_CMD="curl hash URL full command to get from Nightly-CI"
+export LIBSAI_GET_ENA_HWSKU=Y
+export LIBSAI_GET_CMD_HWSKU="curl hash URL full command to get prestera_hwsku*.tgz from Nightly-CI"
 ```
 
 <a id="faq-customer-release"></a>
