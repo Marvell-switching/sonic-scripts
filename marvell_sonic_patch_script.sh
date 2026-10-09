@@ -249,7 +249,15 @@ prestera_hwsku_fetch_tgz()
     local got_tgz=
     local try
 
-    if [ -n "$SAI_DEB_DIR" ] && [ -n "$SAI_HWSKU_VER" ]; then
+    # Local tarball from LIBSAI_GET_CMD_HWSKU, before the deb-dir / WGET_PATH search.
+    if [ -n "${SAI_URL_PATH_HWSKU:-}" ]; then
+        try=$(basename "$SAI_URL_PATH_HWSKU")
+        wget_cp "$SAI_URL_PATH_HWSKU" -P ./patches/
+        if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
+            got_tgz=$try
+        fi
+    fi
+    if [ -z "$got_tgz" ] && [ -n "$SAI_DEB_DIR" ] && [ -n "$SAI_HWSKU_VER" ]; then
         try="${base}-${SAI_HWSKU_VER}.tgz"
         wget_cp "$SAI_DEB_DIR/$try" -P ./patches/
         if [ $? -eq 0 ] && [ -f "./patches/$try" ]; then
