@@ -315,26 +315,26 @@ check_error_with_retry()
     n=0
     res=$1
 
-    if [[ "x$NO_CACHE" = "xY" ]]; then
-        # Retry would not help, check error directly
-        check_error $res $2
-        return $res
-    fi
-    #set +x
-    if [[ $res -ne 0 && $SONIC_BUILD_JOBS -ge 1 ]]; then
-        sync
-        echo 3 | sudo tee /proc/sys/vm/drop_caches
-        ((n=n+1))
-        echo -e "\n--SONIC_BUILD_JOBS=$SONIC_BUILD_JOBS --------------------------------------------------"
-        echo "Error in building $2, going to retry-$n in 20 sec (to abort press CTRL-C)"
-        sleep 10
-        echo "Error in building $2, going to retry-$n in 10 sec (to abort press CTRL-C)"
-        sleep 10
-        echo "----------------------------------------------------------------------"
-        echo -e "     Retry build $2 started \n\n"
-        eval "$3"
-        res=$?
-    fi
+    #if [[ "x$NO_CACHE" = "xY" ]]; then
+    #    # Retry would not help, check error directly
+    #    check_error $res $2
+    #    return $res
+    #fi
+    ##set +x
+    #if [[ $res -ne 0 && $SONIC_BUILD_JOBS -ge 1 ]]; then
+    #    sync
+    #    echo 3 | sudo tee /proc/sys/vm/drop_caches
+    #    ((n=n+1))
+    #    echo -e "\n--SONIC_BUILD_JOBS=$SONIC_BUILD_JOBS --------------------------------------------------"
+    #    echo "Error in building $2, going to retry-$n in 20 sec (to abort press CTRL-C)"
+    #    sleep 10
+    #    echo "Error in building $2, going to retry-$n in 10 sec (to abort press CTRL-C)"
+    #    sleep 10
+    #    echo "----------------------------------------------------------------------"
+    #    echo -e "     Retry build $2 started \n\n"
+    #    eval "$3"
+    #    res=$?
+    #fi
     if [ $res -ne 0 ]; then
         sync
         echo 3 | sudo tee /proc/sys/vm/drop_caches
@@ -346,7 +346,7 @@ check_error_with_retry()
         sleep 10
         echo "----------------------------------------------------------------------"
         echo -e "     Retry build $2 started \n\n"
-        export SONIC_BUILD_JOBS=1
+        #export SONIC_BUILD_JOBS=1
         eval "$3"
         check_error $? $2
     fi
