@@ -1,27 +1,23 @@
 ## <master> Patches with PR:
 ## 0013    https://github.com/sonic-net/sonic-utilities/pull/4419
 ## 0064    https://github.com/sonic-net/sonic-buildimage/pull/26484
-## 28251 - https://github.com/sonic-net/sonic-buildimage/pull/28251
-#        \ https://github.com/sonic-net/sonic-buildimage/pull/29103 merged
 ## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
 #
 ## 0104    https://github.com/Marvell-switching/mrvl-prestera/pull/66
 ##-------------------------------------------------------------------------------------
 
-# OPTIONAL or TMP
-#0041-buildimage-print-each-build-target-on-separated-line.patch     |sonic-buildimage
-#0042-grub2-nocheck-no-tests-in-build.patch                          |sonic-buildimage
-#0043-rules-config-disable-P4RT-docker-build-by-default.patch        |sonic-buildimage
-0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
+submod-d5d7345              |platform/marvell-prestera/sonic-platform-marvell
 
 # FALCON specific
 0013-sonic_installer-add-sync-before-migration.patch                |src/sonic-utilities
-#0064-build_templates-marvell-blacklist-with-kempld-old.patch        |sonic-buildimage
 0064-build_templates-marvell-blacklist-with-kempld-21aug.patch      |sonic-buildimage
-#0031-Falcon-usb-disk-hung_task-WA.patch                             |sonic-buildimage
 
 28010-marvell-platfrom-add-SAI-dependency-to-DOCKER_MGMT_F.patch    |sonic-buildimage
 
+0104-platform-X-arm64-mrvl-pcie-ep-check-reboot-on-EP-miss.patch    |platform/marvell-prestera/mrvl-prestera
 # OPTIONAL: Boot-up Stability by process decoupling
 #0060-sonic-ext.target-wrapper-for-sonic.target.patch                |platform/marvell-prestera/mrvl-prestera
 #0061-sonic.target-no-install-oveload-for-sonic-ext.target.patch     |platform/marvell-prestera/mrvl-prestera
+
+0122-marvell-prestera-add-db98dx73xx_cn913-AC5X_DB.patch            |sonic-buildimage
+#0123-device-marvell-add-db98dx73xx_cn913-AC5X_DB.patch              |sonic-buildimage

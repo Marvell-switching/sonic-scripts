@@ -190,7 +190,8 @@ apply_sonicbuildimage_patches()
 	log "ERROR: $PATCH_DIR/$SERIES_FILE file not found"
     exit 1
  fi
- cat $PATCH_DIR/$SERIES_FILE | grep -v -E '^#|^$' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
+ # Look for Not "submod-HASH" but only patches for sonic-buildimage
+ cat $PATCH_DIR/$SERIES_FILE | grep -v -E '^#|^$' | grep -v -E '^submod-' | grep sonic-buildimage | cut -f 1 -d'|' | while read -r patch_file
  do
 	echo $patch_file
 	pushd $PATCH_DIR
@@ -218,7 +219,8 @@ apply_submodule_patches()
  CSD=$2
  PATCH_DIR=patches/$CSD
  CWD=`pwd`
- cat $PATCH_DIR/$SERIES_FILE | grep -v -E '^#|^$' | grep -v sonic-buildimage | while read -r line
+ # Look for Not "submod-HASH" but only patches for submodules
+ cat $PATCH_DIR/$SERIES_FILE | grep -v -E '^#|^$' | grep -v -E '^submod-' | grep -v sonic-buildimage | while read -r line
  do
 	patch=`echo $line | cut -f 1 -d'|'`
 	dir=`echo $line | cut -f 2 -d'|'`
@@ -240,6 +242,51 @@ apply_submodule_patches()
 		log "${patch} \t\t applied in ${dir}"
 	fi
 	popd
+ done
+}
+
+# series* line: submod-<short-or-long-hash> | <submodule-path>
+# No such lines: return success. Checkout failure follows the patch abort/skip rule.
+series_set_submodule_id()
+{
+ SERIES_FILE=$1
+ CSD=$2
+ PATCH_DIR=patches/$CSD
+ if [ ! -f "$PATCH_DIR/$SERIES_FILE" ]; then
+	log "ERROR: $PATCH_DIR/$SERIES_FILE file not found"
+	exit 1
+ fi
+ if ! grep -v -E '^#|^$' "$PATCH_DIR/$SERIES_FILE" | grep -q -E '^submod-'; then
+	return 0
+ fi
+ cat $PATCH_DIR/$SERIES_FILE | grep -v -E '^#|^$' | grep -E '^submod-' | while read -r line
+ do
+	hash=`echo $line | cut -f 1 -d'|' | sed 's/^submod-//' | tr -d '[:space:]'`
+	dir=`echo $line | cut -f 2 -d'|' | tr -d '[:space:]'`
+	if [ -z "$hash" ] || [ -z "$dir" ]; then
+		log "PATCH ERROR: Bad submod line: $line, abort"
+		return 1
+	fi
+	pushd ${dir} >/dev/null
+	ret=$?
+	orig_id=unkn
+	if [ $ret -eq 0 ]; then
+		orig_id=`git log --pretty=format:"%h" -1 2>/dev/null`
+		git fetch origin ${hash} >/dev/null 2>&1
+		git checkout --detach ${hash} >/dev/null 2>&1
+		ret=$?
+		popd >/dev/null
+	fi
+	if [ $ret -ne 0 ]; then
+		((err_cnt++))
+		if [ "$PATCH_ERR_SKIP" == "" ]; then
+			log "PATCH ERROR: Failed to set submodule ${dir} ${orig_id} to ${hash}, abort"
+			return $ret
+		fi
+		log "PATCH ERROR: Failed to set submodule ${dir} ${orig_id} to ${hash}, skeep and continue"
+	else
+		log "submodule ${dir} ${orig_id} set to ${hash}"
+	fi
  done
 }
 
@@ -400,6 +447,7 @@ main()
 	log "\n--- Apply submodule patches ---\n"
 	# Apply submodule patches
     CSD=.
+	series_set_submodule_id $PATCH_SERIES_FILE "$CSD" || exit 1
 	apply_submodule_patches $PATCH_SERIES_FILE "$CSD" || exit 1
 
     for CSD in $CSD_LIST; do
@@ -409,6 +457,7 @@ main()
             *)  var="PATCH_CUSTOM_${CSD}" ;;
         esac
         [ "${!var}" = "Y" ] || continue
+        series_set_submodule_id series "$CSD" || exit 1
         apply_submodule_patches series "$CSD" || exit 1
     done
 

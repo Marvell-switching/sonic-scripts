@@ -825,7 +825,11 @@ main()
         export NOSTRETCH=1
         export NOBUSTER=1
         export NOBULLSEYE=1
-        export SONIC_BUILD_JOBS="${SONIC_BUILD_JOBS:-8}"
+        # Set Default JOBS depending upon num-CPUS: CPIs->JOBS= 4->3, 12->8, 24->16, 32->24, ...
+        l_cpus=$(nproc)
+        l_jobs=$(( l_cpus >= 32 ? l_cpus * 3 / 4 : l_cpus - (l_cpus / 3 > 8 ? 8 : l_cpus / 3) ))
+        [ "$l_jobs" -lt 1 ] && l_jobs=1
+        export SONIC_BUILD_JOBS="${SONIC_BUILD_JOBS:-$l_jobs}"
         echo "export SONIC_BUILD_JOBS=${SONIC_BUILD_JOBS}" >> build_cmd.txt
         #export SONIC_IMAGE_VERSION=SONIC-OS-${SONIC_SOURCE_DIR}
         #echo "export SONIC_IMAGE_VERSION=SONIC-OS-${SONIC_SOURCE_DIR}" >> build_cmd.txt
