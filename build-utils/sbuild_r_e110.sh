@@ -52,7 +52,7 @@ rEXTRA_OPT=$@
 #==============================================================================
 SONIC_BUILD_SH_CMD="./sonic_build_script.sh $rBRANCH $rBUILD_PLATFORM $rBUILD_PLATFORM_ARCH \
  $rBUILD_ESAI $rEXTRA_PATCH_SETS $rBUILD_RPC $rBUILD_NO_CACHE $rCOMMIT_ID \
- $rPATCH_SCRIPT_PATH $rSAI_DEB $rEXTRA_OPT"
+ $rPATCH_SCRIPT_PATH $rSAI_VER $rSAI_DEB $rEXTRA_OPT"
 
 echo "========================================================================="
 echo "<< Release build-configuration (eSAI 1.1.0 / r_e110)"
