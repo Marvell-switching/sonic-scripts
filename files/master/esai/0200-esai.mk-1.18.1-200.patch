@@ -1,0 +1,32 @@
+From f248397324dfa3eef288404f52091668612f543b Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Sun, 18 Oct 2026 16:55:25 +0300
+Subject: [PATCH 1/1] esai.mk-1.18.1-200
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/sai.mk | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell-prestera/sai.mk b/platform/marvell-prestera/sai.mk
+index 8c8be0508..3658cd495 100644
+--- a/platform/marvell-prestera/sai.mk
++++ b/platform/marvell-prestera/sai.mk
+@@ -2,11 +2,11 @@
+ 
+ BRANCH = master
+ ifeq ($(CONFIGURED_ARCH),arm64)
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-200
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-not-supported
+ else
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-200
+ endif
+ 
+ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
+-- 
+2.34.1
+
