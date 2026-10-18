@@ -12,6 +12,9 @@ cd "$PROJECT_DIR"
 rm -f "$R_TAR_GZ"
 tar czf "$R_TAR_GZ" \
     --exclude='files/202605/tl' \
+    --exclude='files/202605/*teralynx*' \
+    --exclude='files/202605/prestera_hwsku.tgz' \
+    --exclude='files/202605/1' \
     --transform='s|^build-utils/||' \
     files/202605 \
     sonic_build_script.sh \
