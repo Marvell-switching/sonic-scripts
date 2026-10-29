@@ -14,6 +14,7 @@
 - [Build SONiC on Top of a Specific Commit ID](#build-sonic-on-top-of-a-specific-commit-id)
 - [Marvell-SAI Package Binding into SONiC Build](#marvell-sai-package-binding-into-sonic-build)
 - [Customer Release Package — Create and Use](#customer-release-package--create-and-use)
+- [eSAI/SONiC vs pSAI/SONiC build](#esaisonic-vs-psaisonic-build)
 - [**Frequently Asked Questions (FAQ)**](#frequently-asked-questions-faq)
 
 <a id="general-purpose"></a>
@@ -330,6 +331,7 @@ export LIBSAI_GET_CMD_HWSKU="curl hash URL full command to get prestera_hwsku*.t
 ## Customer Release Package — Create and Use
 
 ```
+build-utils/release-packages/r_XXXX.tar.gz
 build-utils/
   ├── create-script-tarball-p701.sh
   ├── README_series_r_p701.txt
@@ -347,7 +349,7 @@ To create a new release package (for example P8.0.0):
 1. Copy and adjust `README_series_r_p800.txt`, `sbuild_r_p800.sh`, `sbuild_r_p800_armhf.sh`, and `create-script-tarball-p800.sh`
 2. Run `./build-utils/create-script-tarball-p800.sh` to create the package
 
-Resulting tarball `r_p800.tar.gz`:
+Resulting tarball `r_p800.tar.gz` (to be saved in the `build-utils/release-packages/`):
 
 ```
 r_p800.tar.gz
@@ -379,6 +381,24 @@ SONIC_COMMIT_ID=63f17ae50
 In practice, `sbuild_r_p800.sh` is a wrapper that generates options and calls `./sonic_build_script.sh ...options...`.
 
 Architecture (`arm64` vs `amd64`) is detected automatically by `sbuild_r_p800.sh`, but `armhf` must be declared explicitly. For ARMHF builds, use `sbuild_r_p800_armhf.sh`.
+
+The resulting tarball `r_p800.tar.gz` is delivered/published to customers over Marvell Extranet site.
+
+### Use on a customer side
+
+- Download `r_XXX.tar.gz`
+- Untar it in a work-directory
+- Run the `./sbuild_r_XXX.sh`
+- Wait for 1..4 hours whilst the SONiC is cloned, patched, configured and built
+
+## eSAI/SONiC vs pSAI/SONiC build
+
+Currently the eSAI/SONiC has some specific patches and therefore **canNOT** be build in the canonical SONiC way, but **ONLY** over this Build Toolset.
+
+To switch to the eSAI build from the default pSAI-build the build command option `--eSAI` is used.
+The eSAI version-number is bigger than 100 — 110 for C1.1.0, 200 for C2.0.0, 250 for C2.5.0, so on; also suffix `esai` or `e` may be present on the name.
+
+For example — `mrvllibsai_1.18.1-200_arm64.deb`, `prestera_hwsku-esai-1.18.1-200.tgz`, `r_e200.tar.gz`
 
 ## Frequently Asked Questions (FAQ)
 
