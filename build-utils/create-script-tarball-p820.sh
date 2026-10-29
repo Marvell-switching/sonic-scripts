@@ -2,7 +2,7 @@
 # File: ./build-utils/create-script-tarball.sh
 
 set -e
-RELEASE=p701
+RELEASE=p820
 R_TAR_GZ=r_${RELEASE}.tar.gz
 CURRENT_DIR="$(pwd)"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,11 +15,11 @@ rm -f $R_TAR_GZ sonic_build_r_*.sh
 cp build-utils/sbuild_r_${RELEASE}*.sh .
 cp build-utils/README_series_r_${RELEASE}.txt .
 tar czf $R_TAR_GZ \
-    --exclude='files/master/TBD' \
-    --exclude='files/master/tl' \
-    --exclude='files/202511/tl' \
-    files/202511 \
-    files/master \
+    --exclude='files/202605/*esai*' \
+    --exclude='files/202605/1' \
+    --exclude='files/202605/*teralynx*' \
+    --exclude='files/202605/0001-*.patch' \
+    --exclude='files/master' \
+    files/202605 \
     *.sh \
     README_series_r_${RELEASE}.txt
-

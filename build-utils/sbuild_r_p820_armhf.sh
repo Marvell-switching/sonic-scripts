@@ -2,4 +2,4 @@
 
 # Force TARGET-armhf build on arm64:QEMU
 export SONIC_TARGET_ARCH=armhf
-./sbuild_r_p800.sh $@
+./sbuild_r_p820.sh $@

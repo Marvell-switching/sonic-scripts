@@ -1,0 +1,85 @@
+From 87b9712bf278f32fdabebc1d73d1e6b456457483 Mon Sep 17 00:00:00 2001
+From: mssonicbld <79238446+mssonicbld@users.noreply.github.com>
+Date: Wed, 9 Sep 2026 03:13:09 -0700
+Subject: [PATCH 1/1] device: Nokia-7215 sai.profile: createSwitchTimeout=180s
+ (#29411)
+
+#### Why I did it
+Weak CPU on device Nokia-7214/armhf/AC3x has long time of SONIC/swss/syncd start and "restart".
+"orinary", the existing createSwitchTimeout=120s is enough for reboot and for "config reload"(restart).
+But sometimes after "deploy-minigraph + config reload" the 120s is Not enough.
+
+The specific (PTF) problem fixed by this patch is: sometimes after deploy-minigraph the "show interfaces status" stays empty (e.g. doesn't work)
+
+##### Work item tracking
+- Microsoft ADO **(number only)**:
+
+#### How I did it
+Increase createSwitchTimeout in the hwsku/Nokia sai.profile from 120s to 180s.
+Needed and done for One slow/weak "device/nokia armhf"
+
+#### How to verify it
+
+Deploy minigraph & config reload for some loops:
+WITH this PR (e.g. with extended timeout 180s) run
+[test-mingraph.sh](https://github.com/user-attachments/files/30385370/test-mingraph.sh)
+
+the attached TEST-script file <test-mingraph.sh>.
+The script does some loops:
+- config load_minigraph -y"
+- while-trial to "show interfaces status" until success with printing latency until success.
+The MAX seen time until success for Nokia-AC3X/armhf board on the <202605> branch is 164sec.
+
+The obtained result means that initial timeout 120sec is not enough, but expanded 180sec is enough.
+
+FAQ: "Why 120s was good but now it is not enough"?
+Each daily SONiC adds more and more features, services, threads requiring more CPU. On week Nokia-AC3X/armhf board this leads for long 100% CPU-busy and job-finishing delays.
+
+FAQ: Does this PR-change requires backporting to 202511"?
+The PR root-cause is statistical, depending upon "other" OS-SONiC services;
+so backporting is strongly recommended.
+
+#### Which release branch to backport (provide reason below if selected)
+
+- [ ] 202305
+- [ ] 202311
+- [ ] 202405
+- [ ] 202411
+- [ ] 202505
+- [X] 202511
+- [X] 202605
+
+#### Tested branch (Please provide the tested image version)
+Tested on "private build" branch 202605 based on the 202605 commit-ID:
+9c84048a4 - 2026-07-05 19:12:46 +1000, mssonicbld : [submodule] Update submodule sonic-dash-ha to the latest HEAD automatically (#28234)
+
+#### Description for the changelog
+
+#### Link to config_db schema for YANG module changes
+minigraph.xml and resulting config_db.json are attached
+
+[config_db.json](https://github.com/user-attachments/files/29286068/config_db.json)
+[minigraph.xml](https://github.com/user-attachments/files/29286069/minigraph.xml)
+[syslog.log](https://github.com/user-attachments/files/29286178/syslog.log)
+
+Signed-off-by: Sonic Build Admin <sonicbld@microsoft.com>
+
+#### A picture of a cute animal (not mandatory but encouraged)
+---
+ device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile b/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
+index 61ad9bae0..2fdf55a1e 100644
+--- a/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
++++ b/device/nokia/armhf-nokia_ixs7215_52x-r0/Nokia-7215/sai.profile
+@@ -2,5 +2,5 @@ mode=1
+ hwId=et6448m
+ SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/profile.ini
+ switchProfile=/usr/share/sonic/hwsku/SAI-M0-48x1G-4x10G.xml
+-createSwitchTimeout=120
++createSwitchTimeout=180
+ customEVlanUpdate=1
+-- 
+2.34.1
+
