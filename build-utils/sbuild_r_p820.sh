@@ -4,8 +4,9 @@
 ##############################################################
 # <<  Release build-configuration
 SONIC_BRANCH=202605
-SONIC_COMMIT_ID=63f17ae50
-#MRVLLIBSAI_VER=1.18.1-1     - already set as 202605 Default
+SONIC_COMMIT_ID=08559af01
+#             \\2026-09-04 mssonicbld : Disable debugfs on Nokia 7215 IXS-A1 and 7215-C1 devices (#29331)
+MRVLLIBSAI_VER=1.18.1-3
 ##CANONIC_BUILD=Y
 #MV_EXTRA_PATCH_SETS=Y
 # >>
@@ -59,7 +60,7 @@ rEXTRA_OPT=$@
 #==============================================================================
 SONIC_BUILD_SH_CMD="./sonic_build_script.sh $rBRANCH $rBUILD_PLATFORM $rBUILD_PLATFORM_ARCH \
  $rEXTRA_PATCH_SETS $rBUILD_RPC $rBUILD_SAISERVER $rBUILD_NO_CACHE $rCOMMIT_ID \
- $rPATCH_SCRIPT_PATH $rSAI_VER $rSAI_DEB $rEXTRA_OPT"
+ $rPATCH_SCRIPT_PATH $rSAI_VER $rSAI_DEB $rSUFFIX $rEXTRA_OPT"
 
 echo "========================================================================="
 echo "<< Release build-configuration"

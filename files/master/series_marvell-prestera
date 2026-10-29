@@ -4,6 +4,7 @@
 ## 28010   https://github.com/sonic-net/sonic-buildimage/pull/28010
 #
 ## 0104    https://github.com/Marvell-switching/mrvl-prestera/pull/66
+## 30436   https://github.com/sonic-net/sonic-buildimage/pull/30436
 ##-------------------------------------------------------------------------------------
 
 submod-d5d7345              |platform/marvell-prestera/sonic-platform-marvell
@@ -21,3 +22,5 @@ submod-d5d7345              |platform/marvell-prestera/sonic-platform-marvell
 
 0122-marvell-prestera-add-db98dx73xx_cn913-AC5X_DB.patch            |sonic-buildimage
 #0123-device-marvell-add-db98dx73xx_cn913-AC5X_DB.patch              |sonic-buildimage
+
+3046-marvell-prestera-sai.mk-1.18.1-3-P8.20.0.patch                 |sonic-buildimage

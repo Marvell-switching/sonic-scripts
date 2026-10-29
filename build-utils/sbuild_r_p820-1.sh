@@ -3,11 +3,13 @@
 ################################################################
 ##############################################################
 # <<  Release build-configuration
-SONIC_BRANCH=202511
-SONIC_COMMIT_ID=922fae553
-MRVLLIBSAI_VER=1.17.1-21
+SONIC_BRANCH=202605
+SONIC_COMMIT_ID=08559af01
+#             \\2026-09-04 mssonicbld : Disable debugfs on Nokia 7215 IXS-A1 and 7215-C1 devices (#29331)
+MRVLLIBSAI_VER=1.18.1-3
 ##CANONIC_BUILD=Y
 MV_EXTRA_PATCH_SETS=Y
+rSUFFIX="--suffix ui"
 # >>
 # echo/print is at the end
 ##############################################################
@@ -38,8 +40,8 @@ SONIC_TARGET_ARCH="${SONIC_TARGET_ARCH:-$(uname -m)}"
 
 rBUILD_PLATFORM_ARCH="-a $rARCH"
 
-#rSAI_DEB="--SAI `pwd`/mrvllibsai_1.17.1-nn_${rARCH}.deb"
-#rSAI_DEB="--SAI <URL>/mrvllibsai_1.17.1-nn_${rARCH}.deb"
+#rSAI_DEB="--SAI `pwd`/mrvllibsai_1.18.1-nn_${rARCH}.deb"
+#rSAI_DEB="--SAI <URL>/mrvllibsai_1.18.1-nn_${rARCH}.deb"
 #---------
 if [[ -z "${rSAI_DEB}" && -n ${MRVLLIBSAI_VER} ]]; then
     rSAI_VER="--SAI_VER ${MRVLLIBSAI_VER}"
@@ -59,7 +61,7 @@ fi
 #==============================================================================
 SONIC_BUILD_SH_CMD="./sonic_build_script.sh $rBRANCH $rBUILD_PLATFORM $rBUILD_PLATFORM_ARCH \
  $rEXTRA_PATCH_SETS $rBUILD_RPC $rBUILD_SAISERVER $rBUILD_NO_CACHE $rCOMMIT_ID \
- $rPATCH_SCRIPT_PATH $rSAI_VER $rSAI_DEB $rEXTRA_OPT"
+ $rPATCH_SCRIPT_PATH $rSAI_VER $rSAI_DEB $rSUFFIX $rEXTRA_OPT"
 
 echo "========================================================================="
 echo "<< Release build-configuration"

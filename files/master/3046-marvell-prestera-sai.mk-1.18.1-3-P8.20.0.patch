@@ -1,0 +1,35 @@
+From d11cced403940609b17a76b4ef1c85f5c0f43967 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 29 Oct 2026 14:15:46 +0200
+Subject: [PATCH 1/1] marvell-prestera: sai.mk 1.18.1-3 P8.20.0
+
+Forward Marvell-SAI version-index from 1.18.1-11 onto
+pSAI 1.18.1-3 ~ P8.20.0
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ platform/marvell-prestera/sai.mk | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/platform/marvell-prestera/sai.mk b/platform/marvell-prestera/sai.mk
+index 047a054e1..5909d8282 100644
+--- a/platform/marvell-prestera/sai.mk
++++ b/platform/marvell-prestera/sai.mk
+@@ -2,11 +2,11 @@
+ 
+ BRANCH = master
+ ifeq ($(CONFIGURED_ARCH),arm64)
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-3
+ else ifeq ($(CONFIGURED_ARCH),armhf)
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-3
+ else
+-MRVL_SAI_VERSION = 1.18.1-11
++MRVL_SAI_VERSION = 1.18.1-3
+ endif
+ 
+ MRVL_SAI_URL_PREFIX = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/$(CONFIGURED_ARCH)/sai-plugin/$(BRANCH)/
+-- 
+2.34.1
+
