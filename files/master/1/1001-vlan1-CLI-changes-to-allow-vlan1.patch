@@ -1,0 +1,222 @@
+From 85baa542e37d17bf2b4e50698fab2598897d2bb8 Mon Sep 17 00:00:00 2001
+From: Ravi Minnikanti <rminnikanti@marvell.com>
+Date: Thu, 3 Sep 2026 17:17:05 +0300
+Subject: [PATCH 1/1] vlan1: CLI changes to allow vlan1
+
+Signed-off-by: Ravi Minnikanti <rminnikanti@marvell.com>
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ config/vlan.py          | 15 ++++-----------
+ tests/vlan_test.py      | 40 +++++++++++++++++++---------------------
+ utilities_common/cli.py |  5 +----
+ 3 files changed, 24 insertions(+), 36 deletions(-)
+
+diff --git a/config/vlan.py b/config/vlan.py
+index dce8dda5..de896eac 100644
+--- a/config/vlan.py
++++ b/config/vlan.py
+@@ -117,15 +117,11 @@ def add_vlan(ctx, vid, multiple):
+         for vid in vid_list:
+ 
+             if not clicommon.is_vlanid_in_range(vid):
+-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
++                ctx.fail("Invalid VLAN ID {} (1-4094)".format(vid))
+ 
+             # Multiple VLANs need to be referenced
+             vlan = 'Vlan{}'.format(vid)
+ 
+-            # Default VLAN checker
+-            if vid == 1:
+-                ctx.fail("{} is default VLAN".format(vlan))  # TODO: MISSING CONSTRAINT IN YANG MODEL
+-
+             log.log_info("'vlan add {}' executing...".format(vid))
+ 
+             if clicommon.check_if_vlanid_exist(config_db, vlan):  # TODO: MISSING CONSTRAINT IN YANG MODEL
+@@ -207,7 +203,7 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
+             log.log_info("'vlan del {}' executing...".format(vid))
+ 
+             if not clicommon.is_vlanid_in_range(vid):
+-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
++                ctx.fail("Invalid VLAN ID {} (1-4094)".format(vid))
+ 
+             # Multiple VLANs needs to be referenced
+             vlan = 'Vlan{}'.format(vid)
+@@ -348,12 +344,9 @@ def add_vlan_member(ctx, vid, port, untagged, multiple, except_flag):
+     if ADHOC_VALIDATION:
+         for vid in vid_list:
+             vlan = 'Vlan{}'.format(vid)
+-            # default vlan checker
+-            if vid == 1:
+-                ctx.fail("{} is default VLAN".format(vlan))
+             log.log_info("'vlan member add {} {}' executing...".format(vid, port))
+             if not clicommon.is_vlanid_in_range(vid):
+-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
++                ctx.fail("Invalid VLAN ID {} (1-4094)".format(vid))
+             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan) is False:
+                 ctx.fail("{} does not exist".format(vlan))
+             if clicommon.get_interface_naming_mode() == "alias":  # TODO: MISSING CONSTRAINT IN YANG MODEL
+@@ -427,7 +420,7 @@ def del_vlan_member(ctx, vid, port, multiple, except_flag):
+             log.log_info("'vlan member del {} {}' executing...".format(vid, port))
+ 
+             if not clicommon.is_vlanid_in_range(vid):
+-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
++                ctx.fail("Invalid VLAN ID {} (1-4094)".format(vid))
+ 
+             vlan = 'Vlan{}'.format(vid)
+ 
+diff --git a/tests/vlan_test.py b/tests/vlan_test.py
+index a0245b5d..fa547dec 100644
+--- a/tests/vlan_test.py
++++ b/tests/vlan_test.py
+@@ -477,7 +477,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
+ 
+     def test_config_vlan_add_vlan_with_exist_vlanid(self):
+         runner = CliRunner()
+@@ -493,7 +493,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
+ 
+     def test_config_vlan_del_vlan_with_nonexist_vlanid(self):
+         runner = CliRunner()
+@@ -552,13 +552,12 @@ class TestVlan(object):
+         assert result.exit_code != 0
+         assert "15 is greater than 10. List cannot be generated" in result.output
+ 
+-    def test_config_vlan_add_vlan_range_with_default_vlan(self):
++    def test_config_vlan_add_vlan_range_with_default_vlan(self, mock_restart_dhcp_relay_service):
+         runner = CliRunner()
+         result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1-10", "--multiple"])
+         print(result.exit_code)
+         print(result.output)
+-        assert result.exit_code != 0
+-        assert "Vlan1 is default vlan" in result.output
++        assert result.exit_code == 0
+ 
+     def test_config_vlan_add_vlan_range_with_invalid_vlanid(self):
+         runner = CliRunner()
+@@ -566,7 +565,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Invalid VLAN ID must be in (2-4094)" in result.output
++        assert "Invalid VLAN ID must be in (1-4094)" in result.output
+ 
+     def test_config_vlan_add_vlan_with_multiple_vlanids_is_digit_fail(self):
+         runner = CliRunner()
+@@ -596,15 +595,12 @@ class TestVlan(object):
+         assert result.exit_code != 0
+         assert "{} is not integer".format(vid) in result.output
+ 
+-    def test_config_vlan_add_vlan_is_default_vlan(self):
++    def test_config_vlan_add_vlan1(self, mock_restart_dhcp_relay_service):
+         runner = CliRunner()
+-        default_vid = "1"
+-        vlan = "Vlan{}".format(default_vid)
+-        result = runner.invoke(config.config.commands["vlan"].commands["add"], [default_vid])
++        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1"])
+         print(result.exit_code)
+         print(result.output)
+-        assert result.exit_code != 0
+-        assert "{} is default VLAN".format(vlan) in result.output
++        assert result.exit_code == 0
+ 
+     def test_config_vlan_del_vlan_does_not_exist(self):
+         runner = CliRunner()
+@@ -616,13 +612,15 @@ class TestVlan(object):
+         assert result.exit_code != 0
+         assert "{} does not exist".format(vlan) in result.output
+ 
+-    def test_config_vlan_add_member_with_default_vlan(self):
++    def test_config_vlan_add_member_with_vlan1(self, mock_restart_dhcp_relay_service):
+         runner = CliRunner()
+-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"], ["1", "Ethernet4"])
++        db = Db()
++        db.cfgdb.set_entry("VLAN", "Vlan1", {"vlanid": "1"})
++        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
++                               ["1", "Ethernet4"], obj=db)
+         print(result.exit_code)
+         print(result.output)
+-        assert result.exit_code != 0
+-        assert "Error: Vlan1 is default VLAN" in result.output
++        assert result.exit_code == 0
+ 
+     def test_config_vlan_add_member_with_invalid_vlanid(self):
+         runner = CliRunner()
+@@ -630,7 +628,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
+ 
+     def test_config_vlan_del_member_with_invalid_vlanid(self):
+         runner = CliRunner()
+@@ -638,7 +636,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
+ 
+     def test_config_vlan_add_member_with_invalid_port(self):
+         runner = CliRunner()
+@@ -646,7 +644,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4097 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4097 (1-4094)" in result.output
+ 
+     def test_config_vlan_del_member_with_invalid_port(self):
+         runner = CliRunner()
+@@ -654,7 +652,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 4097 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 4097 (1-4094)" in result.output
+ 
+     def test_config_vlan_add_member_with_invalid_long_name(self):
+         runner = CliRunner()
+@@ -663,7 +661,7 @@ class TestVlan(object):
+         print(result.exit_code)
+         print(result.output)
+         assert result.exit_code != 0
+-        assert "Error: Invalid VLAN ID 123456789012 (2-4094)" in result.output
++        assert "Error: Invalid VLAN ID 123456789012 (1-4094)" in result.output
+ 
+     def test_config_vlan_add_member_with_nonexist_vlanid(self):
+         runner = CliRunner()
+diff --git a/utilities_common/cli.py b/utilities_common/cli.py
+index c4123bd8..43b9ce5e 100644
+--- a/utilities_common/cli.py
++++ b/utilities_common/cli.py
+@@ -312,16 +312,13 @@ def vlan_range_list(ctx, vid_range: str) -> list:
+ 
+     vid1, vid2 = map(int, vid_range.split("-"))
+ 
+-    if vid1 == 1 or vid2 == 1:
+-        ctx.fail("Vlan1 is default vlan")
+-
+     if vid1 >= vid2:
+         ctx.fail("{} is greater than {}. List cannot be generated".format(vid1, vid2))
+ 
+     if is_vlanid_in_range(vid1) and is_vlanid_in_range(vid2):
+         return list(range(vid1, vid2+1))
+     else:
+-        ctx.fail("Invalid VLAN ID must be in (2-4094)")
++        ctx.fail("Invalid VLAN ID must be in (1-4094)")
+ 
+ 
+ def multiple_vlan_parser(ctx, s_input: str) -> list:
+-- 
+2.34.1
+

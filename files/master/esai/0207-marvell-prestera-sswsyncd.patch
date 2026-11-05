@@ -2,7 +2,8 @@ From: Yan Markman <ymarkman@marvell.com>
 Date: Mon, 3 Aug 2026 00:00:00 +0000
 Subject: [PATCH] marvell-prestera: add sswsyncd support
 
-Build and install the sswsyncd package (dsserve) on Marvell Prestera,
+Build and install the sswsyncd (Switch State Synchronization Daemon)
+package (dsserve) on Marvell Prestera,
 bind-mount /var/run/sswsyncd into syncd and gbsyncd containers, and
 wrap PHY syncd with dsserve for the shared diagnostic socket.
 
@@ -12,7 +13,7 @@ so NPU syncd is launched via dsserve when /usr/bin/dsserve is present.
 Signed-off-by: Yan Markman <ymarkman@marvell.com>
 ---
 diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64 b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
-index 36e690e2..b9b19252 100644
+index 36e690e27..b9b19252a 100644
 --- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
 +++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-arm64
 @@ -22,4 +22,5 @@ sgml-base==1.31
@@ -22,7 +23,7 @@ index 36e690e2..b9b19252 100644
 +sswsyncd==1.0.0
  xml-core==0.18+nmu1
 diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
-index 36e690e2..b9b19252 100644
+index 36e690e27..b9b19252a 100644
 --- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
 +++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-bookworm-armhf
 @@ -22,4 +22,5 @@ sgml-base==1.31
@@ -32,31 +33,31 @@ index 36e690e2..b9b19252 100644
 +sswsyncd==1.0.0
  xml-core==0.18+nmu1
 diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64 b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
-index 06de598e..e3190d34 100644
+index 5e7a41fd4..dcabab0b3 100644
 --- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
 +++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-arm64
-@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u2
+@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u5
  sgml-base==1.31+nmu1
  swig==4.3.0-1
  syncd==1.0.0
 +sswsyncd==1.0.0
  xml-core==0.19
 diff --git a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
-index 06de598e..e3190d34 100644
+index 5e7a41fd4..dcabab0b3 100644
 --- a/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
 +++ b/files/build/versions-public/dockers/docker-syncd-mrvl-prestera/versions-deb-trixie-armhf
-@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u2
+@@ -22,4 +22,5 @@ python3.13-dev==3.13.5-2+deb13u5
  sgml-base==1.31+nmu1
  swig==4.3.0-1
  syncd==1.0.0
 +sswsyncd==1.0.0
  xml-core==0.19
 diff --git a/files/build_templates/docker_image_ctl.j2 b/files/build_templates/docker_image_ctl.j2
-index 49941938..e51693fe 100644
+index 2bbbba943..047f89eaa 100644
 --- a/files/build_templates/docker_image_ctl.j2
 +++ b/files/build_templates/docker_image_ctl.j2
-@@ -787,6 +787,11 @@ start() {
-         -v /var/run/docker-syncd$DEV:/var/run/sswsyncd \
+@@ -885,6 +885,11 @@ start() {
+         $BRCM_DEV_MNT \
  {%- endif %}
  {%- endif %}
 +{%- if sonic_asic_platform == "marvell-prestera" %}
@@ -68,7 +69,7 @@ index 49941938..e51693fe 100644
      -v /usr/share/sonic/firmware:/usr/share/sonic/firmware:rw \
      $(if [ -d /host/bmc ]; then echo "-v /host/bmc:/host/bmc:rw"; fi) \
 diff --git a/platform/components/docker-gbsyncd-mrvl.mk b/platform/components/docker-gbsyncd-mrvl.mk
-index 3d968a8a..74336dc5 100644
+index 3d968a8ac..74336dc54 100644
 --- a/platform/components/docker-gbsyncd-mrvl.mk
 +++ b/platform/components/docker-gbsyncd-mrvl.mk
 @@ -8,4 +8,4 @@ include $(PLATFORM_PATH)/../template/docker-gbsyncd-trixie.mk
@@ -78,14 +79,14 @@ index 3d968a8a..74336dc5 100644
 -$(DOCKER_GBSYNCD_BASE)_DEPENDS += $(SYNCD) $(MRVL_SAI)
 +$(DOCKER_GBSYNCD_BASE)_DEPENDS += $(SYNCD) $(MRVL_SAI) $(SSWSYNCD)
 diff --git a/platform/components/docker-gbsyncd-mrvl/critical_processes.j2 b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
-index bdd6903c..608f1714 100644
+index bdd6903c5..608f17143 100644
 --- a/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
 +++ b/platform/components/docker-gbsyncd-mrvl/critical_processes.j2
 @@ -1 +1 @@
 -program:syncd
 +program:dsserve
 diff --git a/platform/components/docker-gbsyncd-mrvl/start.sh b/platform/components/docker-gbsyncd-mrvl/start.sh
-index 88442be4..8ff766e1 100755
+index 88442be4f..8ff766e18 100755
 --- a/platform/components/docker-gbsyncd-mrvl/start.sh
 +++ b/platform/components/docker-gbsyncd-mrvl/start.sh
 @@ -1,6 +1,9 @@
@@ -99,7 +100,7 @@ index 88442be4..8ff766e1 100755
  mkdir -p /etc/sai.d/
  
 diff --git a/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2 b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
-index 0ae31c85..75b0ff02 100644
+index 0ae31c856..75b0ff020 100644
 --- a/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
 +++ b/platform/components/docker-gbsyncd-mrvl/supervisord.conf.j2
 @@ -44,7 +44,7 @@ dependent_startup=true
@@ -112,7 +113,7 @@ index 0ae31c85..75b0ff02 100644
  autostart=false
  autorestart=false
 diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
-index d8c4d22e..6c6b5814 100644
+index d8c4d22ec..6c6b58143 100644
 --- a/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera-rpc.mk
 @@ -24,5 +24,6 @@ $(DOCKER_SYNCD_MRVL_RPC)_RUN_OPT += --privileged -t
@@ -123,7 +124,7 @@ index d8c4d22e..6c6b5814 100644
  
  SONIC_TRIXIE_DOCKERS += $(DOCKER_SYNCD_MRVL_RPC)
 diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
-index 885374ca..b7a8792d 100644
+index 4fed462d2..5b826c253 100644
 --- a/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera.mk
 @@ -5,6 +5,7 @@ include $(PLATFORM_PATH)/../template/docker-syncd-trixie.mk
@@ -134,23 +135,26 @@ index 885374ca..b7a8792d 100644
  
  $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
                                  $(LIBSWSSCOMMON_DBG) \
-@@ -16,3 +17,4 @@ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
+@@ -16,6 +17,7 @@ $(DOCKER_SYNCD_BASE)_PACKAGE_NAME = syncd
  $(DOCKER_SYNCD_BASE)_MACHINE = marvell-prestera
  
  $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /host/warmboot:/var/warmboot
 +$(DOCKER_SYNCD_BASE)_RUN_OPT += -v /var/run/docker-syncd:/var/run/sswsyncd
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += --cap-add=IPC_LOCK
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += --device-cgroup-rule='a *:* rwm'
+ $(DOCKER_SYNCD_BASE)_RUN_OPT += -v /dev/mvdma:/dev/mvdma:rw
 diff --git a/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes b/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
-index bdd6903c..608f1714 100644
+index bdd6903c5..608f17143 100644
 --- a/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
 +++ b/platform/marvell-prestera/docker-syncd-mrvl-prestera/critical_processes
 @@ -1 +1 @@
 -program:syncd
 +program:dsserve
 diff --git a/platform/marvell-prestera/rules.dep b/platform/marvell-prestera/rules.dep
-index bc3eb86d..172b30ba 100644
+index 028de2de1..c6cb7e75d 100644
 --- a/platform/marvell-prestera/rules.dep
 +++ b/platform/marvell-prestera/rules.dep
-@@ -9,6 +9,7 @@ include $(PLATFORM_PATH)/mrvl-prestera.dep
+@@ -10,6 +10,7 @@ include $(PLATFORM_PATH)/mrvl-prestera.dep
  include $(PLATFORM_PATH)/platform-nokia.dep
  endif
  include $(PLATFORM_PATH)/sai.dep
@@ -159,7 +163,7 @@ index bc3eb86d..172b30ba 100644
  include $(PLATFORM_PATH)/../components/docker-gbsyncd-mrvl.dep
  endif
 diff --git a/platform/marvell-prestera/rules.mk b/platform/marvell-prestera/rules.mk
-index 2b17a3f5..2f3ba4a6 100644
+index bbc93d160..7c169bad4 100644
 --- a/platform/marvell-prestera/rules.mk
 +++ b/platform/marvell-prestera/rules.mk
 @@ -1,4 +1,5 @@
@@ -170,7 +174,7 @@ index 2b17a3f5..2f3ba4a6 100644
  endif
 diff --git a/platform/marvell-prestera/sswsyncd.dep b/platform/marvell-prestera/sswsyncd.dep
 new file mode 100644
-index 00000000..7aae9b13
+index 000000000..7aae9b13c
 --- /dev/null
 +++ b/platform/marvell-prestera/sswsyncd.dep
 @@ -0,0 +1,7 @@
@@ -183,7 +187,7 @@ index 00000000..7aae9b13
 +$(SSWSYNCD)_DEP_FILES   := $(DEP_FILES)
 diff --git a/platform/marvell-prestera/sswsyncd.mk b/platform/marvell-prestera/sswsyncd.mk
 new file mode 100644
-index 00000000..d8000a30
+index 000000000..d8000a30d
 --- /dev/null
 +++ b/platform/marvell-prestera/sswsyncd.mk
 @@ -0,0 +1,4 @@

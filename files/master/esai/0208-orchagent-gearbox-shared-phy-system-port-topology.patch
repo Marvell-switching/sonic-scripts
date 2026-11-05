@@ -1,0 +1,468 @@
+From c6bac46d83c66a29bf5e81eee345085bc446dee4 Mon Sep 17 00:00:00 2001
+From: Yan Markman <ymarkman@marvell.com>
+Date: Thu, 15 Oct 2026 17:34:30 +0300
+Subject: [PATCH 1/1] orchagent: gearbox for shared phy system-port topology
+
+Add to Gearbox supporting for the Marvell-Alaska
+shared multilane host_side PHY-MAC interface topology.
+Fix SAI_PORT_ATTR_SPEED speed for this topology.
+
+CURRENT topology:
+each outbound port has single/separated
+system_lanes and line_lanes (1x1 or 4x4 or 8x8).
+
+line port0 >-PHY--1x1--Serdes/MAC
+
+ADDED topology:
+shared system lane map where multiple outbound 1_lane ports
+refer the same shared system_lane LIST 8x1
+(multiple logical ports over one host-side lane bundle).
+
+line port0 -------\                    Ethernet0
+      ...  >-PHY-<01234567>-8x1--Serdes/MAC
+line port7 -------------/              Ethernet7
+
+Signed-off-by: Yan Markman <ymarkman@marvell.com>
+---
+ orchagent/portsorch.cpp | 308 ++++++++++++++++++++++++++++++++++++++--
+ orchagent/portsorch.h   |  18 +++
+ 2 files changed, 312 insertions(+), 14 deletions(-)
+
+diff --git a/orchagent/portsorch.cpp b/orchagent/portsorch.cpp
+index 22e6a5f1..67bac76a 100644
+--- a/orchagent/portsorch.cpp
++++ b/orchagent/portsorch.cpp
+@@ -3421,6 +3421,11 @@ bool PortsOrch::setGearboxPortsAttr(const Port &port, sai_port_attr_t id, void *
+ {
+     bool status = false;
+ 
++    if (id == SAI_PORT_ATTR_ADMIN_STATE)
++    {
++        return setGearboxPortsAdminState(port, *static_cast<bool*>(value));
++    }
++
+     status = setGearboxPortAttr(port, PHY_PORT_TYPE, id, value, override_fec);
+ 
+     if (status == true)
+@@ -3431,6 +3436,204 @@ bool PortsOrch::setGearboxPortsAttr(const Port &port, sai_port_attr_t id, void *
+     return status;
+ }
+ 
++/*
++ * Set Gearbox admin state. A 1:1 system-side port follows the interface.
++ * A shared system-side port is brought up by the first interface going
++ * admin up and brought down by the last interface going admin down; the
++ * line-side port always follows the interface.
++ */
++bool PortsOrch::setGearboxPortsAdminState(const Port &port, bool up)
++{
++    sai_object_id_t systemPort;
++    sai_attribute_t attr;
++    sai_status_t status;
++
++    SWSS_LOG_ENTER();
++
++    if (!getDestPortId(port.m_port_id, PHY_PORT_TYPE, systemPort) ||
++        m_gearboxSharedSystemPorts.find(systemPort) == m_gearboxSharedSystemPorts.end())
++    {
++        if (!setGearboxPortAttr(port, PHY_PORT_TYPE, SAI_PORT_ATTR_ADMIN_STATE, &up, false))
++        {
++            return false;
++        }
++        return setGearboxPortAttr(port, LINE_PORT_TYPE, SAI_PORT_ATTR_ADMIN_STATE, &up, false);
++    }
++
++    auto &adminUpPorts = m_gearboxSharedSystemPortAdminUp[systemPort];
++
++    attr.id = SAI_PORT_ATTR_ADMIN_STATE;
++    attr.value.booldata = up;
++
++    if (up)
++    {
++        if (adminUpPorts.empty())
++        {
++            SWSS_LOG_NOTICE("BOX: %s first admin up on shared system-side port 0x%" PRIx64 ", set UP",
++                    port.m_alias.c_str(), systemPort);
++            status = sai_port_api->set_port_attribute(systemPort, &attr);
++            if (status != SAI_STATUS_SUCCESS)
++            {
++                SWSS_LOG_ERROR("BOX: Failed to set shared system-side port 0x%" PRIx64 " admin UP for %s",
++                        systemPort, port.m_alias.c_str());
++                task_process_status handle_status = handleSaiSetStatus(SAI_API_PORT, status);
++                if (handle_status != task_success)
++                {
++                    return parseHandleSaiStatusFailure(handle_status);
++                }
++            }
++        }
++
++        if (!setGearboxPortAttr(port, LINE_PORT_TYPE, SAI_PORT_ATTR_ADMIN_STATE, &up, false))
++        {
++            return false;
++        }
++
++        adminUpPorts.insert(port.m_port_id);
++        return true;
++    }
++
++    if (!setGearboxPortAttr(port, LINE_PORT_TYPE, SAI_PORT_ATTR_ADMIN_STATE, &up, false))
++    {
++        return false;
++    }
++
++    adminUpPorts.erase(port.m_port_id);
++
++    if (!adminUpPorts.empty())
++    {
++        SWSS_LOG_NOTICE("BOX: %s admin down, shared system-side port 0x%" PRIx64 " still used by %zu ports",
++                port.m_alias.c_str(), systemPort, adminUpPorts.size());
++        return true;
++    }
++
++    SWSS_LOG_NOTICE("BOX: %s last admin down on shared system-side port 0x%" PRIx64 ", set DOWN",
++            port.m_alias.c_str(), systemPort);
++    status = sai_port_api->set_port_attribute(systemPort, &attr);
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("BOX: Failed to set shared system-side port 0x%" PRIx64 " admin DOWN for %s",
++                systemPort, port.m_alias.c_str());
++        task_process_status handle_status = handleSaiSetStatus(SAI_API_PORT, status);
++        if (handle_status != task_success)
++        {
++            return parseHandleSaiStatusFailure(handle_status);
++        }
++    }
++
++    return true;
++}
++
++/*
++ * Remove the Gearbox objects of a deleted interface: its port connector and
++ * line-side port, and the system-side port once no interface uses it. A
++ * shared system-side port that stays in use is set admin down if the deleted
++ * interface was its last admin up user.
++ */
++void PortsOrch::deInitGearboxPort(const Port &port)
++{
++    sai_object_id_t systemPort;
++    sai_object_id_t linePort;
++    sai_status_t status;
++
++    SWSS_LOG_ENTER();
++
++    auto lanesIt = m_gearboxPortListLaneMap.find(port.m_port_id);
++    if (!m_gearboxEnabled || lanesIt == m_gearboxPortListLaneMap.end())
++    {
++        return;
++    }
++
++    systemPort = get<0>(lanesIt->second);
++    linePort = get<1>(lanesIt->second);
++
++    /* Remove port connector, then line-side port */
++    auto connIt = m_gearboxPortConnectorMap.find(port.m_port_id);
++    if (connIt != m_gearboxPortConnectorMap.end())
++    {
++        status = sai_port_api->remove_port_connector(connIt->second);
++        if (status != SAI_STATUS_SUCCESS)
++        {
++            SWSS_LOG_ERROR("BOX: Failed to remove Gearbox port connector 0x%" PRIx64 " for %s, status:%d",
++                    connIt->second, port.m_alias.c_str(), status);
++        }
++        m_gearboxPortConnectorMap.erase(connIt);
++    }
++
++    gb_port_stat_manager.clearCounterIdList(linePort);
++    status = sai_port_api->remove_port(linePort);
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("BOX: Failed to remove Gearbox line-side port 0x%" PRIx64 " for %s, status:%d",
++                linePort, port.m_alias.c_str(), status);
++    }
++    saiOidToAlias.erase(linePort);
++    m_gbcounterTable->hdel("", port.m_alias + "_line");
++    m_gbcounterTable->hdel("", port.m_alias + "_system");
++    m_gearboxPortListLaneMap.erase(lanesIt);
++
++    /* Detach from the system-side port */
++    auto adminIt = m_gearboxSharedSystemPortAdminUp.find(systemPort);
++    bool wasAdminUp = adminIt != m_gearboxSharedSystemPortAdminUp.end() &&
++                      adminIt->second.erase(port.m_port_id) > 0;
++
++    auto intfIt = m_gearboxInterfaceMap.find(port.m_index);
++    if (intfIt == m_gearboxInterfaceMap.end())
++    {
++        SWSS_LOG_ERROR("BOX: %s index %d not in gearbox interface map, keep system-side port 0x%" PRIx64,
++                port.m_alias.c_str(), port.m_index, systemPort);
++        return;
++    }
++
++    gearbox_system_port_t &gbSystemPort =
++        m_gearboxSystemPortMap[make_pair(intfIt->second.phy_id, intfIt->second.system_lanes)];
++    gbSystemPort.members.erase(port.m_port_id);
++
++    if (!gbSystemPort.members.empty())
++    {
++        SWSS_LOG_NOTICE("BOX: %s removed, shared system-side port 0x%" PRIx64 " still used by %zu ports",
++                port.m_alias.c_str(), systemPort, gbSystemPort.members.size());
++
++        /* Name the system-side port after a remaining interface */
++        if (saiOidToAlias.count(systemPort) && saiOidToAlias[systemPort] == port.m_alias)
++        {
++            saiOidToAlias[systemPort] = saiOidToAlias[*gbSystemPort.members.begin()];
++        }
++
++        if (wasAdminUp && adminIt->second.empty())
++        {
++            sai_attribute_t attr;
++            attr.id = SAI_PORT_ATTR_ADMIN_STATE;
++            attr.value.booldata = false;
++            status = sai_port_api->set_port_attribute(systemPort, &attr);
++            if (status != SAI_STATUS_SUCCESS)
++            {
++                SWSS_LOG_ERROR("BOX: Failed to set shared system-side port 0x%" PRIx64 " admin DOWN on %s removal",
++                        systemPort, port.m_alias.c_str());
++            }
++        }
++        return;
++    }
++
++    /* Last interface on this system-side port */
++    gb_port_stat_manager.clearCounterIdList(systemPort);
++    status = sai_port_api->remove_port(systemPort);
++    if (status != SAI_STATUS_SUCCESS)
++    {
++        SWSS_LOG_ERROR("BOX: Failed to remove Gearbox system-side port 0x%" PRIx64 " for %s, status:%d",
++                systemPort, port.m_alias.c_str(), status);
++    }
++    else
++    {
++        SWSS_LOG_NOTICE("BOX: Removed Gearbox system-side port 0x%" PRIx64 " with %s",
++                systemPort, port.m_alias.c_str());
++    }
++    saiOidToAlias.erase(systemPort);
++    m_gearboxSharedSystemPorts.erase(systemPort);
++    m_gearboxSharedSystemPortAdminUp.erase(systemPort);
++    gbSystemPort.oid = SAI_NULL_OBJECT_ID;
++}
++
+ /*
+  * If Gearbox is enabled and this is a Gearbox port then set the specific lane attribute.
+  * Note: the appl_db is also updated (Gearbox config_db tables are TBA).
+@@ -3449,6 +3652,17 @@ bool PortsOrch::setGearboxPortAttr(const Port &port, dest_port_type_t port_type,
+     {
+         if (getDestPortId(port.m_port_id, port_type, dest_port_id) == true)
+         {
++            /* A shared system-side port carries several interfaces; its
++             * attributes are fixed at creation and must not follow any
++             * single interface (e.g. one port shutdown or speed change). */
++            if (port_type == PHY_PORT_TYPE &&
++                m_gearboxSharedSystemPorts.find(dest_port_id) != m_gearboxSharedSystemPorts.end())
++            {
++                SWSS_LOG_INFO("BOX: Skip attr %d on shared system-side port 0x%" PRIx64 " for %s",
++                        id, dest_port_id, port.m_alias.c_str());
++                return true;
++            }
++
+             switch (id)
+             {
+                 case SAI_PORT_ATTR_FEC_MODE:
+@@ -3479,7 +3693,8 @@ bool PortsOrch::setGearboxPortAttr(const Port &port, dest_port_type_t port_type,
+                     {
+                         // Gearbox may not implement speed check, so
+                         // invalidate speed if it doesn't make sense.
+-                        if (to_string(speed).size() < 5)
++                        // 1G/2.5G/5G are valid gearbox speeds.
++                        if (speed < 1000)
+                         {
+                             speed = 0;
+                         }
+@@ -5852,6 +6067,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
+                 it++;
+                 continue;
+             }
++            deInitGearboxPort(m_portList[alias]);
+             removePortFromLanesMap(alias);
+             removePortFromPortListMap(port_id);
+ 
+@@ -10680,6 +10896,22 @@ void PortsOrch::initGearbox()
+         SWSS_LOG_NOTICE("BOX: m_gearboxLaneMap size      = %d.", (int) m_gearboxLaneMap.size());
+         SWSS_LOG_NOTICE("BOX: m_gearboxPortMap size      = %d.", (int) m_gearboxPortMap.size());
+ 
++        /* Count interfaces per (phy_id, system_lanes) to detect shared system ports */
++        m_gearboxSystemPortMap.clear();
++        for (const auto &it : m_gearboxInterfaceMap)
++        {
++            m_gearboxSystemPortMap[make_pair(it.second.phy_id, it.second.system_lanes)].users++;
++        }
++        for (const auto &it : m_gearboxSystemPortMap)
++        {
++            if (it.second.users > 1)
++            {
++                SWSS_LOG_NOTICE("BOX: phy_id:%d system lanes [%s] shared by %u interfaces",
++                        it.first.first, swss::join(',', it.first.second.begin(), it.first.second.end()).c_str(),
++                        it.second.users);
++            }
++        }
++
+         m_gb_counter_db = shared_ptr<DBConnector>(new DBConnector("GB_COUNTERS_DB", 0));
+         m_gbcounterTable = unique_ptr<Table>(new Table(m_gb_counter_db.get(), COUNTERS_PORT_NAME_MAP));
+     }
+@@ -10727,10 +10959,18 @@ bool PortsOrch::initGearboxPort(Port &port)
+             SWSS_LOG_NOTICE("BOX: Gearbox port %s assigned phyOid 0x%" PRIx64, port.m_alias.c_str(), phyOid);
+             port.m_switch_id = phyOid;
+ 
++            /* System-side port is shared when several interfaces map to the same
++             * system lanes on this PHY (one host SerDes muxing N line ports). */
++            gearbox_system_port_t &gbSystemPort =
++                m_gearboxSystemPortMap[make_pair(phy_id, m_gearboxInterfaceMap[port.m_index].system_lanes)];
++            bool sharedSystemPort = gbSystemPort.users > 1;
++            bool systemPortCreated = false;
++
+             /* Create SYSTEM-SIDE port */
+             attrs.clear();
+ 
+             attr.id = SAI_PORT_ATTR_ADMIN_STATE;
++            /* Shared system port admin is refcounted by its admin up interfaces */
+             attr.value.booldata = port.m_admin_state_up;
+             attrs.push_back(attr);
+ 
+@@ -10746,9 +10986,24 @@ bool PortsOrch::initGearboxPort(Port &port)
+             }
+ 
+             attr.id = SAI_PORT_ATTR_SPEED;
+-            attr.value.u32 = (uint32_t) m_gearboxPortMap[port.m_index].system_speed * (uint32_t) lanes.size();
+-            if (isSpeedSupported(port.m_alias, port.m_port_id, attr.value.u32))
++            if (!sharedSystemPort)
++            {
++                attr.value.u32 = (uint32_t) m_gearboxPortMap[port.m_index].system_speed * (uint32_t) lanes.size();
++                if (isSpeedSupported(port.m_alias, port.m_port_id, attr.value.u32))
++                {
++                    attrs.push_back(attr);
++                }
++            }
++            else
+             {
++                /* Shared lanes: system_speed is the per-interface (channel) rate,
++                 * matching the NPU logical port, not multiplied by lane count. */
++                attr.value.u32 = (uint32_t) m_gearboxPortMap[port.m_index].system_speed;
++                if (port.m_speed && port.m_speed != attr.value.u32)
++                {
++                    SWSS_LOG_ERROR("BOX: %s shared system-side speed %u does not match NPU port speed %u",
++                            port.m_alias.c_str(), attr.value.u32, port.m_speed);
++                }
+                 attrs.push_back(attr);
+             }
+ 
+@@ -10788,19 +11043,34 @@ bool PortsOrch::initGearboxPort(Port &port)
+                 attrs.push_back(attr);
+             }
+ 
+-            status = sai_port_api->create_port(&systemPort, phyOid, static_cast<uint32_t>(attrs.size()), attrs.data());
+-            if (status != SAI_STATUS_SUCCESS)
++            if (gbSystemPort.oid != SAI_NULL_OBJECT_ID)
+             {
+-                SWSS_LOG_ERROR("BOX: Failed to create Gearbox system-side port for alias:%s port_id:0x%" PRIx64 " index:%d status:%d",
+-                        port.m_alias.c_str(), port.m_port_id, port.m_index, status);
+-                task_process_status handle_status = handleSaiCreateStatus(SAI_API_PORT, status);
+-                if (handle_status != task_success)
++                systemPort = gbSystemPort.oid;
++                SWSS_LOG_NOTICE("BOX: Reuse shared Gearbox system-side port 0x%" PRIx64 " for alias:%s index:%d",
++                        systemPort, port.m_alias.c_str(), port.m_index);
++            }
++            else
++            {
++                status = sai_port_api->create_port(&systemPort, phyOid, static_cast<uint32_t>(attrs.size()), attrs.data());
++                if (status != SAI_STATUS_SUCCESS)
+                 {
+-                    return parseHandleSaiStatusFailure(handle_status);
++                    SWSS_LOG_ERROR("BOX: Failed to create Gearbox system-side port for alias:%s port_id:0x%" PRIx64 " index:%d status:%d",
++                            port.m_alias.c_str(), port.m_port_id, port.m_index, status);
++                    task_process_status handle_status = handleSaiCreateStatus(SAI_API_PORT, status);
++                    if (handle_status != task_success)
++                    {
++                        return parseHandleSaiStatusFailure(handle_status);
++                    }
++                }
++                SWSS_LOG_NOTICE("BOX: Created Gearbox %ssystem-side port 0x%" PRIx64 " for alias:%s index:%d",
++                        sharedSystemPort ? "shared " : "", systemPort, port.m_alias.c_str(), port.m_index);
++                systemPortCreated = true;
++                gbSystemPort.oid = systemPort;
++                if (sharedSystemPort)
++                {
++                    m_gearboxSharedSystemPorts.insert(systemPort);
+                 }
+             }
+-            SWSS_LOG_NOTICE("BOX: Created Gearbox system-side port 0x%" PRIx64 " for alias:%s index:%d",
+-                    systemPort, port.m_alias.c_str(), port.m_index);
+             port.m_system_side_id = systemPort;
+ 
+             /* Create LINE-SIDE port */
+@@ -10933,8 +11203,17 @@ bool PortsOrch::initGearboxPort(Port &port)
+ 
+             SWSS_LOG_NOTICE("BOX: Connected Gearbox ports; system-side:0x%" PRIx64 " to line-side:0x%" PRIx64, systemPort, linePort);
+             m_gearboxPortListLaneMap[port.m_port_id] = make_tuple(systemPort, linePort);
++            m_gearboxPortConnectorMap[port.m_port_id] = connector;
++            gbSystemPort.members.insert(port.m_port_id);
+             port.m_line_side_id = linePort;
+-            saiOidToAlias[systemPort] = port.m_alias;
++            if (sharedSystemPort && port.m_admin_state_up)
++            {
++                m_gearboxSharedSystemPortAdminUp[systemPort].insert(port.m_port_id);
++            }
++            if (systemPortCreated)
++            {
++                saiOidToAlias[systemPort] = port.m_alias;
++            }
+             saiOidToAlias[linePort] = port.m_alias;
+ 
+             /* Add gearbox system/line port name map to counter table */
+@@ -10957,7 +11236,8 @@ bool PortsOrch::initGearboxPort(Port &port)
+                     serdes_attr.insert(serdes_attr_pair(pair.second, attr_val));
+                 }
+             }
+-            if (serdes_attr.size() != 0)
++            /* Shared system port SerDes is programmed once, by the creating interface */
++            if (serdes_attr.size() != 0 && systemPortCreated)
+             {
+                 if (setPortSerdesAttribute(systemPort, phyOid, serdes_attr))
+                 {
+diff --git a/orchagent/portsorch.h b/orchagent/portsorch.h
+index e0d39254..207e13a6 100644
+--- a/orchagent/portsorch.h
++++ b/orchagent/portsorch.h
+@@ -387,6 +387,22 @@ private:
+     map<int, gearbox_port_t> m_gearboxPortMap;
+     map<sai_object_id_t, tuple<sai_object_id_t, sai_object_id_t>> m_gearboxPortListLaneMap;
+ 
++    /* Gearbox system-side port per (phy_id, system_lanes). A lane set used by
++     * more than one interface is a shared (muxed) system port: created once
++     * and reused by every interface that maps to it. */
++    typedef struct
++    {
++        sai_object_id_t oid = SAI_NULL_OBJECT_ID;
++        uint32_t users = 0;                 /* interfaces in gearbox config */
++        set<sai_object_id_t> members;       /* NPU ports currently attached */
++    } gearbox_system_port_t;
++    map<pair<int, set<int>>, gearbox_system_port_t> m_gearboxSystemPortMap;
++    set<sai_object_id_t> m_gearboxSharedSystemPorts;
++    /* Shared system-side port oid -> NPU ports that are admin up on it */
++    map<sai_object_id_t, set<sai_object_id_t>> m_gearboxSharedSystemPortAdminUp;
++    /* NPU port oid -> gearbox port connector oid */
++    map<sai_object_id_t, sai_object_id_t> m_gearboxPortConnectorMap;
++
+     unordered_set<string> m_vlanPorts;
+     port_config_state_t m_portConfigState = PORT_CONFIG_MISSING;
+     sai_uint32_t m_portCount;
+@@ -512,6 +528,8 @@ private:
+     bool getPortSpeed(sai_object_id_t id, sai_uint32_t &speed);
+     bool setGearboxPortsAttr(const Port &port, sai_port_attr_t id, void *value, bool override_fec=true);
+     bool setGearboxPortAttr(const Port &port, dest_port_type_t port_type, sai_port_attr_t id, void *value, bool override_fec);
++    bool setGearboxPortsAdminState(const Port &port, bool up);
++    void deInitGearboxPort(const Port &port);
+ 
+     bool getPortAdvSpeeds(const Port& port, bool remote, std::vector<sai_uint32_t>& speed_list);
+     bool getPortAdvSpeeds(const Port& port, bool remote, string& adv_speeds);
+-- 
+2.34.1
+
